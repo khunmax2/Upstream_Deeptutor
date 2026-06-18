@@ -61,6 +61,7 @@ async def build_tool_options() -> dict[str, list[dict[str, Any]]]:
                 "description_i18n": {
                     "en": definition.description or "",
                     "zh": definition.description or "",
+                    "th": definition.description or "",
                 },
             }
         )

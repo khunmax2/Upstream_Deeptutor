@@ -24,6 +24,10 @@ from deeptutor.services.llm import clean_thinking_tags
 from deeptutor.services.llm import complete as llm_complete
 from deeptutor.services.llm import stream as llm_stream
 from deeptutor.services.memory.document import Document, parse, serialize
+from deeptutor.services.prompt.language import (
+    append_language_directive,
+    normalize_agent_language,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,11 @@ def slot_focus(language: str, slot: str) -> tuple[str, list[str]]:
 
 
 def _lang_code(language: str) -> str:
-    return "zh" if (language or "").lower().startswith("zh") else "en"
+    # Prompt assets exist only for zh/en, so collapse any other language
+    # (e.g. th) to en for file selection; the Thai directive is applied
+    # separately in ``call_llm`` to keep the model's output in `language`.
+    lang = normalize_agent_language(language)
+    return "zh" if lang == "zh" else "en"
 
 
 async def emit(on_event: OnEvent | None, event: dict[str, Any]) -> None:
@@ -96,6 +104,7 @@ async def call_llm(
     turn: int | None = None,
     chunk_index: int | None = None,
     label: str | None = None,
+    language: str | None = None,
 ) -> str:
     """Single LLM call. Returns the raw text body; "" on failure.
 
@@ -106,6 +115,11 @@ async def call_llm(
     workbench trace.
     """
     from deeptutor.services.llm import get_llm_config
+
+    # Keep prompt assets in en/zh but force the model's output into the
+    # requested language (e.g. th) via the shared directive.
+    if language:
+        system_prompt = append_language_directive(system_prompt, language)
 
     model_label = get_llm_config().model or None
     if on_event is not None:

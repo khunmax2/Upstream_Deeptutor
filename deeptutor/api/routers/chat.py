@@ -71,13 +71,14 @@ async def websocket_chat(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
             requested_language = str(data.get("language") or "").lower().strip()
-            language = (
-                "zh"
-                if requested_language.startswith("zh")
-                else "en"
-                if requested_language.startswith("en")
-                else get_ui_language(default=config.get("system", {}).get("language", "en"))
-            )
+            if requested_language.startswith("zh"):
+                language = "zh"
+            elif requested_language.startswith("th") or requested_language == "thai":
+                language = "th"
+            elif requested_language.startswith("en"):
+                language = "en"
+            else:
+                language = get_ui_language(default=config.get("system", {}).get("language", "en"))
             message = data.get("message", "").strip()
             session_id = data.get("session_id")
             explicit_history = data.get("history")

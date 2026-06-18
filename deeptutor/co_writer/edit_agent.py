@@ -14,6 +14,7 @@ from deeptutor.co_writer.storage import _atomic_write_json
 from deeptutor.runtime.registry.tool_registry import get_tool_registry
 from deeptutor.services.llm import clean_thinking_tags
 from deeptutor.services.path_service import get_path_service
+from deeptutor.services.prompt.language import normalize_agent_language
 from deeptutor.tools.rag_tool import rag_search
 from deeptutor.tools.web_search import web_search
 
@@ -335,11 +336,12 @@ class EditAgent(BaseAgent):
     def _build_available_tools_text(self) -> str:
         tool_names = [name for name in self.enabled_tools if name in {"rag", "web_search"}]
         if not tool_names:
-            return (
-                "（当前未启用外部参考工具）"
-                if str(self.language).lower().startswith("zh")
-                else "(no external reference tools enabled)"
-            )
+            lang = normalize_agent_language(self.language)
+            return {
+                "zh": "（当前未启用外部参考工具）",
+                "th": "(ยังไม่ได้เปิดใช้งานเครื่องมืออ้างอิงภายนอก)",
+                "en": "(no external reference tools enabled)",
+            }.get(lang, "(no external reference tools enabled)")
         return self._tool_registry.build_prompt_text(
             tool_names,
             format="list",
@@ -350,11 +352,12 @@ class EditAgent(BaseAgent):
         labels = {
             "en": {"rag": "knowledge base", "web": "web search"},
             "zh": {"rag": "知识库", "web": "网页搜索"},
+            "th": {"rag": "ฐานความรู้", "web": "ค้นหาเว็บ"},
         }
-        lang = "zh" if str(self.language).lower().startswith("zh") else "en"
+        lang = normalize_agent_language(self.language)
         if source in labels[lang]:
             return labels[lang][source]
-        return "reference" if lang == "en" else "参考资料"
+        return {"en": "reference", "zh": "参考资料", "th": "แหล่งอ้างอิง"}.get(lang, "reference")
 
 
 # Legacy compatibility - export get_stats pointing to BaseAgent's stats

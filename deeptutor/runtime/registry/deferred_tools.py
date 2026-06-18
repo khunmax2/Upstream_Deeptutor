@@ -22,6 +22,7 @@ from typing import Any
 
 from deeptutor.core.tool_protocol import BaseTool
 from deeptutor.runtime.registry.tool_registry import ToolRegistry
+from deeptutor.services.prompt.language import normalize_agent_language
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,9 @@ def render_deferred_tools_manifest(tools: list[BaseTool], *, language: str = "en
     """System-prompt block listing deferred tools, grouped by MCP server."""
     if not tools:
         return ""
-    zh = (language or "en").lower().startswith("zh")
+    lang = normalize_agent_language(language)
+    zh = lang == "zh"
+    th = lang == "th"
     groups: dict[str, list[tuple[str, str]]] = {}
     for tool in tools:
         definition = tool.get_definition()
@@ -41,6 +44,14 @@ def render_deferred_tools_manifest(tools: list[BaseTool], *, language: str = "en
             "## 扩展工具",
             "这些工具存在，但尚未加载；直接调用会失败。要使用其中任意工具，"
             "请先用准确的工具名称调用 `load_tools`，随后这些 schema 会在本会话中保持可用。",
+            "",
+        ]
+    elif th:
+        lines = [
+            "## เครื่องมือเพิ่มเติม",
+            "เครื่องมือเหล่านี้มีอยู่แต่ยังไม่ได้โหลด การเรียกใช้โดยตรงจะล้มเหลว "
+            "หากต้องการใช้เครื่องมือใดให้เรียก `load_tools` พร้อมระบุชื่อเครื่องมือ"
+            "ที่ถูกต้องก่อน จากนั้น schema เหล่านี้จะใช้งานได้ตลอดเซสชันนี้",
             "",
         ]
     else:
@@ -54,9 +65,13 @@ def render_deferred_tools_manifest(tools: list[BaseTool], *, language: str = "en
         ]
     for group in sorted(groups):
         if group == "other":
-            header = "### 其他" if zh else "### Other"
+            header = "### 其他" if zh else "### อื่นๆ" if th else "### Other"
+        elif zh:
+            header = f"### MCP 服务器：{group}"
+        elif th:
+            header = f"### เซิร์ฟเวอร์ MCP: {group}"
         else:
-            header = f"### MCP 服务器：{group}" if zh else f"### MCP server: {group}"
+            header = f"### MCP server: {group}"
         lines.append(header)
         for name, description in sorted(groups[group]):
             lines.append(f"- **{name}** - {description}")

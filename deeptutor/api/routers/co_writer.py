@@ -26,6 +26,7 @@ from deeptutor.co_writer.storage import (
 from deeptutor.core.stream_bus import StreamBus
 from deeptutor.services.config import PROJECT_ROOT, load_config_with_main
 from deeptutor.services.llm import clean_thinking_tags
+from deeptutor.services.prompt.language import append_language_directive
 from deeptutor.services.settings.interface_settings import get_ui_language
 
 router = APIRouter()
@@ -200,20 +201,22 @@ def _prepare_react_edit_request(
     tools = _normalize_react_edit_tools(request.tools)
     instruction = request.instruction.strip()
     if request.mode == "none" and not instruction:
-        detail = (
-            "请输入编辑要求，或选择 shorten / expand / rewrite 模式。"
-            if language.startswith("zh")
-            else "Provide an edit instruction, or choose shorten / expand / rewrite mode."
-        )
+        if language.startswith("zh"):
+            detail = "请输入编辑要求，或选择 shorten / expand / rewrite 模式。"
+        elif language.startswith("th"):
+            detail = "กรุณาใส่คำสั่งแก้ไข หรือเลือกโหมด shorten / expand / rewrite"
+        else:
+            detail = "Provide an edit instruction, or choose shorten / expand / rewrite mode."
         raise HTTPException(status_code=400, detail=detail)
 
     selected_text = request.selected_text.strip("\n")
     if not selected_text.strip():
-        detail = (
-            "请先选中一段文本。"
-            if language.startswith("zh")
-            else "Please select a text passage first."
-        )
+        if language.startswith("zh"):
+            detail = "请先选中一段文本。"
+        elif language.startswith("th"):
+            detail = "กรุณาเลือกข้อความก่อน"
+        else:
+            detail = "Please select a text passage first."
         raise HTTPException(status_code=400, detail=detail)
 
     return selected_text, instruction, tools
@@ -278,6 +281,9 @@ async def _run_react_edit(
         if not language.startswith("zh")
         else "你是一个严格的 Markdown 编辑助手。"
     )
+    # Non-zh/en languages (e.g. th) reuse the English prompt scaffold; the
+    # directive keeps the edited output in the requested language.
+    system_prompt = append_language_directive(system_prompt, language)
     prompt = _build_react_edit_prompt(
         selected_text=selected_text,
         instruction=instruction,

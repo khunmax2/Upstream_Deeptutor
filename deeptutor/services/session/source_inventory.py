@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any, Sequence
 
+from deeptutor.services.prompt.language import normalize_agent_language
 from deeptutor.services.session.protocol import SessionStoreProtocol
 
 logger = logging.getLogger(__name__)
@@ -633,7 +634,11 @@ def _imported_agent_label(meta: dict[str, Any], lang: str) -> str | None:
         return None
     if source in _EXTERNAL_AGENT_LABELS:
         return _EXTERNAL_AGENT_LABELS[source]
-    return "外部 AI 助手" if lang == "zh" else "an external AI assistant"
+    return {
+        "zh": "外部 AI 助手",
+        "th": "ผู้ช่วย AI ภายนอก",
+        "en": "an external AI assistant",
+    }.get(lang, "an external AI assistant")
 
 
 def serialize_referenced_transcript(
@@ -660,17 +665,27 @@ def serialize_referenced_transcript(
     be confused with the model's own ``assistant`` role. Returns ``""`` when
     there is no content to serialize.
     """
-    lang = "zh" if str(language or "en").lower().startswith("zh") else "en"
+    lang = normalize_agent_language(language)
     agent = _imported_agent_label(meta, lang)
     if agent is not None:
         assistant_label = agent
-        header = (
-            f"〔以下是用户与外部 AI 助手「{agent}」的历史对话记录，由用户附带进来供你参考和讨论。"
-            "这不是你与用户的对话——你没有参与其中，也没有执行其中的任何动作。"
-            "请把它当作第三方材料客观对待：复述时用第三人称，不要沿用其口吻，"
-            "也不要把其中助手做过的事说成是你做的。〕"
-            if lang == "zh"
-            else (
+        if lang == "zh":
+            header = (
+                f"〔以下是用户与外部 AI 助手「{agent}」的历史对话记录，由用户附带进来供你参考和讨论。"
+                "这不是你与用户的对话——你没有参与其中，也没有执行其中的任何动作。"
+                "请把它当作第三方材料客观对待：复述时用第三人称，不要沿用其口吻，"
+                "也不要把其中助手做过的事说成是你做的。〕"
+            )
+        elif lang == "th":
+            header = (
+                f"〔ต่อไปนี้คือบันทึกบทสนทนาในอดีตระหว่างผู้ใช้กับผู้ช่วย AI ภายนอก ({agent}) "
+                "ที่ผู้ใช้แนบมาให้คุณอ้างอิงและพูดคุย นี่ไม่ใช่บทสนทนาระหว่างคุณกับผู้ใช้ — "
+                "คุณไม่ได้มีส่วนร่วมและไม่ได้ทำสิ่งใดในนั้น ให้ถือเป็นเอกสารของบุคคลที่สาม: "
+                "เล่าด้วยมุมมองบุคคลที่สาม อย่าใช้น้ำเสียงของมัน และอย่าอ้างว่าสิ่งที่ผู้ช่วยใน"
+                "บทสนทนานั้นทำเป็นสิ่งที่คุณทำเอง〕"
+            )
+        else:
+            header = (
                 f"[The following is a transcript of a past conversation between the user and an "
                 f"external AI assistant ({agent}), attached by the user for your reference and "
                 "discussion. This is NOT your conversation with the user — you did not take part "
@@ -678,18 +693,20 @@ def serialize_referenced_transcript(
                 "describe it in the third person, do not adopt its voice, and never claim its "
                 "assistant's actions as your own.]"
             )
-        )
     else:
-        assistant_label = "Assistant"
-        header = (
-            "〔以下是另一段历史对话记录，由用户附带进来供你参考。它不是当前对话的一部分。〕"
-            if lang == "zh"
-            else (
+        assistant_label = {"th": "ผู้ช่วย"}.get(lang, "Assistant")
+        if lang == "zh":
+            header = (
+                "〔以下是另一段历史对话记录，由用户附带进来供你参考。它不是当前对话的一部分。〕"
+            )
+        elif lang == "th":
+            header = "〔ต่อไปนี้คือบันทึกบทสนทนาในอดีตอีกชุดหนึ่ง ที่ผู้ใช้แนบมาให้อ้างอิง ไม่ใช่ส่วนหนึ่งของบทสนทนาปัจจุบัน〕"
+        else:
+            header = (
                 "[The following is a transcript of a separate past conversation, attached by the "
                 "user for reference. It is not part of the current conversation.]"
             )
-        )
-    user_label = "用户" if lang == "zh" else "User"
+    user_label = {"zh": "用户", "th": "ผู้ใช้", "en": "User"}.get(lang, "User")
     lines: list[str] = []
     for message in messages:
         content = str(message.get("content", "") or "").strip()
