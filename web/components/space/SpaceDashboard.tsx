@@ -31,7 +31,7 @@ import { fetchAllProgress } from "@/lib/learning-api";
  * section page (which keeps the mini-nav for lateral movement).
  */
 
-type Lang = { zh: string; en: string };
+type Lang = { zh: string; en: string; th: string };
 
 type DashKey =
   | "chat_history"
@@ -72,18 +72,23 @@ function distinctAgentSources(sessions: SessionSummary[]): number {
 
 const GROUPS: DashboardGroup[] = [
   {
-    label: { zh: "对话与资料", en: "Conversations & Materials" },
+    label: {
+      zh: "对话与资料",
+      en: "Conversations & Materials",
+      th: "บทสนทนาและเอกสาร",
+    },
     items: [
       {
         key: "chat_history",
         href: "/space/chat-history",
         icon: History,
-        title: { zh: "聊天历史", en: "Chat History" },
+        title: { zh: "聊天历史", en: "Chat History", th: "ประวัติแชต" },
         blurb: {
           zh: "回顾并继续此前的对话。",
           en: "Review and reopen previous conversations.",
+          th: "ทบทวนและเปิดบทสนทนาก่อนหน้าอีกครั้ง",
         },
-        unit: { zh: "段对话", en: "conversations" },
+        unit: { zh: "段对话", en: "conversations", th: "บทสนทนา" },
         tile: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
         load: async () => (await listSessions(200, 0, { force: true })).length,
       },
@@ -91,12 +96,13 @@ const GROUPS: DashboardGroup[] = [
         key: "agents",
         href: "/space/agents",
         icon: Bot,
-        title: { zh: "我的智能体", en: "My Agents" },
+        title: { zh: "我的智能体", en: "My Agents", th: "เอเจนต์ของฉัน" },
         blurb: {
           zh: "续聊导入的 Claude Code 与 Codex 对话。",
           en: "Chat with imported Claude Code and Codex agents.",
+          th: "สนทนาต่อกับเอเจนต์ Claude Code และ Codex ที่นำเข้า",
         },
-        unit: { zh: "个智能体", en: "agents" },
+        unit: { zh: "个智能体", en: "agents", th: "เอเจนต์" },
         tile: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
         load: async () =>
           distinctAgentSources(
@@ -107,12 +113,13 @@ const GROUPS: DashboardGroup[] = [
         key: "notebooks",
         href: "/space/notebooks",
         icon: NotebookPen,
-        title: { zh: "笔记本", en: "Notebooks" },
+        title: { zh: "笔记本", en: "Notebooks", th: "สมุดบันทึก" },
         blurb: {
           zh: "整理来自对话、研究、智能写作等的产出。",
           en: "Organize saved outputs from chat, research, Co-Writer, and more.",
+          th: "จัดระเบียบผลลัพธ์ที่บันทึกจากแชต งานวิจัย Co-Writer และอื่นๆ",
         },
-        unit: { zh: "个笔记本", en: "notebooks" },
+        unit: { zh: "个笔记本", en: "notebooks", th: "สมุดบันทึก" },
         tile: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
         load: async () => (await listNotebooks()).length,
       },
@@ -120,30 +127,32 @@ const GROUPS: DashboardGroup[] = [
         key: "question_bank",
         href: "/space/questions",
         icon: ClipboardList,
-        title: { zh: "题库", en: "Question Bank" },
+        title: { zh: "题库", en: "Question Bank", th: "คลังคำถาม" },
         blurb: {
           zh: "跨会话回顾和整理测验题目。",
           en: "Review and organize quiz questions across sessions.",
+          th: "ทบทวนและจัดระเบียบคำถามแบบทดสอบข้ามเซสชัน",
         },
-        unit: { zh: "道题", en: "questions" },
+        unit: { zh: "道题", en: "questions", th: "ข้อ" },
         tile: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
         load: async () => (await listNotebookEntries({ limit: 1 })).total,
       },
     ],
   },
   {
-    label: { zh: "个性化", en: "Personalization" },
+    label: { zh: "个性化", en: "Personalization", th: "การปรับแต่งเฉพาะตัว" },
     items: [
       {
         key: "mastery_path",
         href: "/space/learning",
         icon: GraduationCap,
-        title: { zh: "精通之路", en: "Mastery Path" },
+        title: { zh: "精通之路", en: "Mastery Path", th: "เส้นทางสู่ความเชี่ยวชาญ" },
         blurb: {
           zh: "掌握式学习：硬门槛与间隔复习。",
           en: "Mastery-based learning: hard gate and spaced review.",
+          th: "การเรียนแบบเน้นความเชี่ยวชาญ: ด่านบังคับและการทบทวนแบบเว้นช่วง",
         },
-        unit: { zh: "条路径", en: "paths" },
+        unit: { zh: "条路径", en: "paths", th: "เส้นทาง" },
         tile: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
         load: async () =>
           (await fetchAllProgress()).summaries.filter((s) => s.kp_count > 0)
@@ -153,12 +162,13 @@ const GROUPS: DashboardGroup[] = [
         key: "personas",
         href: "/space/personas",
         icon: UserRound,
-        title: { zh: "Personas", en: "Personas" },
+        title: { zh: "Personas", en: "Personas", th: "เพอร์โซนา" },
         blurb: {
           zh: "可在每轮对话中套用的行为预设。",
           en: "Behavior presets you can apply per chat turn.",
+          th: "ค่าตั้งพฤติกรรมที่ใช้ได้ในแต่ละเทิร์นของแชต",
         },
-        unit: { zh: "个预设", en: "personas" },
+        unit: { zh: "个预设", en: "personas", th: "เพอร์โซนา" },
         tile: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
         load: async () => (await listPersonas()).length,
       },
@@ -166,12 +176,13 @@ const GROUPS: DashboardGroup[] = [
         key: "skills",
         href: "/space/skills",
         icon: Wand2,
-        title: { zh: "技能", en: "Skills" },
+        title: { zh: "技能", en: "Skills", th: "สกิล" },
         blurb: {
           zh: "模型按需读取的能力手册。",
           en: "Capability playbooks the model reads on demand.",
+          th: "คู่มือความสามารถที่โมเดลอ่านเมื่อจำเป็น",
         },
-        unit: { zh: "个技能", en: "skills" },
+        unit: { zh: "个技能", en: "skills", th: "สกิล" },
         tile: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
         load: async () => (await listSkills()).length,
       },
@@ -183,8 +194,11 @@ const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
 
 export default function SpaceDashboard() {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const tr = useCallback(
+    (l: Lang) => (lang.startsWith("zh") ? l.zh : lang.startsWith("th") ? l.th : l.en),
+    [lang],
+  );
 
   const [counts, setCounts] = useState<Partial<Record<DashKey, number>>>({});
 
@@ -211,12 +225,13 @@ export default function SpaceDashboard() {
     <div>
       <header className="mb-8">
         <h1 className="font-serif text-[24px] font-semibold leading-tight tracking-tight text-[var(--foreground)]">
-          {tr({ zh: "学习空间", en: "Learning Space" })}
+          {tr({ zh: "学习空间", en: "Learning Space", th: "พื้นที่การเรียนรู้" })}
         </h1>
         <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-[var(--muted-foreground)]">
           {tr({
             zh: "你的对话、智能体、笔记与练习，集中在一处 —— 从这里进入。",
             en: "Your conversations, agents, notebooks, and practice in one place — enter from here.",
+            th: "บทสนทนา เอเจนต์ สมุดบันทึก และแบบฝึกหัดของคุณ รวมอยู่ในที่เดียว — เข้าจากที่นี่",
           })}
         </p>
       </header>

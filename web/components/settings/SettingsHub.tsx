@@ -34,8 +34,11 @@ type NetworkPreview = {
 
 export default function SettingsHub() {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const tr = useCallback(
+    (l: Lang) => (lang.startsWith("zh") ? l.zh : lang.startsWith("th") ? l.th : l.en),
+    [lang],
+  );
 
   const { catalog, catalogEditable, startTour } = useSettings();
 
@@ -84,12 +87,13 @@ export default function SettingsHub() {
       <header className="mb-7 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="font-serif text-[24px] font-semibold leading-tight tracking-tight text-[var(--foreground)]">
-            {tr({ zh: "设置", en: "Settings" })}
+            {tr({ zh: "设置", en: "Settings", th: "ตั้งค่า" })}
           </h1>
           <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-[var(--muted-foreground)]">
             {tr({
               zh: "管理外观、模型与服务、知识库、聊天与记忆。",
               en: "Manage appearance, models and services, knowledge base, chat, and memory.",
+              th: "จัดการรูปลักษณ์ โมเดลและบริการ ฐานความรู้ แชต และความจำ",
             })}
           </p>
         </div>
@@ -99,7 +103,7 @@ export default function SettingsHub() {
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)]/60 px-3 py-1.5 text-[12.5px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
         >
           <Rocket size={13} />
-          {tr({ zh: "引导", en: "Tour" })}
+          {tr({ zh: "引导", en: "Tour", th: "นำชม" })}
         </button>
       </header>
 
@@ -206,6 +210,7 @@ function ModelPreview({
         {tr({
           zh: `${stats.done}/${stats.total} 已配置`,
           en: `${stats.done}/${stats.total} configured`,
+          th: `ตั้งค่าแล้ว ${stats.done}/${stats.total}`,
         })}
       </span>
     </div>
@@ -222,13 +227,13 @@ function NetworkPreviewRow({
   return (
     <div className="flex items-center gap-2 text-[12px] text-[var(--muted-foreground)]">
       <span className="shrink-0 text-[var(--muted-foreground)]/70">
-        {tr({ zh: "API", en: "API" })}
+        {tr({ zh: "API", en: "API", th: "API" })}
       </span>
       <span
         className="truncate font-mono text-[11.5px] text-[var(--foreground)]"
         title={network.apiBase}
       >
-        {network.apiBase || tr({ zh: "本地", en: "local" })}
+        {network.apiBase || tr({ zh: "本地", en: "local", th: "ในเครื่อง" })}
       </span>
     </div>
   );

@@ -29,8 +29,11 @@ export default function SettingsSectionGrid({
   categoryKey: string;
 }) {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const tr = useCallback(
+    (l: Lang) => (lang.startsWith("zh") ? l.zh : lang.startsWith("th") ? l.th : l.en),
+    [lang],
+  );
 
   const { catalog, catalogEditable } = useSettings();
 
@@ -59,8 +62,8 @@ export default function SettingsSectionGrid({
       return {
         ok: configured,
         label: configured
-          ? { zh: "已配置", en: "Configured" }
-          : { zh: "未配置", en: "Not set" },
+          ? { zh: "已配置", en: "Configured", th: "ตั้งค่าแล้ว" }
+          : { zh: "未配置", en: "Not set", th: "ยังไม่ได้ตั้งค่า" },
       };
     },
     [catalog, catalogEditable],

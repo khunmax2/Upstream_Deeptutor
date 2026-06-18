@@ -718,12 +718,13 @@ export default function BookCreator({
                   value={language}
                   onChange={(e) => {
                     languageTouchedRef.current = true;
-                    setLanguage(e.target.value as "en" | "zh");
+                    setLanguage(e.target.value as "en" | "zh" | "th");
                   }}
                   className="ml-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-1.5 py-0.5 text-xs text-[var(--foreground)]"
                 >
                   <option value="en">{t("language.english")}</option>
                   <option value="zh">{t("language.chinese")}</option>
+                  <option value="th">{t("language.thai")}</option>
                 </select>
               </label>
               <button

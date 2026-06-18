@@ -37,7 +37,7 @@ import type { ServiceName } from "@/components/settings/SettingsContext";
  * breadcrumb trail rendered top-left on every page.
  */
 
-export type Lang = { zh: string; en: string };
+export type Lang = { zh: string; en: string; th: string };
 
 export interface SettingsLeaf {
   key: string;
@@ -69,10 +69,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "llm",
     href: "/settings/llm",
-    label: { zh: "LLM", en: "LLM" },
+    label: { zh: "LLM", en: "LLM", th: "LLM" },
     blurb: {
       zh: "语言模型供应商与当前档位。",
       en: "Language model providers and active profile.",
+      th: "ผู้ให้บริการโมเดลภาษาและโปรไฟล์ที่ใช้งาน",
     },
     icon: Brain,
     tile: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
@@ -81,10 +82,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "embedding",
     href: "/settings/embedding",
-    label: { zh: "嵌入模型", en: "Embedding" },
+    label: { zh: "嵌入模型", en: "Embedding", th: "Embedding" },
     blurb: {
       zh: "向量模型供应商与维度。",
       en: "Embedding model providers and dimensions.",
+      th: "ผู้ให้บริการโมเดล embedding และมิติ",
     },
     icon: Database,
     tile: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
@@ -93,8 +95,12 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "search",
     href: "/settings/search",
-    label: { zh: "搜索", en: "Search" },
-    blurb: { zh: "联网搜索供应商。", en: "Web search providers." },
+    label: { zh: "搜索", en: "Search", th: "ค้นหา" },
+    blurb: {
+      zh: "联网搜索供应商。",
+      en: "Web search providers.",
+      th: "ผู้ให้บริการค้นหาเว็บ",
+    },
     icon: Search,
     tile: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     service: "search",
@@ -102,10 +108,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "tts",
     href: "/settings/tts",
-    label: { zh: "语音合成", en: "Text-to-Speech" },
+    label: { zh: "语音合成", en: "Text-to-Speech", th: "แปลงข้อความเป็นเสียง" },
     blurb: {
       zh: "朗读助手回复的 TTS 供应商。",
       en: "Text-to-speech for reading replies aloud.",
+      th: "TTS สำหรับอ่านคำตอบออกเสียง",
     },
     icon: AudioLines,
     tile: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
@@ -114,10 +121,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "stt",
     href: "/settings/stt",
-    label: { zh: "语音识别", en: "Speech-to-Text" },
+    label: { zh: "语音识别", en: "Speech-to-Text", th: "แปลงเสียงเป็นข้อความ" },
     blurb: {
       zh: "转写麦克风录音的 STT 供应商。",
       en: "Speech-to-text for the composer microphone.",
+      th: "STT สำหรับไมโครโฟนในช่องพิมพ์",
     },
     icon: Mic,
     tile: "bg-pink-500/10 text-pink-600 dark:text-pink-400",
@@ -126,10 +134,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "imagegen",
     href: "/settings/image",
-    label: { zh: "文生图", en: "Image Generation" },
+    label: { zh: "文生图", en: "Image Generation", th: "การสร้างภาพ" },
     blurb: {
       zh: "chat imagegen 工具使用的文生图模型。",
       en: "Text-to-image model for the chat imagegen tool.",
+      th: "โมเดลแปลงข้อความเป็นภาพสำหรับเครื่องมือ imagegen ในแชต",
     },
     icon: ImageIcon,
     tile: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
@@ -138,10 +147,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "videogen",
     href: "/settings/video",
-    label: { zh: "文生视频", en: "Video Generation" },
+    label: { zh: "文生视频", en: "Video Generation", th: "การสร้างวิดีโอ" },
     blurb: {
       zh: "chat videogen 工具使用的文生视频模型。",
       en: "Text-to-video model for the chat videogen tool.",
+      th: "โมเดลแปลงข้อความเป็นวิดีโอสำหรับเครื่องมือ videogen ในแชต",
     },
     icon: Clapperboard,
     tile: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
@@ -153,10 +163,11 @@ const CHAT_CHILDREN: SettingsLeaf[] = [
   {
     key: "tools",
     href: "/settings/tools",
-    label: { zh: "工具", en: "Tools" },
+    label: { zh: "工具", en: "Tools", th: "เครื่องมือ" },
     blurb: {
       zh: "对话智能体可调用的内置工具。",
       en: "Built-in tools the chat agent can invoke.",
+      th: "เครื่องมือในตัวที่เอเจนต์แชตเรียกใช้ได้",
     },
     icon: Wrench,
     tile: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
@@ -164,10 +175,11 @@ const CHAT_CHILDREN: SettingsLeaf[] = [
   {
     key: "mcp",
     href: "/settings/mcp",
-    label: { zh: "MCP 服务器", en: "MCP servers" },
+    label: { zh: "MCP 服务器", en: "MCP servers", th: "เซิร์ฟเวอร์ MCP" },
     blurb: {
       zh: "部署共享的外部 MCP 服务器。",
       en: "External MCP servers shared by the deployment.",
+      th: "เซิร์ฟเวอร์ MCP ภายนอกที่แชร์ในการใช้งานนี้",
     },
     icon: Plug,
     tile: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
@@ -176,10 +188,11 @@ const CHAT_CHILDREN: SettingsLeaf[] = [
   {
     key: "capabilities",
     href: "/settings/capabilities",
-    label: { zh: "能力", en: "Capabilities" },
+    label: { zh: "能力", en: "Capabilities", th: "ความสามารถ" },
     blurb: {
       zh: "各能力的 LLM 参数与运行时旋钮。",
       en: "Per-capability LLM parameters and runtime knobs.",
+      th: "พารามิเตอร์ LLM และค่าปรับแต่งรันไทม์แยกตามความสามารถ",
     },
     icon: SlidersHorizontal,
     tile: "bg-lime-500/10 text-lime-600 dark:text-lime-400",
@@ -189,27 +202,33 @@ const CHAT_CHILDREN: SettingsLeaf[] = [
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     key: "appearance",
-    label: { zh: "外观", en: "Appearance" },
-    blurb: { zh: "视觉主题与界面语言", en: "Theme and interface language" },
+    label: { zh: "外观", en: "Appearance", th: "รูปลักษณ์" },
+    blurb: {
+      zh: "视觉主题与界面语言",
+      en: "Theme and interface language",
+      th: "ธีมและภาษาของอินเทอร์เฟซ",
+    },
     icon: Palette,
     href: "/settings/appearance",
   },
   {
     key: "network",
-    label: { zh: "网络", en: "Network" },
+    label: { zh: "网络", en: "Network", th: "เครือข่าย" },
     blurb: {
       zh: "端口、浏览器 API 地址与 CORS",
       en: "Ports, browser API base, and CORS",
+      th: "พอร์ต, base ของ API ฝั่งเบราว์เซอร์ และ CORS",
     },
     icon: Network,
     href: "/settings/network",
   },
   {
     key: "models",
-    label: { zh: "模型", en: "Models" },
+    label: { zh: "模型", en: "Models", th: "โมเดล" },
     blurb: {
       zh: "语言、向量、搜索、语音与生成模型",
       en: "Language, embedding, search, voice, and generation models",
+      th: "โมเดลภาษา, embedding, ค้นหา, เสียง และการสร้างสื่อ",
     },
     icon: Boxes,
     href: "/settings/models",
@@ -217,17 +236,22 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   },
   {
     key: "knowledge",
-    label: { zh: "知识库", en: "Knowledge Base" },
-    blurb: { zh: "文档解析引擎", en: "Document parsing engine" },
+    label: { zh: "知识库", en: "Knowledge Base", th: "ฐานความรู้" },
+    blurb: {
+      zh: "文档解析引擎",
+      en: "Document parsing engine",
+      th: "เอนจินแยกวิเคราะห์เอกสาร",
+    },
     icon: Library,
     href: "/settings/document-parsing",
   },
   {
     key: "chat",
-    label: { zh: "聊天", en: "Chat" },
+    label: { zh: "聊天", en: "Chat", th: "แชต" },
     blurb: {
       zh: "工具、MCP 服务器与能力",
       en: "Tools, MCP servers, and capabilities",
+      th: "เครื่องมือ, เซิร์ฟเวอร์ MCP และความสามารถ",
     },
     icon: MessagesSquare,
     href: "/settings/chat",
@@ -235,10 +259,11 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   },
   {
     key: "memory",
-    label: { zh: "记忆", en: "Memory" },
+    label: { zh: "记忆", en: "Memory", th: "ความจำ" },
     blurb: {
       zh: "分块、预算、去重与引用策略",
       en: "Chunking, budget, dedup, and reference policies",
+      th: "การแบ่งชังก์, งบประมาณ, การกำจัดข้อมูลซ้ำ และนโยบายการอ้างอิง",
     },
     icon: BrainCircuit,
     href: "/settings/memory",
@@ -246,7 +271,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
 ];
 
 export const SETTINGS_HUB_HREF = "/settings";
-const HUB_LABEL: Lang = { zh: "设置", en: "Settings" };
+const HUB_LABEL: Lang = { zh: "设置", en: "Settings", th: "ตั้งค่า" };
 
 /** Routes that are pure navigation (hub + sub-hubs) — no Save/Apply toolbar. */
 const NAV_ONLY_ROUTES = new Set<string>([
