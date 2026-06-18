@@ -31,6 +31,7 @@ def _normalize_language(language: Any, default: str = "en") -> str:
     Normalize language codes:
     - en/english -> en
     - zh/chinese/cn -> zh
+    - th/thai -> th
     """
     if language is None or language == "":
         language = default
@@ -39,6 +40,8 @@ def _normalize_language(language: Any, default: str = "en") -> str:
         s = language.lower().strip()
         if s in {"en", "english"}:
             return "en"
+        if s in {"th", "thai"}:
+            return "th"
         if s in {"zh", "chinese", "cn"}:
             return "zh"
 

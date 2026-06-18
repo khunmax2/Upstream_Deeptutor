@@ -7,6 +7,8 @@ from typing import Any
 
 def _parse_language(language: str | None) -> str:
     raw = (language or "en").strip().lower()
+    if raw.startswith("th") or raw == "thai":
+        return "th"
     if raw.startswith("zh") or raw in {"cn", "chinese"}:
         return "zh"
     return "en"

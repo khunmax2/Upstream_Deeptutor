@@ -12,6 +12,7 @@ _LANGUAGE_LABELS: dict[str, str] = {
     "zh-cn": "中文（简体）",
     "zh-tw": "繁體中文",
     "en": "English",
+    "th": "ภาษาไทย",
     "ja": "日本語",
     "ko": "한국어",
     "es": "Español",
@@ -25,6 +26,31 @@ _LANGUAGE_LABELS: dict[str, str] = {
 
 def normalize_language(language: str | None) -> str:
     return (language or "en").strip().lower() or "en"
+
+
+_AGENT_LANGS = {"zh", "th", "en"}
+_AGENT_LANG_ALIASES = {"thai": "th", "chinese": "zh", "cn": "zh", "english": "en"}
+
+
+def normalize_agent_language(language: str | None) -> str:
+    """Collapse an arbitrary language string to a supported agent code.
+
+    Returns one of ``"zh"``, ``"th"`` or ``"en"``. Any ``zh*`` locale collapses
+    to ``"zh"``; recognised aliases map to their base code; everything else
+    falls back to ``"en"``.
+
+    Args:
+        language: Raw language value (e.g. ``"th"``, ``"thai"``, ``"zh-CN"``).
+
+    Returns:
+        A normalized agent language code.
+    """
+    s = (language or "en").strip().lower()
+    if s.startswith("zh"):
+        return "zh"
+    if s in _AGENT_LANGS:
+        return s
+    return _AGENT_LANG_ALIASES.get(s, "en")
 
 
 def language_label(language: str | None) -> str:
@@ -77,5 +103,6 @@ __all__ = [
     "append_language_directive",
     "language_directive",
     "language_label",
+    "normalize_agent_language",
     "normalize_language",
 ]
