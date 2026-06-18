@@ -63,9 +63,32 @@ def _prompt_text(prompts: dict[str, Any], path: tuple[str, ...]) -> str:
 
 
 def _load_system_prompt(language: str) -> str:
-    lang = "zh" if language.lower().startswith("zh") else "en"
-    prompt = resources.files(__package__).joinpath("prompts", lang, "system.md")
-    return prompt.read_text(encoding="utf-8").strip()
+    # Lazy import: loaded during capability-registry bootstrap, before the
+    # prompt package finishes initializing.
+    from deeptutor.services.prompt.language import (
+        append_language_directive,
+        normalize_agent_language,
+    )
+
+    lang = normalize_agent_language(language)
+    try:
+        text = (
+            resources.files(__package__)
+            .joinpath("prompts", lang, "system.md")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        return text
+    except (FileNotFoundError, OSError):
+        # No localized prompt (e.g. th): fall back to the English system prompt
+        # and rely on the language directive to keep the output in `lang`.
+        text = (
+            resources.files(__package__)
+            .joinpath("prompts", "en", "system.md")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        return append_language_directive(text, lang)
 
 
 __all__ = ["MasteryLoopCapability"]

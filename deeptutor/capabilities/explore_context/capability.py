@@ -46,20 +46,31 @@ _PROMPT_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _load_prompts(language: str) -> dict[str, Any]:
-    lang = "zh" if str(language or "en").lower().startswith("zh") else "en"
+    # Lazy import: this module is loaded during capability-registry bootstrap,
+    # before the prompt package finishes initializing.
+    from deeptutor.services.prompt.language import normalize_agent_language
+
+    lang = normalize_agent_language(language)
     cached = _PROMPT_CACHE.get(lang)
     if cached is not None:
         return cached
-    try:
-        text = (
-            resources.files(__package__)
-            .joinpath("prompts", lang, "explore_context.yaml")
-            .read_text(encoding="utf-8")
-        )
-        data = yaml.safe_load(text)
-    except Exception:
-        logger.warning("failed to load explore_context prompts (%s)", lang, exc_info=True)
-        data = None
+    # Try the requested language, then fall back to English so a missing
+    # localized prompt set (e.g. th) never yields empty prompts; the explorer
+    # appends the language directive to keep the briefing in `lang`.
+    data: Any = None
+    for candidate in (lang, "en"):
+        try:
+            text = (
+                resources.files(__package__)
+                .joinpath("prompts", candidate, "explore_context.yaml")
+                .read_text(encoding="utf-8")
+            )
+            data = yaml.safe_load(text)
+        except Exception:
+            logger.warning("failed to load explore_context prompts (%s)", candidate, exc_info=True)
+            data = None
+        if isinstance(data, dict) and data:
+            break
     result = data if isinstance(data, dict) else {}
     _PROMPT_CACHE[lang] = result
     return result

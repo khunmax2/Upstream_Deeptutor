@@ -175,12 +175,13 @@ def parse_language(language: Any) -> str:
     Supported language representations:
     - English: "en", "english", "English"
     - Chinese: "zh", "chinese", "Chinese"
+    - Thai: "th", "thai", "Thai"
 
     Args:
-        language: Language configuration value (can be "zh"/"en"/"Chinese"/"English" etc.)
+        language: Language configuration value (can be "zh"/"en"/"th"/"Chinese"/"English" etc.)
 
     Returns:
-        Standardized language code: 'zh' or 'en', defaults to 'zh'
+        Standardized language code: 'zh', 'en' or 'th', defaults to 'zh'
     """
     if not language:
         return "zh"
@@ -189,6 +190,8 @@ def parse_language(language: Any) -> str:
         lang_lower = language.lower()
         if lang_lower in ["en", "english"]:
             return "en"
+        if lang_lower in ["th", "thai"]:
+            return "th"
         if lang_lower in ["zh", "chinese", "cn"]:
             return "zh"
 

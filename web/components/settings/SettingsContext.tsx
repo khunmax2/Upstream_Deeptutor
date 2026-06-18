@@ -99,7 +99,7 @@ export type Catalog = {
 
 export type UiSettings = {
   theme: "light" | "dark" | "glass" | "snow";
-  language: "en" | "zh";
+  language: "en" | "zh" | "th";
 };
 
 export type ProviderOption = {
@@ -290,7 +290,8 @@ function nextModelName(
   models: CatalogModel[],
   language: UiSettings["language"],
 ): string {
-  const prefix = language === "zh" ? "模型" : "Model ";
+  const prefix =
+    { en: "Model ", zh: "模型", th: "โมเดล " }[language] ?? "Model ";
   const used = new Set(models.map((model) => model.name.trim()));
   let index = models.length + 1;
   while (used.has(`${prefix}${index}`)) {

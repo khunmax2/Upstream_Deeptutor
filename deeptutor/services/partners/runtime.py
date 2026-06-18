@@ -40,6 +40,7 @@ from deeptutor.services.partners.commands import PartnerCommandHandler
 from deeptutor.services.partners.scope import partner_user
 from deeptutor.services.partners.sessions import PartnerSessionStore
 from deeptutor.services.partners.workspace import ensure_partner_workspace, read_soul
+from deeptutor.services.prompt.language import normalize_agent_language
 
 logger = logging.getLogger(__name__)
 
@@ -439,8 +440,7 @@ class PartnerRunner:
             return []
 
     def _language(self) -> str:
-        lang = str(getattr(self.config, "language", "") or "").strip().lower()
-        return "zh" if lang.startswith("zh") else "en"
+        return normalize_agent_language(getattr(self.config, "language", "") or "")
 
     def _channel_delivery_flag(self, channel_name: str, name: str, *, default: bool) -> bool:
         channels = getattr(self.config, "channels", None) or {}

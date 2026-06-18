@@ -42,6 +42,10 @@ from deeptutor.core.trace import build_trace_metadata, merge_trace_metadata, new
 from deeptutor.runtime.registry.tool_registry import get_tool_registry
 from deeptutor.services.llm import clean_thinking_tags, get_llm_config, get_token_limit_kwargs
 from deeptutor.services.llm import stream as llm_stream
+from deeptutor.services.prompt.language import (
+    append_language_directive,
+    normalize_agent_language,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +91,7 @@ class ContextExplorer:
     """Investigate the turn's attached sources and return an objective briefing."""
 
     def __init__(self, *, language: str, prompts: dict[str, Any]) -> None:
-        self.language = "zh" if str(language or "en").lower().startswith("zh") else "en"
+        self.language = normalize_agent_language(language)
         self._prompts = prompts or {}
         cfg = get_llm_config()
         self.model = getattr(cfg, "model", None)
@@ -159,6 +163,7 @@ class ContextExplorer:
         if not system_prompt or not user_template:
             logger.warning("explore_context loop prompts missing; using single pass")
             return ""
+        system_prompt = append_language_directive(system_prompt, self.language)
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
@@ -376,6 +381,7 @@ class ContextExplorer:
         if not system_prompt or not user_template:
             logger.warning("explore_context single-pass prompts missing; skipping pre-pass")
             return ""
+        system_prompt = append_language_directive(system_prompt, self.language)
         user_prompt = user_template.format(
             question=(context.user_message or "").strip() or "(empty)",
             mode=str(context.active_capability or "chat"),
@@ -456,7 +462,7 @@ class ContextExplorer:
         for prefix, (en, zh) in _KIND_BY_PREFIX.items():
             if sid.startswith(prefix):
                 return zh if self.language == "zh" else en
-        return "来源" if self.language == "zh" else "Source"
+        return {"zh": "来源", "th": "แหล่งข้อมูล", "en": "Source"}.get(self.language, "Source")
 
     def _clip(self, text: str, limit: int) -> str:
         text = (text or "").strip()
@@ -464,7 +470,11 @@ class ContextExplorer:
             return ""
         if len(text) <= limit:
             return text
-        note = "\n…（已截断）" if self.language == "zh" else "\n…(truncated)"
+        note = {
+            "zh": "\n…（已截断）",
+            "th": "\n…(ตัดทอน)",
+            "en": "\n…(truncated)",
+        }.get(self.language, "\n…(truncated)")
         return text[:limit].rstrip() + note
 
     # ---- shared helpers --------------------------------------------------
@@ -511,7 +521,11 @@ class ContextExplorer:
     def _status_exploring(self) -> str:
         return self._t(
             "status.exploring",
-            default="上下文调查" if self.language == "zh" else "Context exploration",
+            default={
+                "zh": "上下文调查",
+                "th": "การสำรวจบริบท",
+                "en": "Context exploration",
+            }.get(self.language, "Context exploration"),
         )
 
     def _briefing_header(self) -> str:

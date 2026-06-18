@@ -52,6 +52,7 @@ from deeptutor.services.llm import (
 )
 from deeptutor.services.llm.context_window import resolve_effective_context_window
 from deeptutor.services.prompt import get_prompt_manager
+from deeptutor.services.prompt.language import normalize_agent_language
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ class AgenticChatPipeline:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> None:
-        self.language = "zh" if language.lower().startswith("zh") else "en"
+        self.language = normalize_agent_language(language)
         self.llm_config = get_llm_config()
         self.binding = getattr(self.llm_config, "binding", None) or "openai"
         self.model = getattr(self.llm_config, "model", None)
@@ -618,7 +619,13 @@ class AgenticChatPipeline:
         if not choices:
             return ""
         capped = choices[:30]
-        lines = ["[用户的笔记本列表]" if self.language == "zh" else "[User's notebooks]"]
+        lines = [
+            {
+                "zh": "[用户的笔记本列表]",
+                "th": "[รายการสมุดบันทึกของผู้ใช้]",
+                "en": "[User's notebooks]",
+            }.get(self.language, "[User's notebooks]")
+        ]
         for entry in capped:
             nid = entry.get("id", "")
             name = entry.get("name", nid)
@@ -1172,6 +1179,8 @@ class AgenticChatPipeline:
         joined = ", ".join(kbs)
         if self.language == "zh":
             return f"用户已挂载知识库：{joined}。调用 rag 时，kb_name 必须从其中选一个。"
+        if self.language == "th":
+            return f"ฐานความรู้ที่แนบไว้: {joined} เมื่อเรียกใช้ rag ค่า kb_name ต้องเป็นหนึ่งในชื่อเหล่านี้"
         return f"Attached knowledge bases: {joined}. When calling rag, kb_name must be one of these names."
 
     def _workspace_system_note(self, context: UnifiedContext) -> str:
@@ -1197,6 +1206,16 @@ class AgenticChatPipeline:
                 "直接通过 exec 写入并运行脚本（如 heredoc：python - <<'PY' … PY，"
                 "或 cat > gen.py <<'EOF' … EOF 后再运行）。生成的文件会自动以可下载"
                 "卡片呈现给用户——在回答里描述你做了什么即可，不要粘贴原始 URL。"
+            )
+        if self.language == "th":
+            return (
+                "[เวิร์กสเปซของเทิร์นนี้]\n"
+                f"สคริปต์และไฟล์ชั่วคราวควรเขียนไว้ใต้: {exec_dir}\n"
+                "พาธสัมพัทธ์จะถูกแปลงไปยังไดเรกทอรีนี้ เมื่อต้องสร้างไฟล์ PDF, รูปภาพ, "
+                "สเปรดชีต หรือไฟล์ดาวน์โหลดอื่นๆ ให้เขียนและรันสคริปต์ผ่าน exec โดยตรง "
+                "(เช่น heredoc: python - <<'PY' … PY หรือ cat > gen.py <<'EOF' … EOF "
+                "แล้วรัน) ไฟล์ที่สร้างจะแสดงให้ผู้ใช้เป็นการ์ดดาวน์โหลดอัตโนมัติ — "
+                "อธิบายสิ่งที่คุณทำในคำตอบก็พอ ไม่ต้องวาง URL ดิบ"
             )
         return (
             "[Turn workspace]\n"

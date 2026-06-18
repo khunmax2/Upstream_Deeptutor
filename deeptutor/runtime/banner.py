@@ -242,6 +242,11 @@ def _pick_language(language: str | None) -> str:
     code = str(language).lower().strip()
     if code in {"zh", "zh-cn", "zh-hans", "chinese", "cn"}:
         return "zh"
+    # Thai is recognised but the CLI banner catalog (LABELS) ships only en/zh,
+    # so Thai users get the English banner. A full "th" catalog is deferred
+    # (CLI-only, low priority); the web UI and agent output are fully localized.
+    if code.startswith("th") or code == "thai":
+        return "en"
     return "en"
 
 

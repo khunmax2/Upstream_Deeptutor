@@ -30,7 +30,13 @@ class Option:
     en: str
 
     def label(self, locale: str = "zh") -> str:
-        return self.en if locale == "en" else self.zh
+        if locale == "en":
+            return self.en
+        # Thai taxonomy labels aren't authored yet; fall back to English rather
+        # than leaking Chinese to Thai users.
+        if locale == "th":
+            return self.en
+        return self.zh
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +49,11 @@ class DomainNode:
     children: tuple[Option, ...] = ()
 
     def label(self, locale: str = "zh") -> str:
-        return self.en if locale == "en" else self.zh
+        if locale == "en":
+            return self.en
+        if locale == "th":
+            return self.en
+        return self.zh
 
 
 # ── required: track (single-select) ───────────────────────────────────────

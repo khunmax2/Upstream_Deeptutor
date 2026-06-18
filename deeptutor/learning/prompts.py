@@ -31,7 +31,14 @@ def _get_nested(data: dict[str, Any], path: str, default: str = "") -> str:
 def get_learning_prompts(language: str = "zh") -> dict[str, Any]:
     """Load localized Mastery Path LLM prompts."""
     lang = parse_language(language)
-    candidates = [lang, "zh" if lang != "zh" else "en"]
+    # Each language falls back to English (then Chinese) rather than coercing
+    # Thai onto the Chinese asset.
+    if lang == "th":
+        candidates = ["th", "en"]
+    elif lang == "zh":
+        candidates = ["zh", "en"]
+    else:
+        candidates = ["en", "zh"]
     for candidate in candidates:
         path = _PROMPT_DIR / f"{candidate}.yaml"
         if path.exists():

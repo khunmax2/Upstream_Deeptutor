@@ -106,8 +106,8 @@ class ToolPromptComposer:
         Tools without a ``short_description`` are skipped entirely so the
         block never carries empty bullets.
         """
-        when_label = "When to use" if self.language != "zh" else "适用场景"
-        input_label = "Input" if self.language != "zh" else "参数格式"
+        when_label = {"zh": "适用场景", "th": "เมื่อไรควรใช้"}.get(self.language, "When to use")
+        input_label = {"zh": "参数格式", "th": "พารามิเตอร์"}.get(self.language, "Input")
         blocks: list[str] = []
         for name, hint in hints:
             if not hint.short_description:

@@ -61,9 +61,9 @@ class ToolHintsPayload(BaseModel):
 class BuiltinToolPayload(BaseModel):
     name: str
     description: str
-    description_i18n: dict[Literal["en", "zh"], str] = {}
+    description_i18n: dict[Literal["en", "zh", "th"], str] = {}
     parameters: list[ToolParameterPayload]
-    hints: dict[Literal["en", "zh"], ToolHintsPayload]
+    hints: dict[Literal["en", "zh", "th"], ToolHintsPayload]
     aliases: list[str] = []
     # True iff the user is allowed to switch this tool on/off from the
     # /settings/tools UI. Locked-on tools (auto-mounted by the chat
@@ -157,6 +157,7 @@ def _build_tool_payload(
         hints={
             "en": _serialise_hints(tool.get_prompt_hints(language="en")),
             "zh": _serialise_hints(tool.get_prompt_hints(language="zh")),
+            "th": _serialise_hints(tool.get_prompt_hints(language="th")),
         },
         aliases=_collect_aliases_for(name),
         toggleable=toggleable,

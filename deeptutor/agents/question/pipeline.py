@@ -1605,13 +1605,17 @@ class QuestionPipeline:
         return text or self._fallback_empty_tool_list()
 
     def _fallback_empty_tool_list(self) -> str:
-        return "- 无" if self.language == "zh" else "- none"
+        return {"zh": "- 无", "th": "- ไม่มี"}.get(self.language, "- none")
 
     def _kb_system_note(self) -> str:
         if not self.kb_name:
             return ""
         if self.language == "zh":
             return f"用户已挂载知识库：{self.kb_name}。调用 rag 时，kb_name 必须填这个名称。"
+        if self.language == "th":
+            return (
+                f"ฐานความรู้ที่แนบไว้: {self.kb_name} เมื่อเรียกใช้ rag ค่า kb_name ต้องเป็น {self.kb_name!r}"
+            )
         return (
             f"Attached knowledge bases: {self.kb_name}. When calling rag, kb_name "
             f"must be {self.kb_name!r}."
@@ -1785,17 +1789,17 @@ class QuestionPipeline:
         return "\n\n".join(lines)
 
     def _render_question_markdown(self, qa: QuizPair, ordinal: int) -> str:
-        header = "题目" if self.language == "zh" else "Question"
+        header = {"zh": "题目", "th": "ข้อ"}.get(self.language, "Question")
         lines = [f"### {header} {ordinal}\n", qa.question]
         if isinstance(qa.options, dict) and qa.options:
             for key in _CHOICE_KEYS:
                 if key in qa.options:
                     lines.append(f"- {key}. {qa.options[key]}")
         if qa.correct_answer:
-            answer_label = "答案" if self.language == "zh" else "Answer"
+            answer_label = {"zh": "答案", "th": "เฉลย"}.get(self.language, "Answer")
             lines.append(f"\n**{answer_label}:** {qa.correct_answer}")
         if qa.explanation:
-            expl_label = "解析" if self.language == "zh" else "Explanation"
+            expl_label = {"zh": "解析", "th": "คำอธิบาย"}.get(self.language, "Explanation")
             lines.append(f"\n**{expl_label}:** {qa.explanation}")
         return "\n".join(lines).strip()
 

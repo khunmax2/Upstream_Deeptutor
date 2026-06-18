@@ -61,12 +61,14 @@ export function formatContextWindowSource(
 
 export function formatContextWindowUpdatedAt(
   value: string | undefined,
-  language: "en" | "zh",
+  language: "en" | "zh" | "th",
 ): string {
   if (!value) return "";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
+  const locale =
+    { en: "en-US", zh: "zh-CN", th: "th-TH" }[language] ?? "en-US";
+  return parsed.toLocaleString(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -94,11 +96,13 @@ export function activeModelDetail(
 
 // Category-label typography. English looks good with uppercase + wide tracking;
 // CJK glyphs are already square blocks so we drop both and bump size a hair.
+// Thai script likewise should not use uppercase/letter-spacing, so it shares
+// the CJK branch.
 export function labelClass(
   size: "sm" | "md" | "lg",
-  language: "en" | "zh",
+  language: "en" | "zh" | "th",
 ): string {
-  if (language === "zh") {
+  if (language === "zh" || language === "th") {
     if (size === "sm") return "text-[10.5px] font-medium";
     if (size === "lg") return "text-[12px] font-medium";
     return "text-[11px] font-medium";
