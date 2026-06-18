@@ -16,6 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from deeptutor.services.config import PROJECT_ROOT, load_config_with_main
 from deeptutor.services.llm import stream as llm_stream
+from deeptutor.services.prompt.language import append_language_directive
 from deeptutor.services.settings.interface_settings import get_ui_language
 from deeptutor.utils.error_utils import format_exception_message
 
@@ -275,11 +276,11 @@ async def websocket_quiz_judge(websocket: WebSocket):
         return
 
     requested_language = (data.get("language") or "").strip().lower()
-    if requested_language not in ("zh", "en"):
+    if requested_language not in ("zh", "en", "th"):
         requested_language = get_ui_language(
             default=_config.get("system", {}).get("language", "en")
         )
-        if requested_language not in ("zh", "en"):
+        if requested_language not in ("zh", "en", "th"):
             requested_language = "en"
 
     user_answer = data.get("user_answer") or ""
@@ -336,6 +337,10 @@ async def websocket_quiz_judge(websocket: WebSocket):
 
     options_value = data.get("options") if isinstance(data.get("options"), dict) else None
     system_prompt = _JUDGE_SYSTEM_PROMPTS.get(requested_language, _JUDGE_SYSTEM_PROMPTS["en"])
+    # Languages without a hand-written judge prompt (e.g. th) reuse the English
+    # prompt plus the shared directive so feedback still comes back localized.
+    if requested_language not in _JUDGE_SYSTEM_PROMPTS:
+        system_prompt = append_language_directive(system_prompt, requested_language)
     user_prompt = _build_judge_user_prompt(
         language=requested_language,
         question=question_text,
