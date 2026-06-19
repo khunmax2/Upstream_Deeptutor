@@ -44,4 +44,46 @@ adapters). Small UI touch-ups (channel icon, Thai labels). _Not yet landed._
 
 _Record each upstream version merged into this fork here._
 
-- _(none yet — fork is at baseline v1.4.6)_
+### v1.4.8 (`88c25653`) — merged 2026-06-19
+
+Merged upstream **v1.4.8** into `main` (merge commit `e62fdd3d`). Brought in the
+upstream **Subagent / Connected-Agents / Partners** stack (~33 new files:
+`deeptutor/services/subagent/*`, `deeptutor/capabilities/subagent/*`, subagents API
+router, `web/.../agents/*` UI). 146 files, +11,674 / −567 from the previous fork
+point (v1.4.6). Upstream CI for the target was green before merging.
+
+Conflicts: 4 content conflicts + 2 auto-merged HIGH-risk files, all re-localized:
+
+- `deeptutor/agents/chat/agentic_pipeline.py` — kept both imports
+  (`normalize_agent_language` + upstream `PARTNER_BUILTIN_TOOL_NAMES`).
+- `web/components/settings/SettingsHub.tsx`, `SettingsSectionGrid.tsx` — took
+  upstream's new `tone`/`dot` readiness shape; added `th` labels (the shared
+  `Lang` type requires `th`).
+- `web/components/space/SpaceDashboard.tsx` — dropped the fork's obsolete
+  `/space/agents` tile (upstream relocated agents to top-level `/agents` and
+  deleted `/space/agents/page.tsx`).
+- `web/lib/settings-nav.ts` (auto-merged) — added `th` to the new **Partners &
+  Agents** nav (Claude Code, Codex leaves + category label/blurb).
+- `deeptutor/services/session/source_inventory.py` (auto-merged) — added a `th`
+  partner label; existing Thai transcript framing verified intact.
+
+Thai work after merge:
+
+- **+29 new UI keys** translated into `web/locales/th/app.json` (the Connected-Agents
+  / conversation-command surface); parity restored to 2643 keys vs `en`.
+- **New `th` gate** in `deeptutor/capabilities/subagent/capability.py` — the subagent
+  framing prompt was zh/en only; added a Thai branch via `normalize_agent_language`
+  (lazy import to avoid a circular import).
+
+Deferred (tracked follow-up): the new agents-config components
+`web/components/agents/ConnectedAgents.tsx` and
+`web/components/settings/SubagentSettingsEditor.tsx` use a local `{zh,en}` `Lang`
+and fall back to English for Thai (~72 strings).
+
+Verification: web build OK, ruff check+format OK, i18n parity OK, live Thai chat OK,
+pytest 2483 passed (10 pre-existing optional-dep failures — telegram/slack/msteams —
+confirmed identical on `main`). Detail: `REPORT_sync_v1.4.8.md` (impact analysis in
+`REPORT_impact_v1.4.8.md`).
+
+> Note: the fork's customizations are now rebased on **v1.4.8**; the next sync's
+> merge-base is `88c25653`.
