@@ -78,7 +78,8 @@ Thai work after merge:
 Deferred (tracked follow-up): the new agents-config components
 `web/components/agents/ConnectedAgents.tsx` and
 `web/components/settings/SubagentSettingsEditor.tsx` use a local `{zh,en}` `Lang`
-and fall back to English for Thai (~72 strings).
+and fall back to English for Thai (~72 strings). _Resolved 2026-06-19 — see
+"Agents-config UI + th-TH" below._
 
 Verification: web build OK, ruff check+format OK, i18n parity OK, live Thai chat OK,
 pytest 2483 passed (10 pre-existing optional-dep failures — telegram/slack/msteams —
@@ -87,3 +88,26 @@ confirmed identical on `main`). Detail: `REPORT_sync_v1.4.8.md` (impact analysis
 
 > Note: the fork's customizations are now rebased on **v1.4.8**; the next sync's
 > merge-base is `88c25653`.
+
+### v1.4.8 follow-up — Agents-config UI + th-TH (2026-06-19)
+
+Closes the two residuals deferred from the v1.4.8 sync. Branch
+`fix/thai-agents-ui` → ff `main`.
+
+- **Localized the agents-config UI (~72 strings).** Added `th` to the local
+  `Lang` type and every label in `web/components/agents/ConnectedAgents.tsx` and
+  `web/components/settings/SubagentSettingsEditor.tsx`, and made their `tr`
+  detect Thai (`zh ? zh : th ? th : en`). `formatTs` in the editor now takes a
+  locale (`th-TH` for Thai). Edits kept the files' original double-quote/semicolon
+  style for mergeability (no whole-file reformat). Audit confirmed these were the
+  only agents components with a local `{zh,en}` `Lang`.
+- **th-TH normalization.** `normalize_agent_language()` in
+  `deeptutor/services/prompt/language.py` now collapses any `th*` locale to `th`
+  (symmetry with the existing `zh*` rule), so `th-TH` / `th_TH` no longer fall
+  back to English — fixes the subagent framing prompt for `th-TH` sessions. Added
+  `th-TH` / `th_TH` cases to `tests/services/prompt/test_language_th.py`.
+
+Verification: `npm run build` OK, `eslint` OK, `tsc --noEmit` OK, i18n parity OK,
+`pytest tests/services/prompt` 19 passed. Detail: `REPORT_followup_agents_ui.md`.
+
+> Thai localization is now **100% on v1.4.8** (no known deferred surfaces).

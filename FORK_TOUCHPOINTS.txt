@@ -37,12 +37,14 @@ deeptutor/tools/prompting/__init__.py
 web/app/(utility)/settings/appearance/page.tsx
 web/app/(utility)/settings/tools/page.tsx
 web/app/(workspace)/book/components/BookCreator.tsx
+web/components/agents/ConnectedAgents.tsx
 web/components/quiz/QuizViewer.tsx
 web/components/settings/ServiceConfigEditor.tsx
 web/components/settings/SettingsBreadcrumb.tsx
 web/components/settings/SettingsContext.tsx
 web/components/settings/SettingsHub.tsx
 web/components/settings/SettingsSectionGrid.tsx
+web/components/settings/SubagentSettingsEditor.tsx
 web/components/settings/shared.tsx
 web/components/space/SpaceDashboard.tsx
 web/context/app-shell-storage.ts
