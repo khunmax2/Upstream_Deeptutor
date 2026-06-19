@@ -1,0 +1,22 @@
+DeepTutor
+Copyright (c) the DeepTutor authors (HKUDS) — https://github.com/HKUDS/DeepTutor
+
+This product includes software developed by HKUDS and the DeepTutor
+contributors, licensed under the Apache License, Version 2.0 (see the LICENSE
+file in this repository).
+
+==============================================================================
+Modifications
+==============================================================================
+
+This distribution is a MODIFIED FORK of the upstream HKUDS/DeepTutor project,
+maintained by khunmax2 — https://github.com/khunmax2/Upstream_Deeptutor
+
+It contains changes relative to the upstream project, including (but not
+limited to) Thai (th) localization and additional channel integrations. A
+summary of the modifications is recorded in CHANGES.md, with detailed
+per-change records in the REPORT_*.md files and the git commit history.
+
+This NOTICE is provided in accordance with Section 4 of the Apache License,
+Version 2.0. The upstream attribution above is retained; the modification
+statement is added for this fork.
