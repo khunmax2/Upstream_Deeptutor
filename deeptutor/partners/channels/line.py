@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections import OrderedDict
 import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -46,6 +47,9 @@ LINE_API_BASE = "https://api.line.me/v2/bot"
 # change and to account for network delay), so we treat them as live only well
 # inside that window and otherwise fall straight through to Push.
 LINE_REPLY_TOKEN_TTL_S = 50.0
+# Hard ceiling on the in-memory token / profile caches so a public OA
+# (allow_from=["*"]) with many senders cannot grow them without bound.
+LINE_MAX_CACHE_ENTRIES = 10_000
 
 
 def _is_placeholder_token(token: str) -> bool:
@@ -55,6 +59,32 @@ def _is_placeholder_token(token: str) -> bool:
     ``replyToken`` (all ``0``); it must never be stored as a live token.
     """
     return bool(token) and set(token) == {"0"}
+
+
+def _bounded_set(
+    cache: OrderedDict[str, Any], key: str, value: Any, max_entries: int | None = None
+) -> None:
+    """Insert into an LRU-bounded cache, evicting the oldest entry over the cap.
+
+    ``max_entries`` defaults to the module-level ``LINE_MAX_CACHE_ENTRIES`` read
+    at call time (not bound as a default arg, so it stays overridable).
+    """
+    if max_entries is None:
+        max_entries = LINE_MAX_CACHE_ENTRIES
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > max_entries:
+        cache.popitem(last=False)
+
+
+def _log_webhook_task_result(future: Any) -> None:
+    """Done-callback: log a top-level webhook-task failure (ack is already sent)."""
+    try:
+        exc = future.exception()
+    except Exception:  # pragma: no cover - cancelled / not-done guard
+        return
+    if exc is not None:
+        logger.warning("LINE webhook task failed: {}", exc)
 
 
 class LineConfig(DeliveryOverrides):
@@ -73,6 +103,12 @@ class LineConfig(DeliveryOverrides):
     path: str = "/line/webhook"
     allow_from: list[str] = Field(default_factory=list)
     reply_token_ttl_s: float = Field(default=LINE_REPLY_TOKEN_TTL_S, ge=0)
+    # LINE cannot edit a message in place (no streaming) so progress/tool-hint
+    # narration adds no UX value, and each one is a separate OutboundMessage —
+    # only the first can use the free Reply, the rest become quota-counted Push.
+    # Default both off; a user can still opt back in per channel.
+    send_progress: bool = False
+    send_tool_hints: bool = False
 
 
 class LineChannel(BaseChannel):
@@ -95,10 +131,11 @@ class LineChannel(BaseChannel):
         self._server_thread: threading.Thread | None = None
         self._http: httpx.AsyncClient | None = None
         # userId -> (replyToken, issued_at). In-memory: a Push fallback only
-        # needs the userId, so nothing here needs to survive a restart.
-        self._reply_tokens: dict[str, tuple[str, float]] = {}
-        # userId -> displayName, resolved lazily via Get profile.
-        self._profile_cache: dict[str, str] = {}
+        # needs the userId, so nothing here needs to survive a restart. Bounded
+        # (LINE_MAX_CACHE_ENTRIES) so a public OA cannot grow it without limit.
+        self._reply_tokens: OrderedDict[str, tuple[str, float]] = OrderedDict()
+        # userId -> displayName, resolved lazily via Get profile. Also bounded.
+        self._profile_cache: OrderedDict[str, str] = OrderedDict()
 
     async def start(self) -> None:
         """Start the LINE webhook listener."""
@@ -144,18 +181,16 @@ class LineChannel(BaseChannel):
                     self.end_headers()
                     return
 
-                # Bridge onto the asyncio loop. _handle_webhook only parses,
-                # resolves a profile, and enqueues onto the bus — it never waits
-                # for the agent — so the 200 ack stays fast (LINE disables a
-                # slow/failing webhook).
-                try:
-                    fut = asyncio.run_coroutine_threadsafe(
-                        channel._handle_webhook(payload),
-                        channel._loop,
-                    )
-                    fut.result(timeout=15)
-                except Exception as e:
-                    logger.warning("LINE webhook handling failed: {}", e)
+                # Schedule processing fire-and-forget and ack immediately: do
+                # NOT block on the result. _handle_webhook may call Get profile
+                # for a new user, and a slow/failing ack makes LINE disable the
+                # webhook. Per-event errors are already swallowed inside
+                # _handle_webhook; a done-callback logs any top-level failure.
+                future = asyncio.run_coroutine_threadsafe(
+                    channel._handle_webhook(payload),
+                    channel._loop,
+                )
+                future.add_done_callback(_log_webhook_task_result)
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -275,9 +310,17 @@ class LineChannel(BaseChannel):
         if not user_id or not text:
             return
 
+        # Pre-gate before doing any network work or storing a token: an
+        # unauthorized sender must not be able to burn the Get-profile rate
+        # limit or fill the token cache. The base _handle_message re-checks
+        # is_allowed as the single source of truth.
+        if not self.is_allowed(user_id):
+            logger.warning("LINE: access denied for {}, ignoring", user_id)
+            return
+
         reply_token = str(event.get("replyToken") or "").strip()
         if reply_token and not _is_placeholder_token(reply_token):
-            self._reply_tokens[user_id] = (reply_token, time.time())
+            self._store_reply_token(user_id, reply_token)
 
         display_name = await self._resolve_display_name(user_id)
         await self._handle_message(
@@ -308,8 +351,22 @@ class LineChannel(BaseChannel):
             )
             resp.raise_for_status()
             name = str(resp.json().get("displayName") or "").strip() or user_id
-            self._profile_cache[user_id] = name
+            _bounded_set(self._profile_cache, user_id, name)
             return name
         except Exception as e:
             logger.debug("LINE get-profile failed for {}: {}", user_id, e)
             return user_id
+
+    def _store_reply_token(self, user_id: str, token: str) -> None:
+        """Store a reply token in the bounded cache, pruning expired ones first.
+
+        Pruning is opportunistic (on insert): a turn that yields no outbound
+        message never pops its token, so without this an idle/abusive public OA
+        would leak dead tokens until the LRU cap evicts them.
+        """
+        now = time.time()
+        ttl = self.config.reply_token_ttl_s
+        expired = [uid for uid, (_, ts) in self._reply_tokens.items() if now - ts > ttl]
+        for uid in expired:
+            self._reply_tokens.pop(uid, None)
+        _bounded_set(self._reply_tokens, user_id, (token, now))

@@ -151,3 +151,59 @@ Console OA + channel secret/token + ngrok. Checklist to run (from feasibility §
    `Radio` fallback until phase 2?
 5. **Profile persistence** — worth caching `displayName` to the session record so
    it survives restarts, or leave in-memory?
+
+---
+
+## 7. Post-review fixes (2026-06-20, before integration test)
+
+Cowork review of the full file flagged four items (2 quota/abuse, 2 robustness for
+a public OA). All four are in-file; no framework files touched.
+
+### FIX 1 — quota-safe delivery defaults
+`LineConfig` now overrides `send_progress = False` and `send_tool_hints = False`
+(was inheriting `True` from `DeliveryOverrides`). LINE cannot edit a sent message,
+so progress/tool-hint narration has no UX value, and each one is a *separate*
+`OutboundMessage` — only the first can use the free Reply, the rest become
+quota-counted Push. Users can still opt back in per channel.
+
+> **Mechanism nuance (for Cowork):** the effective runtime flag is resolved by
+> `ChannelManager._init_channels` via `_resolve_bool_override(section,
+> "send_progress", default=True)` — it reads the **persisted config section**, not
+> the Pydantic model, and *defaults to `True` when the key is absent*. So FIX 1
+> bites through the **seeding path**: `default_config()` now emits
+> `sendProgress: False` / `sendToolHints: False`, so a channel enabled the normal
+> way persists `False` and the manager reads `False`. Verified end-to-end
+> (`EFFECTIVE send_progress: False`). Caveat: a hand-edited `config.yaml` that
+> *omits* the key would still default to `True` — a pre-existing framework quirk,
+> not LINE-specific.
+
+### FIX 2 — allowlist pre-gate before network work
+`_handle_event` now calls `is_allowed(user_id)` **before** storing a reply token
+or calling Get profile, dropping unauthorized senders early (mirrors how
+`msteams.py` checks before persisting). The base `_handle_message` still re-checks
+`is_allowed` as the single source of truth — this just stops an out-of-allowlist
+spammer from burning the Get-profile rate limit / filling caches.
+
+### FIX 3 — fast ack (processing off the ack path)
+The webhook `do_POST` previously blocked the 200 ack on `fut.result(timeout=15)`,
+which includes a first-sighting Get profile. It now schedules `_handle_webhook`
+fire-and-forget via `run_coroutine_threadsafe` + `add_done_callback`
+(`_log_webhook_task_result` logs any top-level failure) and acks 200 immediately.
+Signature verify + JSON parse stay on the ack path (so a bad request still gets a
+4xx). Per-event exceptions are already swallowed inside `_handle_webhook`.
+
+### FIX 4 — bounded in-memory caches
+`_reply_tokens` and `_profile_cache` are now `OrderedDict`, capped at
+`LINE_MAX_CACHE_ENTRIES = 10_000` via the `_bounded_set` helper (LRU: evict oldest
+over cap). `_store_reply_token` additionally prunes expired tokens on insert
+(a turn with no outbound never pops its token, so without this an idle/abusive
+public OA would leak dead tokens). `_bounded_set` reads the cap from the module
+global at call time so it stays test-overridable.
+
+### Test results
+`tests/services/partners/test_line_channel.py`: **39 passed** (was 32; +7 for the
+fixes — delivery-flag defaults + re-enable, pre-gate-blocks-network, `_bounded_set`
+eviction + key-refresh, profile/token cap, expired-token prune, ack-path no-block
+source guard). `ruff check .` clean; `ruff format --check` clean on both files.
+Manager smoke re-confirmed: `LineChannel` still wired with **zero** framework
+edits, and effective delivery flags resolve to `False` via the seeding path.

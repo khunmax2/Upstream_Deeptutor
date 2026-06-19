@@ -75,6 +75,23 @@ icon, Thai labels) deferred._
   `REPORT_line_implementation.md`. Deferred to phase 2: rich content / images /
   audio / stickers / group chat.
 
+- **2026-06-20 — post-review fixes (pre-integration-test).** Four hardening
+  changes to `deeptutor/partners/channels/line.py` (+ tests), all in-file:
+  (1) **quota defaults** — `LineConfig` now overrides `send_progress` /
+  `send_tool_hints` to `False` (LINE has no in-place edit, so progress narration
+  is pure quota-burning Push); effective via the `default_config()` seeding path.
+  (2) **allowlist pre-gate** — `_handle_event` checks `is_allowed` before any
+  Get-profile call or token storage, so an unauthorized sender can't burn the
+  profile rate-limit or fill caches (base `_handle_message` still re-checks).
+  (3) **fast-ack** — the webhook handler schedules `_handle_webhook`
+  fire-and-forget (done-callback logs failures) instead of blocking the 200 ack
+  on `fut.result`, so a new-user Get-profile can't slow the ack (LINE disables
+  slow webhooks). (4) **bounded caches** — `_reply_tokens` / `_profile_cache`
+  are now `OrderedDict` capped at `LINE_MAX_CACHE_ENTRIES` (10k) with LRU
+  eviction; reply-token store also prunes expired entries opportunistically, so
+  a public OA can't grow memory without bound. See the "Post-review fixes"
+  section in `REPORT_line_implementation.md`.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

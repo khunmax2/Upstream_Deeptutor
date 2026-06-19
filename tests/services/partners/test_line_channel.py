@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+from collections import OrderedDict
 import hashlib
 import hmac
+import inspect
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,7 +14,8 @@ import pytest
 
 from deeptutor.partners.bus.events import OutboundMessage
 from deeptutor.partners.bus.queue import MessageBus
-from deeptutor.partners.channels.line import LineChannel, LineConfig
+from deeptutor.partners.channels import line as line_mod
+from deeptutor.partners.channels.line import LineChannel, LineConfig, _bounded_set
 
 SECRET = "test-channel-secret"
 TOKEN = "test-access-token"
@@ -62,7 +65,13 @@ class TestLineConfig:
         assert cfg.path == "/line/webhook"
         assert cfg.allow_from == []
         assert cfg.reply_token_ttl_s == 50.0
-        # Inherited DeliveryOverrides flags
+        # LINE overrides DeliveryOverrides: no in-place edit + Push counts quota,
+        # so progress/tool-hint narration is off by default.
+        assert cfg.send_progress is False
+        assert cfg.send_tool_hints is False
+
+    def test_delivery_flags_can_be_re_enabled(self):
+        cfg = LineConfig(send_progress=True, send_tool_hints=True)
         assert cfg.send_progress is True
         assert cfg.send_tool_hints is True
 
@@ -192,10 +201,15 @@ class TestHandleEvent:
         assert "U123" not in ch._reply_tokens
 
     @pytest.mark.asyncio
-    async def test_denied_sender_not_dispatched(self):
+    async def test_denied_sender_pre_gated_no_network_no_token(self):
+        # FIX 2: an unauthorized sender must be dropped before any Get-profile
+        # call or token storage — not just before the bus publish.
         ch = _make_channel(allow_from=[])
+        ch._http = AsyncMock()
         await ch._handle_event(_text_event())
         ch.bus.publish_inbound.assert_not_awaited()
+        ch._http.get.assert_not_awaited()  # no Get profile
+        assert "U123" not in ch._reply_tokens  # no token stored
 
 
 class TestHandleWebhook:
@@ -347,6 +361,58 @@ class TestResolveDisplayName:
         assert await ch._resolve_display_name("U123") == "U123"
         # Not cached → next message retries.
         assert "U123" not in ch._profile_cache
+
+
+class TestBoundedCaches:
+    def test_bounded_set_evicts_oldest_over_cap(self):
+        cache: OrderedDict[str, int] = OrderedDict()
+        for i in range(5):
+            _bounded_set(cache, f"k{i}", i, max_entries=3)
+        assert len(cache) == 3
+        # Oldest two evicted; newest three retained in insertion order.
+        assert list(cache.keys()) == ["k2", "k3", "k4"]
+
+    def test_bounded_set_refreshes_existing_key_to_newest(self):
+        cache: OrderedDict[str, int] = OrderedDict()
+        _bounded_set(cache, "a", 1, max_entries=2)
+        _bounded_set(cache, "b", 2, max_entries=2)
+        _bounded_set(cache, "a", 3, max_entries=2)  # touch "a" → now newest
+        _bounded_set(cache, "c", 4, max_entries=2)  # evicts the oldest ("b")
+        assert "b" not in cache
+        assert cache["a"] == 3
+        assert cache["c"] == 4
+
+    def test_profile_cache_capped(self, monkeypatch):
+        monkeypatch.setattr(line_mod, "LINE_MAX_CACHE_ENTRIES", 3)
+        ch = _make_channel()
+        for i in range(10):
+            _bounded_set(ch._profile_cache, f"U{i}", f"name{i}")
+        assert len(ch._profile_cache) <= 3
+
+    def test_store_reply_token_caps_and_prunes_expired(self):
+        ch = _make_channel(reply_token_ttl_s=50)
+        # An expired token already parked in the cache.
+        ch._reply_tokens["old"] = ("rt-old", time.time() - 999)
+        ch._store_reply_token("fresh", "rt-fresh")
+        # Expired entry pruned opportunistically on insert; fresh one stored.
+        assert "old" not in ch._reply_tokens
+        assert ch._reply_tokens["fresh"][0] == "rt-fresh"
+
+    def test_reply_tokens_capped(self, monkeypatch):
+        monkeypatch.setattr(line_mod, "LINE_MAX_CACHE_ENTRIES", 3)
+        ch = _make_channel(reply_token_ttl_s=999)
+        for i in range(10):
+            ch._store_reply_token(f"U{i}", f"rt{i}")
+        assert len(ch._reply_tokens) <= 3
+
+
+class TestFastAck:
+    def test_ack_path_does_not_block_on_result(self):
+        # FIX 3: the webhook handler must schedule processing fire-and-forget,
+        # never blocking the 200 ack on the task result.
+        src = inspect.getsource(LineChannel.start)
+        assert "fut.result" not in src
+        assert "add_done_callback" in src
 
 
 class TestSupportsStreaming:
