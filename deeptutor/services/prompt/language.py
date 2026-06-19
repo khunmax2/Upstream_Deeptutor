@@ -48,6 +48,8 @@ def normalize_agent_language(language: str | None) -> str:
     s = (language or "en").strip().lower()
     if s.startswith("zh"):
         return "zh"
+    if s.startswith("th"):
+        return "th"
     if s in _AGENT_LANGS:
         return s
     return _AGENT_LANG_ALIASES.get(s, "en")

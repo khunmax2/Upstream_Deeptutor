@@ -29,19 +29,25 @@ import {
 
 const PARTNER_KIND = "partner";
 
-type Lang = { zh: string; en: string };
+type Lang = { zh: string; en: string; th: string };
 
 function backendLabel(kind: string, tr: (l: Lang) => string): string {
   if (kind === "claude_code") return "Claude Code";
   if (kind === "codex") return "Codex";
-  if (kind === PARTNER_KIND) return tr({ zh: "伙伴", en: "Partner" });
+  if (kind === PARTNER_KIND)
+    return tr({ zh: "伙伴", en: "Partner", th: "พาร์ทเนอร์" });
   return kind;
 }
 
 export default function ConnectedAgents() {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase();
+  const zh = lang?.startsWith("zh");
+  const th = lang?.startsWith("th");
+  const tr = useCallback(
+    (l: Lang) => (zh ? l.zh : th ? l.th : l.en),
+    [zh, th],
+  );
 
   const [backends, setBackends] = useState<SubagentBackendInfo[]>([]);
   const [connections, setConnections] = useState<SubagentConnection[]>([]);
@@ -88,6 +94,7 @@ export default function ConnectedAgents() {
           tr({
             zh: `断开「${name}」？这只会移除连接，不影响本机的智能体配置。`,
             en: `Disconnect “${name}”? This only removes the connection; your local agent is untouched.`,
+            th: `ตัดการเชื่อมต่อ “${name}”? การกระทำนี้จะลบเฉพาะการเชื่อมต่อ ไม่กระทบการตั้งค่าเอเจนต์ในเครื่องของคุณ`,
           }),
         )
       )
@@ -107,10 +114,15 @@ export default function ConnectedAgents() {
     <section className="space-y-4">
       <SpaceSectionHeader
         icon={Plug}
-        title={tr({ zh: "连接的智能体", en: "Connected agents" })}
+        title={tr({
+          zh: "连接的智能体",
+          en: "Connected agents",
+          th: "เอเจนต์ที่เชื่อมต่อ",
+        })}
         description={tr({
           zh: "把本机的 Claude Code / Codex 或你的伙伴接进来，在对话中选中后直接向它提问 —— 它的完整运行过程会实时展示。",
           en: "Bring in the Claude Code / Codex on this machine, or one of your partners — select one in chat to consult it directly, with its full run shown live.",
+          th: "นำ Claude Code / Codex ในเครื่องนี้ หรือพาร์ทเนอร์ของคุณเข้ามา — เลือกในแชตเพื่อปรึกษาได้โดยตรง พร้อมแสดงกระบวนการทำงานทั้งหมดแบบเรียลไทม์",
         })}
         action={
           canConnect ? (
@@ -120,7 +132,7 @@ export default function ConnectedAgents() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--foreground)] px-3 py-1.5 text-[12px] font-medium text-[var(--background)] shadow-sm transition-opacity hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
-              {tr({ zh: "连接智能体", en: "Connect agent" })}
+              {tr({ zh: "连接智能体", en: "Connect agent", th: "เชื่อมต่อเอเจนต์" })}
             </button>
           ) : null
         }
@@ -129,13 +141,14 @@ export default function ConnectedAgents() {
       {loading ? (
         <div className="flex items-center gap-2 px-1 text-[12px] text-[var(--muted-foreground)]">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {tr({ zh: "检测本机智能体…", en: "Detecting local agents…" })}
+          {tr({ zh: "检测本机智能体…", en: "Detecting local agents…", th: "กำลังตรวจหาเอเจนต์ในเครื่อง…" })}
         </div>
       ) : !canConnect ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)]/40 px-4 py-5 text-[12.5px] leading-relaxed text-[var(--muted-foreground)]">
           {tr({
             zh: "未在本机检测到 Claude Code 或 Codex，也还没有任何伙伴。安装并登录其中任一 CLI，或在「伙伴」里新建一个，即可连接。",
             en: "No Claude Code or Codex detected on this machine, and no partners yet. Install and log in to either CLI, or create a partner, to connect one.",
+            th: "ไม่พบ Claude Code หรือ Codex ในเครื่องนี้ และยังไม่มีพาร์ทเนอร์ ติดตั้งและล็อกอิน CLI ตัวใดตัวหนึ่ง หรือสร้างพาร์ทเนอร์ เพื่อเชื่อมต่อ",
           })}
         </div>
       ) : connections.length === 0 ? (
@@ -143,6 +156,7 @@ export default function ConnectedAgents() {
           {tr({
             zh: "尚未连接任何智能体。点击「连接智能体」把本机的 Claude Code / Codex 或你的伙伴接进来。",
             en: "No agents connected yet. Click “Connect agent” to bring in your local Claude Code / Codex, or a partner.",
+            th: "ยังไม่ได้เชื่อมต่อเอเจนต์ใด คลิก “เชื่อมต่อเอเจนต์” เพื่อนำ Claude Code / Codex ในเครื่อง หรือพาร์ทเนอร์ของคุณเข้ามา",
           })}
         </div>
       ) : (
@@ -197,8 +211,8 @@ export default function ConnectedAgents() {
                   type="button"
                   onClick={() => void handleDisconnect(conn.name)}
                   disabled={busyName === conn.name}
-                  title={tr({ zh: "断开", en: "Disconnect" })}
-                  aria-label={tr({ zh: "断开", en: "Disconnect" })}
+                  title={tr({ zh: "断开", en: "Disconnect", th: "ตัดการเชื่อมต่อ" })}
+                  aria-label={tr({ zh: "断开", en: "Disconnect", th: "ตัดการเชื่อมต่อ" })}
                   className="rounded-lg border border-[var(--border)]/50 p-2 text-[var(--muted-foreground)] transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:hover:border-red-900 dark:hover:text-red-400"
                 >
                   {busyName === conn.name ? (
@@ -250,7 +264,12 @@ function ConnectModal({
     () => [
       ...backends.map((b) => ({ kind: b.kind, label: b.display_name })),
       ...(partners.length
-        ? [{ kind: PARTNER_KIND, label: tr({ zh: "伙伴", en: "Partner" }) }]
+        ? [
+            {
+              kind: PARTNER_KIND,
+              label: tr({ zh: "伙伴", en: "Partner", th: "พาร์ทเนอร์" }),
+            },
+          ]
         : []),
     ],
     [backends, partners, tr],
@@ -277,7 +296,9 @@ function ConnectModal({
   const submit = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError(tr({ zh: "请填写名称。", en: "Please enter a name." }));
+      setError(
+        tr({ zh: "请填写名称。", en: "Please enter a name.", th: "กรุณากรอกชื่อ" }),
+      );
       return;
     }
     if (existingNames.includes(trimmed)) {
@@ -285,12 +306,15 @@ function ConnectModal({
         tr({
           zh: "已存在同名连接。",
           en: "A connection with this name already exists.",
+          th: "มีการเชื่อมต่อชื่อนี้อยู่แล้ว",
         }),
       );
       return;
     }
     if (isPartner && !partnerId) {
-      setError(tr({ zh: "请选择一个伙伴。", en: "Please pick a partner." }));
+      setError(
+        tr({ zh: "请选择一个伙伴。", en: "Please pick a partner.", th: "กรุณาเลือกพาร์ทเนอร์" }),
+      );
       return;
     }
     setSubmitting(true);
@@ -320,13 +344,13 @@ function ConnectModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-serif text-[16px] font-semibold tracking-tight text-[var(--foreground)]">
-            {tr({ zh: "连接智能体", en: "Connect an agent" })}
+            {tr({ zh: "连接智能体", en: "Connect an agent", th: "เชื่อมต่อเอเจนต์" })}
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]/60 hover:text-[var(--foreground)]"
-            aria-label={tr({ zh: "关闭", en: "Close" })}
+            aria-label={tr({ zh: "关闭", en: "Close", th: "ปิด" })}
           >
             <X size={16} />
           </button>
@@ -335,7 +359,7 @@ function ConnectModal({
         <div className="space-y-3.5">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
-              {tr({ zh: "智能体", en: "Agent" })}
+              {tr({ zh: "智能体", en: "Agent", th: "เอเจนต์" })}
             </label>
             <div className="flex gap-2">
               {options.map((opt) => {
@@ -362,7 +386,7 @@ function ConnectModal({
           {isPartner && (
             <div>
               <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
-                {tr({ zh: "伙伴", en: "Partner" })}
+                {tr({ zh: "伙伴", en: "Partner", th: "พาร์ทเนอร์" })}
               </label>
               <select
                 value={partnerId}
@@ -382,7 +406,7 @@ function ConnectModal({
 
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
-              {tr({ zh: "名称", en: "Name" })}
+              {tr({ zh: "名称", en: "Name", th: "ชื่อ" })}
             </label>
             <input
               autoFocus
@@ -394,6 +418,7 @@ function ConnectModal({
               placeholder={tr({
                 zh: "例如：我的代码助手",
                 en: "e.g. My coding agent",
+                th: "เช่น ผู้ช่วยเขียนโค้ดของฉัน",
               })}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--ring)]"
             />
@@ -405,6 +430,7 @@ function ConnectModal({
                 {tr({
                   zh: "工作目录（可选）",
                   en: "Working directory (optional)",
+                  th: "ไดเรกทอรีทำงาน (ไม่บังคับ)",
                 })}
               </label>
               <input
@@ -413,6 +439,7 @@ function ConnectModal({
                 placeholder={tr({
                   zh: "例如：/Users/you/project —— 智能体将在此目录运行",
                   en: "e.g. /Users/you/project — the agent runs here",
+                  th: "เช่น /Users/you/project — เอเจนต์จะรันที่นี่",
                 })}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-[12px] text-[var(--foreground)] outline-none focus:border-[var(--ring)]"
               />
@@ -424,6 +451,7 @@ function ConnectModal({
               {tr({
                 zh: "在对话中咨询该伙伴时，会像在伙伴页开启一个新 session；同一对话里的多次咨询都会归档为同一个 session。",
                 en: "Consulting this partner in chat opens a session on it, just like the partner page; every consult within one chat is archived as the same session.",
+                th: "เมื่อปรึกษาพาร์ทเนอร์นี้ในแชต จะเปิดเซสชันบนพาร์ทเนอร์เหมือนในหน้าพาร์ทเนอร์ การปรึกษาหลายครั้งในแชตเดียวกันจะถูกบันทึกเป็นเซสชันเดียวกัน",
               })}
             </p>
           )}
@@ -441,7 +469,7 @@ function ConnectModal({
             onClick={onClose}
             className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           >
-            {tr({ zh: "取消", en: "Cancel" })}
+            {tr({ zh: "取消", en: "Cancel", th: "ยกเลิก" })}
           </button>
           <button
             type="button"
@@ -454,7 +482,7 @@ function ConnectModal({
             ) : (
               <Plug className="h-3.5 w-3.5" />
             )}
-            {tr({ zh: "连接", en: "Connect" })}
+            {tr({ zh: "连接", en: "Connect", th: "เชื่อมต่อ" })}
           </button>
         </div>
       </div>

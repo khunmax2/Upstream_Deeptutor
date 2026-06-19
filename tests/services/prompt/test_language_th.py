@@ -19,6 +19,8 @@ from deeptutor.services.prompt.manager import PromptManager
         ("thai", "th"),
         ("Thai", "th"),
         ("TH", "th"),
+        ("th-TH", "th"),
+        ("th_TH", "th"),
         ("zh", "zh"),
         ("zh-CN", "zh"),
         ("zh-tw", "zh"),

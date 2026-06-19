@@ -22,7 +22,7 @@ import {
   type SubagentBackendOptions,
 } from "@/lib/subagents-api";
 
-type Lang = { zh: string; en: string };
+type Lang = { zh: string; en: string; th: string };
 
 /** The CLI default sentinel — empty model/effort means "let the CLI decide". */
 const CUSTOM = "__custom__";
@@ -62,52 +62,83 @@ const PERMISSION_MODES: { value: string; label: Lang }[] = [
     label: {
       zh: "绕过权限 · 全自主（推荐）",
       en: "Bypass permissions · autonomous (recommended)",
+      th: "ข้ามการขอสิทธิ์ · อัตโนมัติเต็มรูปแบบ (แนะนำ)",
     },
   },
   {
     value: "acceptEdits",
-    label: { zh: "自动接受编辑", en: "Accept edits automatically" },
+    label: {
+      zh: "自动接受编辑",
+      en: "Accept edits automatically",
+      th: "ยอมรับการแก้ไขอัตโนมัติ",
+    },
   },
   {
     value: "default",
-    label: { zh: "默认 · 可能等待确认", en: "Default · may wait for prompts" },
+    label: {
+      zh: "默认 · 可能等待确认",
+      en: "Default · may wait for prompts",
+      th: "ค่าเริ่มต้น · อาจรอการยืนยัน",
+    },
   },
   {
     value: "plan",
-    label: { zh: "计划模式 · 只读", en: "Plan mode · read-only" },
+    label: { zh: "计划模式 · 只读", en: "Plan mode · read-only", th: "โหมดวางแผน · อ่านอย่างเดียว" },
   },
 ];
 
 const SANDBOXES: { value: string; label: Lang }[] = [
-  { value: "read-only", label: { zh: "只读", en: "Read-only" } },
+  { value: "read-only", label: { zh: "只读", en: "Read-only", th: "อ่านอย่างเดียว" } },
   {
     value: "workspace-write",
-    label: { zh: "工作目录可写（推荐）", en: "Workspace write (recommended)" },
+    label: {
+      zh: "工作目录可写（推荐）",
+      en: "Workspace write (recommended)",
+      th: "เขียนในไดเรกทอรีทำงานได้ (แนะนำ)",
+    },
   },
-  { value: "danger-full-access", label: { zh: "完全访问", en: "Full access" } },
+  { value: "danger-full-access", label: { zh: "完全访问", en: "Full access", th: "เข้าถึงเต็มรูปแบบ" } },
   {
     value: "bypass",
-    label: { zh: "绕过沙箱与审批", en: "Bypass sandbox & approvals" },
+    label: {
+      zh: "绕过沙箱与审批",
+      en: "Bypass sandbox & approvals",
+      th: "ข้ามแซนด์บ็อกซ์และการอนุมัติ",
+    },
   },
 ];
 
 const APPROVALS: { value: string; label: Lang }[] = [
   {
     value: "never",
-    label: { zh: "从不询问（推荐）", en: "Never ask (recommended)" },
+    label: {
+      zh: "从不询问（推荐）",
+      en: "Never ask (recommended)",
+      th: "ไม่ถามเลย (แนะนำ)",
+    },
   },
-  { value: "on-failure", label: { zh: "失败时询问", en: "On failure" } },
-  { value: "on-request", label: { zh: "按需询问", en: "On request" } },
+  { value: "on-failure", label: { zh: "失败时询问", en: "On failure", th: "เมื่อทำงานล้มเหลว" } },
+  { value: "on-request", label: { zh: "按需询问", en: "On request", th: "เมื่อมีการร้องขอ" } },
   {
     value: "untrusted",
-    label: { zh: "不可信命令时询问", en: "Untrusted commands" },
+    label: {
+      zh: "不可信命令时询问",
+      en: "Untrusted commands",
+      th: "เมื่อเป็นคำสั่งที่ไม่น่าเชื่อถือ",
+    },
   },
 ];
 
 export function SubagentSettingsEditor({ kind }: { kind: string }) {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase();
+  const zh = lang?.startsWith("zh");
+  const th = lang?.startsWith("th");
+  const tr = useCallback(
+    (l: Lang) => (zh ? l.zh : th ? l.th : l.en),
+    [zh, th],
+  );
+  const tsLocale = zh ? "zh-CN" : th ? "th-TH" : "en-US";
 
   const [options, setOptions] = useState<SubagentBackendOptions | null>(null);
   const [config, setConfig] = useState<SubagentBackendConfig>({ ...DEFAULTS });
@@ -228,13 +259,14 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
         description={tr({
           zh: `DeepTutor 通过 consult_subagent 调用本机 ${displayName} 时使用的模型、推理强度与运行参数。设置后即覆盖 CLI 的默认值；留空表示沿用 CLI 默认。`,
           en: `Model, reasoning effort, and run parameters DeepTutor drives the local ${displayName} with when consulting it. These override the CLI defaults; leave blank to keep the CLI's own default.`,
+          th: `โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันที่ DeepTutor ใช้ขับ ${displayName} ในเครื่องเมื่อปรึกษาผ่าน consult_subagent ค่าเหล่านี้จะแทนที่ค่าเริ่มต้นของ CLI เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของ CLI เอง`,
         })}
       />
 
       {loading && (
         <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
           <Loader2 className="h-4 w-4 animate-spin" />
-          {tr({ zh: "加载中…", en: "Loading…" })}
+          {tr({ zh: "加载中…", en: "Loading…", th: "กำลังโหลด…" })}
         </div>
       )}
 
@@ -249,14 +281,19 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           {/* Availability + sync. The model/effort lists change over time, so
               the user can re-pull them on demand. */}
           <SettingSection
-            title={tr({ zh: "连接与同步", en: "Connection & sync" })}
+            title={tr({
+              zh: "连接与同步",
+              en: "Connection & sync",
+              th: "การเชื่อมต่อและการซิงค์",
+            })}
             description={tr({
               zh: "供应商会不定期增删模型与推理档位——随时点同步即可重新拉取最新列表。",
               en: "Vendors add and retire models and effort levels over time — sync any time to re-pull the latest lists.",
+              th: "ผู้ให้บริการมีการเพิ่มและปลดโมเดลกับระดับการให้เหตุผลเป็นระยะ — กดซิงค์เมื่อใดก็ได้เพื่อดึงรายการล่าสุด",
             })}
           >
             <SettingRow
-              title={tr({ zh: "本机状态", en: "On this machine" })}
+              title={tr({ zh: "本机状态", en: "On this machine", th: "บนเครื่องนี้" })}
               description={
                 options.available
                   ? options.version
@@ -264,6 +301,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     tr({
                       zh: "未在 PATH 上找到该 CLI。",
                       en: "CLI not found on PATH.",
+                      th: "ไม่พบ CLI นี้ใน PATH",
                     })
               }
               control={
@@ -281,22 +319,24 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     <XCircle className="h-3.5 w-3.5" />
                   )}
                   {options.available
-                    ? tr({ zh: "已安装", en: "Installed" })
-                    : tr({ zh: "未检测到", en: "Not detected" })}
+                    ? tr({ zh: "已安装", en: "Installed", th: "ติดตั้งแล้ว" })
+                    : tr({ zh: "未检测到", en: "Not detected", th: "ไม่พบ" })}
                 </span>
               }
             />
             <SettingRow
-              title={tr({ zh: "模型列表", en: "Model list" })}
+              title={tr({ zh: "模型列表", en: "Model list", th: "รายการโมเดล" })}
               description={
                 options.synced_at
                   ? tr({
-                      zh: `上次同步：${formatTs(options.synced_at, zh)}`,
-                      en: `Last synced: ${formatTs(options.synced_at, zh)}`,
+                      zh: `上次同步：${formatTs(options.synced_at, tsLocale)}`,
+                      en: `Last synced: ${formatTs(options.synced_at, tsLocale)}`,
+                      th: `ซิงค์ล่าสุด: ${formatTs(options.synced_at, tsLocale)}`,
                     })
                   : tr({
                       zh: "该 CLI 无可枚举的模型接口，下方为常用别名，可自定义任意模型名。",
                       en: "This CLI has no model-list API; below are the common aliases, and any model name is accepted.",
+                      th: "CLI นี้ไม่มี API สำหรับแจกแจงโมเดล ด้านล่างเป็นชื่อเรียกที่ใช้บ่อย และรับชื่อโมเดลใดก็ได้",
                     })
               }
               control={
@@ -309,24 +349,26 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   <RefreshCw
                     className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
                   />
-                  {tr({ zh: "同步", en: "Sync" })}
+                  {tr({ zh: "同步", en: "Sync", th: "ซิงค์" })}
                 </button>
               }
             />
           </SettingSection>
 
           <SettingSection
-            title={tr({ zh: "模型", en: "Model" })}
+            title={tr({ zh: "模型", en: "Model", th: "โมเดล" })}
             description={tr({
               zh: "DeepTutor 调用该智能体时使用的模型与推理强度。",
               en: "The model and reasoning effort DeepTutor consults this agent with.",
+              th: "โมเดลและระดับการให้เหตุผลที่ DeepTutor ใช้เมื่อปรึกษาเอเจนต์นี้",
             })}
           >
             <SettingRow
-              title={tr({ zh: "启用", en: "Enabled" })}
+              title={tr({ zh: "启用", en: "Enabled", th: "เปิดใช้งาน" })}
               description={tr({
                 zh: "关闭后，DeepTutor 不会在对话中调用该智能体。",
                 en: "When off, DeepTutor won't consult this agent in chat.",
+                th: "เมื่อปิด DeepTutor จะไม่ปรึกษาเอเจนต์นี้ในแชต",
               })}
               control={
                 <Toggle
@@ -337,7 +379,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
               }
             />
             <SettingRow
-              title={tr({ zh: "模型", en: "Model" })}
+              title={tr({ zh: "模型", en: "Model", th: "โมเดล" })}
               control={
                 <div className="flex w-[260px] flex-col items-end gap-2">
                   <select
@@ -347,7 +389,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     onChange={(e) => onModelSelect(e.target.value)}
                   >
                     <option value="">
-                      {tr({ zh: "CLI 默认", en: "CLI default" })}
+                      {tr({ zh: "CLI 默认", en: "CLI default", th: "ค่าเริ่มต้นของ CLI" })}
                     </option>
                     {options.models.map((m) => (
                       <option key={m.slug} value={m.slug}>
@@ -356,7 +398,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     ))}
                     {options.allow_custom_model && (
                       <option value={CUSTOM}>
-                        {tr({ zh: "自定义…", en: "Custom…" })}
+                        {tr({ zh: "自定义…", en: "Custom…", th: "กำหนดเอง…" })}
                       </option>
                     )}
                   </select>
@@ -367,6 +409,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                       placeholder={tr({
                         zh: "输入模型名",
                         en: "Enter a model name",
+                        th: "ใส่ชื่อโมเดล",
                       })}
                       value={config.model ?? ""}
                       onChange={(e) =>
@@ -381,7 +424,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
               }
             />
             <SettingRow
-              title={tr({ zh: "推理强度", en: "Reasoning effort" })}
+              title={tr({ zh: "推理强度", en: "Reasoning effort", th: "ระดับการให้เหตุผล" })}
               control={
                 <select
                   className={`${selectClass} w-[260px]`}
@@ -390,7 +433,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   onChange={(e) => void save({ effort: e.target.value })}
                 >
                   <option value="">
-                    {tr({ zh: "CLI 默认", en: "CLI default" })}
+                    {tr({ zh: "CLI 默认", en: "CLI default", th: "ค่าเริ่มต้นของ CLI" })}
                   </option>
                   {effortChoices.map((eff) => (
                     <option key={eff} value={eff}>
@@ -404,10 +447,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
 
           {!isCodex && (
             <SettingSection
-              title={tr({ zh: "系统提示", en: "System prompt" })}
+              title={tr({ zh: "系统提示", en: "System prompt", th: "พรอมป์ตระบบ" })}
               description={tr({
                 zh: "追加到该智能体的系统提示（--append-system-prompt）。留空则使用 DeepTutor 的默认委派提示。",
                 en: "Appended to the agent's system prompt (--append-system-prompt). Blank uses DeepTutor's default delegate instruction.",
+                th: "ต่อท้ายพรอมป์ตระบบของเอเจนต์ (--append-system-prompt) เว้นว่างไว้เพื่อใช้คำสั่งมอบหมายงานเริ่มต้นของ DeepTutor",
               })}
             >
               <div className="py-4">
@@ -417,6 +461,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   placeholder={tr({
                     zh: "（留空使用默认委派提示）",
                     en: "(blank uses the default delegate instruction)",
+                    th: "(เว้นว่างไว้เพื่อใช้คำสั่งมอบหมายงานเริ่มต้น)",
                   })}
                   value={config.system_prompt ?? ""}
                   onChange={(e) =>
@@ -429,18 +474,20 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           )}
 
           <SettingSection
-            title={tr({ zh: "运行参数", en: "Run parameters" })}
+            title={tr({ zh: "运行参数", en: "Run parameters", th: "พารามิเตอร์การรัน" })}
             description={tr({
               zh: "DeepTutor 无人值守地驱动该智能体——默认值确保它不会卡在等待确认上。",
               en: "DeepTutor drives the agent unattended — the defaults ensure it never stalls waiting for an approval prompt.",
+              th: "DeepTutor ขับเอเจนต์แบบไม่มีคนดูแล — ค่าเริ่มต้นช่วยให้ไม่ค้างรอการอนุมัติ",
             })}
           >
             {!isCodex && (
               <SettingRow
-                title={tr({ zh: "权限模式", en: "Permission mode" })}
+                title={tr({ zh: "权限模式", en: "Permission mode", th: "โหมดสิทธิ์" })}
                 description={tr({
                   zh: "非「绕过权限」的模式可能让无人值守的运行卡住等待确认。",
                   en: "Modes other than bypass may stall an unattended run waiting for a prompt.",
+                  th: "โหมดอื่นนอกจาก ‘ข้ามการขอสิทธิ์’ อาจทำให้การรันแบบไม่มีคนดูแลค้างรอการยืนยัน",
                 })}
                 control={
                   <select
@@ -464,7 +511,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
             {isCodex && (
               <>
                 <SettingRow
-                  title={tr({ zh: "沙箱", en: "Sandbox" })}
+                  title={tr({ zh: "沙箱", en: "Sandbox", th: "แซนด์บ็อกซ์" })}
                   control={
                     <select
                       className={`${selectClass} w-[260px]`}
@@ -481,10 +528,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "审批策略", en: "Approval policy" })}
+                  title={tr({ zh: "审批策略", en: "Approval policy", th: "นโยบายการอนุมัติ" })}
                   description={tr({
                     zh: "非「从不询问」可能让无人值守的运行卡住。",
                     en: "Anything but never may stall an unattended run.",
+                    th: "อะไรก็ตามที่ไม่ใช่ ‘ไม่ถามเลย’ อาจทำให้การรันแบบไม่มีคนดูแลค้าง",
                   })}
                   control={
                     <select
@@ -502,10 +550,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "命令联网", en: "Command network access" })}
+                  title={tr({ zh: "命令联网", en: "Command network access", th: "การเข้าถึงเครือข่ายของคำสั่ง" })}
                   description={tr({
                     zh: "允许模型运行的 shell 命令访问网络（工作目录可写模式默认离线）。内置 web search 不受影响。",
                     en: "Let the model's shell commands reach the network (workspace-write is offline by default). The built-in web search is unaffected.",
+                    th: "ให้คำสั่ง shell ที่โมเดลรันเข้าถึงเครือข่ายได้ (โหมดเขียนไดเรกทอรีทำงานออฟไลน์โดยค่าเริ่มต้น) web search ในตัวไม่ได้รับผลกระทบ",
                   })}
                   control={
                     <Toggle
@@ -516,10 +565,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "临时会话", en: "Ephemeral session" })}
+                  title={tr({ zh: "临时会话", en: "Ephemeral session", th: "เซสชันชั่วคราว" })}
                   description={tr({
                     zh: "不在 ~/.codex/sessions 下持久化本次会话。",
                     en: "Don't persist the session under ~/.codex/sessions.",
+                    th: "ไม่บันทึกเซสชันนี้ไว้ใน ~/.codex/sessions",
                   })}
                   control={
                     <Toggle
@@ -533,10 +583,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
             )}
 
             <SettingRow
-              title={tr({ zh: "转发图片", en: "Forward images" })}
+              title={tr({ zh: "转发图片", en: "Forward images", th: "ส่งต่อรูปภาพ" })}
               description={tr({
                 zh: "允许 DeepTutor 把本轮对话中的图片附件转发给该智能体。",
                 en: "Let DeepTutor forward image attachments from the chat turn to this agent.",
+                th: "ให้ DeepTutor ส่งต่อไฟล์แนบรูปภาพจากรอบสนทนานี้ไปยังเอเจนต์นี้",
               })}
               control={
                 <Toggle
@@ -553,10 +604,10 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
   );
 }
 
-function formatTs(value: string, zh: boolean): string {
+function formatTs(value: string, locale: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(zh ? "zh-CN" : "en-US", {
+  return parsed.toLocaleString(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   });
