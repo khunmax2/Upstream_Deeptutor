@@ -40,6 +40,21 @@ Adding LINE Messaging as a Partners channel — primarily a new file
 `deeptutor/partners/channels/line.py` (additive; the channel registry auto-discovers
 adapters). Small UI touch-ups (channel icon, Thai labels). _Not yet landed._
 
+- **2026-06-20 — feasibility re-verified against v1.4.8.** Added
+  `REPORT_line_integration_feasibility.md` (code-traced, file:line). Confirmed the
+  channel framework is contract-stable v1.4.6→v1.4.8 and the LINE adapter is
+  backend-additive: no edits to `registry.py`, `partners/config/schema.py`,
+  `_partners_channel_schema.py`, `channels/manager.py`, or `pyproject.toml`
+  (LINE adds no new dependency). Template corrected to `msteams.py` (webhook+HMAC+REST)
+  over `slack.py` (socket mode). Documented that the partner runtime does not forward
+  inbound metadata to `send()` (reply-token must be stashed in-memory) and that
+  per-session concurrency is already handled by `PartnerRunner`. Added a LINE
+  retrievability section (Get profile → displayName/picture/status/language only;
+  consent/friend/not-blocked conditions; opaque per-OA userId; reply-free vs
+  push-counted quota; rate limits) verified against official LINE docs (Jun 2026),
+  and put displayName resolution via Get profile into scope. No source code changed
+  in this round (docs only).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
