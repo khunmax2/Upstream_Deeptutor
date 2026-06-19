@@ -38,7 +38,8 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 Adding LINE Messaging as a Partners channel — primarily a new file
 `deeptutor/partners/channels/line.py` (additive; the channel registry auto-discovers
-adapters). Small UI touch-ups (channel icon, Thai labels). _Not yet landed._
+adapters). _Backend DM MVP landed 2026-06-20 (see below); UI touch-ups (channel
+icon, Thai labels) deferred._
 
 - **2026-06-20 — feasibility re-verified against v1.4.8.** Added
   `REPORT_line_integration_feasibility.md` (code-traced, file:line). Confirmed the
@@ -54,6 +55,25 @@ adapters). Small UI touch-ups (channel icon, Thai labels). _Not yet landed._
   push-counted quota; rate limits) verified against official LINE docs (Jun 2026),
   and put displayName resolution via Get profile into scope. No source code changed
   in this round (docs only).
+
+- **2026-06-20 — DM MVP implemented (backend-only).** New files
+  `deeptutor/partners/channels/line.py` (LINE Official Account adapter) and
+  `tests/services/partners/test_line_channel.py` (32 unit tests). The adapter
+  runs a `ThreadingHTTPServer` webhook (modeled on `msteams.py`): verifies
+  `x-line-signature` (HMAC-SHA256 over the raw body) before parsing, acks 200
+  fast and bridges work onto the asyncio loop, loops `events[]` for 1:1 text,
+  and replies via the Reply API (free, single-use token, ~50s margin) with a
+  Push-API fallback. Resolves `displayName` via Get profile (cached) so the
+  session list shows a real name instead of the opaque `userId`. No new
+  dependency (stdlib `hmac`/`hashlib`/`base64` + existing `httpx`). Verified
+  end-to-end that the framework auto-discovers the channel and the schema
+  endpoint masks `channel_secret`/`channel_access_token` with **zero** edits to
+  `registry.py`/`schema.py`/`manager.py`/`_partners_channel_schema.py`/
+  `pyproject.toml` — confirming the feasibility report. Appended
+  `line.py` to `FORK_TOUCHPOINTS.txt`. UI touch-ups (channel icon, locale keys)
+  deferred; LINE falls back to the generic `Radio` icon. See
+  `REPORT_line_implementation.md`. Deferred to phase 2: rich content / images /
+  audio / stickers / group chat.
 
 ## Upstream syncs
 

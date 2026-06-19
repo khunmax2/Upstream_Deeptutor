@@ -20,6 +20,7 @@ deeptutor/core/i18n.py
 deeptutor/i18n/metadata_i18n.py
 deeptutor/learning/prompts.py
 deeptutor/learning/prompts/th.yaml
+deeptutor/partners/channels/line.py
 deeptutor/runtime/banner.py
 deeptutor/runtime/registry/deferred_tools.py
 deeptutor/services/config/loader.py
