@@ -106,12 +106,17 @@ class ChannelManager:
         return value if isinstance(value, bool) else default
 
     def _validate_allow_from(self) -> None:
-        for name, ch in self.channels.items():
-            if getattr(ch.config, "allow_from", None) == []:
-                raise SystemExit(
-                    f'Error: "{name}" has empty allowFrom (denies all). '
-                    f'Set ["*"] to allow everyone, or add specific user IDs.'
+        # An enabled channel with empty allowFrom denies all senders. Disable
+        # just that channel (and log why) instead of aborting the whole
+        # process, so one misconfigured channel can't take the backend down.
+        for name in list(self.channels):  # snapshot — we mutate during the loop
+            if getattr(self.channels[name].config, "allow_from", None) == []:
+                _logger().error(
+                    "{} channel disabled: empty allowFrom (denies all). "
+                    'Set ["*"] to allow everyone, or add specific user IDs.',
+                    name,
                 )
+                del self.channels[name]
 
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         try:

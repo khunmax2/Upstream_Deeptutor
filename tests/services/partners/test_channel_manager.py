@@ -234,6 +234,43 @@ class TestStreamDispatch:
         assert chunks == ["a", "b"]
 
 
+class _AllowFromChannel:
+    """Minimal channel stub exposing only ``config.allow_from``."""
+
+    def __init__(self, allow_from: list[str]):
+        self.config = type("_Cfg", (), {"allow_from": allow_from})()
+
+
+class TestValidateAllowFrom:
+    def _manager(self) -> ChannelManager:
+        # Empty config enables no channels, so __init__ builds nothing.
+        return ChannelManager(ChannelsConfig(), _MultiShotBus([]))  # type: ignore[arg-type]
+
+    def test_empty_allow_from_disables_only_that_channel(self):
+        manager = self._manager()
+        manager.channels = {  # type: ignore[assignment]
+            "broken": _AllowFromChannel([]),
+            "ok": _AllowFromChannel(["*"]),
+        }
+
+        # Must not raise — one misconfigured channel can't kill the backend.
+        manager._validate_allow_from()
+
+        assert "broken" not in manager.channels
+        assert "ok" in manager.channels
+
+    def test_valid_channels_are_left_intact(self):
+        manager = self._manager()
+        manager.channels = {  # type: ignore[assignment]
+            "a": _AllowFromChannel(["*"]),
+            "b": _AllowFromChannel(["U123"]),
+        }
+
+        manager._validate_allow_from()
+
+        assert set(manager.channels) == {"a", "b"}
+
+
 def test_channel_registry_discovers_builtin_channels() -> None:
     from deeptutor.partners.channels.base import BaseChannel
     from deeptutor.partners.channels.registry import discover_all, discover_channel_names
