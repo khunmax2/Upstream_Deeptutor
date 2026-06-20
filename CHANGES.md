@@ -12,8 +12,27 @@ upstream.
 
 > Detailed, per-round records are in the committed `REPORT_*.md` files and the
 > git commit history. This file is the high-level, human-readable summary.
+> See also `ARCHITECTURE_overview.md` — how the three workstreams (Thai i18n,
+> v1.4.8 sync, LINE) attach to the upstream core.
 
 ---
+
+## Upstream bug fixes
+
+These fix bugs that exist in upstream (not fork-specific). Each is kept as a
+small, isolated diff so it can be cherry-picked onto a clean branch and proposed
+back to HKUDS; once merged upstream the divergence is removed.
+
+- **2026-06-20 — `allowFrom` empty no longer crashes the whole backend.**
+  `ChannelManager._validate_allow_from` (`deeptutor/partners/channels/manager.py`)
+  used to `raise SystemExit` when any *enabled* channel had `allow_from == []`,
+  which aborted backend startup entirely (FastAPI lifespan → "Application startup
+  failed"). Affects every channel, since `allow_from` defaults to `[]`. Now the
+  misconfigured channel is disabled with a logged ERROR and the rest of the
+  backend starts normally; the runtime `BaseChannel.is_allowed` already denies all
+  senders when the allowlist is empty, so deny-by-default is preserved. Added unit
+  tests (`tests/services/partners/test_channel_manager.py::TestValidateAllowFrom`).
+  Candidate for an upstream PR (see `REPORT_line_allowfrom_crash.md`).
 
 ## Thai (th) localization — 2026-06-17
 
