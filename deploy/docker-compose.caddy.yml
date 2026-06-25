@@ -1,0 +1,47 @@
+# ============================================
+# DeepTutor — Caddy reverse proxy + TLS (overlay)
+# ============================================
+# Adds a Caddy service that terminates HTTPS and routes three public
+# hostnames to the in-container services:
+#
+#   app.<domain>   -> deeptutor:3782   (Next.js Web UI)
+#   api.<domain>   -> deeptutor:8001   (FastAPI backend; the browser calls it directly)
+#   line.<domain>  -> deeptutor:3979   (LINE webhook listener, /line/webhook)
+#
+# The LINE listener (port 3979) is started *inside* the main `deeptutor`
+# container by the partner auto-start hook — it is reached over the internal
+# docker network, so it is NOT published to the host.
+#
+# Use ALWAYS together with the base compose file and the JSON-port wrapper:
+#
+#   python scripts/docker_compose.py \
+#     -f docker-compose.yml \
+#     -f deploy/docker-compose.caddy.yml \
+#     up -d --build
+#
+# Prerequisites:
+#   1. A domain with DNS A/AAAA records for app./api./line.<domain> -> this server
+#   2. Ports 80 and 443 open to the internet (Caddy gets Let's Encrypt certs)
+#   3. deploy/Caddyfile created from deploy/Caddyfile.example (real domain + email)
+#   4. data/user/settings/system.json: next_public_api_base_external + cors_origins
+#      set to the api./app. hostnames (see DEPLOY.md)
+# ============================================
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: deeptutor-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data # certificates + ACME state (persist!)
+      - ./data/caddy/config:/config
+    depends_on:
+      deeptutor:
+        condition: service_healthy
+    networks:
+      - deeptutor-network

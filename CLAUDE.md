@@ -105,6 +105,17 @@ Prefer **adding new files** over editing upstream files (use extension points su
 the `partners/channels` adapter framework and the plugin system). The more custom
 logic lives in new/isolated files, the less it conflicts on each upstream sync.
 
+**Partners channels adapter framework** (the fork's main extension point — this is
+where the LINE work lives): each chat platform is **one self-contained file** under
+`deeptutor/partners/channels/<name>.py` implementing `BaseChannel`
+(`channels/base.py`). The registry (`channels/registry.py`) discovers a channel by
+module name (first `BaseChannel` subclass in the file) and also loads external
+channels via entry_points; `channels/manager.py` instantiates them and resolves
+per-channel config; messages flow over the partner `MessageBus`
+(`partners/bus/`). Add a new integration as a new file here rather than touching
+shared code. Tests live in `tests/services/partners/` (e.g. `test_line_channel.py`)
+and `tests/api/test_partners_*`.
+
 ## 4. graphify — code knowledge graph (use it to work faster)
 
 This project uses **graphify** to give agents a fast, structured map of the codebase.

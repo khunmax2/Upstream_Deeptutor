@@ -1,0 +1,40 @@
+# ============================================
+# LINE partner config — example
+# ============================================
+# Copy to:  data/partners/<partner-id>/config.yaml   (e.g. data/partners/lineme/config.yaml)
+# This whole tree (data/) is gitignored — secrets never enter the repo.
+#
+# Get the two LINE credentials from https://developers.line.biz/console/ :
+#   channel_secret        = Basic settings tab  (32-char hex)
+#   channel_access_token   = Messaging API tab -> Issue long-lived token (~170 chars)
+#
+# After editing, restart the stack — config is read only at startup.
+# ============================================
+
+auto_start: true # backend auto-starts this partner on boot (api/main.py)
+name: DeepTutor LINE # display name
+description: LINE tutoring bot
+emoji: 🤖
+language: '' # '' = follow user/runtime default; set 'th' to lock Thai
+avatar: ''
+color: ''
+
+soul_origin:
+  id: companion # built-in persona; or point to your own soul markdown
+  type: library
+
+channels:
+  line:
+    enabled: true
+    channel_secret: REPLACE_WITH_CHANNEL_SECRET
+    channel_access_token: REPLACE_WITH_CHANNEL_ACCESS_TOKEN
+    host: 0.0.0.0
+    port: 3979 # listener port inside the container (Caddy proxies line.<domain> here)
+    path: /line/webhook # public webhook URL = https://line.<domain>/line/webhook
+    # allow_from: empty list = DENY everyone. Put your own LINE userId(s) here.
+    # '*' allows anyone who messages the OA — use only for short tests.
+    allow_from:
+      - 'REPLACE_WITH_YOUR_LINE_USER_ID'
+    reply_token_ttl_s: 50
+    send_progress: false # LINE can't edit msgs in place; progress = extra push quota
+    send_tool_hints: false

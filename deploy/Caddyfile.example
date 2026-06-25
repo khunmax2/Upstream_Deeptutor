@@ -1,0 +1,35 @@
+# ============================================
+# DeepTutor Caddyfile — copy to deploy/Caddyfile and edit
+# ============================================
+# Replace:
+#   - example.com        -> your real domain
+#   - you@example.com    -> your real email (Let's Encrypt notices)
+#
+# Caddy obtains and renews TLS certificates automatically for every hostname
+# below, provided DNS points here and ports 80/443 are reachable.
+# ============================================
+
+{
+	email you@example.com
+	# For first-time testing against rate limits, uncomment the staging CA:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# --- Web UI (Next.js) ---
+app.example.com {
+	encode zstd gzip
+	reverse_proxy deeptutor:3782
+}
+
+# --- Backend API (the browser calls this directly; must be public) ---
+# Must match data/user/settings/system.json -> next_public_api_base_external
+api.example.com {
+	encode zstd gzip
+	reverse_proxy deeptutor:8001
+}
+
+# --- LINE webhook ---
+# Set the LINE Developers webhook URL to: https://line.example.com/line/webhook
+line.example.com {
+	reverse_proxy deeptutor:3979
+}

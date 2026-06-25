@@ -53,6 +53,25 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 - **Learning / quiz:** `deeptutor/learning/prompts/th.yaml`; quiz judge accepts `th`.
 - **Detail:** `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
 
+## Documentation
+
+- **2026-06-25 — Added production deployment guide + deploy templates.** New
+  `DEPLOY.md`: step-by-step Docker Compose (production) deploy on a fresh server,
+  including LINE webhook setup behind Caddy reverse proxy + auto-TLS, the
+  remote-server `next_public_api_base_external`/CORS gotcha, ops (restart/update/
+  backup), troubleshooting, and a Claude-CLI checklist. New additive templates
+  under `deploy/`: `docker-compose.caddy.yml` (Caddy overlay routing
+  app./api./line. → in-container 3782/8001/3979), `Caddyfile.example`,
+  `settings/system.json.example`, `settings/partner-line-config.yaml.example`.
+  All new files; no upstream files touched. Secrets stay out of git (everything
+  under `data/` remains gitignored). Files: `DEPLOY.md`, `deploy/`.
+- **2026-06-25 — CLAUDE.md: documented the Partners channels adapter framework.**
+  Added a pointer under fork-policy §3 locating the extension point
+  (`deeptutor/partners/channels/<name>.py` → `BaseChannel`, discovered by
+  `channels/registry.py`, wired by `channels/manager.py` over `partners/bus/`) and its
+  tests (`tests/services/partners/`, `tests/api/test_partners_*`), so future agents
+  working on channel integrations (e.g. LINE) know where to add code. Files: `CLAUDE.md`.
+
 ## LINE integration — (in progress)
 
 Adding LINE Messaging as a Partners channel — primarily a new file
