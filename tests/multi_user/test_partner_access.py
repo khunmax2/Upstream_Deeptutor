@@ -139,6 +139,4 @@ def test_admin_partner_summary_is_identity_only(monkeypatch):
         ],
     )
     summary = router._admin_partner_summary()
-    assert summary == [
-        {"partner_id": "p1", "name": "Tutor", "description": "math", "emoji": "🤖"}
-    ]
+    assert summary == [{"partner_id": "p1", "name": "Tutor", "description": "math", "emoji": "🤖"}]

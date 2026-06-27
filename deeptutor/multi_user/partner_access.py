@@ -79,7 +79,5 @@ def visible_partner_cards() -> list[dict[str, Any]]:
         return [_project_card(item) for item in everything]
     allowed = assigned_partner_ids(user.id)
     return [
-        _project_card(item)
-        for item in everything
-        if str(item.get("partner_id") or "") in allowed
+        _project_card(item) for item in everything if str(item.get("partner_id") or "") in allowed
     ]
