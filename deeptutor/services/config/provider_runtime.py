@@ -251,6 +251,20 @@ TTS_PROVIDERS: dict[str, VoiceProviderSpec] = {
         default_model="tts-1",
         default_voice="alloy",
     ),
+    "elevenlabs": VoiceProviderSpec(
+        label="ElevenLabs",
+        default_api_base="https://api.elevenlabs.io/v1",
+        adapter="elevenlabs",
+        default_model="eleven_multilingual_v2",
+        default_voice="",  # an ElevenLabs voice_id; admin must pick one
+    ),
+    "botnoi": VoiceProviderSpec(
+        label="BOTNOI Voice",
+        default_api_base="https://api-voice.botnoi.ai/openapi/v1",
+        adapter="botnoi",
+        default_model="botnoi-voice",  # BOTNOI has no model; placeholder for the catalog
+        default_voice="1",  # numeric speaker id
+    ),
     "vllm": VoiceProviderSpec(
         label="vLLM / Local",
         default_api_base="http://localhost:8000/v1",
