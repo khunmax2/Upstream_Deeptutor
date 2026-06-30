@@ -78,9 +78,7 @@ async def test_speaks_only_final_response_not_narration(monkeypatch: pytest.Monk
     spoken = _patch_common(monkeypatch, events=events)
     emitter = FakeEmitter()
 
-    transcript, reply = await pipe.run_turn(
-        emitter, b"webm-bytes", [], session_id="voice:test"
-    )
+    transcript, reply = await pipe.run_turn(emitter, b"webm-bytes", [], session_id="voice:test")
 
     assert transcript == "พีทาโกรัส"
     assert reply == "ทฤษฎีบทพีทาโกรัส. a²+b²=c² นั่นเอง."
@@ -141,7 +139,9 @@ async def test_first_audio_streams_before_stream_finishes(monkeypatch: pytest.Mo
             yield _content("ประโยคแรกจบ. ", call_kind="llm_final_response")
             order.append("token2")
             yield _content("ประโยคสอง.", call_kind="llm_final_response")
-            yield StreamEvent(type=StreamEventType.RESULT, source="chat", metadata={"response": "x"})
+            yield StreamEvent(
+                type=StreamEventType.RESULT, source="chat", metadata={"response": "x"}
+            )
 
     monkeypatch.setattr(pipe, "transcribe_audio", fake_transcribe)
     monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)

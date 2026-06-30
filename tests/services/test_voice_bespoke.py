@@ -14,7 +14,9 @@ from deeptutor.services.voice.base import VoiceProviderError, VoiceProviderHTTPE
 from deeptutor.services.voice.config import TTSConfig
 
 
-def _resp(status: int, *, content: bytes = b"", json_body: Any = None, content_type: str = "") -> httpx.Response:
+def _resp(
+    status: int, *, content: bytes = b"", json_body: Any = None, content_type: str = ""
+) -> httpx.Response:
     headers = {"content-type": content_type} if content_type else None
     if json_body is not None:
         resp = httpx.Response(status, json=json_body, headers=headers)
@@ -86,7 +88,9 @@ async def test_elevenlabs_raises_http_error(monkeypatch: pytest.MonkeyPatch) -> 
         return _resp(401, content=b"unauthorized")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-    config = TTSConfig(model="m", adapter="elevenlabs", api_key="bad", base_url="https://x/v1", voice="v")
+    config = TTSConfig(
+        model="m", adapter="elevenlabs", api_key="bad", base_url="https://x/v1", voice="v"
+    )
     with pytest.raises(VoiceProviderHTTPError) as exc:
         await ElevenLabsTTSAdapter().synthesize("hi", config)
     assert exc.value.status_code == 401
@@ -103,7 +107,11 @@ async def test_botnoi_generates_then_fetches_audio(monkeypatch: pytest.MonkeyPat
         captured["post_url"] = url
         captured["headers"] = kwargs.get("headers")
         captured["json"] = kwargs.get("json")
-        return _resp(200, json_body={"audio_url": "https://cdn.botnoi/clip.mp3"}, content_type="application/json")
+        return _resp(
+            200,
+            json_body={"audio_url": "https://cdn.botnoi/clip.mp3"},
+            content_type="application/json",
+        )
 
     async def fake_get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
         captured["get_url"] = url
@@ -134,6 +142,8 @@ async def test_botnoi_errors_when_no_audio_url(monkeypatch: pytest.MonkeyPatch) 
         return _resp(200, json_body={"message": "quota exceeded"}, content_type="application/json")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-    config = TTSConfig(model="m", adapter="botnoi", api_key="tok", base_url="https://x/v1", voice="1")
+    config = TTSConfig(
+        model="m", adapter="botnoi", api_key="tok", base_url="https://x/v1", voice="1"
+    )
     with pytest.raises(VoiceProviderError, match="audio_url"):
         await BotnoiTTSAdapter().synthesize("hi", config)

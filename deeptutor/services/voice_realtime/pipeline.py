@@ -139,7 +139,11 @@ async def run_turn(
         if first_audio_at is None:
             first_audio_at = time.perf_counter()
             await emitter.send_json(
-                {"type": "stage", "stage": "tts_first", "ms": round((first_audio_at - tts_t0) * 1000)}
+                {
+                    "type": "stage",
+                    "stage": "tts_first",
+                    "ms": round((first_audio_at - tts_t0) * 1000),
+                }
             )
         await emitter.send_json(
             {"type": "audio", "seq": seq, "text": chunk, "content_type": content_type}

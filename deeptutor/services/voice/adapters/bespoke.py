@@ -72,9 +72,7 @@ class ElevenLabsTTSAdapter(BaseTTSAdapter):
         if config.model:
             payload["model_id"] = config.model
 
-        logger.debug(
-            "ElevenLabs TTS voice=%s model=%s chars=%d", voice_id, config.model, len(text)
-        )
+        logger.debug("ElevenLabs TTS voice=%s model=%s chars=%d", voice_id, config.model, len(text))
         try:
             async with httpx.AsyncClient(timeout=config.request_timeout) as client:
                 resp = await client.post(url, headers=headers, json=payload)
