@@ -1,0 +1,81 @@
+"""Per-connection voice session — conversation state + barge-in.
+
+One WebSocket connection == one :class:`VoiceSession` == one ongoing "call".
+The session owns the in-memory conversation history and, crucially, the *single
+in-flight turn task*. A barge-in (the user starts talking while the assistant is
+still speaking) cancels that task so STT / LLM / TTS unwind immediately and the
+client stops receiving audio for the abandoned turn.
+
+Turns are serialised: a new utterance cancels any turn still running before
+starting its own, so the model never answers two utterances at once on the same
+call. History is kept in memory for the life of the connection only — voice is a
+live medium; durable transcripts are out of scope for the MVP.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+import uuid
+
+from deeptutor.services.voice_realtime.pipeline import VoiceEmitter, run_turn
+
+logger = logging.getLogger(__name__)
+
+
+class VoiceSession:
+    """Drive voice turns for one WebSocket connection, with barge-in support."""
+
+    def __init__(self, emitter: VoiceEmitter, *, language: str = "th") -> None:
+        self._emitter = emitter
+        self._language = language
+        self.session_id = f"voice:{uuid.uuid4().hex}"
+        self.history: list[dict[str, Any]] = []
+        self._current: asyncio.Task[None] | None = None
+
+    async def handle_utterance(self, audio: bytes) -> None:
+        """Start a new turn for *audio*, cancelling any turn still in flight."""
+        await self.cancel_current_turn()
+        self._current = asyncio.create_task(self._run(audio), name="voice:turn")
+
+    async def cancel_current_turn(self) -> None:
+        """Barge-in: stop the running turn (if any) and wait for it to unwind."""
+        task = self._current
+        self._current = None
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            # The turn was deliberately cancelled; any error during unwinding is
+            # not the caller's concern (the turn is being abandoned anyway).
+            logger.debug("Cancelled in-flight voice turn", exc_info=True)
+
+    async def aclose(self) -> None:
+        """Tear the session down (connection closed)."""
+        await self.cancel_current_turn()
+
+    async def _run(self, audio: bytes) -> None:
+        try:
+            transcript, reply = await run_turn(
+                self._emitter,
+                audio,
+                self.history,
+                session_id=self.session_id,
+                language=self._language,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Voice turn crashed")
+            return
+        # Commit to history only after the turn completed without barge-in.
+        if transcript:
+            self.history.append({"role": "user", "content": transcript})
+            if reply:
+                self.history.append({"role": "assistant", "content": reply})
+
+
+__all__ = ["VoiceSession"]
