@@ -130,6 +130,47 @@ icon, Thai labels) deferred._
   a public OA can't grow memory without bound. See the "Post-review fixes"
   section in `REPORT_line_implementation.md`.
 
+## Voice call (realtime) — prototype (in progress)
+
+Adding a two-way realtime voice layer (Mic → STT → LLM → TTS → speaker), Thai-first
+and low-latency. Design decision: a **separate realtime I/O layer**, not a Partners
+channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
+`MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
+code is additive and isolated for mergeability.
+
+- **2026-06-30 — Standalone prototype landed** under `voice_prototype/` (outside the
+  `deeptutor/` package; no upstream files touched). FastAPI WebSocket server +
+  browser mic client (energy-VAD endpointing + barge-in), pipeline = Groq Whisper STT
+  (batch-on-endpoint) → OpenAI-compatible LLM stream → `SentenceChunker` →
+  pluggable TTS (`openai` / `elevenlabs` / `botnoi`). Per-stage latency instrumentation;
+  network-free tests in `voice_prototype/tests/`. Proves the design before integration.
+  Production target: `deeptutor/api/routers/voice_realtime.py` +
+  `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
+  STT/TTS adapters.
+
+- **2026-06-30 — Production realtime layer landed** (prototype → `deeptutor/`,
+  additive). New, isolated for mergeability:
+  - `deeptutor/services/voice_realtime/{chunker,vad,pipeline,session}.py` — the
+    realtime turn machinery. `pipeline.run_turn()` drives `ChatOrchestrator.handle()`
+    directly and consumes `StreamBus` `CONTENT` events, speaking **only** the final
+    answer by gating on `metadata.call_kind == "llm_final_response"` (the same rule
+    `PartnerRunner` uses); final-answer tokens feed `SentenceChunker` → per-sentence
+    TTS so audio for sentence 1 streams while the LLM is still writing. STT/TTS reuse
+    the catalog-driven facade (`transcribe_audio` / `synthesize_speech`).
+    `VoiceSession` owns per-connection history + a single in-flight turn task;
+    a new utterance or `barge` control frame cancels it (barge-in).
+  - `deeptutor/api/routers/voice_realtime.py` — WebSocket `/api/v1/voice/ws`
+    (binary frame = one utterance, `{"type":"barge"}` = cancel); auth via
+    `ws_require_auth` like `unified_ws`. Wired in `deeptutor/api/main.py` (one
+    `include_router` line).
+  - `deeptutor/services/voice/adapters/bespoke.py` — new **ElevenLabs** and
+    **BOTNOI** TTS adapters; registered in `adapters/__init__.py` and added to
+    `TTS_PROVIDERS` in `services/config/provider_runtime.py` so both are selectable
+    from Settings > Voice (Groq STT + OpenAI/Groq TTS already shipped in the catalog).
+  - Tests: `tests/services/voice_realtime/` (chunker, pipeline CONTENT-gating,
+    session barge-in), `tests/services/test_voice_bespoke.py` (adapter wire shape),
+    `tests/api/test_voice_realtime_ws.py` (WS routing).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
