@@ -175,6 +175,43 @@ code is additive and isolated for mergeability.
 
 _Record each upstream version merged into this fork here._
 
+### v1.4.15 (`bca6f6e9`) — merged 2026-07-01
+
+Merged upstream **v1.4.15** into `main` (merge commit `bdb41011`) from the previous
+fork point v1.4.8 (`88c25653`). 210 files, **+13,848 / −3,438** — large but mostly
+net-new, non-colliding surface: LightRAG-server integration, user profile + avatar,
+admin User-Management, MCP-grant gating, docker/rootless hardening, provider
+updates, and a new native **Mattermost** partner channel. Upstream CI green
+(Tests #538 on `bca6f6e9`).
+
+- **Conflicts: none.** A pre-merge dry-run (`REPORT_dry_merge_v1.4.15.md`) confirmed
+  `git merge` produces zero textual conflicts; all 8 collision files auto-merged
+  (`agentic_pipeline.py`, `api/routers/settings.py`, `capabilities/mastery/loop.py`,
+  `ConnectedAgents.tsx`, `QuizViewer.tsx`, `ServiceConfigEditor.tsx`, `en/app.json`,
+  `zh/app.json`). Sanity-checked `agentic_pipeline.py` — the Thai
+  `normalize_agent_language` path + `PARTNER_BUILTIN_TOOL_NAMES` import survived
+  intact; `ConnectedAgents.tsx` kept its `th` labels while adopting upstream's
+  `listConnectablePartners`/`ConnectablePartner` API.
+- **Thai i18n delta (+27 / −2).** Added 27 new `th/app.json` keys (profile/avatar,
+  LightRAG server config, partners-assigned, conversation-loading) and removed 2
+  orphaned keys upstream deleted (`"PDF limit: {{size}}"`,
+  `"PDF files must be smaller than {{size}}."`) → `set(th) == set(en)` = **2668**
+  (exact parity). Translations pre-drafted in `th_i18n_delta_v1.4.15.json`, reviewed.
+- **`Lang`-needs-`th` sweep:** all 49 changed `.tsx`/`.ts` files clean (0 zh/en-only
+  objects); `npm run build` (tsc) is the backstop and passed.
+- **New Mattermost channel** (`deeptutor/partners/channels/`) is net-new and
+  non-colliding — same extension point as the fork's LINE channel; no user-facing
+  Thai strings needed for parity.
+
+Verification: `npm run build` OK (50 pages), `npm run i18n:check` parity OK,
+`ruff check`/`format` OK, `pytest` **2670 passed** (10 pre-existing optional-dep
+partner failures — telegram/slack/msteams SDKs absent — identical to the v1.4.8
+baseline, not a regression), live Thai chat replied in fluent Thai. Detail:
+`REPORT_sync_v1.4.15.md` (impact `REPORT_impact_v1.4.15.md`, dry-run
+`REPORT_dry_merge_v1.4.15.md`).
+
+> Next sync merge-base = `bca6f6e9`.
+
 ### v1.4.8 (`88c25653`) — merged 2026-06-19
 
 Merged upstream **v1.4.8** into `main` (merge commit `e62fdd3d`). Brought in the

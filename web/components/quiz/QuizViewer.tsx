@@ -1039,7 +1039,13 @@ export default function QuizViewer({
                       key
                     )}
                   </span>
-                  <span className="leading-relaxed">{text}</span>
+                  <div className="min-w-0 leading-relaxed">
+                    <MarkdownRenderer
+                      content={text}
+                      variant="compact"
+                      enableMath
+                    />
+                  </div>
                 </button>
               );
             })}

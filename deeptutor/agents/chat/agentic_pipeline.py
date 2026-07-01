@@ -430,21 +430,37 @@ class AgenticChatPipeline:
 
     # ---- deferred tools / tool composition ------------------------------
 
+    @staticmethod
+    def _is_partner_turn(context: UnifiedContext) -> bool:
+        """Whether this turn runs under a partner's synthetic scope.
+
+        A partner turn executes as a synthetic non-admin user but acts as the
+        admin owner's extension. Authorization for these turns travels through
+        context metadata (the owner-scoped ``mcp_tools_filter`` / exec gate),
+        not the synthetic user's grant file — so callers must bypass real-user
+        grant resolution and defer to that metadata whitelist instead.
+        """
+        return str((context.metadata or {}).get("source") or "") == "partner"
+
     async def _prepare_deferred_tools(self, context: UnifiedContext) -> None:
         try:
             from deeptutor.services.mcp import get_mcp_manager, load_loaded_tools
 
             await get_mcp_manager().ensure_started()
             # Caller-scoped whitelist (e.g. a partner's configured MCP tools)
-            # intersected with the current user's admin grant: ``None`` = all
-            # deferred tools, a set = only these. Either side can narrow.
+            # intersected with the current user's grant. ``None`` means
+            # unrestricted; a set narrows the deferred tools. Real non-admin
+            # users fail closed when no MCP grant is present, while partner
+            # turns defer to their owner-scoped metadata whitelist as the
+            # authority (see ``_is_partner_turn``).
             from deeptutor.multi_user.tool_access import allowed_mcp_tools, combine_whitelists
 
             raw_filter = context.metadata.get("mcp_tools_filter")
-            allowed: set[str] | None = combine_whitelists(
-                {str(name) for name in raw_filter} if isinstance(raw_filter, list) else None,
-                allowed_mcp_tools(),
+            caller_allowed = (
+                {str(name) for name in raw_filter} if isinstance(raw_filter, list) else None
             )
+            user_allowed = None if self._is_partner_turn(context) else allowed_mcp_tools()
+            allowed: set[str] | None = combine_whitelists(caller_allowed, user_allowed)
             pool = self.registry.deferred_tools()
             if allowed is not None:
                 pool = [t for t in pool if t.get_definition().name in allowed]
@@ -478,7 +494,7 @@ class AgenticChatPipeline:
             # owner's extension (partners are anchored to the admin workspace), so
             # exec follows the owner's authority — not the partner's "user" role.
             # The owner still gates exec per-partner via the builtin-tool whitelist.
-            is_partner = str((context.metadata or {}).get("source")) == "partner"
+            is_partner = self._is_partner_turn(context)
 
             level = await get_sandbox_service().isolation_level()
             if level is IsolationLevel.SYSTEM:
@@ -504,7 +520,7 @@ class AgenticChatPipeline:
             return False
 
     def _compose_enabled_tools(self, context: UnifiedContext) -> list[str]:
-        is_partner = str((context.metadata or {}).get("source")) == "partner"
+        is_partner = self._is_partner_turn(context)
         composed = compose_enabled_tools(
             registry=self.registry,
             requested_tools=context.enabled_tools,
@@ -889,7 +905,7 @@ class AgenticChatPipeline:
             kwargs["_cron_in_context"] = bool(
                 cron_job_id or str(meta.get("source") or "") == "cron"
             )
-            if str(meta.get("source") or "") == "partner":
+            if self._is_partner_turn(context):
                 channel_meta = meta.get("channel_metadata")
                 kwargs["_cron_owner"] = {
                     "kind": "partner",
