@@ -1,0 +1,37 @@
+{
+  "_note": "Thai i18n delta for the v1.4.15 upstream sync. Apply to web/locales/th/app.json AFTER merging upstream/main. Result: th == en == 2668 keys (parity exact). Translations are proposed — review the Thai wording before committing.",
+  "add": {
+    "Loading conversation": "กำลังโหลดบทสนทนา…",
+    "Still loading…": "ยังโหลดอยู่…",
+    "Required — without it, search falls back to DuckDuckGo.": "จำเป็น — หากไม่มี การค้นหาจะถอยไปใช้ DuckDuckGo",
+    "Partners your administrator has assigned to you. Click one to start chatting with it.": "พาร์ทเนอร์ที่ผู้ดูแลระบบมอบหมายให้คุณ คลิกที่รายการใดรายการหนึ่งเพื่อเริ่มสนทนา",
+    "No partners assigned yet": "ยังไม่มีพาร์ทเนอร์ที่ได้รับมอบหมาย",
+    "Your administrator hasn't assigned you any partners yet. Once they do, they'll appear here.": "ผู้ดูแลระบบยังไม่ได้มอบหมายพาร์ทเนอร์ให้คุณ เมื่อมอบหมายแล้วจะแสดงที่นี่",
+    "My profile": "โปรไฟล์ของฉัน",
+    "View your account and personalize your avatar": "ดูบัญชีของคุณและปรับแต่งรูปประจำตัว",
+    "Administrator": "ผู้ดูแลระบบ",
+    "Joined": "เข้าร่วมเมื่อ",
+    "Avatar": "รูปประจำตัว",
+    "Upload a picture or pick an icon": "อัปโหลดรูปภาพหรือเลือกไอคอน",
+    "Upload image": "อัปโหลดรูปภาพ",
+    "Remove photo": "ลบรูปภาพ",
+    "Or pick an icon": "หรือเลือกไอคอน",
+    "Sign out": "ออกจากระบบ",
+    "End your session on this device": "สิ้นสุดเซสชันบนอุปกรณ์นี้",
+    "Failed to load profile": "โหลดโปรไฟล์ไม่สำเร็จ",
+    "Image is too large": "รูปภาพมีขนาดใหญ่เกินไป",
+    "Server URL": "URL เซิร์ฟเวอร์",
+    "The base URL of your running LightRAG server. Documents are indexed there — nothing is uploaded or copied.": "URL หลักของเซิร์ฟเวอร์ LightRAG ที่คุณรันอยู่ เอกสารจะถูกทำดัชนีที่นั่น — ไม่มีการอัปโหลดหรือคัดลอกข้อมูลใด ๆ",
+    "Only if your server requires one": "เฉพาะเมื่อเซิร์ฟเวอร์ของคุณต้องการเท่านั้น",
+    "Could not connect": "เชื่อมต่อไม่ได้",
+    "Connected to LightRAG server": "เชื่อมต่อกับเซิร์ฟเวอร์ LightRAG แล้ว",
+    "Core {{version}}": "คอร์ {{version}}",
+    "API key accepted": "ยอมรับคีย์ API แล้ว",
+    "Open access": "เข้าถึงแบบเปิด"
+  },
+  "remove": [
+    "PDF limit: {{size}}",
+    "PDF files must be smaller than {{size}}."
+  ],
+  "_apply": "python3 - <<'PY'\nimport json\nd=json.load(open('th_i18n_delta_v1.4.15.json',encoding='utf-8'))\np='web/locales/th/app.json'\nth=json.load(open(p,encoding='utf-8'))\nth.update(d['add'])\nfor k in d['remove']: th.pop(k,None)\njson.dump(th,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2)\nprint('applied',len(d['add']),'adds',len(d['remove']),'removes ->',len(th),'keys')\nPY"
+}
