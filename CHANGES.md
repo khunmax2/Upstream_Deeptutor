@@ -147,6 +147,23 @@ code is additive and isolated for mergeability.
   Production target: `deeptutor/api/routers/voice_realtime.py` +
   `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
   STT/TTS adapters.
+- **2026-07-02 — iApp (Thai) STT/TTS adapters, catalog-integrated.** New
+  `deeptutor/services/voice/adapters/iapp.py` (`IAppTTSAdapter` + `IAppSTTAdapter`
+  — the first bespoke STT adapter): auth via `apikey` header under
+  `https://api.iapp.co.th/v3/store`. TTS v3 posts `{text, speed}` (speed clamped
+  0.8–1.2) and returns raw PCM s16le 24 kHz reported as
+  `audio/pcm;rate=24000;channels=1` so the existing PCM→WAV wrapper containers it;
+  STT is multipart upload with the catalog *model* selecting the variant
+  (`pro` = accurate / anything else = `base` fast + `chunk_size=7`), joining
+  `output[].text` segments. Registered in both adapter registries + added
+  `iapp` specs to `TTS_PROVIDERS`/`STT_PROVIDERS`, so "iApp (Thai)" appears in
+  Settings > Voice for both services. Tests in `tests/services/test_voice_iapp.py`.
+  Live-verified with a real key: **TTS works** (144 KB PCM in ~2.5 s);
+  **STT confirmed correct earlier in the day** (round-trip transcript matched)
+  but iApp's ASR backend degraded to a persistent 500
+  (`'50359' is not a valid task`) during verification — an iApp-side outage
+  affecting base + pro alike, independent of request shape.
+
 - **2026-07-02 — GLM hybrid-reasoning support (`LLM_DISABLE_THINKING`).** Verified a
   z.ai (Zhipu) key against the prototype: `glm-4.5-flash` (free) works as the LLM
   brain (Thai OK; measured TTFT ≈2.2 s with thinking off), but z.ai exposes no
