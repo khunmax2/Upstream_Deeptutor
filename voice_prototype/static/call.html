@@ -105,7 +105,21 @@ function playNext() {
 function stopPlayback() {
   playQueue.length = 0;
   if (player) { player.pause(); player = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();  // ตัดเสียงสำรองด้วย
   playing = false;
+}
+
+// ── browser-TTS fallback: server TTS ล้มทั้งเทิร์น (เครดิตหมด ฯลฯ) → browser อ่านเอง ──
+let turnAudioFrames = 0, lastReplyText = "";
+function speakFallback(text) {
+  if (!("speechSynthesis" in window) || !text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "th-TH";
+  const th = speechSynthesis.getVoices().find(v => (v.lang || "").startsWith("th"));
+  if (th) u.voice = th;
+  u.onstart = () => { playing = true; setStatus("🔊 เสียงสำรองจาก browser (server TTS ใช้ไม่ได้)"); };
+  u.onend = u.onerror = () => { playing = false; if (running) setStatus("ฟังอยู่…"); };
+  speechSynthesis.speak(u);
 }
 function bargeIn() {                    // user started talking → cut assistant off
   if (playing && ws && ws.readyState === 1) {
@@ -123,15 +137,16 @@ function connect() {
   ws.onerror = () => setStatus("เชื่อมต่อไม่ได้ — deeptutor serve รันอยู่ไหม?");
   ws.onmessage = ev => {
     if (typeof ev.data !== "string") {
+      turnAudioFrames++;
       const type = (pendingMeta && pendingMeta.content_type) || "audio/wav";
       enqueueAudio(new Blob([ev.data], { type }));
       pendingMeta = null;
       return;
     }
     const m = JSON.parse(ev.data);
-    if (m.type === "transcript") addMsg(m.text, "user");
+    if (m.type === "transcript") { addMsg(m.text, "user"); turnAudioFrames = 0; lastReplyText = ""; }
     else if (m.type === "audio") pendingMeta = m;
-    else if (m.type === "assistant_text") addMsg(m.text, "bot");
+    else if (m.type === "assistant_text") { addMsg(m.text, "bot"); lastReplyText = m.text || ""; }
     else if (m.type === "stage") {
       if (m.stage === "stt") $("m-stt").textContent = m.ms + " ms";
       if (m.stage === "llm_ttft") $("m-llm").textContent = m.ms + " ms";
@@ -140,6 +155,8 @@ function connect() {
     else if (m.type === "done") {
       $("m-total").textContent = m.total_ms + " ms";
       $("m-first").textContent = (m.first_audio_ms ?? "–") + " ms";
+      if (turnAudioFrames === 0 && lastReplyText) speakFallback(lastReplyText);
+      turnAudioFrames = 0; lastReplyText = "";
     }
     else if (m.type === "error") addMsg("⚠ " + m.message, "bot");
   };
@@ -149,6 +166,7 @@ function sendText(text) {
   text = (text || "").trim();
   if (!text || !ws || ws.readyState !== 1) return;
   addMsg(text, "user");
+  turnAudioFrames = 0; lastReplyText = "";
   ws.send(JSON.stringify({ type: "user_text", text }));
 }
 
