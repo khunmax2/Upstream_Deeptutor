@@ -162,6 +162,18 @@ code is additive and isolated for mergeability.
   typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
   20 per-sentence iApp WAV frames streamed while the model was still writing.
 
+- **2026-07-02 — Voice-mode prompt + guarded STT (turn quality).** All inside
+  `deeptutor/services/voice_realtime/` (zero upstream edits): `build_voice_context`
+  now injects a VOICE CALL MODE directive (persona slot + a reminder appended to
+  the current user message — the persona block alone was ignored) so the brain
+  answers in short spoken prose; measured 612-char markdown/LaTeX answer →
+  297 chars of clean spoken Thai, turn 45 s → 4.8 s. New `stt_guard.py`:
+  vocab-biased `verbose_json` transcription with mean `avg_logprob` confidence
+  for the OpenAI-compatible STT cluster (facade fallback for bespoke adapters)
+  plus `screen_transcript()` rejecting empties, known Whisper hallucination
+  phrases, and low-confidence noise with a speakable Thai error. Tests in
+  `tests/services/voice_realtime/test_stt_guard.py` (+ pipeline updates).
+
 - **2026-07-02 — Call page VAD hardening (real-mic feedback).** First live mic
   test hit a feedback loop: fixed VAD thresholds fired on ambient noise, whisper
   hallucinated text from the noise clips, and each false trigger barged-in and
