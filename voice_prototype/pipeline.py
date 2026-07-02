@@ -22,15 +22,24 @@ import httpx
 async def transcribe(
     audio: bytes, *, filename: str = "audio.webm", content_type: str = "audio/webm"
 ) -> tuple[str, float]:
-    """Transcribe one utterance. Returns (text, elapsed_seconds)."""
-    if not CONFIG.groq_api_key:
-        raise RuntimeError("GROQ_API_KEY is not set")
+    """Transcribe one utterance via the configured STT backend. Returns (text, s)."""
     t0 = time.perf_counter()
+    if CONFIG.stt_backend.lower() == "openrouter":
+        from providers import OpenRouterSTT
+
+        stt = OpenRouterSTT(
+            base_url=CONFIG.stt_base_url, api_key=CONFIG.stt_api_key, model=CONFIG.stt_model
+        )
+        res = await stt.transcribe(
+            audio, content_type=content_type, language=CONFIG.stt_language or None
+        )
+        return res.text, time.perf_counter() - t0
+
+    # default: Groq Whisper (OpenAI multipart)
+    if not CONFIG.groq_api_key:
+        raise RuntimeError("GROQ_API_KEY is not set (or set STT_BACKEND=openrouter)")
     url = "https://api.groq.com/openai/v1/audio/transcriptions"
-    files = {
-        "file": (filename, audio, content_type),
-        "model": (None, CONFIG.stt_model),
-    }
+    files = {"file": (filename, audio, content_type), "model": (None, CONFIG.stt_model)}
     if CONFIG.stt_language:
         files["language"] = (None, CONFIG.stt_language)
     headers = {"Authorization": f"Bearer {CONFIG.groq_api_key}"}

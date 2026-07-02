@@ -147,6 +147,12 @@ code is additive and isolated for mergeability.
   Production target: `deeptutor/api/routers/voice_realtime.py` +
   `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
   STT/TTS adapters.
+- **2026-07-02 — Provider interface + playable MVP.** Added `voice_prototype/providers.py`
+  (`BaseSTT`/`BaseTTS` ABCs + OpenAI-compatible adapters covering the TokenMind
+  `ptm-asr-1`/`ptm-tts-1` endpoints, streaming-first, + Thai number normalizer) and a
+  browser-only MVP (`/mvp` route + `static/mvp.html`) that uses the Web Speech API for
+  STT/TTS so it runs with no audio keys — only a DeepTutor OpenAI-compatible LLM
+  endpoint. Tests in `voice_prototype/tests/test_providers.py`.
 
 - **2026-06-30 — Production realtime layer landed** (prototype → `deeptutor/`,
   additive). New, isolated for mergeability:

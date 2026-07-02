@@ -19,7 +19,26 @@ server.py  ──►  STT (Groq Whisper)  ──►  LLM (OpenAI-compatible, str
 แนวคิดหลัก: **เริ่มพูดประโยคแรกตั้งแต่ LLM ยังพิมพ์ไม่จบ** (per-sentence TTS) →
 รู้สึกเหมือนโทรคุย ไม่ใช่อัดแล้วรอ
 
-## ติดตั้ง
+## 🚀 MVP — เล่นได้จริงเร็วสุด (ไม่ต้องมี key STT/TTS)
+
+โหมดนี้ให้ **เบราว์เซอร์ทำ STT/TTS เอง** (Web Speech API, ภาษาไทย) — ต้องมีแค่ DeepTutor
+endpoint เป็นสมอง ไม่ต้องมี Groq/TokenMind/อะไรทั้งนั้น
+
+```bash
+cd voice_prototype
+pip install -r requirements.txt
+# ตั้ง .env ให้ LLM_BASE_URL/LLM_MODEL ชี้ DeepTutor OpenAI-compatible wrap ของคุณ
+set -a; source .env; set +a
+python server.py
+```
+
+เปิด **Chrome/Edge** ที่ `http://127.0.0.1:8800/mvp` → กด "เริ่มสนทนา" → อนุญาตไมค์ → พูดไทยได้เลย
+ระบบถอดเสียง → ส่งเข้า DeepTutor (stream) → พูดตอบกลับทีละประโยค. ใส่หูฟังแล้วติ๊ก
+"โหมดหูฟัง" เพื่อพูดแทรก (barge-in). พอ key TokenMind มา ค่อยสลับไปโหมด server-side ด้านล่าง
+
+---
+
+## ติดตั้ง (โหมดเต็ม: server-side STT/TTS)
 
 ```bash
 cd voice_prototype
