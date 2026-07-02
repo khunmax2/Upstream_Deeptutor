@@ -162,6 +162,13 @@ code is additive and isolated for mergeability.
   typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
   20 per-sentence iApp WAV frames streamed while the model was still writing.
 
+- **2026-07-02 — Call page: browser-TTS fallback.** When a turn ends with a
+  reply but zero audio frames (server TTS down / out of credit — iApp hit
+  `INSUFFICIENT_CREDIT` during testing), `call.html` now speaks the reply via
+  the browser's Web Speech synthesis (th-TH voice when available) instead of
+  going silent; barge-in cancels the fallback voice too. File:
+  `voice_prototype/static/call.html`.
+
 - **2026-07-02 — Voice-mode prompt + guarded STT (turn quality).** All inside
   `deeptutor/services/voice_realtime/` (zero upstream edits): `build_voice_context`
   now injects a VOICE CALL MODE directive (persona slot + a reminder appended to
