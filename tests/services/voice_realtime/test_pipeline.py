@@ -48,14 +48,14 @@ def _patch_common(
     """Patch STT/TTS/orchestrator; return the list that records spoken chunks."""
     spoken: list[str] = []
 
-    async def fake_transcribe(audio: bytes, *, language: str = "th") -> str:
-        return transcript
+    async def fake_transcribe(audio: bytes, **kwargs: Any) -> tuple[str, float | None]:
+        return transcript, None
 
     async def fake_synthesize(text: str) -> tuple[bytes, str]:
         spoken.append(text)
         return (f"AUDIO:{text}".encode(), "audio/mpeg")
 
-    monkeypatch.setattr(pipe, "transcribe_audio", fake_transcribe)
+    monkeypatch.setattr(pipe, "transcribe_utterance", fake_transcribe)
     monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
     monkeypatch.setattr(
         "deeptutor.runtime.orchestrator.ChatOrchestrator", _fake_orchestrator(events)
@@ -133,10 +133,10 @@ async def test_text_turn_skips_stt_and_replies(monkeypatch: pytest.MonkeyPatch) 
     ]
 
     async def boom(*a: Any, **k: Any) -> str:  # noqa: ANN401
-        raise AssertionError("transcribe_audio must not be called for text turns")
+        raise AssertionError("transcribe_utterance must not be called for text turns")
 
     spoken = _patch_common(monkeypatch, events=events)
-    monkeypatch.setattr(pipe, "transcribe_audio", boom)
+    monkeypatch.setattr(pipe, "transcribe_utterance", boom)
     emitter = FakeEmitter()
 
     reply = await pipe.run_text_turn(emitter, "สวัสดี", [], session_id="voice:test")
@@ -146,6 +146,14 @@ async def test_text_turn_skips_stt_and_replies(monkeypatch: pytest.MonkeyPatch) 
     types = [m.get("type") for m in emitter.json]
     assert "transcript" not in types  # no server STT stage
     assert "done" in types
+
+
+def test_voice_context_injects_speech_style_directive() -> None:
+    """The brain must shape answers for speech from token one (persona slot)."""
+    ctx = pipe.build_voice_context(transcript="สวัสดี", history=[], session_id="voice:x")
+    assert ctx.persona_context == pipe.VOICE_STYLE_DIRECTIVE
+    assert "phone call" in ctx.persona_context
+    assert ctx.metadata["source"] == "voice"
 
 
 def test_containerize_audio_wraps_pcm_and_passes_through() -> None:
@@ -169,8 +177,8 @@ async def test_first_audio_streams_before_stream_finishes(monkeypatch: pytest.Mo
     """Audio for sentence 1 must be emitted before later tokens are consumed."""
     order: list[str] = []
 
-    async def fake_transcribe(audio: bytes, *, language: str = "th") -> str:
-        return "q"
+    async def fake_transcribe(audio: bytes, **kwargs: Any) -> tuple[str, float | None]:
+        return "q", None
 
     async def fake_synthesize(text: str) -> tuple[bytes, str]:
         order.append(f"tts:{text[:6]}")
@@ -185,7 +193,7 @@ async def test_first_audio_streams_before_stream_finishes(monkeypatch: pytest.Mo
                 type=StreamEventType.RESULT, source="chat", metadata={"response": "x"}
             )
 
-    monkeypatch.setattr(pipe, "transcribe_audio", fake_transcribe)
+    monkeypatch.setattr(pipe, "transcribe_utterance", fake_transcribe)
     monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
     monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _Orch)
 

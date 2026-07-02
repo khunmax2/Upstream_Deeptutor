@@ -31,14 +31,37 @@ import wave
 
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
-from deeptutor.services.voice import (
-    VoiceProviderError,
-    synthesize_speech,
-    transcribe_audio,
-)
+from deeptutor.services.voice import VoiceProviderError, synthesize_speech
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
+from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
 
 logger = logging.getLogger(__name__)
+
+# Eagerly injected into the system prompt (persona slot) so the brain shapes
+# its ANSWER for speech from the first token — rewriting afterwards would
+# throw away the per-sentence streaming advantage. Spoken and written answers
+# have different ideal lengths; this closes that gap at the source.
+VOICE_STYLE_DIRECTIVE = (
+    "VOICE CALL MODE — THIS OVERRIDES ALL FORMATTING RULES ABOVE AND BELOW. "
+    "You are speaking on a live phone call; everything you write is read aloud "
+    "by text-to-speech, so formatting characters get spoken as garbage. "
+    "Answer in the caller's language. HARD RULES: at most four short spoken "
+    "sentences per reply; absolutely no markdown, asterisks, headings, lists, "
+    "tables, LaTeX, code or emojis; write numbers, units, and formulas out as "
+    "words (say 'a squared plus b squared equals c squared', never '$a^2$'). "
+    "If the full answer is long, give only the key point, then ask whether the "
+    "caller wants more detail. Before any destructive or irreversible action "
+    "(deleting, overwriting, sending something), say what you are about to do "
+    "and get the caller's confirmation first."
+)
+
+# Appended to the current user message — the position models follow most
+# reliably. History still stores the clean transcript (the session commits the
+# bare text), so this never pollutes later turns.
+_VOICE_TURN_REMINDER = (
+    "\n\n[voice call: answer as natural speech, max four short sentences, "
+    "no markdown or symbols — they will be read aloud]"
+)
 
 # Cap a chunk so a runaway clause can't block first-audio; the chunker already
 # soft-breaks near this, this is just the synthesis budget.
@@ -103,10 +126,11 @@ def build_voice_context(
     """
     return UnifiedContext(
         session_id=session_id,
-        user_message=transcript,
+        user_message=transcript + _VOICE_TURN_REMINDER,
         conversation_history=list(history),
         active_capability="chat",
         language=language,
+        persona_context=VOICE_STYLE_DIRECTIVE,
         metadata={
             "turn_id": f"voice-{uuid.uuid4().hex[:12]}",
             "source": "voice",
@@ -131,15 +155,16 @@ async def run_turn(
     """
     turn_t0 = time.perf_counter()
 
-    # ── STT ──
+    # ── STT (guarded: vocab-biased, confidence + hallucination screened) ──
     try:
-        transcript = await transcribe_audio(audio, language=language)
+        transcript, confidence = await transcribe_utterance(audio, language=language)
     except (VoiceProviderError, ValueError) as exc:
         await emitter.send_json({"type": "error", "message": f"STT: {exc}"})
         return "", ""
     transcript = transcript.strip()
-    if not transcript:
-        await emitter.send_json({"type": "error", "message": "ไม่ได้ยินเสียงพูด"})
+    ok, reason = screen_transcript(transcript, confidence)
+    if not ok:
+        await emitter.send_json({"type": "error", "message": reason})
         return "", ""
     await emitter.send_json({"type": "transcript", "text": transcript})
     await emitter.send_json(
