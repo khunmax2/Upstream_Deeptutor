@@ -7,6 +7,8 @@ audio back. **Text** frames are JSON control messages.
 
 Client → server:
   * binary frame                     → one utterance (e.g. a webm blob)
+  * ``{"type": "user_text", "text"}`` → client-recognised utterance (browser STT
+    such as Web Speech); skips server STT, same turn from the brain onward
   * ``{"type": "barge"}``            → barge-in: cancel the turn now (stop audio)
 
 Server → client (all JSON except the audio payload frames):
@@ -85,14 +87,17 @@ async def voice_websocket(ws: WebSocket) -> None:
 
 
 async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> None:
-    """Dispatch a JSON control frame. Only ``barge`` is meaningful in the MVP."""
+    """Dispatch a JSON control frame (``barge`` / ``user_text``)."""
     try:
         msg = json.loads(raw)
     except json.JSONDecodeError:
         await safe_send({"type": "error", "message": "Invalid JSON."})
         return
-    if msg.get("type") == "barge":
+    kind = msg.get("type")
+    if kind == "barge":
         await session.cancel_current_turn()
+    elif kind == "user_text":
+        await session.handle_text(str(msg.get("text") or ""))
 
 
 __all__ = ["router"]

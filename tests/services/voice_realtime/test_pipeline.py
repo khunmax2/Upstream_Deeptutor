@@ -66,8 +66,8 @@ def _patch_common(
 @pytest.mark.asyncio
 async def test_speaks_only_final_response_not_narration(monkeypatch: pytest.MonkeyPatch) -> None:
     events = [
-        _content("กำลังค้นหา...", call_kind="narration"),  # must NOT be spoken
-        _content("ทฤษฎีบทพีทาโกรัส. ", call_kind="llm_final_response"),
+        _content("tool-payload junk", call_kind="tool_result"),  # must NOT be spoken
+        _content("ทฤษฎีบทพีทาโกรัส. ", call_kind="agent_loop_round"),
         _content("a²+b²=c² นั่นเอง.", call_kind="llm_final_response"),
         StreamEvent(
             type=StreamEventType.RESULT,
@@ -82,8 +82,8 @@ async def test_speaks_only_final_response_not_narration(monkeypatch: pytest.Monk
 
     assert transcript == "พีทาโกรัส"
     assert reply == "ทฤษฎีบทพีทาโกรัส. a²+b²=c² นั่นเอง."
-    # Narration never reached TTS; both final-answer sentences did.
-    assert not any("ค้นหา" in chunk for chunk in spoken), spoken
+    # Tool payloads never reached TTS; both speakable rounds did.
+    assert not any("junk" in chunk for chunk in spoken), spoken
     assert any("พีทาโกรัส" in chunk for chunk in spoken), spoken
     # One binary audio frame per spoken chunk.
     assert len(emitter.audio) == len(spoken)
@@ -120,6 +120,48 @@ async def test_empty_transcription_reports_error(monkeypatch: pytest.MonkeyPatch
     assert (transcript, reply) == ("", "")
     assert emitter.json[-1]["type"] == "error"
     assert not emitter.audio
+
+
+@pytest.mark.asyncio
+async def test_text_turn_skips_stt_and_replies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """user_text path: no transcribe call, straight to LLM → TTS."""
+    events = [
+        _content("ตอบจากข้อความ.", call_kind="llm_final_response"),
+        StreamEvent(
+            type=StreamEventType.RESULT, source="chat", metadata={"response": "ตอบจากข้อความ."}
+        ),
+    ]
+
+    async def boom(*a: Any, **k: Any) -> str:  # noqa: ANN401
+        raise AssertionError("transcribe_audio must not be called for text turns")
+
+    spoken = _patch_common(monkeypatch, events=events)
+    monkeypatch.setattr(pipe, "transcribe_audio", boom)
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(emitter, "สวัสดี", [], session_id="voice:test")
+
+    assert reply == "ตอบจากข้อความ."
+    assert spoken  # TTS ran
+    types = [m.get("type") for m in emitter.json]
+    assert "transcript" not in types  # no server STT stage
+    assert "done" in types
+
+
+def test_containerize_audio_wraps_pcm_and_passes_through() -> None:
+    pcm = b"\x01\x02" * 24  # fake s16le samples
+    wav, ctype = pipe.containerize_audio(pcm, "audio/pcm;rate=24000;channels=1")
+    assert ctype == "audio/wav"
+    assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE"
+    # rate parsed from params
+    import io as _io
+    import wave as _wave
+
+    with _wave.open(_io.BytesIO(wav)) as w:
+        assert w.getframerate() == 24000 and w.getnchannels() == 1
+
+    mp3, ctype2 = pipe.containerize_audio(b"MP3DATA", "audio/mpeg")
+    assert (mp3, ctype2) == (b"MP3DATA", "audio/mpeg")
 
 
 @pytest.mark.asyncio

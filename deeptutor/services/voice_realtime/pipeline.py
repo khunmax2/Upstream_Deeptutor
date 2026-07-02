@@ -2,13 +2,13 @@
 
 This is where the realtime layer's design pays off. Instead of going through the
 turn-based partner ``MessageBus``, ``run_turn`` drives ``ChatOrchestrator``
-directly and consumes ``StreamBus`` ``CONTENT`` events as they arrive. Only the
-assistant's **final answer** is spoken — narration / tool-status rounds are
-filtered out exactly the way :class:`PartnerRunner` does it, by keying on
-``metadata.call_kind == "llm_final_response"``. Final-answer tokens feed a
-:class:`SentenceChunker`, and each completed clause is synthesized and streamed
-back immediately, so audio for sentence 1 goes out while the LLM is still
-writing sentence 2.
+directly and consumes ``StreamBus`` ``CONTENT`` events as they arrive. Spoken
+content is gated by ``metadata.call_kind`` (see ``_SPEAKABLE_CALL_KINDS``): the
+agentic loop's user-visible rounds are voiced — including narration while tools
+run, which suits a call — while tool payloads and other machinery stay silent.
+Speakable tokens feed a :class:`SentenceChunker`, and each completed clause is
+synthesized and streamed back immediately, so audio for sentence 1 goes out
+while the LLM is still writing sentence 2.
 
 STT and TTS reuse the catalog-driven facade in
 :mod:`deeptutor.services.voice` (``transcribe_audio`` / ``synthesize_speech``),
@@ -21,10 +21,13 @@ in-flight STT / LLM / TTS awaits unwind on ``CancelledError``.
 
 from __future__ import annotations
 
+import io
 import logging
+import re
 import time
 from typing import Any, Protocol
 import uuid
+import wave
 
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
@@ -40,6 +43,40 @@ logger = logging.getLogger(__name__)
 # Cap a chunk so a runaway clause can't block first-audio; the chunker already
 # soft-breaks near this, this is just the synthesis budget.
 _CHUNK_MAX_CHARS = 120
+
+# CONTENT rounds that are user-visible speech. The agentic chat loop streams
+# its rounds as ``agent_loop_round`` (including narration while tools run —
+# speaking those suits a call: the tutor says what it's doing) and tags
+# terminator/ask_user text ``llm_final_response``. Everything else (tool
+# payloads, thinking) stays silent. Narration vs final can only be told apart
+# when a round *completes*, which is too late for early per-sentence TTS.
+_SPEAKABLE_CALL_KINDS = {"agent_loop_round", "llm_final_response"}
+
+# Raw-PCM content types some TTS providers emit (e.g. iApp: s16le mono 24 kHz).
+# Browsers can't play bare PCM, so those chunks are wrapped in a WAV container
+# before hitting the wire (mirrors the REST voice router's behaviour).
+_PCM_TYPES = {"audio/pcm", "audio/x-pcm", "audio/l16"}
+_PCM_PARAM = re.compile(r"(rate|sample-rate|samplerate|channels?)\s*=\s*\"?(\d+)\"?")
+
+
+def containerize_audio(audio: bytes, content_type: str) -> tuple[bytes, str]:
+    """Wrap raw PCM16 in a WAV header; pass every other format through."""
+    media_type, _, params = (content_type or "").partition(";")
+    if media_type.strip().lower() not in _PCM_TYPES:
+        return audio, content_type
+    rate, channels = 24_000, 1
+    for key, value in _PCM_PARAM.findall(params.lower()):
+        if key.startswith("rate") or key.endswith("rate"):
+            rate = int(value) or rate
+        else:
+            channels = int(value) or channels
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        wav.writeframes(audio)
+    return buf.getvalue(), "audio/wav"
 
 
 class VoiceEmitter(Protocol):
@@ -85,15 +122,13 @@ async def run_turn(
     session_id: str,
     language: str = "th",
 ) -> tuple[str, str]:
-    """Run one voice turn and stream events/audio to *emitter*.
+    """Run one voice turn (audio in) and stream events/audio to *emitter*.
 
     Returns ``(transcript, reply)`` so the caller can update conversation
     history. Raises nothing for provider failures — they are reported to the
     client as ``error`` events and yield an empty reply; ``asyncio.CancelledError``
     (barge-in) is allowed to propagate.
     """
-    from deeptutor.runtime.orchestrator import ChatOrchestrator
-
     turn_t0 = time.perf_counter()
 
     # ── STT ──
@@ -110,6 +145,36 @@ async def run_turn(
     await emitter.send_json(
         {"type": "stage", "stage": "stt", "ms": round((time.perf_counter() - turn_t0) * 1000)}
     )
+    reply = await run_text_turn(
+        emitter,
+        transcript,
+        history,
+        session_id=session_id,
+        language=language,
+        turn_t0=turn_t0,
+    )
+    return transcript, reply
+
+
+async def run_text_turn(
+    emitter: VoiceEmitter,
+    transcript: str,
+    history: list[dict[str, Any]],
+    *,
+    session_id: str,
+    language: str = "th",
+    turn_t0: float | None = None,
+) -> str:
+    """LLM → per-sentence TTS for an already-recognised user utterance.
+
+    Serves two callers: ``run_turn`` after server-side STT, and the ``user_text``
+    control frame where the client did its own STT (e.g. browser Web Speech) —
+    the turn is identical from the brain onward. Returns the reply text.
+    """
+    from deeptutor.runtime.orchestrator import ChatOrchestrator
+
+    if turn_t0 is None:
+        turn_t0 = time.perf_counter()
 
     # ── LLM stream → sentence chunker → TTS ──
     context = build_voice_context(
@@ -136,6 +201,8 @@ async def run_turn(
             return
         if not audio_bytes:
             return
+        # Browsers can't play bare PCM (e.g. iApp TTS) — container it as WAV.
+        audio_bytes, content_type = containerize_audio(audio_bytes, content_type)
         if first_audio_at is None:
             first_audio_at = time.perf_counter()
             await emitter.send_json(
@@ -156,9 +223,8 @@ async def run_turn(
         async for event in orchestrator.handle(context):
             meta = event.metadata or {}
             if event.type == StreamEventType.CONTENT:
-                # Speak ONLY the assistant's final answer, never narration /
-                # tool-status rounds (same gate PartnerRunner uses).
-                if meta.get("call_kind") != "llm_final_response":
+                # Speak the user-visible rounds only (see _SPEAKABLE_CALL_KINDS).
+                if meta.get("call_kind") not in _SPEAKABLE_CALL_KINDS:
                     continue
                 token = event.content or ""
                 if first_token_at is None:
@@ -183,7 +249,7 @@ async def run_turn(
     except Exception as exc:  # noqa: BLE001 — report, don't crash the socket
         logger.exception("Voice turn failed")
         await emitter.send_json({"type": "error", "message": f"LLM/TTS: {exc}"})
-        return transcript, ""
+        return ""
 
     reply = (final_text or "".join(spoken_parts)).strip()
     await emitter.send_json({"type": "assistant_text", "text": reply})
@@ -196,7 +262,13 @@ async def run_turn(
             ),
         }
     )
-    return transcript, reply
+    return reply
 
 
-__all__ = ["VoiceEmitter", "build_voice_context", "run_turn"]
+__all__ = [
+    "VoiceEmitter",
+    "build_voice_context",
+    "containerize_audio",
+    "run_text_turn",
+    "run_turn",
+]

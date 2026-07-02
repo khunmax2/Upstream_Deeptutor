@@ -19,7 +19,7 @@ import logging
 from typing import Any
 import uuid
 
-from deeptutor.services.voice_realtime.pipeline import VoiceEmitter, run_turn
+from deeptutor.services.voice_realtime.pipeline import VoiceEmitter, run_text_turn, run_turn
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,14 @@ class VoiceSession:
         """Start a new turn for *audio*, cancelling any turn still in flight."""
         await self.cancel_current_turn()
         self._current = asyncio.create_task(self._run(audio), name="voice:turn")
+
+    async def handle_text(self, text: str) -> None:
+        """Start a turn from client-recognised text (browser STT), skipping server STT."""
+        text = (text or "").strip()
+        if not text:
+            return
+        await self.cancel_current_turn()
+        self._current = asyncio.create_task(self._run_text(text), name="voice:text-turn")
 
     async def cancel_current_turn(self) -> None:
         """Barge-in: stop the running turn (if any) and wait for it to unwind."""
@@ -71,6 +79,25 @@ class VoiceSession:
         except Exception:
             logger.exception("Voice turn crashed")
             return
+        self._commit(transcript, reply)
+
+    async def _run_text(self, text: str) -> None:
+        try:
+            reply = await run_text_turn(
+                self._emitter,
+                text,
+                self.history,
+                session_id=self.session_id,
+                language=self._language,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Voice text turn crashed")
+            return
+        self._commit(text, reply)
+
+    def _commit(self, transcript: str, reply: str) -> None:
         # Commit to history only after the turn completed without barge-in.
         if transcript:
             self.history.append({"role": "user", "content": transcript})

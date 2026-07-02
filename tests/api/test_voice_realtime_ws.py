@@ -39,12 +39,16 @@ class FakeSession:
 
     def __init__(self, emitter: Any, *, language: str = "th") -> None:
         self.utterances: list[bytes] = []
+        self.texts: list[str] = []
         self.cancels = 0
         self.closed = False
         FakeSession.last = self
 
     async def handle_utterance(self, audio: bytes) -> None:
         self.utterances.append(audio)
+
+    async def handle_text(self, text: str) -> None:
+        self.texts.append(text)
 
     async def cancel_current_turn(self) -> None:
         self.cancels += 1
@@ -87,6 +91,17 @@ async def test_barge_control_frame_cancels_turn() -> None:
 
     assert FakeSession.last.utterances == [b"u1"]
     assert FakeSession.last.cancels >= 1
+
+
+@pytest.mark.asyncio
+async def test_user_text_frame_starts_text_turn() -> None:
+    ws = FakeWebSocket(
+        [{"type": "websocket.receive", "text": '{"type": "user_text", "text": "สวัสดี"}'}]
+    )
+    await vr.voice_websocket(ws)
+
+    assert FakeSession.last.texts == ["สวัสดี"]
+    assert not FakeSession.last.utterances
 
 
 @pytest.mark.asyncio
