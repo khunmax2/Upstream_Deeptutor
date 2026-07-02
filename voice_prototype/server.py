@@ -192,7 +192,11 @@ async def _handle_text_turn(ws: WebSocket, text: str, history: list[dict]) -> No
                 first_token_at = time.perf_counter()
                 await _safe_send(
                     ws,
-                    {"type": "stage", "stage": "llm_ttft", "ms": round((first_token_at - t0) * 1000)},
+                    {
+                        "type": "stage",
+                        "stage": "llm_ttft",
+                        "ms": round((first_token_at - t0) * 1000),
+                    },
                 )
             reply_parts.append(token)
             for chunk in chunker.feed(token):
@@ -208,7 +212,11 @@ async def _handle_text_turn(ws: WebSocket, text: str, history: list[dict]) -> No
     history.append({"role": "assistant", "content": reply})
     await _safe_send(
         ws,
-        {"type": "assistant_done", "reply": reply, "total_ms": round((time.perf_counter() - t0) * 1000)},
+        {
+            "type": "assistant_done",
+            "reply": reply,
+            "total_ms": round((time.perf_counter() - t0) * 1000),
+        },
     )
 
 

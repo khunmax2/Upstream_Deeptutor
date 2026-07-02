@@ -88,15 +88,15 @@ class BaseTTS(ABC):
 class OpenAICompatSTT(BaseSTT):
     """`/audio/transcriptions` — TokenMind ``ptm-asr-1``, Groq Whisper, OpenAI."""
 
-    def __init__(self, *, base_url: str, api_key: str, model: str,
-                 timeout: float = 60.0) -> None:
+    def __init__(self, *, base_url: str, api_key: str, model: str, timeout: float = 60.0) -> None:
         self._url = f"{base_url.rstrip('/')}/audio/transcriptions"
         self._key = api_key
         self._model = model
         self._timeout = timeout
 
-    async def transcribe(self, audio, *, filename="audio.wav",
-                         content_type="audio/wav", language=None) -> STTResult:
+    async def transcribe(
+        self, audio, *, filename="audio.wav", content_type="audio/wav", language=None
+    ) -> STTResult:
         files = {
             "file": (filename, audio, content_type),
             "model": (None, self._model),
@@ -124,9 +124,18 @@ class OpenAICompatTTS(BaseTTS):
     (numbers → words) before sending, per the provider's guidelines.
     """
 
-    def __init__(self, *, base_url: str, api_key: str, model: str, voice: str,
-                 sample_rate: int = 24_000, response_format: str = "pcm",
-                 normalize_thai: bool = True, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        voice: str,
+        sample_rate: int = 24_000,
+        response_format: str = "pcm",
+        normalize_thai: bool = True,
+        timeout: float = 60.0,
+    ) -> None:
         self._url = f"{base_url.rstrip('/')}/audio/speech"
         self._key = api_key
         self._model = model
@@ -151,14 +160,21 @@ class OpenAICompatTTS(BaseTTS):
                 resp.raise_for_status()
                 async for chunk in resp.aiter_bytes():
                     if chunk:
-                        yield AudioChunk(chunk, sample_rate=self.sample_rate,
-                                         channels=1, fmt=self.output_format)
+                        yield AudioChunk(
+                            chunk, sample_rate=self.sample_rate, channels=1, fmt=self.output_format
+                        )
 
 
 _CT_FMT = {
-    "audio/webm": "webm", "audio/wav": "wav", "audio/x-wav": "wav",
-    "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/ogg": "ogg",
-    "audio/mp4": "m4a", "audio/aac": "aac", "audio/flac": "flac",
+    "audio/webm": "webm",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "audio/ogg": "ogg",
+    "audio/mp4": "m4a",
+    "audio/aac": "aac",
+    "audio/flac": "flac",
 }
 
 
@@ -186,8 +202,9 @@ class OpenRouterSTT(BaseSTT):
         self._model = model
         self._timeout = timeout
 
-    async def transcribe(self, audio, *, filename="audio.webm",
-                         content_type="audio/webm", language=None) -> STTResult:
+    async def transcribe(
+        self, audio, *, filename="audio.webm", content_type="audio/webm", language=None
+    ) -> STTResult:
         import base64
 
         payload: dict = {
@@ -245,6 +262,7 @@ def normalize_thai_for_tts(text: str) -> str:
     English-word transliteration (window → วินโดว์) is a documented future hook —
     it needs a lexicon and is left to the provider / a later pass.
     """
+
     def repl(m: re.Match) -> str:
         raw = m.group(0).replace(",", "")
         try:
@@ -256,8 +274,14 @@ def normalize_thai_for_tts(text: str) -> str:
 
 
 __all__ = [
-    "AudioChunk", "STTResult", "BaseSTT", "BaseTTS",
-    "OpenAICompatSTT", "OpenAICompatTTS", "OpenRouterSTT",
+    "AudioChunk",
+    "STTResult",
+    "BaseSTT",
+    "BaseTTS",
+    "OpenAICompatSTT",
+    "OpenAICompatTTS",
+    "OpenRouterSTT",
     "audio_format_from_content_type",
-    "read_thai_number", "normalize_thai_for_tts",
+    "read_thai_number",
+    "normalize_thai_for_tts",
 ]

@@ -26,9 +26,17 @@ from providers import (  # noqa: E402
 
 def test_read_thai_number():
     cases = {
-        0: "ศูนย์", 1: "หนึ่ง", 10: "สิบ", 11: "สิบเอ็ด", 20: "ยี่สิบ",
-        21: "ยี่สิบเอ็ด", 100: "หนึ่งร้อย", 101: "หนึ่งร้อยเอ็ด",
-        123: "หนึ่งร้อยยี่สิบสาม", 1000: "หนึ่งพัน", 1_000_000: "หนึ่งล้าน",
+        0: "ศูนย์",
+        1: "หนึ่ง",
+        10: "สิบ",
+        11: "สิบเอ็ด",
+        20: "ยี่สิบ",
+        21: "ยี่สิบเอ็ด",
+        100: "หนึ่งร้อย",
+        101: "หนึ่งร้อยเอ็ด",
+        123: "หนึ่งร้อยยี่สิบสาม",
+        1000: "หนึ่งพัน",
+        1_000_000: "หนึ่งล้าน",
     }
     for n, expected in cases.items():
         assert read_thai_number(n) == expected, f"{n} → {read_thai_number(n)} (want {expected})"
@@ -57,6 +65,7 @@ def test_tts_streams_and_collects_with_fake_transport():
     def handler(request: httpx.Request) -> httpx.Response:
         # verify the Thai normalization ran before the request went out
         import json
+
         body = json.loads(request.content)
         assert body["input"] == "มี สาม ข้อ", body["input"]
         assert body["voice"] == "baifern"
@@ -98,8 +107,9 @@ def test_openrouter_stt_sends_base64_json():
         assert body["language"] == "th"
         return httpx.Response(200, json={"text": "สวัสดีครับ", "usage": {"seconds": 1.2}})
 
-    stt = OpenRouterSTT(base_url="https://openrouter.ai/api/v1", api_key="k",
-                        model="openai/gpt-audio-mini")
+    stt = OpenRouterSTT(
+        base_url="https://openrouter.ai/api/v1", api_key="k", model="openai/gpt-audio-mini"
+    )
 
     async def run():
         orig = httpx.AsyncClient
