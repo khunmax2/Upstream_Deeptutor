@@ -63,7 +63,18 @@ let ws = null, running = false;
 let recog = null;                 // Web Speech (browser STT mode)
 let stream = null, recorder = null, chunks = [], audioCtx = null, analyser = null;
 let speaking = false, silenceStart = 0, speechStart = 0;   // server STT VAD
-const ON = 0.020, OFF = 0.012, HANG_MS = 700, MIN_MS = 350;
+
+// ── VAD tuning ──
+// ON/OFF are re-calibrated from the room's noise floor at call start, speech
+// must be SUSTAINED (not a click/pop) before it counts, and while the
+// assistant is talking the bar is higher still — otherwise speaker bleed and
+// ambient noise constantly barge-in (killing playback) and ship noise clips
+// that Whisper hallucinates into text ("โปรดติดตามตอนต่อไป"...).
+let ON = 0.020, OFF = 0.012;
+const HANG_MS = 700, MIN_MS = 500, ONSET_MS = 150, CALIB_MS = 1200;
+const BARGE_FACTOR = 2.5;          // ระหว่างบอทพูด ต้องดังกว่านี้ถึงถือว่าแทรก
+let calibStart = 0, calibSum = 0, calibN = 0, calibrated = false;
+let onsetStart = 0;
 
 const playQueue = []; let player = null, playing = false;
 let pendingMeta = null;
@@ -82,13 +93,14 @@ function addMsg(text, who) {
 // ── playback queue + barge-in ──
 function enqueueAudio(blob) { playQueue.push(blob); if (!playing) playNext(); }
 function playNext() {
-  if (!playQueue.length) { playing = false; return; }
+  if (!playQueue.length) { playing = false; if (running) setStatus("ฟังอยู่…"); return; }
   playing = true;
+  setStatus("🔊 บอทกำลังพูด (พูดดังๆ เพื่อแทรกได้)");
   const blob = playQueue.shift();
   player = new Audio(URL.createObjectURL(blob));
   player.onended = playNext;
-  player.onerror = playNext;
-  player.play().catch(playNext);
+  player.onerror = e => { addMsg("⚠ เล่นเสียงไม่ได้: " + (player.error?.message || "decode error"), "bot"); playNext(); };
+  player.play().catch(err => { addMsg("⚠ browser บล็อกการเล่นเสียง: " + err.message, "bot"); playNext(); });
 }
 function stopPlayback() {
   playQueue.length = 0;
@@ -162,6 +174,8 @@ function stopBrowserSTT() { if (recog) { recog.onend = null; recog.stop(); recog
 
 // ── server STT (record webm utterances, energy VAD — same as prototype) ──
 async function startServerSTT() {
+  calibrated = false; calibStart = calibSum = calibN = 0; onsetStart = 0;
+  speaking = false; silenceStart = 0;
   stream = await navigator.mediaDevices.getUserMedia({ audio: {
     echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   audioCtx = new AudioContext();
@@ -174,11 +188,17 @@ async function startServerSTT() {
 function newRecorder() {
   chunks = [];
   recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+  recorder.onstop_discard = false;
   recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
   recorder.onstop = async () => {
+    const discard = recorder.onstop_discard;
     const dur = performance.now() - speechStart;
     const blob = new Blob(chunks, { type: "audio/webm" });
-    if (running && dur >= MIN_MS && ws.readyState === 1) ws.send(await blob.arrayBuffer());
+    // ส่งเฉพาะ utterance ที่ "พูดจริง" (ผ่าน sustained-onset) และยาวพอ —
+    // คลิปสั้น/เสียงรบกวนถูกทิ้ง กัน Whisper hallucinate ข้อความปลอม
+    if (!discard && running && dur >= MIN_MS && ws.readyState === 1) {
+      ws.send(await blob.arrayBuffer());
+    }
     if (running) newRecorder();
   };
 }
@@ -192,11 +212,38 @@ function monitor() {
   if (!running || sttMode() !== "server") return;
   const level = rms();
   const now = performance.now();
+
+  // ── phase 0: calibrate the room's noise floor for the first ~1.2s ──
+  if (!calibrated) {
+    if (!calibStart) { calibStart = now; setStatus("กำลังวัดเสียงรบกวน… เงียบสักครู่"); }
+    calibSum += level; calibN++;
+    if (now - calibStart >= CALIB_MS) {
+      const floor = calibSum / Math.max(1, calibN);
+      ON = Math.max(0.020, floor * 4);
+      OFF = Math.max(0.012, floor * 2.5);
+      calibrated = true;
+      setStatus(`พร้อมคุย (noise floor ${floor.toFixed(3)} → ON ${ON.toFixed(3)})`);
+    }
+    requestAnimationFrame(monitor);
+    return;
+  }
+
+  // While the assistant is talking, require a much louder + sustained voice
+  // to count as speech (speaker bleed / ambient must not barge-in).
+  const gate = playing ? ON * BARGE_FACTOR : ON;
+
   if (!speaking) {
-    if (level > ON) {
-      speaking = true; speechStart = now; silenceStart = 0;
-      bargeIn();
-      if (recorder.state === "inactive") recorder.start();
+    if (level > gate) {
+      if (!onsetStart) {
+        onsetStart = now;
+        if (recorder.state === "inactive") recorder.start();  // จับตั้งแต่ต้นคำ
+      } else if (now - onsetStart >= ONSET_MS) {
+        speaking = true; speechStart = onsetStart; silenceStart = 0; onsetStart = 0;
+        bargeIn();                       // ยืนยันว่าเป็นเสียงพูดจริงแล้วค่อยแทรก
+      }
+    } else if (onsetStart) {
+      onsetStart = 0;                    // แค่เสียงป๊อกแป๊ก — ทิ้งคลิปที่เริ่มอัดไว้
+      if (recorder.state === "recording") { recorder.onstop_discard = true; recorder.stop(); }
     }
   } else {
     if (level < OFF) {
