@@ -12,7 +12,23 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pipeline import SentenceChunker, clean_for_speech  # noqa: E402
+from pipeline import CONFIG, SentenceChunker, build_llm_payload, clean_for_speech  # noqa: E402
+
+
+def test_llm_payload_thinking_switch():
+    """LLM_DISABLE_THINKING adds the Zhipu switch; off by default (other providers
+    must never receive the unknown field)."""
+    messages = [{"role": "user", "content": "สวัสดี"}]
+    saved = CONFIG.llm_disable_thinking
+    try:
+        CONFIG.llm_disable_thinking = False
+        assert "thinking" not in build_llm_payload(messages)
+        CONFIG.llm_disable_thinking = True
+        payload = build_llm_payload(messages)
+        assert payload["thinking"] == {"type": "disabled"}
+        assert payload["stream"] is True and payload["messages"] == messages
+    finally:
+        CONFIG.llm_disable_thinking = saved
 
 
 def test_chunker_flushes_on_terminal():

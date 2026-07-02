@@ -53,11 +53,26 @@ async def transcribe(
 # ──────────────────────────────────────────────────────────────────────────
 # LLM — OpenAI-compatible /chat/completions, streamed token-by-token
 # ──────────────────────────────────────────────────────────────────────────
+def build_llm_payload(messages: list[dict]) -> dict:
+    """Build the /chat/completions request body.
+
+    ``LLM_DISABLE_THINKING=1`` appends the Zhipu-style ``thinking`` switch so
+    hybrid-reasoning models (GLM-4.5+) answer immediately instead of burning
+    seconds (and tokens) thinking — critical for voice TTFT. Off by default:
+    the extra field is only sent when explicitly enabled, so other providers
+    never see an unknown parameter.
+    """
+    payload: dict = {"model": CONFIG.llm_model, "messages": messages, "stream": True}
+    if CONFIG.llm_disable_thinking:
+        payload["thinking"] = {"type": "disabled"}
+    return payload
+
+
 async def stream_llm(messages: list[dict]) -> AsyncIterator[str]:
     """Yield content tokens from an OpenAI-compatible streaming endpoint."""
     url = f"{CONFIG.llm_base_url.rstrip('/')}/chat/completions"
     headers = {"Authorization": f"Bearer {CONFIG.llm_api_key}", "Content-Type": "application/json"}
-    payload = {"model": CONFIG.llm_model, "messages": messages, "stream": True}
+    payload = build_llm_payload(messages)
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", url, headers=headers, json=payload) as resp:
             resp.raise_for_status()

@@ -147,6 +147,16 @@ code is additive and isolated for mergeability.
   Production target: `deeptutor/api/routers/voice_realtime.py` +
   `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
   STT/TTS adapters.
+- **2026-07-02 — GLM hybrid-reasoning support (`LLM_DISABLE_THINKING`).** Verified a
+  z.ai (Zhipu) key against the prototype: `glm-4.5-flash` (free) works as the LLM
+  brain (Thai OK; measured TTFT ≈2.2 s with thinking off), but z.ai exposes no
+  usable STT/TTS models to this account, so audio stays with other providers /
+  the browser MVP. Added `build_llm_payload()` in `voice_prototype/pipeline.py` +
+  `llm_disable_thinking` in `config.py`: `LLM_DISABLE_THINKING=1` sends the
+  Zhipu-style `{"thinking":{"type":"disabled"}}` switch so GLM answers without a
+  thinking phase (otherwise voice TTFT balloons); off by default so other
+  providers never see the unknown field. Test in `tests/test_pipeline.py`.
+
 - **2026-07-02 — Provider interface + playable MVP.** Added `voice_prototype/providers.py`
   (`BaseSTT`/`BaseTTS` ABCs + OpenAI-compatible adapters covering the TokenMind
   `ptm-asr-1`/`ptm-tts-1` endpoints, streaming-first, + Thai number normalizer) and a

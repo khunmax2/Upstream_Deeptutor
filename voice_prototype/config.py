@@ -25,6 +25,9 @@ class Config:
     llm_base_url: str = _env("LLM_BASE_URL", "http://localhost:8001/v1")
     llm_api_key: str = _env("LLM_API_KEY") or _env("OPENROUTER_API_KEY") or "sk-local"
     llm_model: str = _env("LLM_MODEL", "deeptutor")
+    # "1" → send Zhipu-style {"thinking":{"type":"disabled"}} so hybrid-reasoning
+    # models (GLM-4.5+) skip the thinking phase — voice needs fast first tokens.
+    llm_disable_thinking: bool = _env("LLM_DISABLE_THINKING") in ("1", "true", "yes")
     system_prompt: str = _env(
         "SYSTEM_PROMPT",
         "คุณเป็นติวเตอร์ที่พูดไทยเป็นกันเอง ตอบสั้น กระชับ เหมือนกำลังคุยโทรศัพท์ หลีกเลี่ยง markdown และการอ่านสัญลักษณ์",
