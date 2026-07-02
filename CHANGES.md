@@ -162,6 +162,15 @@ code is additive and isolated for mergeability.
   typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
   20 per-sentence iApp WAV frames streamed while the model was still writing.
 
+- **2026-07-02 — Call page VAD hardening (real-mic feedback).** First live mic
+  test hit a feedback loop: fixed VAD thresholds fired on ambient noise, whisper
+  hallucinated text from the noise clips, and each false trigger barged-in and
+  killed playback (replies arrived but were never heard). `call.html` now
+  calibrates the room noise floor at call start, requires 150 ms sustained
+  speech before an utterance counts (short pops are discarded client-side),
+  raises the barge threshold 2.5× while the assistant is speaking, and surfaces
+  playback errors instead of failing silently. File: `voice_prototype/static/call.html`.
+
 - **2026-07-02 — iApp (Thai) STT/TTS adapters, catalog-integrated.** New
   `deeptutor/services/voice/adapters/iapp.py` (`IAppTTSAdapter` + `IAppSTTAdapter`
   — the first bespoke STT adapter): auth via `apikey` header under
