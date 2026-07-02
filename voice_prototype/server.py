@@ -146,6 +146,15 @@ async def mvp() -> FileResponse:
     return FileResponse(STATIC / "mvp.html")
 
 
+# ── Call MVP against the PRODUCTION realtime layer ───────────────────────────
+# Served from here only because a page needs an http://localhost origin for the
+# mic (secure context); the socket it talks to is DeepTutor's own
+# ws://localhost:8001/api/v1/voice/ws — the real ChatOrchestrator brain.
+@app.get("/call")
+async def call() -> FileResponse:
+    return FileResponse(STATIC / "call.html")
+
+
 @app.websocket("/ws/chat")
 async def chat_ws(ws: WebSocket) -> None:
     """MVP socket: receive recognised text, stream the reply as spoken sentences.

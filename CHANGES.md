@@ -147,6 +147,21 @@ code is additive and isolated for mergeability.
   Production target: `deeptutor/api/routers/voice_realtime.py` +
   `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
   STT/TTS adapters.
+- **2026-07-02 — Call MVP: first end-to-end voice call against the real
+  DeepTutor brain.** Production realtime layer additions
+  (`services/voice_realtime/`, `api/routers/voice_realtime.py`): a
+  `user_text` control frame (`run_text_turn()`) runs LLM→TTS for a
+  client-recognised utterance (browser Web Speech STT) so calls work while no
+  server STT provider is available; raw-PCM TTS output (iApp) is wrapped as
+  WAV before hitting the socket (`containerize_audio()`); and the speakable
+  gate was fixed to match reality — agentic rounds stream as
+  `call_kind='agent_loop_round'` (the previous `llm_final_response`-only gate
+  silenced entire turns). Test page `voice_prototype/static/call.html`
+  (`/call` on the prototype server) connects straight to
+  `ws://localhost:8001/api/v1/voice/ws` with browser-STT / server-STT modes,
+  typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
+  20 per-sentence iApp WAV frames streamed while the model was still writing.
+
 - **2026-07-02 — iApp (Thai) STT/TTS adapters, catalog-integrated.** New
   `deeptutor/services/voice/adapters/iapp.py` (`IAppTTSAdapter` + `IAppSTTAdapter`
   — the first bespoke STT adapter): auth via `apikey` header under

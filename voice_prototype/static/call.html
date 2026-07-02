@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DeepTutor Call — production WS MVP</title>
+<style>
+  :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: #0f1115; color: #e7e9ee; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.15rem; font-weight: 600; }
+  button { font-size: 1rem; padding: 10px 18px; border-radius: 10px; border: 0;
+           cursor: pointer; background: #22c55e; color: #fff; }
+  button.stop { background: #ef4444; }
+  button:disabled { opacity: .5; cursor: default; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.8rem;
+          background:#1f2630; margin-right:6px; margin-top:6px; }
+  .pill b { color:#7dd3fc; }
+  #log { margin-top: 18px; }
+  .msg { padding: 10px 14px; border-radius: 12px; margin: 8px 0; max-width: 80%;
+         white-space: pre-wrap; line-height: 1.5; }
+  .user { background: #1d4ed8; margin-left: auto; }
+  .bot  { background: #1f2937; }
+  #status { font-size:.85rem; color:#94a3b8; margin-left:10px; }
+  .row { margin-top: 8px; font-size: .85rem; color: #94a3b8; }
+  input[type=text] { width: 60%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2a3441;
+          background: #151a21; color: #e7e9ee; }
+  label { user-select: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>☎️ DeepTutor Call <span style="font-weight:400;color:#94a3b8">(production /api/v1/voice/ws — สมอง DeepTutor จริง)</span>
+      <span id="status">ยังไม่เชื่อมต่อ</span></h1>
+  <p>
+    <button id="start">📞 เริ่มสาย</button>
+    <button id="stop" class="stop" disabled>วางสาย</button>
+  </p>
+  <div class="row">
+    <label><input type="radio" name="sttmode" value="browser" checked>
+      STT ฝั่ง browser (Web Speech th-TH — ฟรี ใช้ได้วันนี้)</label><br>
+    <label><input type="radio" name="sttmode" value="server">
+      STT ฝั่ง server (อัดเสียงส่งไป — ใช้เมื่อ provider STT ใน Settings ทำงาน)</label>
+  </div>
+  <div class="row">
+    พิมพ์ทดสอบโดยไม่ใช้ไมค์: <input type="text" id="typed" placeholder="พิมพ์แล้วกด Enter" />
+  </div>
+  <div>
+    <span class="pill">STT <b id="m-stt">–</b></span>
+    <span class="pill">LLM TTFT <b id="m-llm">–</b></span>
+    <span class="pill">TTS แรก <b id="m-tts">–</b></span>
+    <span class="pill">เสียงแรก <b id="m-first">–</b></span>
+    <span class="pill">รวม <b id="m-total">–</b></span>
+  </div>
+  <div id="log"></div>
+</div>
+
+<script>
+// ── config: production DeepTutor API ──
+const WS_URL = `ws://${location.hostname}:8001/api/v1/voice/ws`;
+
+let ws = null, running = false;
+let recog = null;                 // Web Speech (browser STT mode)
+let stream = null, recorder = null, chunks = [], audioCtx = null, analyser = null;
+let speaking = false, silenceStart = 0, speechStart = 0;   // server STT VAD
+const ON = 0.020, OFF = 0.012, HANG_MS = 700, MIN_MS = 350;
+
+const playQueue = []; let player = null, playing = false;
+let pendingMeta = null;
+
+const $ = id => document.getElementById(id);
+const setStatus = t => $("status").textContent = t;
+const sttMode = () => document.querySelector('input[name=sttmode]:checked').value;
+
+function addMsg(text, who) {
+  const d = document.createElement("div");
+  d.className = "msg " + who; d.textContent = text;
+  $("log").appendChild(d); window.scrollTo(0, document.body.scrollHeight);
+  return d;
+}
+
+// ── playback queue + barge-in ──
+function enqueueAudio(blob) { playQueue.push(blob); if (!playing) playNext(); }
+function playNext() {
+  if (!playQueue.length) { playing = false; return; }
+  playing = true;
+  const blob = playQueue.shift();
+  player = new Audio(URL.createObjectURL(blob));
+  player.onended = playNext;
+  player.onerror = playNext;
+  player.play().catch(playNext);
+}
+function stopPlayback() {
+  playQueue.length = 0;
+  if (player) { player.pause(); player = null; }
+  playing = false;
+}
+function bargeIn() {                    // user started talking → cut assistant off
+  if (playing && ws && ws.readyState === 1) {
+    stopPlayback();
+    ws.send(JSON.stringify({ type: "barge" }));
+  }
+}
+
+// ── WebSocket to production DeepTutor ──
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => setStatus("เชื่อมต่อ DeepTutor แล้ว");
+  ws.onclose = () => { setStatus("ตัดการเชื่อมต่อ"); if (running) stop(); };
+  ws.onerror = () => setStatus("เชื่อมต่อไม่ได้ — deeptutor serve รันอยู่ไหม?");
+  ws.onmessage = ev => {
+    if (typeof ev.data !== "string") {
+      const type = (pendingMeta && pendingMeta.content_type) || "audio/wav";
+      enqueueAudio(new Blob([ev.data], { type }));
+      pendingMeta = null;
+      return;
+    }
+    const m = JSON.parse(ev.data);
+    if (m.type === "transcript") addMsg(m.text, "user");
+    else if (m.type === "audio") pendingMeta = m;
+    else if (m.type === "assistant_text") addMsg(m.text, "bot");
+    else if (m.type === "stage") {
+      if (m.stage === "stt") $("m-stt").textContent = m.ms + " ms";
+      if (m.stage === "llm_ttft") $("m-llm").textContent = m.ms + " ms";
+      if (m.stage === "tts_first") $("m-tts").textContent = m.ms + " ms";
+    }
+    else if (m.type === "done") {
+      $("m-total").textContent = m.total_ms + " ms";
+      $("m-first").textContent = (m.first_audio_ms ?? "–") + " ms";
+    }
+    else if (m.type === "error") addMsg("⚠ " + m.message, "bot");
+  };
+}
+
+function sendText(text) {
+  text = (text || "").trim();
+  if (!text || !ws || ws.readyState !== 1) return;
+  addMsg(text, "user");
+  ws.send(JSON.stringify({ type: "user_text", text }));
+}
+
+// ── browser STT (Web Speech th-TH) ──
+function startBrowserSTT() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { addMsg("⚠ เบราว์เซอร์นี้ไม่มี Web Speech API — ใช้ Chrome หรือสลับโหมด server", "bot"); return; }
+  recog = new SR();
+  recog.lang = "th-TH";
+  recog.continuous = true;
+  recog.interimResults = true;
+  recog.onresult = ev => {
+    bargeIn();                          // any speech interrupts playback
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      if (ev.results[i].isFinal) sendText(ev.results[i][0].transcript);
+    }
+  };
+  recog.onend = () => { if (running && sttMode() === "browser") recog.start(); };  // keep alive
+  recog.onerror = e => { if (e.error !== "no-speech") console.warn("speech:", e.error); };
+  recog.start();
+}
+function stopBrowserSTT() { if (recog) { recog.onend = null; recog.stop(); recog = null; } }
+
+// ── server STT (record webm utterances, energy VAD — same as prototype) ──
+async function startServerSTT() {
+  stream = await navigator.mediaDevices.getUserMedia({ audio: {
+    echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  audioCtx = new AudioContext();
+  const src = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+  src.connect(analyser);
+  newRecorder();
+  monitor();
+}
+function newRecorder() {
+  chunks = [];
+  recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    const dur = performance.now() - speechStart;
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    if (running && dur >= MIN_MS && ws.readyState === 1) ws.send(await blob.arrayBuffer());
+    if (running) newRecorder();
+  };
+}
+function rms() {
+  const buf = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf);
+  let s = 0; for (const v of buf) { const x = (v - 128) / 128; s += x * x; }
+  return Math.sqrt(s / buf.length);
+}
+function monitor() {
+  if (!running || sttMode() !== "server") return;
+  const level = rms();
+  const now = performance.now();
+  if (!speaking) {
+    if (level > ON) {
+      speaking = true; speechStart = now; silenceStart = 0;
+      bargeIn();
+      if (recorder.state === "inactive") recorder.start();
+    }
+  } else {
+    if (level < OFF) {
+      if (!silenceStart) silenceStart = now;
+      else if (now - silenceStart > HANG_MS) {
+        speaking = false; silenceStart = 0;
+        if (recorder.state === "recording") recorder.stop();
+      }
+    } else silenceStart = 0;
+  }
+  requestAnimationFrame(monitor);
+}
+function stopServerSTT() {
+  if (recorder && recorder.state === "recording") recorder.stop();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  stream = recorder = audioCtx = analyser = null;
+}
+
+// ── lifecycle ──
+async function start() {
+  connect();
+  running = true;
+  $("start").disabled = true; $("stop").disabled = false;
+  if (sttMode() === "browser") startBrowserSTT(); else await startServerSTT();
+}
+function stop() {
+  running = false;
+  $("start").disabled = false; $("stop").disabled = true;
+  stopBrowserSTT(); stopServerSTT(); stopPlayback();
+  if (ws) ws.close();
+  setStatus("วางสายแล้ว");
+}
+
+$("start").onclick = () => start().catch(e => addMsg("⚠ " + e.message, "bot"));
+$("stop").onclick = stop;
+$("typed").addEventListener("keydown", e => {
+  if (e.key === "Enter") { sendText(e.target.value); e.target.value = ""; }
+});
+</script>
+</body>
+</html>
