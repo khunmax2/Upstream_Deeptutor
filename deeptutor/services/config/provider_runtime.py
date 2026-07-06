@@ -265,13 +265,6 @@ TTS_PROVIDERS: dict[str, VoiceProviderSpec] = {
         default_model="botnoi-voice",  # BOTNOI has no model; placeholder for the catalog
         default_voice="1",  # numeric speaker id
     ),
-    "iapp": VoiceProviderSpec(
-        label="iApp (Thai)",
-        default_api_base="https://api.iapp.co.th/v3/store",
-        adapter="iapp",
-        default_model="kaitom-v3",  # iApp has one voice; placeholder for the catalog
-        default_voice="",
-    ),
     "vllm": VoiceProviderSpec(
         label="vLLM / Local",
         default_api_base="http://localhost:8000/v1",
@@ -314,12 +307,6 @@ STT_PROVIDERS: dict[str, VoiceProviderSpec] = {
         default_api_base="",
         auth_style=AUTH_API_KEY_HEADER,
         default_model="whisper-1",
-    ),
-    "iapp": VoiceProviderSpec(
-        label="iApp (Thai)",
-        default_api_base="https://api.iapp.co.th/v3/store",
-        adapter="iapp",
-        default_model="pro",  # "pro" (accurate) or "base" (fast) ASR variant
     ),
     "vllm": VoiceProviderSpec(
         label="vLLM / Local",

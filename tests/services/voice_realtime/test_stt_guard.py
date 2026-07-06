@@ -106,7 +106,7 @@ async def test_bespoke_adapter_falls_back_to_facade(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(stt_guard, "transcribe_audio", fake_facade)
     monkeypatch.setattr(
         "deeptutor.services.config.provider_runtime.resolve_stt_runtime_config",
-        lambda **kw: _stt_config(adapter="iapp"),
+        lambda **kw: _stt_config(adapter="botnoi"),
     )
 
     text, confidence = await transcribe_utterance(b"webm")

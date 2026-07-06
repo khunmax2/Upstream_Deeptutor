@@ -9,7 +9,7 @@ upstream files:
 * :func:`transcribe_utterance` — when the active catalog STT is the
   OpenAI-compatible multipart cluster (OpenAI/Groq/…), it requests
   ``verbose_json`` with a domain *vocab prompt* (biases Whisper toward our
-  terms) and returns ``(text, avg_logprob)``. Any other adapter (iApp,
+  terms) and returns ``(text, avg_logprob)``. Any other adapter (bespoke,
   OpenRouter base64) falls back to the plain facade with no confidence.
 * :func:`screen_transcript` — rejects empty text, known Whisper-hallucination
   phrases, and low-confidence transcripts, returning a reason the pipeline can
@@ -82,7 +82,7 @@ async def transcribe_utterance(
         return await _transcribe_verbose(
             audio, config, filename=filename, content_type=content_type
         )
-    # Bespoke providers (iApp, OpenRouter base64-JSON) — facade path, no confidence.
+    # Bespoke providers (OpenRouter base64-JSON, …) — facade path, no confidence.
     text = await transcribe_audio(
         audio, filename=filename, content_type=content_type, language=language
     )

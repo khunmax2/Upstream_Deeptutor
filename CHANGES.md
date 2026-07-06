@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-06 — Removed the iApp STT/TTS integration.** The iApp account ran
+  out of credit and its published API docs didn't match the live endpoints
+  (reported to the vendor), so the adapter was dead weight. Deleted
+  `deeptutor/services/voice/adapters/iapp.py` + `tests/services/test_voice_iapp.py`,
+  its registry entries in `deeptutor/services/voice/adapters/__init__.py`, and
+  the `iapp` specs this fork had added to TTS/STT provider tables in
+  `deeptutor/services/config/provider_runtime.py` (shrinking our diff against
+  upstream). Stale iApp mentions in voice_realtime comments/tests reworded.
+  Active voice chain is unchanged: Groq whisper STT + custom PTM TTS.
+
 - **2026-07-06 — Fix: "searching" filler no longer fires on small talk.** The
   chat capability runs an automatic KB seed lookup on *every* turn when a KB is
   attached (`call_id` prefix `chat-kb-seed`, same `call_kind=rag_retrieval` as a

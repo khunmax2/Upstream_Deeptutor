@@ -102,7 +102,7 @@ _CHUNK_MAX_CHARS = 120
 # when a round *completes*, which is too late for early per-sentence TTS.
 _SPEAKABLE_CALL_KINDS = {"agent_loop_round", "llm_final_response"}
 
-# Raw-PCM content types some TTS providers emit (e.g. iApp: s16le mono 24 kHz).
+# Raw-PCM content types some TTS providers emit (s16le mono, typically 24 kHz).
 # Browsers can't play bare PCM, so those chunks are wrapped in a WAV container
 # before hitting the wire (mirrors the REST voice router's behaviour).
 _PCM_TYPES = {"audio/pcm", "audio/x-pcm", "audio/l16"}
@@ -293,7 +293,7 @@ async def run_text_turn(
             return
         if not audio_bytes:
             return
-        # Browsers can't play bare PCM (e.g. iApp TTS) — container it as WAV.
+        # Browsers can't play bare PCM — container it as WAV.
         audio_bytes, content_type = containerize_audio(audio_bytes, content_type)
         if first_audio_at is None:
             first_audio_at = time.perf_counter()
