@@ -303,7 +303,11 @@
    * PART 2 — call logic (production /api/v1/voice/ws). Same VAD calibration,
    * barge-in and browser-TTS fallback as before, now also driving the mascot.
    * ========================================================================== */
-  const WS_URL = `ws://${location.hostname}:8001/api/v1/voice/ws`;
+  // DeepTutor's realtime socket. Default 8011 (the Antigravity app on this
+  // machine squats on 8001 and steals the WS handshake → 403); override with
+  // ?port=NNNN if you run `deeptutor serve` on a different port.
+  const WS_PORT = new URLSearchParams(location.search).get('port') || '8011';
+  const WS_URL = `ws://${location.hostname}:${WS_PORT}/api/v1/voice/ws`;
 
   let ws = null, running = false;
   let recog = null;
