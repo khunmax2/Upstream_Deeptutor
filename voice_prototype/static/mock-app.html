@@ -91,6 +91,11 @@
     <button id="vstop" class="stop" disabled>วางสาย</button>
     <span id="vstatus">ยังไม่เชื่อมต่อ</span>
   </div>
+  <div class="row" style="font-size:12px; color:#9fb0cc; gap:12px;">
+    <label><input type="radio" name="vsttmode" value="browser" checked> ไมค์ (browser)</label>
+    <label><input type="radio" name="vsttmode" value="server"> ไมค์ (server STT)</label>
+    <label id="hpwrap"><input type="checkbox" id="vheadphone"> 🎧 หูฟัง</label>
+  </div>
   <div class="row"><input type="text" id="vtyped" placeholder='ลองพิมพ์: "ไปหน้า settings หน่อย"' /></div>
   <div id="vlog"></div>
 </aside>
@@ -137,8 +142,15 @@ const WS_URL = `ws://${location.hostname}:${WS_PORT}/api/v1/voice/ws`;
 let ws=null, running=false, recog=null, playing=false, player=null;
 let muteUntil=0;   // echo guard: ignore mic while bot speaks + a tail grace
 const playQueue=[]; let pendingMeta=null;
+/* server-STT state (ported from call.html: energy-VAD + barge-in) */
+let stream=null, recorder=null, chunks=[], micCtx=null, analyser=null;
+let speaking=false, silenceStart=0, speechStart=0, onsetStart=0;
+let ON=0.020, OFF=0.012, calibStart=0, calibSum=0, calibN=0, calibrated=false;
+const HANG_MS=700, MIN_MS=500, ONSET_MS=150, CALIB_MS=1200, BARGE_FACTOR=2.5;
 const $=id=>document.getElementById(id);
 const setStatus=t=>$("vstatus").textContent=t;
+const sttMode=()=>document.querySelector('input[name=vsttmode]:checked').value;
+const headphones=()=>$("vheadphone").checked;
 function addMsg(text, cls){ const d=document.createElement("div");
   d.className="m "+cls; d.textContent=text; $("vlog").appendChild(d);
   $("vlog").scrollTop=$("vlog").scrollHeight; }
@@ -187,21 +199,94 @@ function startSTT(){
   if(!SR){ addMsg("⚠ ไม่มี Web Speech API — พิมพ์แทนได้","mb"); return; }
   recog=new SR(); recog.lang="th-TH"; recog.continuous=true; recog.interimResults=true;
   recog.onresult=ev=>{
-    // ขณะบอทพูด (หรือเพิ่งพูดจบ) ไมค์จะได้ยินเสียง TTS ของตัวเอง — ทิ้งผลช่วงนั้น
-    // (แทรกกลางคันได้ด้วยการพิมพ์; barge-in ด้วยเสียงใช้โหมด server STT ใน call.html)
-    if(playing || Date.now() < muteUntil) return;
+    // 🎧 หูฟัง: ไมค์ไม่ได้ยินลำโพง → พูดแทรกได้เลย (barge ทันทีที่มีเสียง)
+    if(headphones()) bargeIn();
+    // ลำโพงปกติ: ขณะบอทพูด (หรือเพิ่งจบ) ไมค์ได้ยิน TTS ตัวเอง — ทิ้งผลช่วงนั้น
+    else if(playing || Date.now() < muteUntil) return;
     for(let i=ev.resultIndex;i<ev.results.length;i++)
       if(ev.results[i].isFinal) sendText(ev.results[i][0].transcript); };
-  recog.onend=()=>{ if(running) recog.start(); };
+  recog.onend=()=>{ if(running && sttMode()==="browser") recog.start(); };
   recog.onerror=e=>{ if(e.error!=="no-speech") console.warn(e.error); };
   recog.start();
 }
-function start(){ connect(); running=true; $("vstart").disabled=true; $("vstop").disabled=false;
-  setStatus("ฟังอยู่…"); startSTT(); }
+function stopBrowserSTT(){ if(recog){ recog.onend=null; recog.stop(); recog=null; } }
+
+/* ── server STT: อัดเสียงส่งไปถอดที่ DeepTutor (VAD + barge ด้วยเสียงได้) ── */
+async function startServerSTT(){
+  calibrated=false; calibStart=calibSum=calibN=0; onsetStart=0; speaking=false; silenceStart=0;
+  stream=await navigator.mediaDevices.getUserMedia({audio:{
+    echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
+  micCtx=new AudioContext();
+  analyser=micCtx.createAnalyser(); analyser.fftSize=512;
+  micCtx.createMediaStreamSource(stream).connect(analyser);
+  newRecorder(); monitor();
+}
+function newRecorder(){
+  chunks=[]; recorder=new MediaRecorder(stream,{mimeType:"audio/webm"});
+  recorder.discard=false;
+  recorder.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  recorder.onstop=async()=>{
+    const discard=recorder.discard, dur=performance.now()-speechStart;
+    const blob=new Blob(chunks,{type:"audio/webm"});
+    if(!discard && running && dur>=MIN_MS && ws && ws.readyState===1)
+      ws.send(await blob.arrayBuffer());
+    if(running) newRecorder();
+  };
+}
+function rms(){ const buf=new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf);
+  let s=0; for(const v of buf){ const x=(v-128)/128; s+=x*x; }
+  return Math.sqrt(s/buf.length); }
+function monitor(){
+  if(!running || sttMode()!=="server") return;
+  const level=rms(), now=performance.now();
+  if(!calibrated){
+    if(!calibStart){ calibStart=now; setStatus("กำลังวัดเสียงรบกวน… เงียบสักครู่"); }
+    calibSum+=level; calibN++;
+    if(now-calibStart>=CALIB_MS){
+      const floor=calibSum/Math.max(1,calibN);
+      ON=Math.max(0.020,floor*4); OFF=Math.max(0.012,floor*2.5);
+      calibrated=true; setStatus("ฟังอยู่… (พูดแทรกได้)");
+    }
+    requestAnimationFrame(monitor); return;
+  }
+  const gate = playing ? ON*BARGE_FACTOR : ON;   // แทรกได้ ถ้าดังกว่าเสียงลำโพงสะท้อน
+  if(!speaking){
+    if(level>gate){
+      if(!onsetStart){ onsetStart=now; if(recorder.state==="inactive") recorder.start(); }
+      else if(now-onsetStart>=ONSET_MS){
+        speaking=true; speechStart=onsetStart; silenceStart=0; onsetStart=0; bargeIn();
+      }
+    } else if(onsetStart){
+      onsetStart=0;
+      if(recorder.state==="recording"){ recorder.discard=true; recorder.stop(); }
+    }
+  } else {
+    if(level<OFF){
+      if(!silenceStart) silenceStart=now;
+      else if(now-silenceStart>HANG_MS){
+        speaking=false; silenceStart=0;
+        if(recorder.state==="recording"){ recorder.discard=false; recorder.stop(); }
+      }
+    } else silenceStart=0;
+  }
+  requestAnimationFrame(monitor);
+}
+function stopServerSTT(){
+  if(recorder && recorder.state==="recording") recorder.stop();
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(micCtx) micCtx.close();
+  stream=recorder=micCtx=analyser=null;
+}
+
+async function start(){ connect(); running=true; $("vstart").disabled=true; $("vstop").disabled=false;
+  setStatus("ฟังอยู่…");
+  if(sttMode()==="browser") startSTT(); else await startServerSTT(); }
 function stop(){ running=false; $("vstart").disabled=false; $("vstop").disabled=true;
-  if(recog){recog.onend=null; recog.stop(); recog=null;} stopPlayback();
+  stopBrowserSTT(); stopServerSTT(); stopPlayback();
   if(ws) ws.close(); setStatus("วางสายแล้ว"); }
-$("vstart").onclick=start; $("vstop").onclick=stop;
+$("vstart").onclick=()=>start().catch(e=>addMsg("⚠ "+e.message,"mb"));
+$("vstop").onclick=stop;
 $("vtyped").addEventListener("keydown",e=>{ if(e.key==="Enter"){ sendText(e.target.value); e.target.value=""; } });
 </script>
 </body>

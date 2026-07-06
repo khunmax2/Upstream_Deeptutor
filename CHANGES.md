@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Mock bench: mic-mode selector + headphone barge-in.**
+  `mock-app.html` gains the same STT modes as `call.html`: browser (Web
+  Speech) and server STT (MediaRecorder + energy-VAD with noise-floor
+  calibration, ported from `call.html`) — server mode allows voice barge-in
+  (must be ~2.5× louder than the gate while the bot speaks). New 🎧
+  "headphones" checkbox for browser mode: with no speaker-to-mic echo the
+  mute guard is bypassed and speaking immediately barges in. File:
+  `voice_prototype/static/mock-app.html`.
+
 - **2026-07-06 — Fix: browser-STT echo loop (bot answering its own voice).**
   In browser-STT mode the mic hears the bot's TTS, Web Speech transcribes it
   ("สวัสดีครับ" → new turn → reply → …), looping forever and burning LLM quota.
