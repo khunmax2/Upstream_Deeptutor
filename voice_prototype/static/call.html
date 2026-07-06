@@ -317,6 +317,7 @@
   const HANG_MS = 700, MIN_MS = 500, ONSET_MS = 150, CALIB_MS = 1200, BARGE_FACTOR = 2.5;
   let calibStart = 0, calibSum = 0, calibN = 0, calibrated = false, onsetStart = 0;
   const playQueue = []; let player = null, playing = false;
+  let muteUntil = 0;  // echo guard (browser-STT): ignore mic while bot speaks + tail grace
   let pendingMeta = null, turnAudioFrames = 0, lastReplyText = "";
 
   const $ = id => document.getElementById(id);
@@ -332,7 +333,8 @@
 
   function enqueueAudio(blob) { playQueue.push(blob); if (!playing) playNext(); }
   function playNext() {
-    if (!playQueue.length) { playing = false; if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } return; }
+    if (!playQueue.length) { playing = false; muteUntil = Date.now() + 800;
+      if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } return; }
     playing = true; usingFallback = false; setMascot('speaking');
     setStatus("🔊 บอทกำลังพูด (พูดดังๆ เพื่อแทรกได้)");
     const blob = playQueue.shift();
@@ -355,7 +357,7 @@
     const th = speechSynthesis.getVoices().find(v => (v.lang || "").startsWith("th"));
     if (th) u.voice = th;
     u.onstart = () => { playing = true; usingFallback = true; setMascot('speaking'); setStatus("🔊 เสียงสำรองจาก browser"); };
-    u.onend = u.onerror = () => { playing = false; usingFallback = false; if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } };
+    u.onend = u.onerror = () => { playing = false; usingFallback = false; muteUntil = Date.now() + 800; if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } };
     speechSynthesis.speak(u);
   }
   function bargeIn() {
@@ -404,6 +406,7 @@
   function sendText(text) {
     text = (text || "").trim();
     if (!text || !ws || ws.readyState !== 1) return;
+    bargeIn();  // typing interrupts the bot mid-speech
     addMsg(text, "user");
     turnAudioFrames = 0; lastReplyText = "";
     setMascot('thinking');
@@ -416,8 +419,11 @@
     recog = new SR();
     recog.lang = "th-TH"; recog.continuous = true; recog.interimResults = true;
     recog.onresult = ev => {
-      if (running && !playing) setMascot('listening');
-      bargeIn();
+      // Browser STT hears the bot's own TTS (echo) and would answer itself in a
+      // loop — drop results while audio plays and for a short tail after. Voice
+      // barge-in needs the calibrated server-STT mode; here interrupt by typing.
+      if (playing || Date.now() < muteUntil) return;
+      if (running) setMascot('listening');
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) sendText(ev.results[i][0].transcript);
       }

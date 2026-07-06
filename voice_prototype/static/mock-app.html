@@ -135,6 +135,7 @@ function executeUiAction(m){
 const WS_PORT = new URLSearchParams(location.search).get("port") || "8011";
 const WS_URL = `ws://${location.hostname}:${WS_PORT}/api/v1/voice/ws`;
 let ws=null, running=false, recog=null, playing=false, player=null;
+let muteUntil=0;   // echo guard: ignore mic while bot speaks + a tail grace
 const playQueue=[]; let pendingMeta=null;
 const $=id=>document.getElementById(id);
 const setStatus=t=>$("vstatus").textContent=t;
@@ -143,7 +144,8 @@ function addMsg(text, cls){ const d=document.createElement("div");
   $("vlog").scrollTop=$("vlog").scrollHeight; }
 
 function playNext(){
-  if(!playQueue.length){ playing=false; if(running) setStatus("ฟังอยู่…"); return; }
+  if(!playQueue.length){ playing=false; muteUntil=Date.now()+800;
+    if(running) setStatus("ฟังอยู่…"); return; }
   playing=true; setStatus("🔊 กำลังพูด");
   player=new Audio(URL.createObjectURL(playQueue.shift()));
   player.onended=playNext; player.onerror=playNext;
@@ -177,13 +179,17 @@ function connect(){
   };
 }
 function sendText(t){ t=(t||"").trim(); if(!t||!ws||ws.readyState!==1) return;
+  bargeIn();   // พิมพ์แทรกได้: หยุดเสียงเก่าก่อนส่งคำใหม่
   addMsg(t,"mu"); ws.send(JSON.stringify({type:"user_text", text:t})); }
 
 function startSTT(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ addMsg("⚠ ไม่มี Web Speech API — พิมพ์แทนได้","mb"); return; }
   recog=new SR(); recog.lang="th-TH"; recog.continuous=true; recog.interimResults=true;
-  recog.onresult=ev=>{ bargeIn();
+  recog.onresult=ev=>{
+    // ขณะบอทพูด (หรือเพิ่งพูดจบ) ไมค์จะได้ยินเสียง TTS ของตัวเอง — ทิ้งผลช่วงนั้น
+    // (แทรกกลางคันได้ด้วยการพิมพ์; barge-in ด้วยเสียงใช้โหมด server STT ใน call.html)
+    if(playing || Date.now() < muteUntil) return;
     for(let i=ev.resultIndex;i<ev.results.length;i++)
       if(ev.results[i].isFinal) sendText(ev.results[i][0].transcript); };
   recog.onend=()=>{ if(running) recog.start(); };

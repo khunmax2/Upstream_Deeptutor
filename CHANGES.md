@@ -169,6 +169,14 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-06 — Fix: browser-STT echo loop (bot answering its own voice).**
+  In browser-STT mode the mic hears the bot's TTS, Web Speech transcribes it
+  ("สวัสดีครับ" → new turn → reply → …), looping forever and burning LLM quota.
+  `call.html` + `mock-app.html` now drop recognition results while bot audio
+  is playing and for an 800 ms tail after it ends (`muteUntil` guard); typing
+  now barges in instead (voice barge-in remains in the calibrated server-STT
+  mode). Files: `voice_prototype/static/call.html`, `mock-app.html`.
+
 - **2026-07-06 — Voice-driven UI control (Botnoi-WebAvatar style) + mock test
   bench.** A caller can now steer the on-screen UI by voice ("ไปหน้า settings",
   "เปิด KB กฎหมาย"). New `deeptutor/services/voice_realtime/ui_control.py`:
