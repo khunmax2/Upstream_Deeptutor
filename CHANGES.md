@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-06 — Fix: "searching" filler no longer fires on small talk.** The
+  chat capability runs an automatic KB seed lookup on *every* turn when a KB is
+  attached (`call_id` prefix `chat-kb-seed`, same `call_kind=rag_retrieval` as a
+  real LLM-chosen `rag` call), so the call spoke "ขอค้นข้อมูลในเอกสารสักครู่"
+  for every utterance. `_tool_starting()`
+  (`deeptutor/services/voice_realtime/pipeline.py`) now skips the seed lookup;
+  the filler + `searching` mascot state fire only for tools/retrievals the LLM
+  actually chose. Test added in
+  `tests/services/voice_realtime/test_pipeline.py`. Zero upstream edits.
+
 - **2026-07-02 — Voice RAG + spoken "searching" filler + watchdog.** Toward
   chat parity for the call: `build_voice_context` attaches available knowledge
   bases so `rag` auto-mounts (the model searches only when a question needs it;

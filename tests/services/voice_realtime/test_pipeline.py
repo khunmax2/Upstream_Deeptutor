@@ -196,6 +196,10 @@ def test_tool_starting_detects_both_shapes() -> None:
         },
     )
     assert pipe._tool_starting(llm, llm.metadata) is None
+    # the automatic per-turn KB seed lookup is NOT announced (fires on small talk too)
+    seed = _rag_running()
+    seed.metadata["call_id"] = "chat-kb-seed-0123456789"
+    assert pipe._tool_starting(seed, seed.metadata) is None
 
 
 @pytest.mark.asyncio

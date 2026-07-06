@@ -116,7 +116,10 @@ def _tool_starting(event: Any, meta: dict[str, Any]) -> str | None:
     ``web_search``), and RAG which the chat capability runs as a retrieval stage
     emitting ``PROGRESS`` with ``call_kind='rag_retrieval'`` + ``call_state=
     'running'`` (no TOOL_CALL). The plain agent LLM round (``agent_loop_round``)
-    is not a tool and is ignored.
+    is not a tool and is ignored — as is the chat capability's automatic KB
+    seed lookup (``call_id`` prefix ``chat-kb-seed``), which runs on *every*
+    turn whenever a KB is attached; announcing it would say "searching the
+    documents" even for small talk. Only retrievals the LLM chose get a filler.
     """
     if event.type == StreamEventType.TOOL_CALL and event.content:
         return str(event.content)
@@ -124,6 +127,7 @@ def _tool_starting(event: Any, meta: dict[str, Any]) -> str | None:
         event.type == StreamEventType.PROGRESS
         and meta.get("trace_kind") == "call_status"
         and meta.get("call_state") == "running"
+        and not str(meta.get("call_id") or "").startswith("chat-kb-seed")
     ):
         call_kind = str(meta.get("call_kind") or "")
         if call_kind and call_kind != "agent_loop_round":
