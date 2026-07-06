@@ -33,7 +33,7 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
-from deeptutor.services.voice_realtime import narration
+from deeptutor.services.voice_realtime import narration, ui_control
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
 
@@ -173,6 +173,7 @@ def build_voice_context(
     session_id: str,
     language: str = "th",
     knowledge_bases: list[str] | None = None,
+    ui_manifest: dict[str, Any] | None = None,
 ) -> UnifiedContext:
     """Assemble the chat ``UnifiedContext`` for one spoken turn.
 
@@ -184,8 +185,18 @@ def build_voice_context(
     Knowledge bases are attached so ``rag`` auto-mounts — the model then decides
     per turn whether to search (small talk never triggers it). Pass an explicit
     list to override; ``None`` discovers all available KBs.
+
+    ``ui_manifest`` (the client's declared steerable UI, see ``ui_control``)
+    rides in metadata; its presence activates :class:`VoiceUICapability` which
+    mounts the ``ui_navigate`` tool for this turn.
     """
     kbs = knowledge_bases if knowledge_bases is not None else _list_knowledge_bases()
+    metadata: dict[str, Any] = {
+        "turn_id": f"voice-{uuid.uuid4().hex[:12]}",
+        "source": "voice",
+    }
+    if ui_manifest:
+        metadata["ui_manifest"] = ui_manifest
     return UnifiedContext(
         session_id=session_id,
         user_message=transcript + _VOICE_TURN_REMINDER,
@@ -194,10 +205,7 @@ def build_voice_context(
         language=language,
         knowledge_bases=kbs,
         persona_context=VOICE_STYLE_DIRECTIVE,
-        metadata={
-            "turn_id": f"voice-{uuid.uuid4().hex[:12]}",
-            "source": "voice",
-        },
+        metadata=metadata,
     )
 
 
@@ -208,6 +216,7 @@ async def run_turn(
     *,
     session_id: str,
     language: str = "th",
+    ui_manifest: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Run one voice turn (audio in) and stream events/audio to *emitter*.
 
@@ -240,6 +249,7 @@ async def run_turn(
         session_id=session_id,
         language=language,
         turn_t0=turn_t0,
+        ui_manifest=ui_manifest,
     )
     return transcript, reply
 
@@ -252,6 +262,7 @@ async def run_text_turn(
     session_id: str,
     language: str = "th",
     turn_t0: float | None = None,
+    ui_manifest: dict[str, Any] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
@@ -270,7 +281,11 @@ async def run_text_turn(
 
     # ── LLM stream → sentence chunker → TTS ──
     context = build_voice_context(
-        transcript=transcript, history=history, session_id=session_id, language=language
+        transcript=transcript,
+        history=history,
+        session_id=session_id,
+        language=language,
+        ui_manifest=ui_manifest,
     )
     chunker = SentenceChunker(max_chars=_CHUNK_MAX_CHARS)
     final_text = ""
@@ -345,6 +360,23 @@ async def run_text_turn(
             pending = asyncio.ensure_future(events.__anext__())  # queue the next
             idle = 0.0
             meta = event.metadata or {}
+            if (
+                event.type == StreamEventType.TOOL_CALL
+                and event.content == ui_control.UI_NAVIGATE_TOOL
+            ):
+                # UI steering: forward to the client, which executes it (and
+                # re-validates against its own manifest). Near-instant, so no
+                # filler/searching state — the model confirms it in speech.
+                args = meta.get("args") or {}
+                await emitter.send_json(
+                    {
+                        "type": "ui_action",
+                        "action": "navigate",
+                        "target": str(args.get("target") or ""),
+                        "argument": str(args.get("argument") or ""),
+                    }
+                )
+                continue
             started_tool = _tool_starting(event, meta)
             if started_tool is not None:
                 # A tool/retrieval started — fill the coming silence with a

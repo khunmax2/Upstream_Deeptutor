@@ -21,7 +21,7 @@ class _NullEmitter:
 
 @pytest.mark.asyncio
 async def test_completed_turn_appends_history(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_run_turn(emitter, audio, history, *, session_id, language):  # noqa: ANN001
+    async def fake_run_turn(emitter, audio, history, *, session_id, language, **kwargs):  # noqa: ANN001
         return "ผู้ใช้พูด", "ผู้ช่วยตอบ"
 
     monkeypatch.setattr(session_mod, "run_turn", fake_run_turn)
@@ -40,7 +40,7 @@ async def test_completed_turn_appends_history(monkeypatch: pytest.MonkeyPatch) -
 async def test_barge_in_cancels_turn_and_skips_history(monkeypatch: pytest.MonkeyPatch) -> None:
     started = asyncio.Event()
 
-    async def slow_run_turn(emitter, audio, history, *, session_id, language):  # noqa: ANN001
+    async def slow_run_turn(emitter, audio, history, *, session_id, language, **kwargs):  # noqa: ANN001
         started.set()
         await asyncio.sleep(10)  # simulate a long turn that gets barged in on
         return "should-not", "commit"
@@ -61,7 +61,7 @@ async def test_new_utterance_cancels_previous_turn(monkeypatch: pytest.MonkeyPat
     calls: list[bytes] = []
     first_started = asyncio.Event()
 
-    async def run_turn_recording(emitter, audio, history, *, session_id, language):  # noqa: ANN001
+    async def run_turn_recording(emitter, audio, history, *, session_id, language, **kwargs):  # noqa: ANN001
         calls.append(audio)
         if audio == b"first":
             first_started.set()

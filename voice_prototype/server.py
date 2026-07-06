@@ -31,6 +31,12 @@ async def call() -> FileResponse:
     return FileResponse(STATIC / "call.html")
 
 
+@app.get("/mock")
+async def mock_app() -> FileResponse:
+    """Mock DeepTutor UI — the voice-driven UI-control test bench."""
+    return FileResponse(STATIC / "mock-app.html")
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}

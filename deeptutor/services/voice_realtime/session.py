@@ -32,6 +32,9 @@ class VoiceSession:
         self._language = language
         self.session_id = f"voice:{uuid.uuid4().hex}"
         self.history: list[dict[str, Any]] = []
+        # Steerable-UI whitelist the client declared (see ui_control); None
+        # until a ``ui_manifest`` control frame arrives.
+        self.ui_manifest: dict[str, Any] | None = None
         self._current: asyncio.Task[None] | None = None
 
     async def handle_utterance(self, audio: bytes) -> None:
@@ -73,6 +76,7 @@ class VoiceSession:
                 self.history,
                 session_id=self.session_id,
                 language=self._language,
+                ui_manifest=self.ui_manifest,
             )
         except asyncio.CancelledError:
             raise
@@ -89,6 +93,7 @@ class VoiceSession:
                 self.history,
                 session_id=self.session_id,
                 language=self._language,
+                ui_manifest=self.ui_manifest,
             )
         except asyncio.CancelledError:
             raise

@@ -169,6 +169,23 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-06 — Voice-driven UI control (Botnoi-WebAvatar style) + mock test
+  bench.** A caller can now steer the on-screen UI by voice ("ไปหน้า settings",
+  "เปิด KB กฎหมาย"). New `deeptutor/services/voice_realtime/ui_control.py`:
+  the client declares a steerable-UI whitelist via a `ui_manifest` WS control
+  frame (sanitised, ≤64 targets); its presence activates `VoiceUICapability`
+  (appended to `LOOP_CAPABILITIES` at runtime) which mounts a new
+  `ui_navigate` tool (registered through the public `ToolRegistry.register()`)
+  with a system block listing the allowed targets. The voice pipeline forwards
+  the tool's `TOOL_CALL` to the client as a `{"type": "ui_action", ...}` frame
+  (no spoken filler — near-instant); the page executes and re-validates it.
+  Plumbing in `pipeline.py` / `session.py` / `api/routers/voice_realtime.py`
+  (all fork-owned; zero upstream edits). Test bench:
+  `voice_prototype/static/mock-app.html` (`/mock`) — a mock DeepTutor UI
+  (Chat / Knowledge Base / Mastery / Settings + `open_kb` action) with an
+  embedded call panel, so voice-controls the fake app before any `web/`
+  wiring. Tests: `tests/services/voice_realtime/test_ui_control.py`.
+
 - **2026-07-06 — Prototype folder slimmed to the static call host.** The
   standalone STT→LLM→TTS pipeline in `voice_prototype/` was superseded by the
   production layer (`deeptutor/services/voice_realtime/`) and had been
