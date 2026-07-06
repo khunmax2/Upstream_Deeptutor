@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-06 — Prototype folder slimmed to the static call host.** The
+  standalone STT→LLM→TTS pipeline in `voice_prototype/` was superseded by the
+  production layer (`deeptutor/services/voice_realtime/`) and had been
+  untouched since 2026-07-02; deleted `pipeline.py`, `providers.py`,
+  `selftest.py`, `tests/`, and `.env.openrouter.example`. `config.py` /
+  `requirements.txt` / `.env.example` shrank to just the static host's
+  HOST/PORT (fastapi + uvicorn), and `README.md` was rewritten for what the
+  folder is now: a thin `http://localhost` origin serving `static/call.html`,
+  which talks to DeepTutor's `/api/v1/voice/ws` directly.
+
 - **2026-07-06 — Removed the iApp STT/TTS integration.** The iApp account ran
   out of credit and its published API docs didn't match the live endpoints
   (reported to the vendor), so the adapter was dead weight. Deleted
