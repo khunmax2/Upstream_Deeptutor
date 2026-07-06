@@ -21,6 +21,7 @@ in-flight STT / LLM / TTS awaits unwind on ``CancelledError``.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -32,10 +33,36 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
+from deeptutor.services.voice_realtime import narration
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
 
 logger = logging.getLogger(__name__)
+
+# Watchdog: the agentic loop streams events continuously, so a long silence
+# means a tool is running (or has hung). We pull events with a per-event
+# timeout — event flowing = healthy; quiet past REASSURE = say "still working";
+# quiet past HANG = abort the turn so a stuck tool can't freeze the call.
+_WATCHDOG_TICK = 5.0
+_REASSURE_AFTER = 8.0
+_HANG_LIMIT = 45.0
+
+
+def _list_knowledge_bases() -> list[str]:
+    """Every available KB name, so ``rag`` can auto-mount and the model may
+    search when a question needs it (it stays unused for small talk)."""
+    try:
+        from deeptutor.knowledge.manager import KnowledgeBaseManager
+        from deeptutor.services.path_service import get_path_service
+
+        kb_root = get_path_service().get_knowledge_bases_root()
+        if not kb_root.is_dir():
+            return []
+        return KnowledgeBaseManager(base_dir=str(kb_root)).list_knowledge_bases()
+    except Exception:
+        logger.warning("voice: failed to list knowledge bases", exc_info=True)
+        return []
+
 
 # Eagerly injected into the system prompt (persona slot) so the brain shapes
 # its ANSWER for speech from the first token — rewriting afterwards would
@@ -82,6 +109,31 @@ _PCM_TYPES = {"audio/pcm", "audio/x-pcm", "audio/l16"}
 _PCM_PARAM = re.compile(r"(rate|sample-rate|samplerate|channels?)\s*=\s*\"?(\d+)\"?")
 
 
+def _tool_starting(event: Any, meta: dict[str, Any]) -> str | None:
+    """Name of the tool/retrieval this event announces the *start* of, else None.
+
+    Two shapes reach us: a genuine ``TOOL_CALL`` (``content`` = tool name, e.g.
+    ``web_search``), and RAG which the chat capability runs as a retrieval stage
+    emitting ``PROGRESS`` with ``call_kind='rag_retrieval'`` + ``call_state=
+    'running'`` (no TOOL_CALL). The plain agent LLM round (``agent_loop_round``)
+    is not a tool and is ignored.
+    """
+    if event.type == StreamEventType.TOOL_CALL and event.content:
+        return str(event.content)
+    if (
+        event.type == StreamEventType.PROGRESS
+        and meta.get("trace_kind") == "call_status"
+        and meta.get("call_state") == "running"
+    ):
+        call_kind = str(meta.get("call_kind") or "")
+        if call_kind and call_kind != "agent_loop_round":
+            # "rag_retrieval" → "rag" so it maps to the rag filler line.
+            return (
+                call_kind[: -len("_retrieval")] if call_kind.endswith("_retrieval") else call_kind
+            )
+    return None
+
+
 def containerize_audio(audio: bytes, content_type: str) -> tuple[bytes, str]:
     """Wrap raw PCM16 in a WAV header; pass every other format through."""
     media_type, _, params = (content_type or "").partition(";")
@@ -116,6 +168,7 @@ def build_voice_context(
     history: list[dict[str, Any]],
     session_id: str,
     language: str = "th",
+    knowledge_bases: list[str] | None = None,
 ) -> UnifiedContext:
     """Assemble the chat ``UnifiedContext`` for one spoken turn.
 
@@ -123,13 +176,19 @@ def build_voice_context(
     the already-active authenticated-user scope (no partner workspace), so
     rag / skills / memory resolve to the caller's own workspace. The default
     chat capability handles the turn; ``source="voice"`` tags the trace.
+
+    Knowledge bases are attached so ``rag`` auto-mounts — the model then decides
+    per turn whether to search (small talk never triggers it). Pass an explicit
+    list to override; ``None`` discovers all available KBs.
     """
+    kbs = knowledge_bases if knowledge_bases is not None else _list_knowledge_bases()
     return UnifiedContext(
         session_id=session_id,
         user_message=transcript + _VOICE_TURN_REMINDER,
         conversation_history=list(history),
         active_capability="chat",
         language=language,
+        knowledge_bases=kbs,
         persona_context=VOICE_STYLE_DIRECTIVE,
         metadata={
             "turn_id": f"voice-{uuid.uuid4().hex[:12]}",
@@ -201,6 +260,10 @@ async def run_text_turn(
     if turn_t0 is None:
         turn_t0 = time.perf_counter()
 
+    # Show activity immediately: a reasoning model can take seconds before the
+    # first token, and that silence shouldn't look like a frozen call.
+    await emitter.send_json({"type": "status", "state": "thinking"})
+
     # ── LLM stream → sentence chunker → TTS ──
     context = build_voice_context(
         transcript=transcript, history=history, session_id=session_id, language=language
@@ -244,13 +307,56 @@ async def run_text_turn(
         seq += 1
 
     orchestrator = ChatOrchestrator()
+    events = orchestrator.handle(context).__aiter__()
+    tool_announced = False  # spoke the "looking it up" filler this turn?
+    tool_pending = False  # a tool is running (drives reassurance wording)
+    reassured = False  # spoke the watchdog reassurance already?
+    idle = 0.0  # seconds since the last event (watchdog)
     try:
-        async for event in orchestrator.handle(context):
+        # Pull each event as its OWN task and poll it with a timeout — never
+        # wait_for(__anext__) directly, since that cancels the generator into
+        # its current await (a running tool) and corrupts the stream. A quiet
+        # gap = a tool working; the watchdog reassures, then aborts if it hangs.
+        pending = asyncio.ensure_future(events.__anext__())
+        while True:
+            done, _ = await asyncio.wait({pending}, timeout=_WATCHDOG_TICK)
+            if not done:
+                idle += _WATCHDOG_TICK
+                if idle >= _HANG_LIMIT:
+                    logger.warning("Voice turn watchdog: aborting hung turn")
+                    pending.cancel()
+                    await emitter.send_json({"type": "error", "message": narration.HANG_LINE})
+                    await speak(narration.HANG_LINE)
+                    await events.aclose()  # unwind the stuck orchestrator turn
+                    return (final_text or "".join(spoken_parts)).strip()
+                if tool_pending and not reassured and idle >= _REASSURE_AFTER:
+                    reassured = True
+                    await speak(narration.REASSURE_LINE)
+                continue
+
+            try:
+                event = pending.result()
+            except StopAsyncIteration:
+                break
+            pending = asyncio.ensure_future(events.__anext__())  # queue the next
+            idle = 0.0
             meta = event.metadata or {}
-            if event.type == StreamEventType.CONTENT:
+            started_tool = _tool_starting(event, meta)
+            if started_tool is not None:
+                # A tool/retrieval started — fill the coming silence with a
+                # spoken cue and flag the client's "searching" state (once).
+                tool_pending = True
+                if not tool_announced:
+                    tool_announced = True
+                    await emitter.send_json(
+                        {"type": "status", "state": "searching", "tool": started_tool}
+                    )
+                    await speak(narration.filler_for_tool(started_tool))
+            elif event.type == StreamEventType.CONTENT:
                 # Speak the user-visible rounds only (see _SPEAKABLE_CALL_KINDS).
                 if meta.get("call_kind") not in _SPEAKABLE_CALL_KINDS:
                     continue
+                tool_pending = False  # the answer is streaming; no tool to wait on
                 token = event.content or ""
                 if first_token_at is None:
                     first_token_at = time.perf_counter()

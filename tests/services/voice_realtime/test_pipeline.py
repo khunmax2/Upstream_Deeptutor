@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -150,10 +151,102 @@ async def test_text_turn_skips_stt_and_replies(monkeypatch: pytest.MonkeyPatch) 
 
 def test_voice_context_injects_speech_style_directive() -> None:
     """The brain must shape answers for speech from token one (persona slot)."""
-    ctx = pipe.build_voice_context(transcript="สวัสดี", history=[], session_id="voice:x")
+    ctx = pipe.build_voice_context(
+        transcript="สวัสดี", history=[], session_id="voice:x", knowledge_bases=[]
+    )
     assert ctx.persona_context == pipe.VOICE_STYLE_DIRECTIVE
     assert "phone call" in ctx.persona_context
     assert ctx.metadata["source"] == "voice"
+
+
+def test_voice_context_attaches_knowledge_bases_for_rag() -> None:
+    """KBs are attached so rag can auto-mount; an explicit list overrides discovery."""
+    ctx = pipe.build_voice_context(
+        transcript="q", history=[], session_id="s", knowledge_bases=["kb-a", "kb-b"]
+    )
+    assert ctx.knowledge_bases == ["kb-a", "kb-b"]
+
+
+def _rag_running() -> StreamEvent:
+    """The event the chat capability actually emits when RAG retrieval starts."""
+    return StreamEvent(
+        type=StreamEventType.PROGRESS,
+        source="chat",
+        metadata={
+            "trace_kind": "call_status",
+            "call_state": "running",
+            "call_kind": "rag_retrieval",
+        },
+    )
+
+
+def test_tool_starting_detects_both_shapes() -> None:
+    # genuine tool_call
+    ev = StreamEvent(type=StreamEventType.TOOL_CALL, content="web_search")
+    assert pipe._tool_starting(ev, ev.metadata) == "web_search"
+    # rag retrieval progress → normalized to "rag"
+    assert pipe._tool_starting(_rag_running(), _rag_running().metadata) == "rag"
+    # the plain LLM round is NOT a tool
+    llm = StreamEvent(
+        type=StreamEventType.PROGRESS,
+        metadata={
+            "trace_kind": "call_status",
+            "call_state": "running",
+            "call_kind": "agent_loop_round",
+        },
+    )
+    assert pipe._tool_starting(llm, llm.metadata) is None
+
+
+@pytest.mark.asyncio
+async def test_rag_retrieval_speaks_filler_and_searching_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RAG (progress/rag_retrieval) → one spoken filler + a 'searching' status frame."""
+    events = [
+        _rag_running(),
+        _content("พบว่าคำตอบคือสี่.", call_kind="llm_final_response"),
+        StreamEvent(type=StreamEventType.RESULT, source="chat", metadata={"response": "สี่"}),
+    ]
+    spoken = _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(emitter, "ในเอกสารว่าไง", [], session_id="voice:test")
+
+    assert any("ค้นข้อมูลในเอกสาร" in chunk for chunk in spoken), spoken
+    searching = [
+        m for m in emitter.json if m.get("type") == "status" and m.get("state") == "searching"
+    ]
+    assert searching and searching[0]["tool"] == "rag"
+
+
+@pytest.mark.asyncio
+async def test_watchdog_reassures_then_aborts_on_hang(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tool that goes silent past the limits → reassurance, then a hang abort."""
+    monkeypatch.setattr(pipe, "_WATCHDOG_TICK", 0.01)
+    monkeypatch.setattr(pipe, "_REASSURE_AFTER", 0.02)
+    monkeypatch.setattr(pipe, "_HANG_LIMIT", 0.05)
+    spoken: list[str] = []
+
+    async def fake_synth(text: str) -> tuple[bytes, str]:
+        spoken.append(text)
+        return (b"A", "audio/mpeg")
+
+    class _HangingOrch:
+        async def handle(self, context: Any):  # noqa: ANN401
+            yield StreamEvent(type=StreamEventType.TOOL_CALL, source="chat", content="rag")
+            await asyncio.sleep(1.0)  # tool hangs — no further events
+            yield _content("ไม่ควรมาถึง", call_kind="llm_final_response")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synth)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _HangingOrch)
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(emitter, "q", [], session_id="voice:test")
+
+    assert any("ยังค้นข้อมูลอยู่" in s for s in spoken), spoken  # reassurance
+    assert any(m.get("type") == "error" for m in emitter.json)  # hang reported
+    assert "ไม่ควรมาถึง" not in reply
 
 
 def test_containerize_audio_wraps_pcm_and_passes_through() -> None:

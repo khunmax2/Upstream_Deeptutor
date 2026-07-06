@@ -225,7 +225,7 @@
   let mascotState = 'idle';        // idle | listening | thinking | speaking
   let usingFallback = false;       // Web-Speech fallback → procedural mouth (no audio graph)
   let mouthOpen = 0;
-  const STATE_RIM = { idle: 0x4f8fff, listening: 0x37d67a, thinking: 0xe0a53a, speaking: 0x59c2ff };
+  const STATE_RIM = { idle: 0x4f8fff, listening: 0x37d67a, thinking: 0xe0a53a, speaking: 0x59c2ff, searching: 0xa855f7 };
   const rimTarget = new THREE.Color(STATE_RIM.idle);
   function setMascot(s) { mascotState = s; if (STATE_RIM[s] !== undefined) rimTarget.setHex(STATE_RIM[s]); }
   window.setMascot = setMascot;
@@ -291,7 +291,7 @@
 
     rim.color.lerp(rimTarget, 0.06);
 
-    if (!dragging) targetYaw += 0.0014 * amp;
+    if (!dragging) targetYaw += (mascotState === 'searching' ? 0.045 : 0.0014) * amp;  // spin while searching
     yaw += (targetYaw - yaw) * 0.08; figure.rotation.y = yaw;
     renderer.render(scene, camera);
   }
@@ -383,6 +383,7 @@
       const m = JSON.parse(ev.data);
       if (m.type === "transcript") { addMsg(m.text, "user"); turnAudioFrames = 0; lastReplyText = ""; setMascot('thinking'); }
       else if (m.type === "audio") pendingMeta = m;
+      else if (m.type === "status") { if (m.state) setMascot(m.state); if (m.state === "searching") setStatus("🔎 กำลังค้นข้อมูล…"); }
       else if (m.type === "assistant_text") { addMsg(m.text, "bot"); lastReplyText = m.text || ""; }
       else if (m.type === "stage") {
         if (m.stage === "stt") $("m-stt").textContent = m.ms + " ms";
