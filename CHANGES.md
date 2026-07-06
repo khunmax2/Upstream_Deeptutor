@@ -169,6 +169,20 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-02 — Voice RAG + spoken "searching" filler + watchdog.** Toward
+  chat parity for the call: `build_voice_context` attaches available knowledge
+  bases so `rag` auto-mounts (the model searches only when a question needs it;
+  small talk never triggers it). When a tool/retrieval starts — the chat
+  capability runs RAG as a stage emitting `PROGRESS(call_kind=rag_retrieval,
+  call_state=running)`, not a `TOOL_CALL`, so `_tool_starting()` detects both —
+  the pipeline speaks a short Thai filler ("ขอค้นข้อมูลในเอกสารสักครู่นะครับ")
+  and sends a `searching` status; a `thinking` status goes out at turn start so
+  a slow reasoning model doesn't look frozen. A watchdog pulls events as a
+  polled task (never `wait_for(__anext__)`, which cancels the generator into a
+  running tool): a quiet gap past the soft limit speaks a reassurance, past the
+  hard limit aborts the hung turn. New `narration.py`; mascot gains a spinning
+  `searching` state. Zero upstream edits; E2E verified against a real KB.
+
 - **2026-07-02 — Call page: 3D talking mascot with audio lip-sync.** Merged a
   Three.js mascot avatar into `voice_prototype/static/call.html` as the call's
   face (all prior call logic — VAD calibration, barge-in, browser-TTS fallback —
