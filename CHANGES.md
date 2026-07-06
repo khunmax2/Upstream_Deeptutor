@@ -162,6 +162,13 @@ code is additive and isolated for mergeability.
   typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
   20 per-sentence iApp WAV frames streamed while the model was still writing.
 
+- **2026-07-02 — Prototype trimmed to the call page.** Removed the standalone
+  `voice_prototype/static/index.html` (`/`) and `mvp.html` (`/mvp`) demos and
+  their prototype-local `/ws` / `/ws/chat` handlers; `server.py` is now a thin
+  static host serving `call.html` (which talks straight to DeepTutor's
+  `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
+  (covered by `selftest.py` + `tests/`).
+
 - **2026-07-02 — Call page: 3D talking mascot with audio lip-sync.** Merged a
   Three.js mascot avatar into `voice_prototype/static/call.html` as the call's
   face (all prior call logic — VAD calibration, barge-in, browser-TTS fallback —
