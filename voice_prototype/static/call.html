@@ -3,304 +3,526 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DeepTutor Call — production WS MVP</title>
+<title>DeepTutor Call — mascot</title>
 <style>
-  :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  body { margin: 0; background: #0f1115; color: #e7e9ee; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
-  h1 { font-size: 1.15rem; font-weight: 600; }
-  button { font-size: 1rem; padding: 10px 18px; border-radius: 10px; border: 0;
-           cursor: pointer; background: #22c55e; color: #fff; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+  html, body { height: 100%; overflow: hidden; background: #0a1730; color: #dbe7ff; }
+  #scene { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: grab; z-index: 0; }
+  #scene:active { cursor: grabbing; }
+
+  .hud { position: fixed; top: 16px; left: 18px; z-index: 2; pointer-events: none; }
+  .hud b { display: block; font-size: 17px; font-weight: 700; }
+  .hud .sub { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(190,214,255,.6); }
+  #status { display:inline-block; margin-top:8px; font-size:12px; padding:4px 12px; border-radius:999px;
+            background: rgba(20,40,80,.6); border:1px solid rgba(120,160,240,.25); color:#bcd; pointer-events:none; }
+
+  .panel { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 2;
+           width: min(680px, 94vw); background: rgba(9,18,38,.72); backdrop-filter: blur(10px);
+           border: 1px solid rgba(120,160,240,.2); border-radius: 16px; padding: 14px 16px; }
+  .controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  button { font-size: .95rem; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer;
+           background: #22c55e; color: #fff; font-weight:600; }
   button.stop { background: #ef4444; }
-  button:disabled { opacity: .5; cursor: default; }
-  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.8rem;
-          background:#1f2630; margin-right:6px; margin-top:6px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .modes { font-size: .8rem; color:#9fb4d8; display:flex; gap:14px; }
+  label { user-select: none; cursor: pointer; }
+  input[type=text] { flex:1; min-width:140px; padding: 8px 11px; border-radius: 9px;
+           border: 1px solid rgba(120,160,240,.3); background: rgba(10,20,40,.7); color: #dbe7ff; }
+  .pills { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+  .pill { padding:2px 9px; border-radius:999px; font-size:.72rem; background: rgba(30,50,90,.6); color:#9fb4d8; }
   .pill b { color:#7dd3fc; }
-  #log { margin-top: 18px; }
-  .msg { padding: 10px 14px; border-radius: 12px; margin: 8px 0; max-width: 80%;
-         white-space: pre-wrap; line-height: 1.5; }
-  .user { background: #1d4ed8; margin-left: auto; }
-  .bot  { background: #1f2937; }
-  #status { font-size:.85rem; color:#94a3b8; margin-left:10px; }
-  .row { margin-top: 8px; font-size: .85rem; color: #94a3b8; }
-  input[type=text] { width: 60%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2a3441;
-          background: #151a21; color: #e7e9ee; }
-  label { user-select: none; }
+  #log { margin-top:10px; max-height: 26vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .msg { padding: 7px 12px; border-radius: 11px; margin: 4px 0; max-width: 82%; white-space: pre-wrap;
+         line-height: 1.45; font-size: .9rem; }
+  .user { background: rgba(37,74,150,.85); align-self:flex-end; }
+  .bot  { background: rgba(31,41,55,.85); align-self:flex-start; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>☎️ DeepTutor Call <span style="font-weight:400;color:#94a3b8">(production /api/v1/voice/ws — สมอง DeepTutor จริง)</span>
-      <span id="status">ยังไม่เชื่อมต่อ</span></h1>
-  <p>
-    <button id="start">📞 เริ่มสาย</button>
-    <button id="stop" class="stop" disabled>วางสาย</button>
-  </p>
-  <div class="row">
-    <label><input type="radio" name="sttmode" value="browser" checked>
-      STT ฝั่ง browser (Web Speech th-TH — ฟรี ใช้ได้วันนี้)</label><br>
-    <label><input type="radio" name="sttmode" value="server">
-      STT ฝั่ง server (อัดเสียงส่งไป — ใช้เมื่อ provider STT ใน Settings ทำงาน)</label>
+  <canvas id="scene"></canvas>
+  <div class="hud">
+    <b>☎️ DeepTutor Call</b>
+    <div class="sub">mascot · production voice ws</div>
+    <div id="status">ยังไม่เชื่อมต่อ</div>
   </div>
-  <div class="row">
-    พิมพ์ทดสอบโดยไม่ใช้ไมค์: <input type="text" id="typed" placeholder="พิมพ์แล้วกด Enter" />
+
+  <div class="panel">
+    <div class="controls">
+      <button id="start">📞 เริ่มสาย</button>
+      <button id="stop" class="stop" disabled>วางสาย</button>
+      <span class="modes">
+        <label><input type="radio" name="sttmode" value="browser" checked> ไมค์ (browser)</label>
+        <label><input type="radio" name="sttmode" value="server"> ไมค์ (server STT)</label>
+      </span>
+    </div>
+    <div class="controls" style="margin-top:10px;">
+      <input type="text" id="typed" placeholder="พิมพ์แล้วกด Enter เพื่อทดสอบโดยไม่ใช้ไมค์" />
+    </div>
+    <div class="pills">
+      <span class="pill">STT <b id="m-stt">–</b></span>
+      <span class="pill">LLM TTFT <b id="m-llm">–</b></span>
+      <span class="pill">TTS แรก <b id="m-tts">–</b></span>
+      <span class="pill">เสียงแรก <b id="m-first">–</b></span>
+      <span class="pill">รวม <b id="m-total">–</b></span>
+    </div>
+    <div id="log"></div>
   </div>
-  <div>
-    <span class="pill">STT <b id="m-stt">–</b></span>
-    <span class="pill">LLM TTFT <b id="m-llm">–</b></span>
-    <span class="pill">TTS แรก <b id="m-tts">–</b></span>
-    <span class="pill">เสียงแรก <b id="m-first">–</b></span>
-    <span class="pill">รวม <b id="m-total">–</b></span>
-  </div>
-  <div id="log"></div>
-</div>
 
-<script>
-// ── config: production DeepTutor API ──
-const WS_URL = `ws://${location.hostname}:8001/api/v1/voice/ws`;
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+  /* ============================================================================
+   * PART 1 — 3D mascot (from the user's mascot.html; mouth + rim light are now
+   * driven by call state / real TTS audio instead of the original fake sine).
+   * ========================================================================== */
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const sceneCanvas = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({ canvas: sceneCanvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-let ws = null, running = false;
-let recog = null;                 // Web Speech (browser STT mode)
-let stream = null, recorder = null, chunks = [], audioCtx = null, analyser = null;
-let speaking = false, silenceStart = 0, speechStart = 0;   // server STT VAD
+  const scene = new THREE.Scene();
+  (function () {
+    const c = document.createElement('canvas'); c.width = 16; c.height = 256;
+    const ctx = c.getContext('2d'); const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, '#081530'); g.addColorStop(0.55, '#0e2350'); g.addColorStop(1, '#143a72');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 16, 256);
+    const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter; scene.background = tex;
+  })();
+  scene.fog = new THREE.Fog(0x0e2350, 8, 18);
 
-// ── VAD tuning ──
-// ON/OFF are re-calibrated from the room's noise floor at call start, speech
-// must be SUSTAINED (not a click/pop) before it counts, and while the
-// assistant is talking the bar is higher still — otherwise speaker bleed and
-// ambient noise constantly barge-in (killing playback) and ship noise clips
-// that Whisper hallucinates into text ("โปรดติดตามตอนต่อไป"...).
-let ON = 0.020, OFF = 0.012;
-const HANG_MS = 700, MIN_MS = 500, ONSET_MS = 150, CALIB_MS = 1200;
-const BARGE_FACTOR = 2.5;          // ระหว่างบอทพูด ต้องดังกว่านี้ถึงถือว่าแทรก
-let calibStart = 0, calibSum = 0, calibN = 0, calibrated = false;
-let onsetStart = 0;
+  const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+  camera.position.set(0, 1.75, 6.4); camera.lookAt(0, 1.3, 0);
 
-const playQueue = []; let player = null, playing = false;
-let pendingMeta = null;
+  scene.add(new THREE.HemisphereLight(0x9fc0ff, 0x0a1730, 0.7));
+  const key = new THREE.DirectionalLight(0xfff0d8, 1.0);
+  key.position.set(3.5, 6.5, 4.5); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+  Object.assign(key.shadow.camera, { near: 1, far: 22, left: -4, right: 4, top: 6, bottom: -1 });
+  key.shadow.bias = -0.0004; scene.add(key);
+  const fill = new THREE.DirectionalLight(0x6fa0ff, 0.45); fill.position.set(-5, 3, 2); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0x4f8fff, 0.55); rim.position.set(0, 3, -5); scene.add(rim);
+  const front = new THREE.PointLight(0xffffff, 0.3, 30); front.position.set(0, 2.2, 4.5); scene.add(front);
 
-const $ = id => document.getElementById(id);
-const setStatus = t => $("status").textContent = t;
-const sttMode = () => document.querySelector('input[name=sttmode]:checked').value;
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(10, 64), new THREE.MeshStandardMaterial({ color: 0x0c1d40, roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const grid = new THREE.GridHelper(20, 40, 0x3a78d0, 0x1c3a66);
+  grid.material.transparent = true; grid.material.opacity = 0.22; grid.position.y = 0.01; scene.add(grid);
 
-function addMsg(text, who) {
-  const d = document.createElement("div");
-  d.className = "msg " + who; d.textContent = text;
-  $("log").appendChild(d); window.scrollTo(0, document.body.scrollHeight);
-  return d;
-}
-
-// ── playback queue + barge-in ──
-function enqueueAudio(blob) { playQueue.push(blob); if (!playing) playNext(); }
-function playNext() {
-  if (!playQueue.length) { playing = false; if (running) setStatus("ฟังอยู่…"); return; }
-  playing = true;
-  setStatus("🔊 บอทกำลังพูด (พูดดังๆ เพื่อแทรกได้)");
-  const blob = playQueue.shift();
-  player = new Audio(URL.createObjectURL(blob));
-  player.onended = playNext;
-  player.onerror = e => { addMsg("⚠ เล่นเสียงไม่ได้: " + (player.error?.message || "decode error"), "bot"); playNext(); };
-  player.play().catch(err => { addMsg("⚠ browser บล็อกการเล่นเสียง: " + err.message, "bot"); playNext(); });
-}
-function stopPlayback() {
-  playQueue.length = 0;
-  if (player) { player.pause(); player = null; }
-  if ("speechSynthesis" in window) speechSynthesis.cancel();  // ตัดเสียงสำรองด้วย
-  playing = false;
-}
-
-// ── browser-TTS fallback: server TTS ล้มทั้งเทิร์น (เครดิตหมด ฯลฯ) → browser อ่านเอง ──
-let turnAudioFrames = 0, lastReplyText = "";
-function speakFallback(text) {
-  if (!("speechSynthesis" in window) || !text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "th-TH";
-  const th = speechSynthesis.getVoices().find(v => (v.lang || "").startsWith("th"));
-  if (th) u.voice = th;
-  u.onstart = () => { playing = true; setStatus("🔊 เสียงสำรองจาก browser (server TTS ใช้ไม่ได้)"); };
-  u.onend = u.onerror = () => { playing = false; if (running) setStatus("ฟังอยู่…"); };
-  speechSynthesis.speak(u);
-}
-function bargeIn() {                    // user started talking → cut assistant off
-  if (playing && ws && ws.readyState === 1) {
-    stopPlayback();
-    ws.send(JSON.stringify({ type: "barge" }));
+  const M = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.7 }, o));
+  const mat = {
+    orange: M(0xef7f24, { roughness: 0.5 }), cream: M(0xf2cea6, { roughness: 0.6 }),
+    blue: M(0x2f6fd0, { roughness: 0.4 }), blueDk: M(0x2356a8, { roughness: 0.45 }),
+    blueLt: M(0x77abf0, { roughness: 0.25, metalness: 0.2 }),
+    suit: M(0x717a86, { roughness: 0.68 }), suitDk: M(0x565d68, { roughness: 0.78 }),
+    lapel: M(0x6c757f, { roughness: 0.66, side: THREE.DoubleSide }),
+    shirt: M(0xeef1f4, { roughness: 0.6, side: THREE.DoubleSide }),
+    white: M(0xeef1f4, { roughness: 0.6 }), tie: M(0x274a96, { roughness: 0.45 }),
+    gold: M(0xd9a93a, { metalness: 0.6, roughness: 0.22 }), dark: M(0x262b34, { roughness: 0.5 }),
+    hi: M(0xffffff, { roughness: 0.3 }), mouth: M(0x4a1f27, { roughness: 0.6 }),
+    cheek: M(0xe89274, { roughness: 0.6, transparent: true, opacity: 0.5 }),
+  };
+  function mesh(geo, m, p = [0,0,0], r = [0,0,0]) {
+    const e = new THREE.Mesh(geo, m);
+    e.position.set(p[0], p[1], p[2]); e.rotation.set(r[0], r[1], r[2]);
+    e.castShadow = true; e.receiveShadow = true; return e;
   }
-}
+  function tube(pts, radius, m) {
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => V3(p[0], p[1], p[2])));
+    const e = new THREE.Mesh(new THREE.TubeGeometry(curve, 56, radius, 12, false), m);
+    e.castShadow = true; return e;
+  }
+  function extrudeShape(pts, depth, m, bevel) {
+    const sh = new THREE.Shape();
+    sh.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
+    sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 });
+    return mesh(geo, m);
+  }
 
-// ── WebSocket to production DeepTutor ──
-function connect() {
-  ws = new WebSocket(WS_URL);
-  ws.binaryType = "arraybuffer";
-  ws.onopen = () => setStatus("เชื่อมต่อ DeepTutor แล้ว");
-  ws.onclose = () => { setStatus("ตัดการเชื่อมต่อ"); if (running) stop(); };
-  ws.onerror = () => setStatus("เชื่อมต่อไม่ได้ — deeptutor serve รันอยู่ไหม?");
-  ws.onmessage = ev => {
-    if (typeof ev.data !== "string") {
-      turnAudioFrames++;
-      const type = (pendingMeta && pendingMeta.content_type) || "audio/wav";
-      enqueueAudio(new Blob([ev.data], { type }));
-      pendingMeta = null;
-      return;
-    }
-    const m = JSON.parse(ev.data);
-    if (m.type === "transcript") { addMsg(m.text, "user"); turnAudioFrames = 0; lastReplyText = ""; }
-    else if (m.type === "audio") pendingMeta = m;
-    else if (m.type === "assistant_text") { addMsg(m.text, "bot"); lastReplyText = m.text || ""; }
-    else if (m.type === "stage") {
-      if (m.stage === "stt") $("m-stt").textContent = m.ms + " ms";
-      if (m.stage === "llm_ttft") $("m-llm").textContent = m.ms + " ms";
-      if (m.stage === "tts_first") $("m-tts").textContent = m.ms + " ms";
-    }
-    else if (m.type === "done") {
-      $("m-total").textContent = m.total_ms + " ms";
-      $("m-first").textContent = (m.first_audio_ms ?? "–") + " ms";
-      if (turnAudioFrames === 0 && lastReplyText) speakFallback(lastReplyText);
-      turnAudioFrames = 0; lastReplyText = "";
-    }
-    else if (m.type === "error") addMsg("⚠ " + m.message, "bot");
-  };
-}
+  const rocker = new THREE.Group(); scene.add(rocker);
+  const figure = new THREE.Group(); rocker.add(figure);
 
-function sendText(text) {
-  text = (text || "").trim();
-  if (!text || !ws || ws.readyState !== 1) return;
-  addMsg(text, "user");
-  turnAudioFrames = 0; lastReplyText = "";
-  ws.send(JSON.stringify({ type: "user_text", text }));
-}
+  [-1, 1].forEach(s => {
+    figure.add(mesh(new THREE.CylinderGeometry(0.17, 0.15, 0.34, 24), mat.suit, [s * 0.18, 0.32, 0]));
+    figure.add(mesh(new THREE.BoxGeometry(0.02, 0.3, 0.02), mat.suitDk, [s * 0.18, 0.32, 0.15]));
+    const sh = new THREE.Group(); sh.position.set(s * 0.18, 0, 0); sh.rotation.y = s * 0.12;
+    const foot = mesh(new THREE.SphereGeometry(0.155, 30, 22), mat.gold, [0, 0.12, 0.12]); foot.scale.set(1.08, 0.98, 1.95); sh.add(foot);
+    const heel = mesh(new THREE.SphereGeometry(0.13, 22, 18), mat.gold, [0, 0.13, -0.07]); heel.scale.set(1.0, 1.05, 1.0); sh.add(heel);
+    sh.add(mesh(new THREE.SphereGeometry(0.018, 10, 8), mat.gold, [0, 0.2, 0.16]));
+    figure.add(sh);
+  });
 
-// ── browser STT (Web Speech th-TH) ──
-function startBrowserSTT() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { addMsg("⚠ เบราว์เซอร์นี้ไม่มี Web Speech API — ใช้ Chrome หรือสลับโหมด server", "bot"); return; }
-  recog = new SR();
-  recog.lang = "th-TH";
-  recog.continuous = true;
-  recog.interimResults = true;
-  recog.onresult = ev => {
-    bargeIn();                          // any speech interrupts playback
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      if (ev.results[i].isFinal) sendText(ev.results[i][0].transcript);
+  const torso = new THREE.Group(); figure.add(torso);
+  const bodyMesh = mesh(new THREE.SphereGeometry(0.42, 40, 30), mat.suit, [0, 0.78, 0]);
+  bodyMesh.scale.set(1.06, 1.2, 0.86); torso.add(bodyMesh);
+  torso.add(mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.16, 22), mat.white, [0, 1.16, 0.02]));
+  torso.add(mesh(new THREE.TorusGeometry(0.21, 0.07, 14, 30), mat.suit, [0, 1.11, 0], [Math.PI / 2, 0, 0]));
+  const shirt = extrudeShape([[-0.12, 0.18], [0.12, 0.18], [0.0, -0.2]], 0.03, mat.shirt, 0.01);
+  shirt.position.set(0, 0.92, 0.30); shirt.rotation.x = -0.12; torso.add(shirt);
+  const lapelPts = [[0.0, 0.22], [0.05, 0.10], [0.11, 0.20], [0.17, 0.05], [0.13, -0.22], [0.0, -0.18]];
+  const lapR = extrudeShape(lapelPts, 0.05, mat.lapel, 0.012);
+  lapR.position.set(0.075, 0.9, 0.31); lapR.rotation.set(-0.12, -0.34, 0); torso.add(lapR);
+  const lapL = extrudeShape(lapelPts.map(p => [-p[0], p[1]]), 0.05, mat.lapel, 0.012);
+  lapL.position.set(-0.075, 0.9, 0.31); lapL.rotation.set(-0.12, 0.34, 0); torso.add(lapL);
+  [-1, 1].forEach(s => torso.add(mesh(new THREE.BoxGeometry(0.012, 0.4, 0.04), mat.suitDk, [s * 0.07, 0.9, 0.37], [0, 0, -s * 0.06])));
+  torso.add(mesh(new THREE.BoxGeometry(0.085, 0.085, 0.05), mat.tie, [0, 1.0, 0.42]));
+  const blade = mesh(new THREE.CylinderGeometry(0.05, 0.085, 0.33, 4), mat.tie, [0, 0.79, 0.41]); blade.rotation.y = Math.PI / 4; torso.add(blade);
+  torso.add(mesh(new THREE.SphereGeometry(0.022, 12, 10), mat.dark, [0, 0.55, 0.37]));
+  torso.add(mesh(new THREE.BoxGeometry(0.07, 0.035, 0.02), mat.white, [-0.2, 0.9, 0.36], [0, 0, 0.12]));
+  torso.add(mesh(new THREE.ConeGeometry(0.035, 0.06, 4), mat.gold, [0.17, 0.92, 0.4]));
+
+  function arm(side) {
+    const g = new THREE.Group(); g.position.set(side * 0.4, 1.0, 0.0);
+    const cap = mesh(new THREE.SphereGeometry(0.17, 26, 20), mat.suit, [0, 0, 0]); cap.scale.set(1, 0.88, 0.95); g.add(cap);
+    g.add(mesh(new THREE.CylinderGeometry(0.15, 0.115, 0.42, 22), mat.suit, [0, -0.23, 0]));
+    g.add(mesh(new THREE.CylinderGeometry(0.13, 0.125, 0.05, 22), mat.suit, [0, -0.44, 0]));
+    const glove = mesh(new THREE.SphereGeometry(0.155, 26, 20), mat.blue, [0, -0.51, 0.02]); glove.scale.set(1, 1.05, 1); g.add(glove);
+    g.add(mesh(new THREE.SphereGeometry(0.06, 16, 12), mat.blue, [side * -0.1, -0.47, 0.09]));
+    g.rotation.z = side * 0.11; torso.add(g); return g;
+  }
+  const armL = arm(-1), armR = arm(1);
+
+  const head = new THREE.Group(); head.position.set(0, 1.86, 0); figure.add(head);
+  const shell = mesh(new THREE.SphereGeometry(0.62, 46, 36), mat.orange); shell.scale.set(1.0, 0.99, 0.9); head.add(shell);
+  const facePanel = mesh(new THREE.SphereGeometry(0.45, 42, 32), mat.cream, [0, -0.02, 0.33]); facePanel.scale.set(0.94, 1.0, 0.52); head.add(facePanel);
+  function eye(side) {
+    const g = new THREE.Group(); g.position.set(side * 0.19, 0.05, 0.5);
+    const e = mesh(new THREE.SphereGeometry(0.12, 30, 24), mat.dark); e.scale.set(0.82, 1.3, 0.8); g.add(e);
+    g.add(mesh(new THREE.SphereGeometry(0.032, 14, 12), mat.hi, [side * 0.04, 0.07, 0.09]));
+    g.add(mesh(new THREE.SphereGeometry(0.016, 12, 10), mat.hi, [-side * 0.03, -0.03, 0.1]));
+    head.add(g); return g;
+  }
+  const eyeL = eye(-1), eyeR = eye(1);
+  [-1, 1].forEach(s => { const ch = mesh(new THREE.SphereGeometry(0.075, 18, 14), mat.cheek, [s * 0.27, -0.06, 0.46]); ch.scale.set(1, 0.7, 0.4); head.add(ch); });
+  const mouth = mesh(new THREE.SphereGeometry(0.08, 28, 22), mat.mouth, [0, -0.23, 0.52]); head.add(mouth);
+  const arcF = [[-0.43, 0.28, 0.30], [-0.24, 0.37, 0.45], [0, 0.40, 0.49], [0.24, 0.37, 0.45], [0.43, 0.28, 0.30]];
+  head.add(tube(arcF, 0.075, mat.blue));
+  head.add(tube(arcF.map(([x, y, z]) => [x, y + 0.005, z + 0.035]), 0.04, mat.blueLt));
+  [-1, 1].forEach(s => head.add(mesh(new THREE.SphereGeometry(0.085, 18, 14), mat.blue, [s * 0.43, 0.28, 0.30])));
+  head.add(tube([[-0.43, 0.28, 0.30], [-0.55, 0.30, -0.05], [-0.34, 0.40, -0.45], [0, 0.44, -0.55], [0.34, 0.40, -0.45], [0.55, 0.30, -0.05], [0.43, 0.28, 0.30]], 0.045, mat.blueDk));
+  [-1, 1].forEach(s => {
+    head.add(mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.16, 30), mat.orange, [s * 0.6, -0.02, 0], [0, 0, Math.PI / 2]));
+    head.add(mesh(new THREE.TorusGeometry(0.12, 0.05, 14, 26), mat.dark, [s * 0.69, -0.02, 0], [0, Math.PI / 2, 0]));
+    head.add(mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 22), mat.suitDk, [s * 0.71, -0.02, 0], [0, 0, Math.PI / 2]));
+  });
+  head.add(tube([[-0.6, 0.0, -0.02], [-0.45, 0.5, -0.06], [0, 0.66, -0.06], [0.45, 0.5, -0.06], [0.6, 0.0, -0.02]], 0.05, mat.suitDk));
+  head.add(tube([[-0.62, -0.02, 0.06], [-0.5, -0.16, 0.42], [-0.25, -0.23, 0.55], [-0.08, -0.24, 0.57]], 0.02, mat.dark));
+  head.add(mesh(new THREE.SphereGeometry(0.045, 16, 12), mat.blue, [-0.06, -0.24, 0.58]));
+
+  /* drag-to-rotate (only when grabbing the canvas, so panel clicks are safe) */
+  let targetYaw = 0.3, yaw = 0.3, dragging = false, lastX = 0;
+  const dragDown = x => { dragging = true; lastX = x; };
+  const dragMove = x => { if (!dragging) return; targetYaw += (x - lastX) * 0.008; lastX = x; };
+  const dragUp = () => { dragging = false; };
+  sceneCanvas.addEventListener('mousedown', e => dragDown(e.clientX));
+  addEventListener('mousemove', e => dragMove(e.clientX)); addEventListener('mouseup', dragUp);
+  sceneCanvas.addEventListener('touchstart', e => dragDown(e.touches[0].clientX), { passive: true });
+  addEventListener('touchmove', e => dragMove(e.touches[0].clientX), { passive: true }); addEventListener('touchend', dragUp);
+
+  /* ── mascot state + lip-sync hooks (the whole point of the merge) ── */
+  let mascotState = 'idle';        // idle | listening | thinking | speaking
+  let usingFallback = false;       // Web-Speech fallback → procedural mouth (no audio graph)
+  let mouthOpen = 0;
+  const STATE_RIM = { idle: 0x4f8fff, listening: 0x37d67a, thinking: 0xe0a53a, speaking: 0x59c2ff };
+  const rimTarget = new THREE.Color(STATE_RIM.idle);
+  function setMascot(s) { mascotState = s; if (STATE_RIM[s] !== undefined) rimTarget.setHex(STATE_RIM[s]); }
+  window.setMascot = setMascot;
+
+  // Lip-sync: route the currently-playing TTS <audio> through an analyser so the
+  // mouth opens by real amplitude. One AudioContext, reused per chunk element.
+  let lipCtx = null, lipAnalyser = null, lipData = null;
+  function ensureLipCtx() {
+    if (lipCtx) return;
+    lipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    lipAnalyser = lipCtx.createAnalyser(); lipAnalyser.fftSize = 256;
+    lipData = new Uint8Array(lipAnalyser.fftSize);
+    lipAnalyser.connect(lipCtx.destination);
+  }
+  function lipAttach(el) {
+    try {
+      ensureLipCtx();
+      if (lipCtx.state === 'suspended') lipCtx.resume();
+      lipCtx.createMediaElementSource(el).connect(lipAnalyser);
+    } catch (e) { /* if capture fails the element still plays to default output */ }
+  }
+  function mouthFromAudio() {
+    if (!lipAnalyser) return 0;
+    lipAnalyser.getByteTimeDomainData(lipData);
+    let s = 0; for (const v of lipData) { const x = (v - 128) / 128; s += x * x; }
+    return Math.min(1, Math.sqrt(s / lipData.length) * 3.4);
+  }
+  window.lipAttach = lipAttach;
+
+  const clock = new THREE.Clock();
+  let nextBlink = 2, blinkAt = -1; const amp = reduce ? 0.3 : 1;
+  function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    rocker.rotation.z = Math.sin(t * 1.0) * 0.06 * amp;
+    rocker.rotation.x = Math.sin(t * 0.85 + 0.5) * 0.025 * amp;
+    rocker.position.y = Math.abs(Math.sin(t * 1.0)) * 0.02 * amp;
+    torso.scale.set(1, 1 + Math.sin(t * 1.7) * 0.012 * amp, 1);
+    // per-state head bias: listening perks up, thinking tilts aside
+    const perk = mascotState === 'listening' ? 0.10 : (mascotState === 'thinking' ? -0.05 : 0);
+    const tilt = mascotState === 'thinking' ? 0.18 : 0;
+    head.rotation.z = -Math.sin(t * 1.0) * 0.04 * amp + tilt;
+    head.rotation.y = Math.sin(t * 0.45) * 0.16 * amp;
+    head.rotation.x = Math.sin(t * 0.9) * 0.03 * amp - perk;
+    armL.rotation.x = Math.sin(t * 1.0 + Math.PI) * 0.08 * amp;
+    armR.rotation.x = Math.sin(t * 1.0) * 0.08 * amp;
+
+    // blink
+    let es = 1;
+    if (t > nextBlink && blinkAt < 0) { blinkAt = t; nextBlink = t + 2.5 + Math.random() * 3.5; }
+    if (blinkAt >= 0) { const p = (t - blinkAt) / 0.16; if (p >= 1) blinkAt = -1; else es = 1 - Math.sin(p * Math.PI); }
+    eyeL.scale.y = eyeR.scale.y = Math.max(0.05, es);
+
+    // mouth: driven by state, not a free-running sine
+    let target = 0;
+    if (mascotState === 'speaking') {
+      target = usingFallback ? (0.35 + 0.4 * Math.abs(Math.sin(t * 9))) : mouthFromAudio();
+    } else if (mascotState === 'listening') {
+      target = 0.05;                    // slightly parted, attentive
     }
-  };
-  recog.onend = () => { if (running && sttMode() === "browser") recog.start(); };  // keep alive
-  recog.onerror = e => { if (e.error !== "no-speech") console.warn("speech:", e.error); };
-  recog.start();
-}
-function stopBrowserSTT() { if (recog) { recog.onend = null; recog.stop(); recog = null; } }
+    mouthOpen += (target - mouthOpen) * 0.35;
+    mouth.scale.set(1.5 - mouthOpen * 0.4, 0.4 + mouthOpen * 1.9, 0.9);
 
-// ── server STT (record webm utterances, energy VAD — same as prototype) ──
-async function startServerSTT() {
-  calibrated = false; calibStart = calibSum = calibN = 0; onsetStart = 0;
-  speaking = false; silenceStart = 0;
-  stream = await navigator.mediaDevices.getUserMedia({ audio: {
-    echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-  audioCtx = new AudioContext();
-  const src = audioCtx.createMediaStreamSource(stream);
-  analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
-  src.connect(analyser);
-  newRecorder();
-  monitor();
-}
-function newRecorder() {
-  chunks = [];
-  recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-  recorder.onstop_discard = false;
-  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-  recorder.onstop = async () => {
-    const discard = recorder.onstop_discard;
-    const dur = performance.now() - speechStart;
-    const blob = new Blob(chunks, { type: "audio/webm" });
-    // ส่งเฉพาะ utterance ที่ "พูดจริง" (ผ่าน sustained-onset) และยาวพอ —
-    // คลิปสั้น/เสียงรบกวนถูกทิ้ง กัน Whisper hallucinate ข้อความปลอม
-    if (!discard && running && dur >= MIN_MS && ws.readyState === 1) {
-      ws.send(await blob.arrayBuffer());
+    rim.color.lerp(rimTarget, 0.06);
+
+    if (!dragging) targetYaw += 0.0014 * amp;
+    yaw += (targetYaw - yaw) * 0.08; figure.rotation.y = yaw;
+    renderer.render(scene, camera);
+  }
+  animate();
+  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
+  addEventListener('resize', resize); resize();
+
+  /* ============================================================================
+   * PART 2 — call logic (production /api/v1/voice/ws). Same VAD calibration,
+   * barge-in and browser-TTS fallback as before, now also driving the mascot.
+   * ========================================================================== */
+  const WS_URL = `ws://${location.hostname}:8001/api/v1/voice/ws`;
+
+  let ws = null, running = false;
+  let recog = null;
+  let stream = null, recorder = null, chunks = [], micCtx = null, analyser = null;
+  let speaking = false, silenceStart = 0, speechStart = 0;
+  let ON = 0.020, OFF = 0.012;
+  const HANG_MS = 700, MIN_MS = 500, ONSET_MS = 150, CALIB_MS = 1200, BARGE_FACTOR = 2.5;
+  let calibStart = 0, calibSum = 0, calibN = 0, calibrated = false, onsetStart = 0;
+  const playQueue = []; let player = null, playing = false;
+  let pendingMeta = null, turnAudioFrames = 0, lastReplyText = "";
+
+  const $ = id => document.getElementById(id);
+  const setStatus = t => $("status").textContent = t;
+  const sttMode = () => document.querySelector('input[name=sttmode]:checked').value;
+
+  function addMsg(text, who) {
+    const d = document.createElement("div");
+    d.className = "msg " + who; d.textContent = text;
+    $("log").appendChild(d); $("log").scrollTop = $("log").scrollHeight;
+    return d;
+  }
+
+  function enqueueAudio(blob) { playQueue.push(blob); if (!playing) playNext(); }
+  function playNext() {
+    if (!playQueue.length) { playing = false; if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } return; }
+    playing = true; usingFallback = false; setMascot('speaking');
+    setStatus("🔊 บอทกำลังพูด (พูดดังๆ เพื่อแทรกได้)");
+    const blob = playQueue.shift();
+    player = new Audio(URL.createObjectURL(blob));
+    lipAttach(player);                      // ← ปากขยับตามเสียงจริง
+    player.onended = playNext;
+    player.onerror = () => { addMsg("⚠ เล่นเสียงไม่ได้ (decode error)", "bot"); playNext(); };
+    player.play().catch(err => { addMsg("⚠ browser บล็อกการเล่นเสียง: " + err.message, "bot"); playNext(); });
+  }
+  function stopPlayback() {
+    playQueue.length = 0;
+    if (player) { player.pause(); player = null; }
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    playing = false;
+  }
+  function speakFallback(text) {
+    if (!("speechSynthesis" in window) || !text) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "th-TH";
+    const th = speechSynthesis.getVoices().find(v => (v.lang || "").startsWith("th"));
+    if (th) u.voice = th;
+    u.onstart = () => { playing = true; usingFallback = true; setMascot('speaking'); setStatus("🔊 เสียงสำรองจาก browser"); };
+    u.onend = u.onerror = () => { playing = false; usingFallback = false; if (running) { setStatus("ฟังอยู่…"); setMascot('listening'); } };
+    speechSynthesis.speak(u);
+  }
+  function bargeIn() {
+    if (playing && ws && ws.readyState === 1) {
+      stopPlayback();
+      ws.send(JSON.stringify({ type: "barge" }));
+      if (running) setMascot('listening');
     }
-    if (running) newRecorder();
-  };
-}
-function rms() {
-  const buf = new Uint8Array(analyser.fftSize);
-  analyser.getByteTimeDomainData(buf);
-  let s = 0; for (const v of buf) { const x = (v - 128) / 128; s += x * x; }
-  return Math.sqrt(s / buf.length);
-}
-function monitor() {
-  if (!running || sttMode() !== "server") return;
-  const level = rms();
-  const now = performance.now();
+  }
 
-  // ── phase 0: calibrate the room's noise floor for the first ~1.2s ──
-  if (!calibrated) {
-    if (!calibStart) { calibStart = now; setStatus("กำลังวัดเสียงรบกวน… เงียบสักครู่"); }
-    calibSum += level; calibN++;
-    if (now - calibStart >= CALIB_MS) {
-      const floor = calibSum / Math.max(1, calibN);
-      ON = Math.max(0.020, floor * 4);
-      OFF = Math.max(0.012, floor * 2.5);
-      calibrated = true;
-      setStatus(`พร้อมคุย (noise floor ${floor.toFixed(3)} → ON ${ON.toFixed(3)})`);
+  function connect() {
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => { setStatus("เชื่อมต่อ DeepTutor แล้ว"); setMascot('idle'); };
+    ws.onclose = () => { setStatus("ตัดการเชื่อมต่อ"); if (running) stop(); };
+    ws.onerror = () => setStatus("เชื่อมต่อไม่ได้ — deeptutor serve รันอยู่ไหม?");
+    ws.onmessage = ev => {
+      if (typeof ev.data !== "string") {
+        turnAudioFrames++;
+        const type = (pendingMeta && pendingMeta.content_type) || "audio/wav";
+        enqueueAudio(new Blob([ev.data], { type }));
+        pendingMeta = null;
+        return;
+      }
+      const m = JSON.parse(ev.data);
+      if (m.type === "transcript") { addMsg(m.text, "user"); turnAudioFrames = 0; lastReplyText = ""; setMascot('thinking'); }
+      else if (m.type === "audio") pendingMeta = m;
+      else if (m.type === "assistant_text") { addMsg(m.text, "bot"); lastReplyText = m.text || ""; }
+      else if (m.type === "stage") {
+        if (m.stage === "stt") $("m-stt").textContent = m.ms + " ms";
+        if (m.stage === "llm_ttft") $("m-llm").textContent = m.ms + " ms";
+        if (m.stage === "tts_first") $("m-tts").textContent = m.ms + " ms";
+      }
+      else if (m.type === "done") {
+        $("m-total").textContent = m.total_ms + " ms";
+        $("m-first").textContent = (m.first_audio_ms ?? "–") + " ms";
+        if (turnAudioFrames === 0 && lastReplyText) speakFallback(lastReplyText);
+        else if (!playing && running) setMascot('listening');
+        turnAudioFrames = 0; lastReplyText = "";
+      }
+      else if (m.type === "error") { addMsg("⚠ " + m.message, "bot"); if (running && !playing) setMascot('listening'); }
+    };
+  }
+
+  function sendText(text) {
+    text = (text || "").trim();
+    if (!text || !ws || ws.readyState !== 1) return;
+    addMsg(text, "user");
+    turnAudioFrames = 0; lastReplyText = "";
+    setMascot('thinking');
+    ws.send(JSON.stringify({ type: "user_text", text }));
+  }
+
+  function startBrowserSTT() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { addMsg("⚠ เบราว์เซอร์นี้ไม่มี Web Speech API — ใช้ Chrome หรือสลับโหมด server", "bot"); return; }
+    recog = new SR();
+    recog.lang = "th-TH"; recog.continuous = true; recog.interimResults = true;
+    recog.onresult = ev => {
+      if (running && !playing) setMascot('listening');
+      bargeIn();
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) sendText(ev.results[i][0].transcript);
+      }
+    };
+    recog.onend = () => { if (running && sttMode() === "browser") recog.start(); };
+    recog.onerror = e => { if (e.error !== "no-speech") console.warn("speech:", e.error); };
+    recog.start();
+  }
+  function stopBrowserSTT() { if (recog) { recog.onend = null; recog.stop(); recog = null; } }
+
+  async function startServerSTT() {
+    calibrated = false; calibStart = calibSum = calibN = 0; onsetStart = 0;
+    speaking = false; silenceStart = 0;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    micCtx = new AudioContext();
+    const src = micCtx.createMediaStreamSource(stream);
+    analyser = micCtx.createAnalyser(); analyser.fftSize = 512;
+    src.connect(analyser);
+    newRecorder();
+    monitor();
+  }
+  function newRecorder() {
+    chunks = [];
+    recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    recorder.onstop_discard = false;
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      const discard = recorder.onstop_discard;
+      const dur = performance.now() - speechStart;
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      if (!discard && running && dur >= MIN_MS && ws.readyState === 1) {
+        ws.send(await blob.arrayBuffer());
+        setMascot('thinking');
+      }
+      if (running) newRecorder();
+    };
+  }
+  function rms() {
+    const buf = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(buf);
+    let s = 0; for (const v of buf) { const x = (v - 128) / 128; s += x * x; }
+    return Math.sqrt(s / buf.length);
+  }
+  function monitor() {
+    if (!running || sttMode() !== "server") return;
+    const level = rms();
+    const now = performance.now();
+    if (!calibrated) {
+      if (!calibStart) { calibStart = now; setStatus("กำลังวัดเสียงรบกวน… เงียบสักครู่"); }
+      calibSum += level; calibN++;
+      if (now - calibStart >= CALIB_MS) {
+        const floor = calibSum / Math.max(1, calibN);
+        ON = Math.max(0.020, floor * 4); OFF = Math.max(0.012, floor * 2.5);
+        calibrated = true;
+        setStatus(`พร้อมคุย (noise floor ${floor.toFixed(3)})`); setMascot('listening');
+      }
+      requestAnimationFrame(monitor); return;
+    }
+    const gate = playing ? ON * BARGE_FACTOR : ON;
+    if (!speaking) {
+      if (level > gate) {
+        if (!onsetStart) { onsetStart = now; if (recorder.state === "inactive") recorder.start(); }
+        else if (now - onsetStart >= ONSET_MS) {
+          speaking = true; speechStart = onsetStart; silenceStart = 0; onsetStart = 0;
+          if (running && !playing) setMascot('listening');
+          bargeIn();
+        }
+      } else if (onsetStart) {
+        onsetStart = 0;
+        if (recorder.state === "recording") { recorder.onstop_discard = true; recorder.stop(); }
+      }
+    } else {
+      if (level < OFF) {
+        if (!silenceStart) silenceStart = now;
+        else if (now - silenceStart > HANG_MS) {
+          speaking = false; silenceStart = 0;
+          if (recorder.state === "recording") recorder.stop();
+        }
+      } else silenceStart = 0;
     }
     requestAnimationFrame(monitor);
-    return;
+  }
+  function stopServerSTT() {
+    if (recorder && recorder.state === "recording") recorder.stop();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (micCtx) micCtx.close();
+    stream = recorder = micCtx = analyser = null;
   }
 
-  // While the assistant is talking, require a much louder + sustained voice
-  // to count as speech (speaker bleed / ambient must not barge-in).
-  const gate = playing ? ON * BARGE_FACTOR : ON;
-
-  if (!speaking) {
-    if (level > gate) {
-      if (!onsetStart) {
-        onsetStart = now;
-        if (recorder.state === "inactive") recorder.start();  // จับตั้งแต่ต้นคำ
-      } else if (now - onsetStart >= ONSET_MS) {
-        speaking = true; speechStart = onsetStart; silenceStart = 0; onsetStart = 0;
-        bargeIn();                       // ยืนยันว่าเป็นเสียงพูดจริงแล้วค่อยแทรก
-      }
-    } else if (onsetStart) {
-      onsetStart = 0;                    // แค่เสียงป๊อกแป๊ก — ทิ้งคลิปที่เริ่มอัดไว้
-      if (recorder.state === "recording") { recorder.onstop_discard = true; recorder.stop(); }
-    }
-  } else {
-    if (level < OFF) {
-      if (!silenceStart) silenceStart = now;
-      else if (now - silenceStart > HANG_MS) {
-        speaking = false; silenceStart = 0;
-        if (recorder.state === "recording") recorder.stop();
-      }
-    } else silenceStart = 0;
+  async function start() {
+    connect();
+    running = true;
+    $("start").disabled = true; $("stop").disabled = false;
+    if (lipCtx && lipCtx.state === 'suspended') lipCtx.resume();   // unlock audio on user gesture
+    if (sttMode() === "browser") startBrowserSTT(); else await startServerSTT();
   }
-  requestAnimationFrame(monitor);
-}
-function stopServerSTT() {
-  if (recorder && recorder.state === "recording") recorder.stop();
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
-  stream = recorder = audioCtx = analyser = null;
-}
+  function stop() {
+    running = false;
+    $("start").disabled = false; $("stop").disabled = true;
+    stopBrowserSTT(); stopServerSTT(); stopPlayback();
+    if (ws) ws.close();
+    setStatus("วางสายแล้ว"); setMascot('idle');
+  }
 
-// ── lifecycle ──
-async function start() {
-  connect();
-  running = true;
-  $("start").disabled = true; $("stop").disabled = false;
-  if (sttMode() === "browser") startBrowserSTT(); else await startServerSTT();
-}
-function stop() {
-  running = false;
-  $("start").disabled = false; $("stop").disabled = true;
-  stopBrowserSTT(); stopServerSTT(); stopPlayback();
-  if (ws) ws.close();
-  setStatus("วางสายแล้ว");
-}
-
-$("start").onclick = () => start().catch(e => addMsg("⚠ " + e.message, "bot"));
-$("stop").onclick = stop;
-$("typed").addEventListener("keydown", e => {
-  if (e.key === "Enter") { sendText(e.target.value); e.target.value = ""; }
-});
-</script>
+  $("start").onclick = () => start().catch(e => addMsg("⚠ " + e.message, "bot"));
+  $("stop").onclick = stop;
+  $("typed").addEventListener("keydown", e => {
+    if (e.key === "Enter") { sendText(e.target.value); e.target.value = ""; }
+  });
+  </script>
 </body>
 </html>
