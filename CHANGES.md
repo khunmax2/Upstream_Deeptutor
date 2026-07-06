@@ -180,7 +180,11 @@ code is additive and isolated for mergeability.
   lip-sync, typed barge-in, and the 3D mascot (Three.js loaded from CDN on
   first open — no bundle dependency). Upstream touch limited to two mount
   lines in `web/app/(workspace)/layout.tsx`. Known deferral: UI strings are
-  Thai literals pending i18n keys (2 lint warnings).
+  Thai literals pending i18n keys (2 lint warnings). Revised same day: the
+  full-screen overlay became a Botnoi-style floating corner layer — the
+  mascot renders on a transparent canvas (no background/fog/floor) in a
+  ~330×240 pane above a compact chat panel at the call-button corner, the
+  page underneath stays interactive, and open/close fades+slides.
 
 - **2026-07-07 — Mock bench: mic-mode selector + headphone barge-in.**
   `mock-app.html` gains the same STT modes as `call.html`: browser (Web

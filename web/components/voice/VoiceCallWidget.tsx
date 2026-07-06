@@ -52,11 +52,11 @@ function initMascot(THREE: any, canvas: HTMLCanvasElement): MascotHandle {
   const V3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0); // transparent — mascot floats over the page
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0e2350, 8, 18);
+  const scene = new THREE.Scene(); // no background / fog / floor: widget layer
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
   camera.position.set(0, 1.75, 6.4);
   camera.lookAt(0, 1.3, 0);
@@ -75,19 +75,6 @@ function initMascot(THREE: any, canvas: HTMLCanvasElement): MascotHandle {
   const front = new THREE.PointLight(0xffffff, 0.3, 30);
   front.position.set(0, 2.2, 4.5);
   scene.add(front);
-
-  const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(10, 64),
-    new THREE.MeshStandardMaterial({ color: 0x0c1d40, roughness: 1 }),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor);
-  const grid = new THREE.GridHelper(20, 40, 0x3a78d0, 0x1c3a66);
-  grid.material.transparent = true;
-  grid.material.opacity = 0.22;
-  grid.position.y = 0.01;
-  scene.add(grid);
 
   const M = (color: number, o: any = {}) =>
     new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.7 }, o));
@@ -592,70 +579,81 @@ export default function VoiceCallWidget() {
         </button>
       )}
 
-      {/* fading mascot overlay */}
+      {/* floating mascot layer — sits over the page at the call-button corner
+          (Botnoi-widget style): transparent scene, page stays interactive */}
       {mounted && (
         <div
           style={{
             position: "fixed",
-            inset: 0,
+            right: 20,
+            bottom: 20,
             zIndex: 70,
-            background: "linear-gradient(#081530, #143a72)",
-            opacity: visible ? 1 : 0,
-            transition: `opacity ${FADE_MS}ms ease`,
+            width: 330,
             display: "flex",
             flexDirection: "column",
+            gap: 8,
+            opacity: visible ? 1 : 0,
+            transform: visible ? "translateY(0)" : "translateY(24px)",
+            transition: `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease`,
+            pointerEvents: visible ? "auto" : "none",
           }}
         >
-          <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
-
-          <div style={{ position: "absolute", top: 18, left: 22, color: "#dbe7ff", pointerEvents: "none" }}>
-            <b style={{ fontSize: 17 }}>☎️ DeepTutor Call</b>
+          {/* mascot: transparent canvas, half-size */}
+          <div style={{ position: "relative", height: 240, pointerEvents: "none" }}>
+            <canvas
+              ref={canvasRef}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+            />
             <div
               style={{
-                marginTop: 8,
-                fontSize: 12,
-                padding: "4px 12px",
+                position: "absolute",
+                top: 6,
+                left: 8,
+                fontSize: 11.5,
+                padding: "3px 10px",
                 borderRadius: 999,
-                background: "rgba(20,40,80,.6)",
-                border: "1px solid rgba(120,160,240,.25)",
-                display: "inline-block",
+                background: "rgba(15,25,50,.75)",
+                border: "1px solid rgba(120,160,240,.3)",
+                color: "#cfe0ff",
+                backdropFilter: "blur(6px)",
               }}
             >
               {status}
             </div>
           </div>
 
+          {/* compact chat/control panel */}
           <div
             style={{
-              position: "absolute",
-              left: "50%",
-              bottom: 22,
-              transform: "translateX(-50%)",
-              width: "min(620px, 92vw)",
+              background: "rgba(12,18,34,.88)",
+              border: "1px solid rgba(120,160,240,.22)",
+              borderRadius: 14,
+              padding: 10,
+              backdropFilter: "blur(10px)",
               display: "flex",
               flexDirection: "column",
-              gap: 8,
+              gap: 6,
             }}
           >
-            <div style={{ maxHeight: "22vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ maxHeight: 130, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
               {log.map((m, i) => (
                 <div
                   key={i}
                   style={{
                     alignSelf: m.who === "user" ? "flex-end" : m.who === "bot" ? "flex-start" : "center",
-                    background: m.who === "user" ? "rgba(37,74,150,.85)" : m.who === "bot" ? "rgba(31,41,55,.85)" : "rgba(90,60,140,.6)",
+                    background: m.who === "user" ? "rgba(37,74,150,.9)" : m.who === "bot" ? "rgba(31,41,55,.9)" : "rgba(90,60,140,.7)",
                     color: "#e8eefb",
-                    borderRadius: 10,
-                    padding: "6px 11px",
-                    fontSize: 13.5,
-                    maxWidth: "82%",
+                    borderRadius: 9,
+                    padding: "5px 10px",
+                    fontSize: 12.5,
+                    maxWidth: "85%",
                   }}
                 >
                   {m.text}
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
@@ -668,8 +666,10 @@ export default function VoiceCallWidget() {
                 placeholder="พิมพ์แทรก/ทดสอบโดยไม่ใช้ไมค์…"
                 style={{
                   flex: 1,
-                  padding: "9px 12px",
-                  borderRadius: 10,
+                  minWidth: 0,
+                  padding: "7px 10px",
+                  borderRadius: 9,
+                  fontSize: 12.5,
                   border: "1px solid rgba(120,160,240,.3)",
                   background: "rgba(10,20,40,.7)",
                   color: "#dbe7ff",
@@ -679,14 +679,15 @@ export default function VoiceCallWidget() {
                 onClick={hangUp}
                 aria-label="วางสาย"
                 style={{
-                  width: 46,
-                  height: 46,
+                  width: 38,
+                  height: 38,
                   borderRadius: "50%",
                   border: "none",
                   cursor: "pointer",
                   background: "#ef4444",
                   color: "#fff",
-                  fontSize: 19,
+                  fontSize: 15,
+                  flexShrink: 0,
                 }}
               >
                 ⏹
