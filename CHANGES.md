@@ -162,6 +162,15 @@ code is additive and isolated for mergeability.
   typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
   20 per-sentence iApp WAV frames streamed while the model was still writing.
 
+- **2026-07-02 — Call page: 3D talking mascot with audio lip-sync.** Merged a
+  Three.js mascot avatar into `voice_prototype/static/call.html` as the call's
+  face (all prior call logic — VAD calibration, barge-in, browser-TTS fallback —
+  preserved). The mouth is driven by real state: server TTS audio is routed
+  through a WebAudio `AnalyserNode` so it opens by actual amplitude (lip-sync),
+  the Web-Speech fallback uses a procedural mouth, and the rim light + head pose
+  shift per state (idle / listening / thinking / speaking). Prototype-only,
+  outside `deeptutor/`.
+
 - **2026-07-02 — Call page: browser-TTS fallback.** When a turn ends with a
   reply but zero audio frames (server TTS down / out of credit — iApp hit
   `INSUFFICIENT_CREDIT` during testing), `call.html` now speaks the reply via
