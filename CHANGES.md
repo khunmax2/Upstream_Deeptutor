@@ -169,6 +169,19 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Voice call in the real web app (branch
+  `feat/voice-web-integration`).** New
+  `web/components/voice/VoiceCallWidget.tsx`: a floating 📞 button in the
+  workspace; pressing it fades in a full-screen mascot overlay
+  (Botnoi-WebAvatar style, 500 ms opacity transition; hang-up fades out then
+  unmounts). Ports the prototype call client natively into React: WS to the
+  same-origin `/api/v1/voice/ws` (via `wsUrl` + web proxy), browser Web-Speech
+  STT with the echo mute-guard, queued TTS playback with real-amplitude
+  lip-sync, typed barge-in, and the 3D mascot (Three.js loaded from CDN on
+  first open — no bundle dependency). Upstream touch limited to two mount
+  lines in `web/app/(workspace)/layout.tsx`. Known deferral: UI strings are
+  Thai literals pending i18n keys (2 lint warnings).
+
 - **2026-07-07 — Mock bench: mic-mode selector + headphone barge-in.**
   `mock-app.html` gains the same STT modes as `call.html`: browser (Web
   Speech) and server STT (MediaRecorder + energy-VAD with noise-floor
