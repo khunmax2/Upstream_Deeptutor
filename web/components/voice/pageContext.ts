@@ -102,23 +102,56 @@ export function collectPageContext(
   };
   // `page` and `buttons` ride as structured fields (not only inside the
   // summary prose): `page` answers "ตอนนี้อยู่หน้าไหน" deterministically and
-  // `buttons` is what click-by-name resolves spoken names against.
+  // `buttons` is what click-by-name resolves spoken names against. The
+  // buttons list comes from the SAME collector the click executor uses, so
+  // every name the server can approve is guaranteed pressable.
   return {
     path: outline.path,
     page: pageName,
     summary: formatPageContext(outline),
-    buttons: cleanItems([...outline.buttons, ...outline.tabs]),
+    buttons: cleanItems(visibleClickables(exclude).map((c) => c.label)),
   };
 }
 
-const CLICKABLE_SELECTOR = "button, [role='button'], [role='tab'], a[role='menuitem']";
+// Everything a finger could tap: real buttons/tabs, and links — settings-hub
+// style cards are <Link href> around a heading, not <button>. Main-content
+// clickables are listed before nav/sidebar ones so, under the caps, the page's
+// own actions win over the ever-present sidebar links.
+const CLICKABLE_SELECTOR =
+  "button, [role='button'], [role='tab'], a[role='menuitem'], a[href]";
+
+/** Short spoken-friendly label for a clickable: aria-label, else the heading
+ * inside it (cards), else its full text. */
+function clickableLabel(el: HTMLElement): string {
+  const aria = el.getAttribute("aria-label") || "";
+  const heading = el.querySelector("h1, h2, h3, h4, h5, h6")?.textContent || "";
+  const text = aria || heading || el.textContent || "";
+  return text.replace(/\s+/g, " ").trim().slice(0, MAX_ITEM_CHARS);
+}
 
 /**
- * Click the visible element whose text matches *name* (exact normalised
- * match first, then substring). Returns whether something was clicked. Only
- * elements outside `exclude` (the widget's own panel) are considered — the
- * same set collectPageContext reported, so the server can only name what the
- * caller could see.
+ * The visible clickable elements (outside `exclude`) with their labels —
+ * single source of truth for BOTH the streamed `buttons` context and the
+ * click executor, so reporting and acting can never disagree.
+ */
+function visibleClickables(exclude: Element | null): { el: HTMLElement; label: string }[] {
+  const main: { el: HTMLElement; label: string }[] = [];
+  const nav: { el: HTMLElement; label: string }[] = [];
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR))) {
+    if (exclude && exclude.contains(el)) continue;
+    if (!isVisible(el)) continue;
+    const label = clickableLabel(el);
+    if (!label) continue;
+    (el.closest("nav, aside, [role='navigation']") ? nav : main).push({ el, label });
+  }
+  return [...main, ...nav];
+}
+
+/**
+ * Click the visible element whose label matches *name* (exact normalised
+ * match first, then substring). Returns whether something was clicked. Uses
+ * the same collector as collectPageContext, so the server can only name what
+ * the caller could see.
  */
 export function clickVisibleByText(name: string, exclude: Element | null): boolean {
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
@@ -126,11 +159,8 @@ export function clickVisibleByText(name: string, exclude: Element | null): boole
   if (!target) return false;
   let exact: HTMLElement | null = null;
   let partial: HTMLElement | null = null;
-  for (const el of Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR))) {
-    if (exclude && exclude.contains(el)) continue;
-    if (!isVisible(el)) continue;
-    const text = norm(el.textContent || el.getAttribute("aria-label") || "");
-    if (!text) continue;
+  for (const { el, label } of visibleClickables(exclude)) {
+    const text = norm(label);
     if (text === target && !exact) exact = el;
     else if (!partial && (text.includes(target) || target.includes(text))) partial = el;
   }

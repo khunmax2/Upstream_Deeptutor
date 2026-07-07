@@ -169,6 +169,17 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Click-by-name now covers links and cards, not just
+  `<button>`.** Settings-hub cards ("Network", "Models"…) are `<Link href>`
+  around a heading — invisible to the old `button/[role=button]` selector, so
+  "กดปุ่ม Network" was an honest miss. New shared `visibleClickables()`
+  collector in `pageContext.ts`: selector adds `a[href]`; labels prefer
+  aria-label → inner heading (so a card reads as "Network", not its whole
+  body text); main-content clickables are listed before sidebar/nav links so
+  page actions win under the caps; and BOTH the streamed `buttons` context
+  and the click executor use this one collector, so a name the server
+  approves is guaranteed pressable. File: `web/components/voice/pageContext.ts`.
+
 - **2026-07-07 — Click-by-name: press a visible button the caller names.**
   The middle rung between curated actions and a full page-agent, completed
   from the previous session's in-progress work: the caller points ("กดปุ่ม
