@@ -169,6 +169,19 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Closing the navigation-reliability gap (two layers).** The
+  same "ไปหน้า settings" sometimes navigated and sometimes just talked — a
+  sampling coin-flip at chat's default temperature. Layer 1: the voice turn's
+  scoped LLM config now also sets `temperature=0.3` (voice-only; chat
+  untouched). Layer 2: a deterministic navigation shortcut
+  (`ui_control.match_navigation_intent`) — short utterances with a nav verb +
+  "หน้า/page" + exactly one manifest page match execute the `ui_action`
+  directly, skipping the LLM round entirely (100% deterministic and faster);
+  ambiguous/compound requests still go to the LLM. The shortcut's ack
+  ("ได้เลยครับ") and the greeting now go through a synthesise-once
+  `_FIXED_LINE_CACHE`, so repeated fixed lines cost zero TTS latency. Files:
+  `services/voice_realtime/pipeline.py`, `ui_control.py`, `narration.py`.
+
 - **2026-07-07 — Post-navigation reply pinned to one phrase.** Live testing
   showed two leaks: (1) the generic "รอสักครู่ฯ" heard on navigation was the
   *pipeline's* default filler triggered by the tool round's `PROGRESS`

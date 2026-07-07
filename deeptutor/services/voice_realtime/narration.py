@@ -28,6 +28,11 @@ _TOOL_FILLERS: dict[str, str] = {
 # that answers with silence feels dead.
 GREETING_LINE = "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
+# Spoken by the deterministic navigation shortcut (see ui_control.
+# match_navigation_intent) — the screen has already changed, so this is the
+# whole reply.
+NAV_ACK_LINE = "ได้เลยครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.
@@ -49,4 +54,4 @@ def filler_for_tool(tool_name: str) -> str:
     return _TOOL_FILLERS.get((tool_name or "").strip(), "")
 
 
-__all__ = ["filler_for_tool", "GREETING_LINE", "HANG_LINE", "REASSURE_LINE"]
+__all__ = ["filler_for_tool", "GREETING_LINE", "HANG_LINE", "NAV_ACK_LINE", "REASSURE_LINE"]

@@ -72,6 +72,7 @@ async def test_greeting_speaks_line_as_audio_and_text(monkeypatch: pytest.Monkey
         return (f"AUDIO:{text}".encode(), "audio/mpeg")
 
     monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
     emitter = FakeEmitter()
 
     line = await pipe.speak_greeting(emitter)
@@ -92,6 +93,7 @@ async def test_greeting_swallows_tts_failure(monkeypatch: pytest.MonkeyPatch) ->
         raise VoiceProviderError("no credit")
 
     monkeypatch.setattr(pipe, "synthesize_speech", broken_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
     emitter = FakeEmitter()
 
     assert await pipe.speak_greeting(emitter) == ""
@@ -106,11 +108,12 @@ async def test_voice_turn_scopes_llm_reasoning_off(monkeypatch: pytest.MonkeyPat
     base = llm_config_mod.LLMConfig(model="m", api_key="k", reasoning_effort="high")
     monkeypatch.setattr(llm_config_mod, "_LLM_CONFIG_CACHE", base)
 
-    seen: list[str | None] = []
+    seen: list[tuple[str | None, float]] = []
 
     class _Orch:
         async def handle(self, context):  # noqa: ANN001, ANN202
-            seen.append(llm_config_mod.get_llm_config().reasoning_effort)
+            cfg = llm_config_mod.get_llm_config()
+            seen.append((cfg.reasoning_effort, cfg.temperature))
             yield _content("โอเคครับ.", call_kind="llm_final_response")
 
     async def fake_synthesize(text: str) -> tuple[bytes, str]:
@@ -121,7 +124,7 @@ async def test_voice_turn_scopes_llm_reasoning_off(monkeypatch: pytest.MonkeyPat
 
     await pipe.run_text_turn(FakeEmitter(), "สวัสดี", [], session_id="voice:test")
 
-    assert seen == ["minimal"]  # thinking off inside the voice turn…
+    assert seen == [("minimal", 0.3)]  # thinking off + low temp inside the voice turn…
     assert llm_config_mod.get_llm_config().reasoning_effort == "high"  # …restored after
 
 

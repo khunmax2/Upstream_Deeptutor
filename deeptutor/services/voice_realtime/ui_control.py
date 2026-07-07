@@ -34,6 +34,7 @@ Manifest shape (all fields optional, unknown fields ignored)::
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from deeptutor.capabilities.protocol import PromptBlock
@@ -88,6 +89,65 @@ def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
         if kept:
             out[section] = kept
     return out or None
+
+
+# ── deterministic navigation shortcut ─────────────────────────────────
+#
+# Clear navigation commands ("ไปหน้า X", "เปิดหน้า settings") are a fixed-shape
+# intent — the same trick production assistants use: match them with rules and
+# execute directly, skipping the LLM round entirely. 100% deterministic for
+# unambiguous phrasings AND faster (no LLM latency at all). Anything long,
+# ambiguous, or multi-intent falls through to the LLM as before.
+
+_NAV_VERBS = ("ไป", "เปิด", "พา", "เข้า", "กลับ", "สลับ", "ขอ", "go", "open", "show")
+_NAV_PAGE_WORDS = ("หน้า", "page")
+# Longer than this = probably a compound request ("ไปหน้า settings แล้วช่วย…")
+# where the LLM should own the turn.
+_MAX_SHORTCUT_CHARS = 48
+_LABEL_SPLIT = re.compile(r"[\s()/—·,\-]+")
+
+
+def _page_match_strings(entry: dict[str, Any]) -> set[str]:
+    """Strings that count as 'the caller named this page'."""
+    out = {str(entry.get("id") or "").strip().lower()}
+    label = str(entry.get("label") or "").lower()
+    for token in _LABEL_SPLIT.split(label):
+        token = token.strip()
+        if token.startswith("หน้า"):
+            token = token[len("หน้า") :]
+        if len(token) >= 3:
+            out.add(token)
+    out.discard("")
+    return out
+
+
+def match_navigation_intent(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
+    """Return ``{"target": id}`` when *text* is an unambiguous page command.
+
+    Conservative on purpose: requires a navigation verb, a page word, a short
+    utterance, and exactly ONE matching manifest page. Everything else returns
+    ``None`` and the LLM decides (multi-intent, ambiguity, non-UI questions).
+    """
+    if not manifest:
+        return None
+    t = (text or "").strip().lower()
+    if not t or len(t) > _MAX_SHORTCUT_CHARS:
+        return None
+    if not any(w in t for w in _NAV_PAGE_WORDS):
+        return None
+    if not any(v in t for v in _NAV_VERBS):
+        return None
+    hits: list[str] = []
+    for entry in manifest.get("pages") or []:
+        if not isinstance(entry, dict):
+            continue
+        if any(m in t for m in _page_match_strings(entry)):
+            target = str(entry.get("id") or "")
+            if target and target not in hits:
+                hits.append(target)
+    if len(hits) != 1:
+        return None
+    return {"target": hits[0]}
 
 
 def allowed_target_ids(manifest: dict[str, Any]) -> set[str]:
@@ -234,5 +294,6 @@ __all__ = [
     "VoiceUICapability",
     "allowed_target_ids",
     "install_ui_control",
+    "match_navigation_intent",
     "sanitize_manifest",
 ]

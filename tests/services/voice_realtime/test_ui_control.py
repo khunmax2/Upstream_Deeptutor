@@ -90,6 +90,41 @@ async def test_tool_execute_requires_target() -> None:
     assert not missing.success
 
 
+# ── deterministic navigation shortcut ─────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("ไปหน้า settings หน่อย", "settings"),
+        ("พาไปที่หน้าตั้งค่าให้หน่อย", "settings"),
+        ("เปิดหน้า knowledge หน่อยครับ", "knowledge"),
+        ("open the settings page", "settings"),
+    ],
+)
+def test_shortcut_matches_clear_commands(text: str, expected: str) -> None:
+    assert ui_control.match_navigation_intent(text, MANIFEST) == {"target": expected}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "มาตรา 112 คืออะไร",  # not a UI request at all
+        "ตั้งค่าเสียงยังไงดี",  # mentions a page word-ish but no "หน้า"+verb shape
+        "ไปหน้า settings แล้วช่วยอธิบายวิธีเปลี่ยนโมเดลแบบละเอียดหน่อย",  # compound → LLM
+        "",
+    ],
+)
+def test_shortcut_falls_through_to_llm(text: str) -> None:
+    assert ui_control.match_navigation_intent(text, MANIFEST) is None
+
+
+def test_shortcut_requires_unambiguous_page() -> None:
+    both = "ไปหน้า settings กับหน้า knowledge หน่อย"  # two pages → ambiguous
+    assert ui_control.match_navigation_intent(both, MANIFEST) is None
+    assert ui_control.match_navigation_intent("ไปหน้า settings", None) is None
+
+
 # ── pipeline forwarding ────────────────────────────────────────────────
 
 
@@ -130,3 +165,43 @@ async def test_ui_navigate_forwarded_as_ui_action_frame(
     assert not any(m.get("state") == "searching" for m in emitter.json if m.get("type") == "status")
     # …but the spoken confirmation still flows.
     assert any("เปิดหน้า" in chunk for chunk in spoken), spoken
+
+
+@pytest.mark.asyncio
+async def test_clear_command_short_circuits_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """'ไปหน้า settings' → ui_action + cached ack, and the LLM is never touched."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a shortcut turn")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter, "ไปหน้า settings หน่อย", [], session_id="voice:test", ui_manifest=MANIFEST
+    )
+
+    assert reply == "ได้เลยครับ"
+    kinds = [m["type"] for m in emitter.json]
+    assert kinds == ["ui_action", "audio", "assistant_text", "done"]
+    assert emitter.json[0]["target"] == "settings"
+
+    # Second shortcut reuses the cached audio — no new synthesis call needed.
+    async def broken_synthesize(text: str) -> tuple[bytes, str]:
+        raise AssertionError("should have used the cache")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", broken_synthesize)
+    emitter2 = FakeEmitter()
+    reply2 = await pipe.run_text_turn(
+        emitter2, "เปิดหน้า knowledge หน่อย", [], session_id="voice:test", ui_manifest=MANIFEST
+    )
+    assert reply2 == "ได้เลยครับ"
+    assert emitter2.json[0]["target"] == "knowledge"

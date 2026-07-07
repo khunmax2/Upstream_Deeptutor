@@ -209,6 +209,68 @@ def build_voice_context(
     )
 
 
+# Synthesised-once cache for fixed lines (greeting, navigation ack). These
+# never change within a process, so the second call costs zero TTS latency.
+# Keyed by text; invalidated implicitly on restart (which also reloads the
+# TTS provider config).
+_FIXED_LINE_CACHE: dict[str, tuple[bytes, str]] = {}
+
+
+async def _speak_fixed_line(emitter: VoiceEmitter, text: str, *, seq: int = 0) -> bool:
+    """Speak a fixed line through the TTS cache; False = TTS unavailable."""
+    cached = _FIXED_LINE_CACHE.get(text)
+    if cached is None:
+        try:
+            audio_bytes, content_type = await synthesize_speech(text)
+        except VoiceProviderError:
+            logger.debug("Fixed-line TTS unavailable: %r", text, exc_info=True)
+            return False
+        if not audio_bytes:
+            return False
+        cached = containerize_audio(audio_bytes, content_type)
+        _FIXED_LINE_CACHE[text] = cached
+    audio_bytes, content_type = cached
+    await emitter.send_json(
+        {"type": "audio", "seq": seq, "text": text, "content_type": content_type}
+    )
+    await emitter.send_bytes(audio_bytes)
+    return True
+
+
+async def _run_navigation_shortcut(
+    emitter: VoiceEmitter,
+    action: dict[str, str],
+    *,
+    turn_t0: float,
+) -> str:
+    """Execute an unambiguous page command without the LLM.
+
+    Mirrors a normal turn's frames (ui_action → cached ack audio →
+    assistant_text → done) so every client behaves identically, just ~an LLM
+    round-trip faster and 100% deterministic.
+    """
+    await emitter.send_json(
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": action.get("target", ""),
+            "argument": action.get("argument", ""),
+        }
+    )
+    ack = narration.NAV_ACK_LINE
+    spoke = await _speak_fixed_line(emitter, ack)
+    first_audio_ms = round((time.perf_counter() - turn_t0) * 1000) if spoke else None
+    await emitter.send_json({"type": "assistant_text", "text": ack})
+    await emitter.send_json(
+        {
+            "type": "done",
+            "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+            "first_audio_ms": first_audio_ms,
+        }
+    )
+    return ack
+
+
 async def speak_greeting(emitter: VoiceEmitter) -> str:
     """Speak the call-opening greeting; returns the line spoken ("" on failure).
 
@@ -218,16 +280,8 @@ async def speak_greeting(emitter: VoiceEmitter) -> str:
     pickup is worse than crashing a brand-new call over a nicety.
     """
     line = narration.GREETING_LINE
-    try:
-        audio_bytes, content_type = await synthesize_speech(line)
-    except VoiceProviderError:
-        logger.debug("Greeting TTS unavailable; starting the call silent", exc_info=True)
+    if not await _speak_fixed_line(emitter, line):
         return ""
-    if not audio_bytes:
-        return ""
-    audio_bytes, content_type = containerize_audio(audio_bytes, content_type)
-    await emitter.send_json({"type": "audio", "seq": 0, "text": line, "content_type": content_type})
-    await emitter.send_bytes(audio_bytes)
     await emitter.send_json({"type": "assistant_text", "text": line})
     return line
 
@@ -286,6 +340,12 @@ async def run_turn(
 # full reasoning: the override is scoped to the voice turn's task only.
 _VOICE_REASONING_EFFORT = "minimal"
 
+# Tool-calling decisions are sampled: at chat's default 0.7 the same
+# "ไปหน้า settings" sometimes calls ui_navigate and sometimes just talks.
+# 0.3 keeps spoken phrasing natural while making decisions near-deterministic.
+# Scoped per voice turn — chat keeps its own temperature.
+_VOICE_TEMPERATURE = 0.3
+
 
 def _enter_fast_voice_llm_scope() -> Any:
     """Scope the LLM config to thinking-off for this voice turn (task-local).
@@ -297,7 +357,14 @@ def _enter_fast_voice_llm_scope() -> Any:
         from deeptutor.services.llm.config import get_llm_config, set_scoped_llm_config
 
         base = get_llm_config()
-        return set_scoped_llm_config(base.model_copy({"reasoning_effort": _VOICE_REASONING_EFFORT}))
+        return set_scoped_llm_config(
+            base.model_copy(
+                {
+                    "reasoning_effort": _VOICE_REASONING_EFFORT,
+                    "temperature": _VOICE_TEMPERATURE,
+                }
+            )
+        )
     except Exception:  # noqa: BLE001
         logger.debug("voice: could not scope LLM config; using defaults", exc_info=True)
         return None
@@ -315,10 +382,18 @@ async def run_text_turn(
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
-    Runs under a scoped LLM config with reasoning disabled (see
-    ``_VOICE_REASONING_EFFORT``) so hybrid-thinking models answer immediately.
+    Unambiguous page commands short-circuit deterministically (no LLM at
+    all — see ``ui_control.match_navigation_intent``). Everything else runs
+    under a scoped LLM config with reasoning disabled and low temperature
+    (see ``_VOICE_REASONING_EFFORT`` / ``_VOICE_TEMPERATURE``).
     """
     from deeptutor.services.llm.config import reset_scoped_llm_config
+
+    action = ui_control.match_navigation_intent(transcript, ui_manifest)
+    if action is not None:
+        return await _run_navigation_shortcut(
+            emitter, action, turn_t0=turn_t0 if turn_t0 is not None else time.perf_counter()
+        )
 
     token = _enter_fast_voice_llm_scope()
     try:
