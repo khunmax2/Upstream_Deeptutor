@@ -346,7 +346,15 @@ function initMascot(THREE: any, canvas: HTMLCanvasElement): MascotHandle {
     mouth.scale.set(1.5 - mouthOpen * 0.4, 0.4 + mouthOpen * 1.9, 0.9);
 
     rim.color.lerp(rimTarget, 0.06);
-    targetYaw += (mascotState === "searching" ? 0.045 : 0.0014);
+    if (mascotState === "searching") {
+      targetYaw += 0.045; // spin = "searching" signal
+    } else {
+      // No idle drift: settle back to facing the user (nearest full turn,
+      // so a post-search return never unwinds several revolutions).
+      const TWO_PI = Math.PI * 2;
+      const home = 0.3 + TWO_PI * Math.round((targetYaw - 0.3) / TWO_PI);
+      targetYaw += (home - targetYaw) * 0.04;
+    }
     yaw += (targetYaw - yaw) * 0.08;
     figure.rotation.y = yaw;
     renderer.render(scene, camera);

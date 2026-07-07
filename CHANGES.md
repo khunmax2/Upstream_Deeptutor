@@ -169,6 +169,12 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Web widget: mascot no longer idles in a slow spin.** The
+  constant yaw drift inherited from the fullscreen prototype looked wrong in
+  the small corner pane; the figure now faces the user at rest, still spins
+  while `searching`, and eases back to front (nearest full turn) afterwards.
+  File: `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-07 — Voice page-navigation wired into the web widget.**
   `VoiceCallWidget` now declares the app's real pages (chat / knowledge /
   notebook / memory / agents / book / co-writer / space / settings / profile)
