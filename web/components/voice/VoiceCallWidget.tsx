@@ -30,9 +30,17 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
   { id: "book", label: "หน้าสร้างหนังสือ (book)", path: "/book" },
   { id: "co_writer", label: "หน้าเขียนงานร่วมกัน (co-writer)", path: "/co-writer" },
   { id: "space", label: "หน้า space", path: "/space" },
+  { id: "partners", label: "หน้า partners (เพื่อนคู่คิด/บอทคู่หู)", path: "/partners" },
+  { id: "playground", label: "หน้า playground (สนามทดลอง)", path: "/playground" },
   { id: "settings", label: "หน้าตั้งค่า (settings)", path: "/settings" },
   { id: "profile", label: "หน้าโปรไฟล์ผู้ใช้", path: "/profile" },
 ];
+
+// Auth pages are deliberately NOT voice-steerable; everything else must be
+// declared above — tests/voice-manifest-parity.test.mjs fails the build when
+// a new page.tsx appears without a manifest entry.
+export const VOICE_MANIFEST_EXCLUDED_ROUTES = ["/login", "/register"];
+export { UI_PAGES };
 
 const THREE_CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
 const FADE_MS = 500;

@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Voice manifest completed + parity test.** The hand-written
+  `UI_PAGES` table had drifted from the app's real routes: `/partners` and
+  `/playground` were missing, so the caller was told those pages don't exist.
+  Added both, and added `web/tests/voice-manifest-parity.test.ts` — a node
+  test that walks `web/app` for top-level `page.tsx` routes (route groups,
+  optional catch-alls handled) and fails when the manifest and the real
+  routes disagree in either direction, so the table can never drift silently
+  again (also guards future upstream syncs that add/rename pages).
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;
