@@ -430,6 +430,9 @@ export default function VoiceCallWidget() {
   const [status, setStatus] = useState("กำลังเชื่อมต่อ…");
   const [log, setLog] = useState<LogMsg[]>([]);
   const [typed, setTyped] = useState("");
+  // Secretary (dictation) mode — server-owned; mirrored here for the
+  // always-visible indicator (a moded UI must show its mode: Dragon lesson).
+  const [secretary, setSecretary] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mascotRef = useRef<MascotHandle | null>(null);
@@ -491,6 +494,28 @@ export default function VoiceCallWidget() {
             argument ? `/knowledge?kb=${encodeURIComponent(argument)}` : "/knowledge",
           );
           return;
+        case "type_in_chat": {
+          // Secretary mode: hand the utterance to the workspace bridge, which
+          // sends it as a real chat message in the current session.
+          let typed = false;
+          const typeDetail: VoiceActionDetail = {
+            target,
+            argument,
+            handled: () => {
+              typed = true;
+            },
+          };
+          window.dispatchEvent(new CustomEvent(VOICE_ACTION_EVENT, { detail: typeDetail }));
+          if (typed) {
+            addMsg("sys", `⌨️ ${argument}`);
+          } else {
+            // No bridge on this page (outside the workspace) — take the
+            // caller to the chat; the next dictated sentence will land.
+            addMsg("sys", "⚠ พิมพ์ได้เฉพาะหน้าแชท — กำลังพาไปหน้าแชท พูดใหม่อีกครั้งครับ");
+            router.push("/home");
+          }
+          return;
+        }
         case "new_chat": {
           // Workspace pages own the session store — hand over via the bridge;
           // elsewhere a plain /home visit already starts a fresh draft session.
@@ -622,6 +647,7 @@ export default function VoiceCallWidget() {
     wsRef.current?.close();
     wsRef.current = null;
     setMascot("idle");
+    setSecretary(false); // a mode must never outlive its call
     setVisible(false); // fade out…
     window.setTimeout(() => {
       mascotRef.current?.dispose();
@@ -699,7 +725,15 @@ export default function VoiceCallWidget() {
           setMascot("listening");
         }
       } else if (m.type === "ui_action") executeUiAction(m);
-      else if (m.type === "error") addMsg("sys", `⚠ ${m.message}`);
+      else if (m.type === "voice_mode") {
+        const on = m.mode === "secretary";
+        setSecretary(on);
+        // Dictation lands in the chat — make sure the caller is looking at it.
+        if (on && !window.location.pathname.startsWith("/home")) {
+          addMsg("sys", "🖱 ไปหน้าแชท (โหมดเลขาพิมพ์ลงแชท)");
+          router.push("/home");
+        }
+      } else if (m.type === "error") addMsg("sys", `⚠ ${m.message}`);
     };
 
     // Browser STT with the echo mute-guard (see prototype bench).
@@ -739,7 +773,7 @@ export default function VoiceCallWidget() {
     } else {
       addMsg("sys", "⚠ เบราว์เซอร์นี้ไม่มี Web Speech — พิมพ์คุยแทนได้");
     }
-  }, [addMsg, executeUiAction, isEchoOfBot, playNext, rememberBotText, sendText, sendUiContext, setMascot]);
+  }, [addMsg, executeUiAction, isEchoOfBot, playNext, rememberBotText, router, sendText, sendUiContext, setMascot]);
 
   useEffect(() => hangUp, [hangUp]); // teardown on unmount
 
@@ -802,16 +836,38 @@ export default function VoiceCallWidget() {
                 position: "absolute",
                 top: 6,
                 left: 8,
-                fontSize: 11.5,
-                padding: "3px 10px",
-                borderRadius: 999,
-                background: "rgba(15,25,50,.75)",
-                border: "1px solid rgba(120,160,240,.3)",
-                color: "#cfe0ff",
-                backdropFilter: "blur(6px)",
+                display: "flex",
+                gap: 6,
               }}
             >
-              {status}
+              <div
+                style={{
+                  fontSize: 11.5,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  background: "rgba(15,25,50,.75)",
+                  border: "1px solid rgba(120,160,240,.3)",
+                  color: "#cfe0ff",
+                  backdropFilter: "blur(6px)",
+                }}
+              >
+                {status}
+              </div>
+              {secretary && (
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    padding: "3px 10px",
+                    borderRadius: 999,
+                    background: "rgba(120,60,10,.8)",
+                    border: "1px solid rgba(250,190,90,.5)",
+                    color: "#ffe2b0",
+                    backdropFilter: "blur(6px)",
+                  }}
+                >
+                  📝 โหมดเลขา
+                </div>
+              )}
             </div>
           </div>
 

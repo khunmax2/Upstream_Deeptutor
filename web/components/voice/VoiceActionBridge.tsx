@@ -31,7 +31,7 @@ export interface VoiceActionDetail {
 
 export default function VoiceActionBridge() {
   const router = useRouter();
-  const { newSession, cancelStreamingTurn } = useUnifiedChat();
+  const { newSession, cancelStreamingTurn, sendMessage } = useUnifiedChat();
 
   useEffect(() => {
     const onAction = (ev: Event) => {
@@ -44,11 +44,19 @@ export default function VoiceActionBridge() {
         cancelStreamingTurn();
         newSession();
         router.push("/home");
+      } else if (detail.target === "type_in_chat") {
+        // Secretary mode: the dictated utterance becomes a real chat turn in
+        // the current session — full on-screen answer, persisted history.
+        const text = (detail.argument || "").trim();
+        if (!text) return;
+        detail.handled?.();
+        sendMessage(text);
+        router.push("/home"); // make sure the caller sees what was typed
       }
     };
     window.addEventListener(VOICE_ACTION_EVENT, onAction);
     return () => window.removeEventListener(VOICE_ACTION_EVENT, onAction);
-  }, [cancelStreamingTurn, newSession, router]);
+  }, [cancelStreamingTurn, newSession, router, sendMessage]);
 
   return null;
 }

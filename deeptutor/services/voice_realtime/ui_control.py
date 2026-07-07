@@ -433,6 +433,58 @@ def match_action_intent(text: str, manifest: dict[str, Any] | None) -> dict[str,
     return {"target": hits[0]}
 
 
+# ── secretary (dictation) mode commands ────────────────────────────────
+#
+# Explicit moded dictation, Dragon / macOS-Voice-Control style: the caller
+# says "เปิดโหมดเลขา" and from then on EVERY utterance is typed into the
+# on-screen chat — no per-sentence guessing, no LLM. The mode-off commands
+# must stay active inside the mode (never trap the user), which the pipeline
+# guarantees by checking them before the in-mode routing.
+
+_MODE_FILLERS = ("ครับ", "ค่ะ", "คะ", "นะ", "หน่อย", "ให้", "ที", "ด้วย", "เลย", "จ้า", " ")
+_SECRETARY_ON_FORMS = {
+    "เปิดโหมดเลขา",
+    "เข้าโหมดเลขา",
+    "ใช้โหมดเลขา",
+    "โหมดเลขา",
+    "เปิดโหมดพิมพ์",
+    "เข้าโหมดพิมพ์",
+    "โหมดพิมพ์",
+    "secretarymode",
+    "dictationmode",
+}
+_SECRETARY_OFF_FORMS = {
+    "ปิดโหมดเลขา",
+    "ออกจากโหมดเลขา",
+    "เลิกโหมดเลขา",
+    "ปิดโหมดพิมพ์",
+    "ออกจากโหมดพิมพ์",
+    "ออกจากโหมด",
+    "ปิดโหมด",
+    "exitdictation",
+    "exitsecretarymode",
+}
+_MAX_MODE_CHARS = 32
+
+
+def match_mode_command(text: str) -> str | None:
+    """``"secretary_on"`` / ``"secretary_off"`` for a bare mode command, else ``None``.
+
+    Exact-after-normalisation like every control matcher here — "โหมดเลขา
+    คืออะไร" is a question and must reach the LLM, not flip the mode.
+    """
+    t = (text or "").strip().lower()
+    if not t or len(t) > _MAX_MODE_CHARS:
+        return None
+    for bit in _MODE_FILLERS:
+        t = t.replace(bit, "")
+    if t in _SECRETARY_ON_FORMS:
+        return "secretary_on"
+    if t in _SECRETARY_OFF_FORMS:
+        return "secretary_off"
+    return None
+
+
 # Bare yes/no for the confirmation turn (exact after stripping politeness —
 # same discipline as the stop matcher).
 _YES_FORMS = {"ใช่", "ช่าย", "ถูกต้อง", "ตกลง", "เอา", "yes", "yeah", "ok", ""}
@@ -658,6 +710,7 @@ __all__ = [
     "is_affirmative",
     "is_negative",
     "match_action_intent",
+    "match_mode_command",
     "match_navigation_guess",
     "match_navigation_intent",
     "match_where_am_i",

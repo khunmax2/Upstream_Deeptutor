@@ -310,6 +310,49 @@ async def _speak_fixed_line(emitter: VoiceEmitter, text: str, *, seq: int = 0) -
     return True
 
 
+async def _run_secretary_turn(emitter: VoiceEmitter, transcript: str, *, turn_t0: float) -> str:
+    """Type one dictated utterance into the on-screen chat; say nothing.
+
+    The screen is the responder in secretary mode — the real chat renders the
+    full answer — so the voice stays silent apart from the frames the client
+    needs (the typed `ui_action` and `done`). Deterministic: no LLM ever runs
+    for a dictation turn.
+    """
+    await emitter.send_json(
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "type_in_chat",
+            "argument": transcript,
+        }
+    )
+    await emitter.send_json(
+        {
+            "type": "done",
+            "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+            "first_audio_ms": None,
+        }
+    )
+    return ""
+
+
+async def _set_secretary_mode(
+    emitter: VoiceEmitter,
+    nav_state: dict[str, Any],
+    on: bool,
+    *,
+    turn_t0: float,
+) -> str:
+    """Flip secretary mode, announce it, and tell the client (mode indicator)."""
+    if on:
+        nav_state["secretary"] = True
+    else:
+        nav_state.pop("secretary", None)
+    await emitter.send_json({"type": "voice_mode", "mode": "secretary" if on else "normal"})
+    line = narration.SECRETARY_ON_LINE if on else narration.SECRETARY_OFF_LINE
+    return await _speak_short_turn(emitter, line, turn_t0=turn_t0)
+
+
 async def _speak_short_turn(emitter: VoiceEmitter, line: str, *, turn_t0: float) -> str:
     """Emit a complete no-LLM turn (cached audio + assistant_text + done)."""
     spoke = await _speak_fixed_line(emitter, line)
@@ -522,11 +565,30 @@ async def run_text_turn(
     t0 = turn_t0 if turn_t0 is not None else time.perf_counter()
     if is_stop_command(transcript):
         # The session already cancelled the previous (speaking) turn when this
-        # utterance arrived — just acknowledge, never start an LLM turn.
+        # utterance arrived — just acknowledge, never start an LLM turn. Stop
+        # is the universal escape hatch: it also exits secretary mode.
         if nav_state is not None:
             nav_state.pop("pending", None)
+            if nav_state.pop("secretary", None):
+                await emitter.send_json({"type": "voice_mode", "mode": "normal"})
         logger.info("voice rung=stop %r", transcript)
         return await _run_stop_shortcut(emitter, turn_t0=t0)
+
+    # Secretary (dictation) mode. Boundary commands stay active in BOTH modes
+    # so the caller can never be trapped; inside the mode every other
+    # utterance is typed into the on-screen chat, bypassing the whole ladder
+    # below ("ไปหน้า settings" said while dictating is text, not a command).
+    if nav_state is not None:
+        mode_cmd = ui_control.match_mode_command(transcript)
+        if mode_cmd == "secretary_off":
+            logger.info("voice rung=mode-off %r", transcript)
+            return await _set_secretary_mode(emitter, nav_state, False, turn_t0=t0)
+        if mode_cmd == "secretary_on":
+            logger.info("voice rung=mode-on %r", transcript)
+            return await _set_secretary_mode(emitter, nav_state, True, turn_t0=t0)
+        if nav_state.get("secretary"):
+            logger.info("voice rung=dictate %r", transcript)
+            return await _run_secretary_turn(emitter, transcript, turn_t0=t0)
 
     # A pending "คุณหมายถึง X ใช่ไหม" owns the very next utterance: bare yes
     # executes, bare no acknowledges, anything else just clears it and is

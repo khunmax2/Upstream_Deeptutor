@@ -323,6 +323,113 @@ def test_page_naming_beats_go_back() -> None:
     assert nav == {"target": "chat"}
 
 
+# ── secretary (dictation) mode ─────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("เปิดโหมดเลขา", "secretary_on"),
+        ("เปิดโหมดเลขาให้หน่อยครับ", "secretary_on"),
+        ("โหมดพิมพ์", "secretary_on"),
+        ("ปิดโหมดเลขาครับ", "secretary_off"),
+        ("ออกจากโหมดเลขา", "secretary_off"),
+        ("ออกจากโหมด", "secretary_off"),
+    ],
+)
+def test_mode_command_matcher(text: str, expected: str) -> None:
+    assert ui_control.match_mode_command(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "โหมดเลขาคืออะไร",  # question about the mode
+        "เลขาช่วยจดหน่อย",  # not a mode command shape
+        "เปิดโหมดเลขาแล้วช่วยสรุปเอกสารให้หน่อยนะครับผม",  # compound/long
+        "",
+    ],
+)
+def test_mode_command_matcher_falls_through(text: str) -> None:
+    assert ui_control.match_mode_command(text) is None
+
+
+@pytest.mark.asyncio
+async def test_secretary_mode_types_everything_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """on → dictate (even a nav-shaped sentence!) → off; no LLM anywhere."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run in secretary mode")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {}
+
+    # Enter: mode frame + spoken contract.
+    emitter1 = FakeEmitter()
+    reply1 = await pipe.run_text_turn(
+        emitter1, "เปิดโหมดเลขา", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert nav_state.get("secretary") is True
+    assert {"type": "voice_mode", "mode": "secretary"} in emitter1.json
+    assert "เปิดโหมดเลขา" in reply1
+
+    # Dictation: a sentence that would otherwise navigate is TYPED instead.
+    emitter2 = FakeEmitter()
+    reply2 = await pipe.run_text_turn(
+        emitter2,
+        "ไปหน้า settings แปลว่าอะไร",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        nav_state=nav_state,
+    )
+    assert reply2 == ""
+    actions = [m for m in emitter2.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "type_in_chat",
+            "argument": "ไปหน้า settings แปลว่าอะไร",
+        }
+    ]
+    assert not [m for m in emitter2.json if m.get("type") == "audio"]  # silent
+
+    # Exit: mode frame back to normal.
+    emitter3 = FakeEmitter()
+    await pipe.run_text_turn(
+        emitter3, "ปิดโหมดเลขาครับ", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert "secretary" not in nav_state
+    assert {"type": "voice_mode", "mode": "normal"} in emitter3.json
+
+
+@pytest.mark.asyncio
+async def test_stop_exits_secretary_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {"secretary": True}
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter, "หยุดก่อน", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert reply == "ครับ"
+    assert "secretary" not in nav_state
+    assert {"type": "voice_mode", "mode": "normal"} in emitter.json
+
+
 # ── confirm-first navigation guess ─────────────────────────────────────
 
 

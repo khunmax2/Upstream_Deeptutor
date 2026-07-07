@@ -41,6 +41,12 @@ STOP_ACK_LINE = "ครับ"
 # ("คุณหมายถึงให้เปิด X ใช่ไหมครับ") — acknowledge and wait, no LLM turn.
 CONFIRM_NO_ACK_LINE = "โอเคครับ"
 
+# Secretary (dictation) mode boundaries. Entering states the contract in one
+# breath — everything said will be typed — because a moded UI must never
+# leave the user guessing which mode they are in (the Dragon lesson).
+SECRETARY_ON_LINE = "เปิดโหมดเลขาแล้วครับ พูดได้เลย ผมจะพิมพ์ลงแชทให้ทุกประโยค"
+SECRETARY_OFF_LINE = "ปิดโหมดเลขาแล้วครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.
@@ -66,6 +72,8 @@ __all__ = [
     "filler_for_tool",
     "CONFIRM_NO_ACK_LINE",
     "GREETING_LINE",
+    "SECRETARY_OFF_LINE",
+    "SECRETARY_ON_LINE",
     "HANG_LINE",
     "NAV_ACK_LINE",
     "REASSURE_LINE",

@@ -293,6 +293,27 @@ code is additive and isolated for mergeability.
   `web/app/(workspace)/layout.tsx` (2-line mount),
   `services/voice_realtime/ui_control.py`, `pipeline.py`.
 
+- **2026-07-07 — Secretary (dictation) mode: "เปิดโหมดเลขา" and the voice
+  types into the real chat.** Explicit moded dictation in the Dragon /
+  macOS-Voice-Control tradition, per design review of how production systems
+  do it: enter with "เปิดโหมดเลขา/โหมดพิมพ์" (deterministic matcher, like
+  stop) and from then on EVERY utterance is sent verbatim into the on-screen
+  chat session — `ui_action type_in_chat` → `VoiceActionBridge` →
+  `UnifiedChatContext.sendMessage()` — so answers render fully (markdown,
+  citations) and persist in real history; the voice stays silent (the screen
+  is the responder). Zero LLM per dictated turn. Mode discipline follows the
+  classic lessons: exit commands ("ปิดโหมดเลขา/ออกจากโหมด" + "หยุด") stay
+  active inside the mode so the caller can never be trapped; an always-on
+  📝 indicator shows the mode on the widget (mode-error mitigation); the mode
+  dies with the call; entering the mode auto-navigates to /home since that is
+  where typing lands. Nav-shaped sentences said while dictating are typed,
+  not executed (mode owns everything — E2E-verified 5/5 against the live
+  server, including 'ไปหน้า settings' typed in-mode and navigating again
+  after exit). State rides the session-owned `nav_state`; server announces
+  boundaries with cached fixed lines and a new `voice_mode` frame. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `VoiceActionBridge.tsx`.
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;
