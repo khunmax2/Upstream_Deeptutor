@@ -220,6 +220,17 @@ code is additive and isolated for mergeability.
   `_VOICE_TURN_REMINDER` — history commits the bare transcript, so it never
   leaks into later turns). E2E scenario (voice-nav to settings → hand-click
   to notebook → "ตอนนี้อยู่หน้าไหน") now passes 2/2 against the live server.
+  **Round 3 — made model-independent:** prompt weighting can regress when
+  the LLM changes, so "ตอนนี้อยู่หน้าไหน" joined the deterministic intent
+  ladder alongside stop and navigation: `match_where_am_i()` (exact after
+  stripping polite particles; compound phrasings still fall to the LLM) +
+  `spoken_page_name()` answer straight from the streamed context — no LLM
+  round at all, ~1 s vs ~10 s, correct on any model. The `ui_context` frame
+  gains a `page` field (the manifest label of the current page) so the
+  answer needs no parsing. The LLM path with the turn note stays as the
+  fallback for unmapped pages and paraphrases. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/pageContext.ts`.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers

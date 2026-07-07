@@ -112,20 +112,91 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 def sanitize_ui_context(raw: Any) -> dict[str, str] | None:
     """Validate + trim a client screen-context frame; ``None`` when unusable.
 
-    Keeps only ``path`` and ``summary`` as control-char-stripped, size-capped
-    strings. Like the manifest, malformed input is dropped silently — screen
-    context is a nicety and must never be able to crash a call.
+    Keeps only ``path``, ``page`` (the manifest label of the current page) and
+    ``summary`` as control-char-stripped, size-capped strings. Like the
+    manifest, malformed input is dropped silently — screen context is a
+    nicety and must never be able to crash a call.
     """
     if not isinstance(raw, dict):
         return None
     path = _CONTROL_CHARS.sub("", str(raw.get("path") or "").strip())
+    page = _CONTROL_CHARS.sub("", str(raw.get("page") or "").strip())
     summary = _CONTROL_CHARS.sub("", str(raw.get("summary") or "").strip())
     out: dict[str, str] = {}
     if path:
         out["path"] = path[:_MAX_CONTEXT_PATH_CHARS]
+    if page:
+        out["page"] = page[:_MAX_CONTEXT_PATH_CHARS]
     if summary:
         out["summary"] = summary[:_MAX_CONTEXT_SUMMARY_CHARS]
     return out or None
+
+
+# ── deterministic "which page am I on" answer ─────────────────────────
+#
+# "ตอนนี้อยู่หน้าไหน" is a fixed-shape question with a known-true answer the
+# server already holds (the streamed ui_context) — same species as the stop
+# and navigation shortcuts, so it gets the same treatment: match with rules,
+# answer without the LLM. This makes the answer model-independent — prompt
+# weighting can't regress it when the LLM changes — and near-instant. Matching
+# is exact-after-normalisation (the "วันหยุด" lesson): long or compound
+# phrasings ("อยู่หน้าไหน แล้วหน้านี้ทำอะไรได้") fall through to the LLM, which
+# still gets the per-turn screen note as its safety net.
+
+_WHERE_FILLERS = (
+    "ครับ",
+    "ค่ะ",
+    "คะ",
+    "นะ",
+    "เนี่ย",
+    "อ่ะ",  # NOT bare "อะ" — it would eat the "อะ" in "อะไร"
+    "เหรอ",
+    "หรอ",
+    "แล้ว",
+    "ตอนนี้",
+    "ที่",
+    "คือ",
+    "กัน",
+    " ",
+    "?",
+)
+_WHERE_FORMS = {
+    "อยู่หน้าไหน",
+    "อยู่หน้าอะไร",
+    "นี่หน้าอะไร",
+    "นี่หน้าไหน",
+    "หน้าอะไร",
+    "หน้าไหน",
+    "whereami",
+    "whatpage",
+    "whatpageisthis",
+    "whichpage",
+    "whichpageamion",
+    "currentpage",
+}
+_MAX_WHERE_CHARS = 32
+
+
+def match_where_am_i(text: str) -> bool:
+    """Whether *text* is a bare "which page am I on" question."""
+    t = (text or "").strip().lower()
+    if not t or len(t) > _MAX_WHERE_CHARS:
+        return False
+    for bit in _WHERE_FILLERS:
+        t = t.replace(bit, "")
+    return t in _WHERE_FORMS
+
+
+def spoken_page_name(ui_context: dict[str, str] | None) -> str:
+    """The current page's name in speakable form ("" when unknown).
+
+    Manifest labels carry parenthetical hints and slash-separated aliases
+    ("หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, ...)") — spoken, we want just the
+    first alias. Empty result = let the LLM turn (with its screen note)
+    handle the question instead.
+    """
+    page = str((ui_context or {}).get("page") or "")
+    return page.split("(")[0].split("/")[0].strip()
 
 
 # ── deterministic navigation shortcut ─────────────────────────────────
@@ -377,6 +448,8 @@ __all__ = [
     "allowed_target_ids",
     "install_ui_control",
     "match_navigation_intent",
+    "match_where_am_i",
     "sanitize_manifest",
     "sanitize_ui_context",
+    "spoken_page_name",
 ]

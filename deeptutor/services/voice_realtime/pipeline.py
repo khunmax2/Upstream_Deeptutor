@@ -310,6 +310,28 @@ async def _speak_fixed_line(emitter: VoiceEmitter, text: str, *, seq: int = 0) -
     return True
 
 
+async def _run_where_shortcut(emitter: VoiceEmitter, page: str, *, turn_t0: float) -> str:
+    """Answer "ตอนนี้อยู่หน้าไหน" from the streamed screen context; no LLM.
+
+    Deterministic and model-independent: the server already knows the page
+    (latest ``ui_context`` frame), so the answer can't be dragged wrong by
+    navigation turns in history — the failure mode the prompt-side note only
+    mitigates. Line goes through the fixed-line TTS cache (one synthesis per
+    distinct page per process).
+    """
+    line = f"ตอนนี้อยู่{page}ครับ" if page.startswith("หน้า") else f"ตอนนี้อยู่ที่หน้า {page} ครับ"
+    spoke = await _speak_fixed_line(emitter, line)
+    await emitter.send_json({"type": "assistant_text", "text": line})
+    await emitter.send_json(
+        {
+            "type": "done",
+            "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+            "first_audio_ms": (round((time.perf_counter() - turn_t0) * 1000) if spoke else None),
+        }
+    )
+    return line
+
+
 async def _run_navigation_shortcut(
     emitter: VoiceEmitter,
     action: dict[str, str],
@@ -470,6 +492,13 @@ async def run_text_turn(
         # The session already cancelled the previous (speaking) turn when this
         # utterance arrived — just acknowledge, never start an LLM turn.
         return await _run_stop_shortcut(emitter, turn_t0=t0)
+
+    if ui_control.match_where_am_i(transcript):
+        # Known-true answer held server-side; no page name in the context
+        # (page outside the manifest) → fall through to the LLM instead.
+        page = ui_control.spoken_page_name(ui_context)
+        if page:
+            return await _run_where_shortcut(emitter, page, turn_t0=t0)
 
     action = ui_control.match_navigation_intent(transcript, ui_manifest)
     if action is not None:

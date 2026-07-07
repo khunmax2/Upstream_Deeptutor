@@ -54,6 +54,55 @@ def test_sanitize_ui_context_keeps_path_and_summary() -> None:
     assert cleaned == SCREEN
 
 
+def test_sanitize_ui_context_keeps_page_label() -> None:
+    cleaned = ui_control.sanitize_ui_context({**SCREEN, "page": "หน้าตั้งค่า (settings)"})
+    assert cleaned is not None
+    assert cleaned["page"] == "หน้าตั้งค่า (settings)"
+
+
+# ── deterministic "which page am I on" shortcut ────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ตอนนี้อยู่หน้าไหน",
+        "อยู่หน้าไหนครับ",
+        "อยู่ที่หน้าไหนแล้วเนี่ย",
+        "นี่หน้าอะไรครับ",
+        "นี่คือหน้าอะไร",
+        "where am I?",
+        "what page is this",
+    ],
+)
+def test_where_matcher_accepts_bare_questions(text: str) -> None:
+    assert ui_control.match_where_am_i(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "หน้าหลักมีเมนูอะไรบ้าง",  # about a page's contents, not location
+        "ไปหน้าไหนดี",  # asking for a suggestion
+        "อยู่หน้าไหน แล้วหน้านี้ใช้ทำอะไรได้บ้างช่วยบอกหน่อย",  # compound → LLM
+        "วันหยุดคืออะไร",
+        "",
+    ],
+)
+def test_where_matcher_falls_through_to_llm(text: str) -> None:
+    assert not ui_control.match_where_am_i(text)
+
+
+def test_spoken_page_name_takes_first_alias() -> None:
+    assert (
+        ui_control.spoken_page_name({"page": "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepTutor)"})
+        == "หน้าแชทหลัก"
+    )
+    assert ui_control.spoken_page_name({"page": "หน้าตั้งค่า (settings)"}) == "หน้าตั้งค่า"
+    assert ui_control.spoken_page_name({"path": "/x"}) == ""
+    assert ui_control.spoken_page_name(None) == ""
+
+
 @pytest.mark.parametrize("raw", [None, "x", 42, [], {}, {"path": "", "summary": "  "}])
 def test_sanitize_ui_context_rejects_garbage(raw: Any) -> None:
     assert ui_control.sanitize_ui_context(raw) is None
@@ -244,6 +293,67 @@ async def test_ui_navigate_forwarded_as_ui_action_frame(
     assert not any(m.get("state") == "searching" for m in emitter.json if m.get("type") == "status")
     # …but the spoken confirmation still flows.
     assert any("เปิดหน้า" in chunk for chunk in spoken), spoken
+
+
+@pytest.mark.asyncio
+async def test_where_am_i_short_circuits_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """'ตอนนี้อยู่หน้าไหน' answers from ui_context deterministically — no LLM."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a where-am-i turn")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ตอนนี้อยู่หน้าไหนครับ",
+        [],
+        session_id="voice:test",
+        ui_manifest=MANIFEST,
+        ui_context={"path": "/notebook", "page": "หน้าสมุดโน้ต", "summary": "x"},
+    )
+
+    assert reply == "ตอนนี้อยู่หน้าสมุดโน้ตครับ"
+    kinds = [m["type"] for m in emitter.json]
+    assert kinds == ["audio", "assistant_text", "done"]
+
+
+@pytest.mark.asyncio
+async def test_where_am_i_without_page_falls_through_to_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No page name in the context (unmapped page) → normal LLM turn."""
+    events = [
+        _content("อยู่หน้ารายละเอียดเอกสารครับ.", call_kind="llm_final_response"),
+        StreamEvent(
+            type=StreamEventType.RESULT,
+            source="chat",
+            metadata={"response": "อยู่หน้ารายละเอียดเอกสารครับ"},
+        ),
+    ]
+    _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ตอนนี้อยู่หน้าไหนครับ",
+        [],
+        session_id="voice:test",
+        ui_manifest=MANIFEST,
+        ui_context={"path": "/kb/detail/42", "summary": "หัวข้อ: เอกสาร"},
+    )
+
+    # The LLM (not the shortcut) owned the turn — proven by the LLM-path reply.
+    assert "อยู่หน้ารายละเอียดเอกสาร" in reply
 
 
 @pytest.mark.asyncio

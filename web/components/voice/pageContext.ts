@@ -90,7 +90,7 @@ function grabTexts(selector: string, exclude: Element | null): string[] {
 export function collectPageContext(
   exclude: Element | null,
   pageName?: string,
-): { path: string; summary: string } {
+): { path: string; page?: string; summary: string } {
   const outline: PageOutline = {
     path: window.location.pathname,
     pageName,
@@ -100,5 +100,7 @@ export function collectPageContext(
     tabs: grabTexts("[role='tab']", exclude),
     buttons: grabTexts("button, [role='button'], a[role='menuitem']", exclude),
   };
-  return { path: outline.path, summary: formatPageContext(outline) };
+  // `page` rides as its own field (not only inside the summary text) so the
+  // server can answer "ตอนนี้อยู่หน้าไหน" deterministically, without the LLM.
+  return { path: outline.path, page: pageName, summary: formatPageContext(outline) };
 }

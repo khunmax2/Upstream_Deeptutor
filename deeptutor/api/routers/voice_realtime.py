@@ -13,9 +13,10 @@ Client → server:
   * ``{"type": "ui_manifest", "manifest": {...}}`` → declare the steerable UI
     (pages/actions whitelist) so the model may drive it via ``ui_navigate``;
     the server answers ``{"type": "ui_manifest_ok", "targets": n}``
-  * ``{"type": "ui_context", "context": {"path", "summary"}}`` → current-screen
-    snapshot (what the page shows *now*); refreshed by the client per turn so
-    the model can answer "หน้านี้มีอะไรบ้าง" from the real screen
+  * ``{"type": "ui_context", "context": {"path", "page", "summary"}}`` →
+    current-screen snapshot (what the page shows *now*); refreshed by the
+    client per turn so "หน้านี้มีอะไรบ้าง" is answered from the real screen and
+    "ตอนนี้อยู่หน้าไหน" is answered deterministically from ``page``
 
 Server → client (all JSON except the audio payload frames):
   * ``{"type": "transcript", "text": …}``                 recognised user speech
