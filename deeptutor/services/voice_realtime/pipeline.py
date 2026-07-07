@@ -77,7 +77,10 @@ VOICE_STYLE_DIRECTIVE = (
     "tables, LaTeX, code or emojis; write numbers, units, and formulas out as "
     "words (say 'a squared plus b squared equals c squared', never '$a^2$'). "
     "If the full answer is long, give only the key point, then ask whether the "
-    "caller wants more detail. Before any destructive or irreversible action "
+    "caller wants more detail. NEVER end with generic offers of further help "
+    "('หากมีคำถามเพิ่มเติม…', 'บอกได้เลยนะครับ', 'ผมพร้อมช่วยเสมอ') — this is a "
+    "live call, the caller already knows they can keep talking; end at the "
+    "content. Before any destructive or irreversible action "
     "(deleting, overwriting, sending something), say what you are about to do "
     "and get the caller's confirmation first."
 )
@@ -207,6 +210,46 @@ def build_voice_context(
         persona_context=VOICE_STYLE_DIRECTIVE,
         metadata=metadata,
     )
+
+
+# ── control commands (stop/quiet) ──────────────────────────────────────
+#
+# "หยุดพูด" is a control command, not conversation — routing it to the LLM
+# produces the absurd "I have stopped talking, and furthermore…" paragraph.
+# Assistants handle stop at the system level: the previous turn is already
+# cancelled by the session (a new utterance barges in), so all that's left is
+# to acknowledge in one syllable and NOT start a new LLM turn.
+#
+# Matching is exact-after-normalisation, not substring: "วันหยุดคืออะไร"
+# contains "หยุด" but is a real question and must reach the LLM.
+_POLITE_BITS = ("ครับ", "ค่ะ", "คะ", "นะ", "หน่อย", "ก่อน", "เลย", "โอเค", "ที", "จ้า", " ")
+_STOP_COMMANDS = {"หยุด", "หยุดพูด", "เงียบ", "พอ", "พอแล้ว", "stop", "shutup", "quiet"}
+_MAX_STOP_CHARS = 24
+
+
+def is_stop_command(text: str) -> bool:
+    """Whether *text* is a bare stop/quiet command (see block comment above)."""
+    t = (text or "").strip().lower()
+    if not t or len(t) > _MAX_STOP_CHARS:
+        return False
+    for bit in _POLITE_BITS:
+        t = t.replace(bit, "")
+    return t in _STOP_COMMANDS
+
+
+async def _run_stop_shortcut(emitter: VoiceEmitter, *, turn_t0: float) -> str:
+    """Acknowledge a stop command in one syllable; no LLM turn."""
+    ack = narration.STOP_ACK_LINE
+    spoke = await _speak_fixed_line(emitter, ack)
+    await emitter.send_json({"type": "assistant_text", "text": ack})
+    await emitter.send_json(
+        {
+            "type": "done",
+            "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+            "first_audio_ms": (round((time.perf_counter() - turn_t0) * 1000) if spoke else None),
+        }
+    )
+    return ack
 
 
 # Synthesised-once cache for fixed lines (greeting, navigation ack). These
@@ -389,11 +432,15 @@ async def run_text_turn(
     """
     from deeptutor.services.llm.config import reset_scoped_llm_config
 
+    t0 = turn_t0 if turn_t0 is not None else time.perf_counter()
+    if is_stop_command(transcript):
+        # The session already cancelled the previous (speaking) turn when this
+        # utterance arrived — just acknowledge, never start an LLM turn.
+        return await _run_stop_shortcut(emitter, turn_t0=t0)
+
     action = ui_control.match_navigation_intent(transcript, ui_manifest)
     if action is not None:
-        return await _run_navigation_shortcut(
-            emitter, action, turn_t0=turn_t0 if turn_t0 is not None else time.perf_counter()
-        )
+        return await _run_navigation_shortcut(emitter, action, turn_t0=t0)
 
     token = _enter_fast_voice_llm_scope()
     try:

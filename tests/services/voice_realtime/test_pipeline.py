@@ -100,6 +100,50 @@ async def test_greeting_swallows_tts_failure(monkeypatch: pytest.MonkeyPatch) ->
     assert emitter.json == [] and emitter.audio == []
 
 
+@pytest.mark.parametrize(
+    "text", ["หยุดพูดก่อน", "หยุด", "เงียบหน่อยครับ", "พอแล้วครับ", "stop", "โอเค พอก่อน"]
+)
+def test_stop_commands_detected(text: str) -> None:
+    assert pipe.is_stop_command(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "วันหยุดคืออะไร",  # contains 'หยุด' but is a real question
+        "หยุดยาวปีนี้เริ่มวันไหน",
+        "พอจะอธิบายมาตรานี้ได้ไหม",  # 'พอ' as an ordinary word
+        "",
+    ],
+)
+def test_stop_commands_not_overtriggered(text: str) -> None:
+    assert not pipe.is_stop_command(text)
+
+
+@pytest.mark.asyncio
+async def test_stop_command_short_circuits_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """'หยุดพูดก่อน' → one-syllable ack, LLM never touched."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a stop command")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(emitter, "หยุดพูดก่อน", [], session_id="voice:test")
+
+    assert reply == "ครับ"
+    assert [m["type"] for m in emitter.json] == ["audio", "assistant_text", "done"]
+
+
 @pytest.mark.asyncio
 async def test_voice_turn_scopes_llm_reasoning_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """During a voice turn the scoped LLM config has reasoning disabled; after it, not."""

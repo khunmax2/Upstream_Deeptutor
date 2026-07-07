@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Stop is a control command, not conversation.** "หยุดพูดก่อน"
+  used to reach the LLM, which replied with a paragraph about having stopped
+  talking. Stop/quiet commands (exact match after stripping polite particles —
+  "วันหยุดคืออะไร" still reaches the LLM) now short-circuit like navigation:
+  the session has already cancelled the speaking turn, so the reply is a
+  cached one-syllable "ครับ" and no LLM turn starts. Also taught
+  `VOICE_STYLE_DIRECTIVE` to never end replies with generic offers of further
+  help ("หากมีคำถามเพิ่มเติม…") — a live call doesn't need them. Files:
+  `services/voice_realtime/pipeline.py`, `narration.py`.
+
 - **2026-07-07 — Closing the navigation-reliability gap (two layers).** The
   same "ไปหน้า settings" sometimes navigated and sometimes just talked — a
   sampling coin-flip at chat's default temperature. Layer 1: the voice turn's
