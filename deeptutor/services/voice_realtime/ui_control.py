@@ -473,6 +473,9 @@ _CLICK_PREFIXES = (  # longest first so "กดปุ่ม" wins over "กด"
     "click",
 )
 _CLICK_TRAILING = ("ให้หน่อย", "หน่อย", "ให้ที", "ที", "ครับ", "ค่ะ", "คะ", "นะ", "เลย", "ด้วย")
+# Connectives between the verb and the name ("กดที่ประวัติแชต", "กดที่ปุ่ม X")
+# — leaked into the name they make every lookup miss. Longest first.
+_CLICK_LEADING = ("ตรงที่", "ที่", "ตรง", "ปุ่ม", "การ์ด", "เมนู", "ลิงก์")
 _MAX_CLICK_CHARS = 48
 
 # Button texts that may have irreversible effects — never pressed without a
@@ -508,6 +511,15 @@ def match_click_intent(text: str) -> str | None:
     for prefix in _CLICK_PREFIXES:
         if t.startswith(prefix):
             name = t[len(prefix) :].strip()
+            # Peel leading connectives ("ที่ / ปุ่ม / ตรงที่ …") until stable —
+            # "กดที่ปุ่มประวัติแชต" must resolve the bare name.
+            while True:
+                trimmed = name
+                for lead in _CLICK_LEADING:
+                    trimmed = trimmed.removeprefix(lead).strip()
+                if trimmed == name:
+                    break
+                name = trimmed
             # Peel trailing politeness until stable ("…ให้หน่อยครับ").
             while True:
                 trimmed = name

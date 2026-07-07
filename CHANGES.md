@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Click matcher: leading connectives no longer leak into the
+  name.** Live gap: "กดที่ประวัติแชท" extracted the name as "ที่ประวัติแชท", so
+  even the phonetic tier (which handles the ท↔ต mismatch against the real
+  "ประวัติแชต" card by itself) never got a clean string to match. The matcher
+  now peels leading connectives (ที่/ตรงที่/ตรง/ปุ่ม/การ์ด/เมนู/ลิงก์) after the
+  click verb, mirroring the existing trailing-politeness peel. The verbatim
+  live utterance is a regression test. File:
+  `services/voice_realtime/ui_control.py`.
+
 - **2026-07-08 — Click-by-name now covers links and cards, not just
   `<button>`.** Settings-hub cards ("Network", "Models"…) are `<Link href>`
   around a heading — invisible to the old `button/[role=button]` selector, so

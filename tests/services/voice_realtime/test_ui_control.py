@@ -339,6 +339,11 @@ CLICK_CONTEXT = {
         ("ช่วยกดปุ่มบันทึกให้หน่อยครับ", "บันทึก"),
         ("คลิก export", "export"),
         ("แตะปุ่มลบโน้ตหน่อย", "ลบโน้ต"),
+        # Leading connectives must not leak into the name (live gap:
+        # "กดที่ประวัติแชท" resolved as "ที่ประวัติแชท" and missed).
+        ("กดที่ประวัติแชท", "ประวัติแชท"),
+        ("กดที่ปุ่มบันทึก", "บันทึก"),
+        ("คลิกตรงที่การ์ดสมุดบันทึก", "สมุดบันทึก"),
     ],
 )
 def test_click_matcher_extracts_button_name(text: str, name: str) -> None:
@@ -356,6 +361,14 @@ def test_click_matcher_extracts_button_name(text: str, name: str) -> None:
 )
 def test_click_matcher_falls_through(text: str) -> None:
     assert ui_control.match_click_intent(text) is None
+
+
+def test_click_resolves_the_live_chat_history_gap() -> None:
+    """คำสั่งจริงที่เคยพลาด: 'กดที่ประวัติแชท' ปะทะปุ่มจริง 'ประวัติแชต' (ท↔ต)."""
+    ctx = {"buttons": ["ประวัติแชต", "สมุดบันทึก", "คลังคำถาม"]}
+    name = ui_control.match_click_intent("กดที่ประวัติแชท")
+    assert name == "ประวัติแชท"
+    assert ui_control.resolve_click_target(name, ctx) == ("hit", "ประวัติแชต")
 
 
 def test_resolve_click_target_tiers() -> None:
