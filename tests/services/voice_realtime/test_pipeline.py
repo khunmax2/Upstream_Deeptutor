@@ -99,6 +99,33 @@ async def test_greeting_swallows_tts_failure(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
+async def test_voice_turn_scopes_llm_reasoning_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """During a voice turn the scoped LLM config has reasoning disabled; after it, not."""
+    from deeptutor.services.llm import config as llm_config_mod
+
+    base = llm_config_mod.LLMConfig(model="m", api_key="k", reasoning_effort="high")
+    monkeypatch.setattr(llm_config_mod, "_LLM_CONFIG_CACHE", base)
+
+    seen: list[str | None] = []
+
+    class _Orch:
+        async def handle(self, context):  # noqa: ANN001, ANN202
+            seen.append(llm_config_mod.get_llm_config().reasoning_effort)
+            yield _content("โอเคครับ.", call_kind="llm_final_response")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (b"A", "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _Orch)
+
+    await pipe.run_text_turn(FakeEmitter(), "สวัสดี", [], session_id="voice:test")
+
+    assert seen == ["minimal"]  # thinking off inside the voice turn…
+    assert llm_config_mod.get_llm_config().reasoning_effort == "high"  # …restored after
+
+
+@pytest.mark.asyncio
 async def test_speaks_only_final_response_not_narration(monkeypatch: pytest.MonkeyPatch) -> None:
     events = [
         _content("tool-payload junk", call_kind="tool_result"),  # must NOT be spoken

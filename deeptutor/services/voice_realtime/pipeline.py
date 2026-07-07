@@ -277,7 +277,66 @@ async def run_turn(
     return transcript, reply
 
 
+# A call cannot sit through a reasoning phase: hybrid-thinking models
+# (Qwen3.5, Nemotron, GLM…) burn 20 s+ before the first token, which reads as
+# a dead line. "minimal" is this codebase's portable "thinking off" value —
+# top-level ``reasoning_effort`` for providers like NVIDIA NIM (verified:
+# TTFT 21 s → <1 s on qwen3.5), extra_body thinking flags for the
+# extra-body providers (see services/llm/reasoning_params.py). Chat keeps
+# full reasoning: the override is scoped to the voice turn's task only.
+_VOICE_REASONING_EFFORT = "minimal"
+
+
+def _enter_fast_voice_llm_scope() -> Any:
+    """Scope the LLM config to thinking-off for this voice turn (task-local).
+
+    Returns the reset token (or ``None`` if config isn't resolvable — never
+    fail a call over a latency tweak).
+    """
+    try:
+        from deeptutor.services.llm.config import get_llm_config, set_scoped_llm_config
+
+        base = get_llm_config()
+        return set_scoped_llm_config(base.model_copy({"reasoning_effort": _VOICE_REASONING_EFFORT}))
+    except Exception:  # noqa: BLE001
+        logger.debug("voice: could not scope LLM config; using defaults", exc_info=True)
+        return None
+
+
 async def run_text_turn(
+    emitter: VoiceEmitter,
+    transcript: str,
+    history: list[dict[str, Any]],
+    *,
+    session_id: str,
+    language: str = "th",
+    turn_t0: float | None = None,
+    ui_manifest: dict[str, Any] | None = None,
+) -> str:
+    """LLM → per-sentence TTS for an already-recognised user utterance.
+
+    Runs under a scoped LLM config with reasoning disabled (see
+    ``_VOICE_REASONING_EFFORT``) so hybrid-thinking models answer immediately.
+    """
+    from deeptutor.services.llm.config import reset_scoped_llm_config
+
+    token = _enter_fast_voice_llm_scope()
+    try:
+        return await _run_text_turn(
+            emitter,
+            transcript,
+            history,
+            session_id=session_id,
+            language=language,
+            turn_t0=turn_t0,
+            ui_manifest=ui_manifest,
+        )
+    finally:
+        if token is not None:
+            reset_scoped_llm_config(token)
+
+
+async def _run_text_turn(
     emitter: VoiceEmitter,
     transcript: str,
     history: list[dict[str, Any]],

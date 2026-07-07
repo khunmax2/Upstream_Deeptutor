@@ -169,6 +169,19 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Latency: reasoning disabled for voice turns (TTFT 21 s → <1 s).**
+  Diagnosis: ~85–90% of call latency was the LLM's hybrid-thinking phase
+  (Qwen3.5/Nemotron reason for 20 s+ before the first token), not the voice
+  pipeline. Fix: `run_text_turn` now wraps each voice turn in a scoped LLM
+  config (`set_scoped_llm_config`, task-local ContextVar — the same public
+  seam `model_selection` uses) with `reasoning_effort="minimal"`, the
+  codebase's portable "thinking off" value (top-level for NVIDIA NIM —
+  verified live: TTFT 0.8–5.8 s on qwen3.5-122b vs 21–64 s with thinking;
+  extra-body flags for DeepSeek/DashScope-style providers). Chat keeps full
+  reasoning — the override never escapes the voice turn's task. Zero
+  upstream edits. File: `services/voice_realtime/pipeline.py`; test in
+  `tests/services/voice_realtime/test_pipeline.py`.
+
 - **2026-07-07 — Spoken greeting on call pickup.** The call now answers with
   "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ" the moment the WebSocket connects:
   `speak_greeting()` in `services/voice_realtime/pipeline.py` synthesises the
