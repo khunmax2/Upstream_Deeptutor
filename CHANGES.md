@@ -169,6 +169,17 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
+  gaps closed: the widget's chat-page label gains the aliases callers
+  actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;
+  the shortcut matcher keeps unstripped label tokens (so the alias matches
+  "ไปที่หน้าหลัก") while excluding generic words like bare "หน้า" that would
+  collide every page into ambiguity; and the `voice_ui` system block now
+  forbids answering a navigation request with an acknowledgement alone —
+  the pinned "ได้เลยครับ" must come *with* the tool call, never instead of
+  it. Files: `web/components/voice/VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`.
+
 - **2026-07-07 — Stop is a control command, not conversation.** "หยุดพูดก่อน"
   used to reach the LLM, which replied with a paragraph about having stopped
   talking. Stop/quiet commands (exact match after stripping polite particles —

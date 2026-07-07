@@ -15,6 +15,7 @@ MANIFEST = {
     "pages": [
         {"id": "settings", "label": "หน้าตั้งค่า"},
         {"id": "knowledge", "label": "หน้า KB"},
+        {"id": "chat", "label": "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home)"},
     ],
     "actions": [{"id": "open_kb", "label": "เปิด KB", "argument": "ชื่อ KB"}],
 }
@@ -26,9 +27,9 @@ MANIFEST = {
 def test_sanitize_manifest_keeps_declared_targets() -> None:
     cleaned = ui_control.sanitize_manifest(MANIFEST)
     assert cleaned is not None
-    assert [p["id"] for p in cleaned["pages"]] == ["settings", "knowledge"]
+    assert [p["id"] for p in cleaned["pages"]] == ["settings", "knowledge", "chat"]
     assert cleaned["actions"][0]["argument"] == "ชื่อ KB"
-    assert ui_control.allowed_target_ids(cleaned) == {"settings", "knowledge", "open_kb"}
+    assert ui_control.allowed_target_ids(cleaned) == {"settings", "knowledge", "chat", "open_kb"}
 
 
 @pytest.mark.parametrize("raw", [None, "x", 42, [], {}, {"pages": "nope"}, {"pages": [{}]}])
@@ -100,6 +101,10 @@ async def test_tool_execute_requires_target() -> None:
         ("พาไปที่หน้าตั้งค่าให้หน่อย", "settings"),
         ("เปิดหน้า knowledge หน่อยครับ", "knowledge"),
         ("open the settings page", "settings"),
+        ("ไปที่หน้าหลัก", "chat"),
+        ("กลับไปหน้าหลัก", "chat"),
+        ("ไปหน้าหลัก", "chat"),
+        ("ไปหน้าแรกหน่อย", "chat"),
     ],
 )
 def test_shortcut_matches_clear_commands(text: str, expected: str) -> None:

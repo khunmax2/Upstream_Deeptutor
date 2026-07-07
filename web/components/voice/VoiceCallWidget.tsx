@@ -22,7 +22,7 @@ import { wsUrl } from "@/lib/api";
 // component re-validates every `ui_action` against the same table before
 // pushing the route (defense in depth — see services/voice_realtime/ui_control).
 const UI_PAGES: { id: string; label: string; path: string }[] = [
-  { id: "chat", label: "หน้าแชทหลัก (คุยกับ DeepTutor)", path: "/" },
+  { id: "chat", label: "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepTutor)", path: "/home" },
   { id: "knowledge", label: "หน้า Knowledge Base (คลังความรู้/เอกสาร)", path: "/knowledge" },
   { id: "notebook", label: "หน้าสมุดโน้ต", path: "/notebook" },
   { id: "memory", label: "หน้าความจำ (memory)", path: "/memory" },

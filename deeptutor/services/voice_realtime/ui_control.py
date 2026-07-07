@@ -108,15 +108,25 @@ _LABEL_SPLIT = re.compile(r"[\s()/—·,\-]+")
 
 
 def _page_match_strings(entry: dict[str, Any]) -> set[str]:
-    """Strings that count as 'the caller named this page'."""
+    """Strings that count as 'the caller named this page'.
+
+    Each label token is kept both as-is and with a leading "หน้า" stripped, so
+    a label alias like "หน้าหลัก" matches "ไปที่หน้าหลัก" (full form) as well
+    as looser phrasings.
+    """
     out = {str(entry.get("id") or "").strip().lower()}
     label = str(entry.get("label") or "").lower()
     for token in _LABEL_SPLIT.split(label):
         token = token.strip()
-        if token.startswith("หน้า"):
-            token = token[len("หน้า") :]
         if len(token) >= 3:
             out.add(token)
+        if token.startswith("หน้า"):
+            token = token[len("หน้า") :]
+            if len(token) >= 3:
+                out.add(token)
+    # Generic words ("หน้า" from a label like "หน้า KB") match every
+    # navigation phrase and would make all pages collide into ambiguity.
+    out -= set(_NAV_PAGE_WORDS)
     out.discard("")
     return out
 
@@ -242,6 +252,9 @@ class VoiceUICapability:
         lines.append(
             "Use the tool only for explicit UI requests; answer normal questions "
             "with speech alone. Never pass a target that is not listed above. "
+            "When the caller asks to go to / open a page, you MUST actually call "
+            f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
+            "saying 'ได้เลยครับ' without the tool call means nothing happened. "
             "TIMING: the screen changes the instant you call the tool — before "
             "your voice reaches the caller. HARD RULE for the reply after a "
             "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "
