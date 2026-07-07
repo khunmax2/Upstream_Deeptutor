@@ -40,6 +40,9 @@ class VoiceSession:
         # Steerable-UI whitelist the client declared (see ui_control); None
         # until a ``ui_manifest`` control frame arrives.
         self.ui_manifest: dict[str, Any] | None = None
+        # Latest current-screen snapshot the client streamed (``ui_context``
+        # frames); refreshed per turn by the client, read-only on this side.
+        self.ui_context: dict[str, str] | None = None
         self._current: asyncio.Task[None] | None = None
 
     async def greet(self) -> None:
@@ -96,6 +99,7 @@ class VoiceSession:
                 session_id=self.session_id,
                 language=self._language,
                 ui_manifest=self.ui_manifest,
+                ui_context=self.ui_context,
             )
         except asyncio.CancelledError:
             raise
@@ -113,6 +117,7 @@ class VoiceSession:
                 session_id=self.session_id,
                 language=self._language,
                 ui_manifest=self.ui_manifest,
+                ui_context=self.ui_context,
             )
         except asyncio.CancelledError:
             raise

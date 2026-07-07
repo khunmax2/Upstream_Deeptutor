@@ -44,6 +44,31 @@ def test_sanitize_manifest_caps_target_count() -> None:
     assert len(cleaned["pages"]) == 64
 
 
+# ── screen-context sanitising ──────────────────────────────────────────
+
+SCREEN = {"path": "/settings", "summary": "หัวข้อ: ตั้งค่า\nปุ่ม: บันทึก | ยกเลิก"}
+
+
+def test_sanitize_ui_context_keeps_path_and_summary() -> None:
+    cleaned = ui_control.sanitize_ui_context(SCREEN)
+    assert cleaned == SCREEN
+
+
+@pytest.mark.parametrize("raw", [None, "x", 42, [], {}, {"path": "", "summary": "  "}])
+def test_sanitize_ui_context_rejects_garbage(raw: Any) -> None:
+    assert ui_control.sanitize_ui_context(raw) is None
+
+
+def test_sanitize_ui_context_caps_and_strips() -> None:
+    cleaned = ui_control.sanitize_ui_context(
+        {"path": "/p" * 500, "summary": "x\x00\x07" + "ย" * 5_000}
+    )
+    assert cleaned is not None
+    assert len(cleaned["path"]) == 200
+    assert len(cleaned["summary"]) == 3_000
+    assert "\x00" not in cleaned["summary"] and "\x07" not in cleaned["summary"]
+
+
 # ── capability gating ──────────────────────────────────────────────────
 
 
@@ -69,6 +94,37 @@ def test_system_block_lists_targets() -> None:
     assert block is not None
     assert "`settings`" in block.content
     assert "`open_kb`" in block.content
+    assert "Current screen" not in block.content  # no context streamed
+
+
+def test_screen_context_activates_and_lands_in_system_block() -> None:
+    cap = ui_control.VoiceUICapability()
+    ctx = pipe.build_voice_context(
+        transcript="q",
+        history=[],
+        session_id="s",
+        knowledge_bases=[],
+        ui_manifest=MANIFEST,
+        ui_context=SCREEN,
+    )
+    assert cap.is_active(ctx)
+    block = cap.system_block(ctx, language="th", prompts={})
+    assert block is not None
+    # Both halves present: steerable targets AND what the screen shows now.
+    assert "`settings`" in block.content
+    assert "## Current screen" in block.content
+    assert "Path: /settings" in block.content
+    assert "ปุ่ม: บันทึก | ยกเลิก" in block.content
+
+    # Context alone (no manifest) still activates — read-only turns work.
+    ctx_only = pipe.build_voice_context(
+        transcript="q", history=[], session_id="s", knowledge_bases=[], ui_context=SCREEN
+    )
+    assert cap.is_active(ctx_only)
+    block_only = cap.system_block(ctx_only, language="th", prompts={})
+    assert block_only is not None
+    assert "## Current screen" in block_only.content
+    assert "Allowed targets" not in block_only.content
 
 
 def test_install_is_idempotent() -> None:

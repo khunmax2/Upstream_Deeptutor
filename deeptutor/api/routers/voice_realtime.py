@@ -13,6 +13,9 @@ Client → server:
   * ``{"type": "ui_manifest", "manifest": {...}}`` → declare the steerable UI
     (pages/actions whitelist) so the model may drive it via ``ui_navigate``;
     the server answers ``{"type": "ui_manifest_ok", "targets": n}``
+  * ``{"type": "ui_context", "context": {"path", "summary"}}`` → current-screen
+    snapshot (what the page shows *now*); refreshed by the client per turn so
+    the model can answer "หน้านี้มีอะไรบ้าง" from the real screen
 
 Server → client (all JSON except the audio payload frames):
   * ``{"type": "transcript", "text": …}``                 recognised user speech
@@ -41,6 +44,7 @@ from deeptutor.services.voice_realtime.ui_control import (
     MAX_MANIFEST_BYTES,
     install_ui_control,
     sanitize_manifest,
+    sanitize_ui_context,
 )
 from deeptutor.services.voice_realtime.vad import is_utterance_too_large
 
@@ -120,6 +124,9 @@ async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> No
         session.ui_manifest = manifest
         targets = sum(len(manifest.get(k, [])) for k in ("pages", "actions")) if manifest else 0
         await safe_send({"type": "ui_manifest_ok", "targets": targets})
+    elif kind == "ui_context":
+        # Silent refresh (no ack): the client streams this before every turn.
+        session.ui_context = sanitize_ui_context(msg.get("context"))
 
 
 __all__ = ["router"]

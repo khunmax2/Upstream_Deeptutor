@@ -57,6 +57,29 @@ async def test_barge_in_cancels_turn_and_skips_history(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_session_forwards_manifest_and_screen_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both UI frames the client streamed ride into every turn's kwargs."""
+    seen: dict[str, Any] = {}
+
+    async def fake_run_text_turn(emitter, text, history, *, session_id, language, **kwargs):  # noqa: ANN001
+        seen.update(kwargs)
+        return "ok"
+
+    monkeypatch.setattr(session_mod, "run_text_turn", fake_run_text_turn)
+    sess = VoiceSession(_NullEmitter())
+    sess.ui_manifest = {"pages": [{"id": "settings", "label": "หน้าตั้งค่า"}]}
+    sess.ui_context = {"path": "/settings", "summary": "ปุ่ม: บันทึก"}
+
+    await sess.handle_text("หน้านี้มีปุ่มอะไรบ้าง")
+    await sess._current
+
+    assert seen["ui_manifest"] == sess.ui_manifest
+    assert seen["ui_context"] == sess.ui_context
+
+
+@pytest.mark.asyncio
 async def test_new_utterance_cancels_previous_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[bytes] = []
     first_started = asyncio.Event()

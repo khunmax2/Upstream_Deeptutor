@@ -178,6 +178,28 @@ code is additive and isolated for mergeability.
   routes disagree in either direction, so the table can never drift silently
   again (also guards future upstream syncs that add/rename pages).
 
+- **2026-07-07 — Voice now sees the caller's screen (live `ui_context`).**
+  Asking "หน้านี้มีเมนู/ปุ่มอะไรบ้าง" used to get a guess — the model only knew
+  the manifest's page ids/labels, nothing about what the page shows. The
+  widget (root layout = it sees every page's DOM) now serialises a read-only
+  outline of the visible screen — title, headings, nav links, tabs, buttons;
+  its own panel excluded; input *values* never read — and streams it as a new
+  `ui_context` control frame on connect and before every turn (pages change
+  under a live call). Server side: `sanitize_ui_context()` (size caps,
+  control-char strip), stored on `VoiceSession`, threaded through the
+  pipeline into turn metadata, and injected by `VoiceUICapability` as a
+  "Current screen" system-block section with a "describe only what is listed"
+  rule. Read side only — acting on the page still goes exclusively through
+  the manifest whitelist. E2E-verified live: fabricated button names streamed
+  in context came back verbatim in the spoken answer. New files:
+  `web/components/voice/pageContext.ts` (pure formatter node-tested in
+  `web/tests/voice-page-context.test.ts`); touched: `VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`, `session.py`, `pipeline.py`,
+  `api/routers/voice_realtime.py`. Also repaired
+  `tests/api/test_voice_realtime_ws.py`, which had been failing since the
+  greeting change (its `FakeSession` lacked `greet()`) — the greeting commit
+  only ran the `tests/services/voice_realtime` suite.
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;

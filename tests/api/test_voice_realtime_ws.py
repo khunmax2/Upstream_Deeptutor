@@ -41,8 +41,14 @@ class FakeSession:
         self.utterances: list[bytes] = []
         self.texts: list[str] = []
         self.cancels = 0
+        self.greeted = False
         self.closed = False
+        self.ui_manifest: Any = None
+        self.ui_context: Any = None
         FakeSession.last = self
+
+    async def greet(self) -> None:
+        self.greeted = True
 
     async def handle_utterance(self, audio: bytes) -> None:
         self.utterances.append(audio)
@@ -102,6 +108,32 @@ async def test_user_text_frame_starts_text_turn() -> None:
 
     assert FakeSession.last.texts == ["สวัสดี"]
     assert not FakeSession.last.utterances
+
+
+@pytest.mark.asyncio
+async def test_ui_frames_land_on_the_session() -> None:
+    """ui_manifest and ui_context control frames update session state."""
+    ws = FakeWebSocket(
+        [
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_manifest", "manifest": '
+                '{"pages": [{"id": "settings", "label": "หน้าตั้งค่า"}]}}',
+            },
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_context", "context": '
+                '{"path": "/settings", "summary": "ปุ่ม: บันทึก"}}',
+            },
+        ]
+    )
+    await vr.voice_websocket(ws)
+
+    sess = FakeSession.last
+    assert sess is not None and sess.greeted
+    assert sess.ui_manifest == {"pages": [{"id": "settings", "label": "หน้าตั้งค่า"}]}
+    assert sess.ui_context == {"path": "/settings", "summary": "ปุ่ม: บันทึก"}
+    assert any("ui_manifest_ok" in t for t in ws.sent_text)
 
 
 @pytest.mark.asyncio

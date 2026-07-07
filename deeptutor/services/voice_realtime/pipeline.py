@@ -177,6 +177,7 @@ def build_voice_context(
     language: str = "th",
     knowledge_bases: list[str] | None = None,
     ui_manifest: dict[str, Any] | None = None,
+    ui_context: dict[str, str] | None = None,
 ) -> UnifiedContext:
     """Assemble the chat ``UnifiedContext`` for one spoken turn.
 
@@ -191,7 +192,9 @@ def build_voice_context(
 
     ``ui_manifest`` (the client's declared steerable UI, see ``ui_control``)
     rides in metadata; its presence activates :class:`VoiceUICapability` which
-    mounts the ``ui_navigate`` tool for this turn.
+    mounts the ``ui_navigate`` tool for this turn. ``ui_context`` (the client's
+    current-screen snapshot) rides the same way so the model can describe what
+    the caller actually sees.
     """
     kbs = knowledge_bases if knowledge_bases is not None else _list_knowledge_bases()
     metadata: dict[str, Any] = {
@@ -200,6 +203,8 @@ def build_voice_context(
     }
     if ui_manifest:
         metadata["ui_manifest"] = ui_manifest
+    if ui_context:
+        metadata["ui_context"] = ui_context
     return UnifiedContext(
         session_id=session_id,
         user_message=transcript + _VOICE_TURN_REMINDER,
@@ -337,6 +342,7 @@ async def run_turn(
     session_id: str,
     language: str = "th",
     ui_manifest: dict[str, Any] | None = None,
+    ui_context: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Run one voice turn (audio in) and stream events/audio to *emitter*.
 
@@ -370,6 +376,7 @@ async def run_turn(
         language=language,
         turn_t0=turn_t0,
         ui_manifest=ui_manifest,
+        ui_context=ui_context,
     )
     return transcript, reply
 
@@ -422,6 +429,7 @@ async def run_text_turn(
     language: str = "th",
     turn_t0: float | None = None,
     ui_manifest: dict[str, Any] | None = None,
+    ui_context: dict[str, str] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
@@ -452,6 +460,7 @@ async def run_text_turn(
             language=language,
             turn_t0=turn_t0,
             ui_manifest=ui_manifest,
+            ui_context=ui_context,
         )
     finally:
         if token is not None:
@@ -467,6 +476,7 @@ async def _run_text_turn(
     language: str = "th",
     turn_t0: float | None = None,
     ui_manifest: dict[str, Any] | None = None,
+    ui_context: dict[str, str] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
@@ -490,6 +500,7 @@ async def _run_text_turn(
         session_id=session_id,
         language=language,
         ui_manifest=ui_manifest,
+        ui_context=ui_context,
     )
     chunker = SentenceChunker(max_chars=_CHUNK_MAX_CHARS)
     final_text = ""

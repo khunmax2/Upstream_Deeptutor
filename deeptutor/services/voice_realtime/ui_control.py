@@ -29,6 +29,15 @@ Manifest shape (all fields optional, unknown fields ignored)::
       "actions": [{"id": "open_kb",  "label": "เปิด knowledge base",
                    "argument": "ชื่อ KB"}, ...]
     }
+
+Besides the manifest (what the page *can do*), the client may also stream
+**UI context** (what the page *currently shows*): a ``ui_context`` control
+frame carrying ``{"path": "/settings", "summary": "หัวข้อ: … | ปุ่ม: …"}``.
+The summary is an opaque, size-capped text outline the client serialised from
+its own visible DOM — the server never parses it, it only injects it into the
+system block so the model can answer "หน้านี้มีเมนูอะไรบ้าง" from the real
+screen instead of guessing. Read-only by design: the whitelist above stays the
+only path that *acts* on the page.
 """
 
 from __future__ import annotations
@@ -53,6 +62,12 @@ UI_NAVIGATE_TOOL = "ui_navigate"
 # Guard rails on the client-supplied manifest (it rides a WS control frame).
 MAX_MANIFEST_BYTES = 8_192
 _MAX_TARGETS = 64
+
+# Guard rails on the client-supplied screen context. The router already caps
+# whole control frames at MAX_MANIFEST_BYTES; these keep what we *store* (and
+# re-inject into every turn's prompt) well under that.
+_MAX_CONTEXT_SUMMARY_CHARS = 3_000
+_MAX_CONTEXT_PATH_CHARS = 200
 
 
 def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
@@ -88,6 +103,28 @@ def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
             total += 1
         if kept:
             out[section] = kept
+    return out or None
+
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def sanitize_ui_context(raw: Any) -> dict[str, str] | None:
+    """Validate + trim a client screen-context frame; ``None`` when unusable.
+
+    Keeps only ``path`` and ``summary`` as control-char-stripped, size-capped
+    strings. Like the manifest, malformed input is dropped silently — screen
+    context is a nicety and must never be able to crash a call.
+    """
+    if not isinstance(raw, dict):
+        return None
+    path = _CONTROL_CHARS.sub("", str(raw.get("path") or "").strip())
+    summary = _CONTROL_CHARS.sub("", str(raw.get("summary") or "").strip())
+    out: dict[str, str] = {}
+    if path:
+        out["path"] = path[:_MAX_CONTEXT_PATH_CHARS]
+    if summary:
+        out["summary"] = summary[:_MAX_CONTEXT_SUMMARY_CHARS]
     return out or None
 
 
@@ -215,13 +252,18 @@ class UINavigateTool(BaseTool):
 
 
 class VoiceUICapability:
-    """LoopCapability that mounts ``ui_navigate`` when a UI manifest is present."""
+    """LoopCapability that mounts ``ui_navigate`` when a UI manifest is present.
+
+    Also injects the client's current-screen context (when streamed) so the
+    model can answer questions about what the caller sees — read side and act
+    side of the same "voice knows the screen" seam.
+    """
 
     name = "voice_ui"
     owned_tools = (UI_NAVIGATE_TOOL,)
 
     def is_active(self, context: UnifiedContext) -> bool:
-        return bool(context.metadata.get("ui_manifest"))
+        return bool(context.metadata.get("ui_manifest")) or bool(context.metadata.get("ui_context"))
 
     def system_block(
         self,
@@ -232,37 +274,59 @@ class VoiceUICapability:
     ) -> PromptBlock | None:
         _ = language, prompts
         manifest = context.metadata.get("ui_manifest")
-        if not isinstance(manifest, dict):
+        screen = context.metadata.get("ui_context")
+        lines: list[str] = []
+        if isinstance(manifest, dict):
+            lines += [
+                "## Voice UI control",
+                "The caller is looking at a screen you can steer with the "
+                f"`{UI_NAVIGATE_TOOL}` tool. Allowed targets (id — what it does):",
+            ]
+            for section, header in (("pages", "Pages"), ("actions", "Actions")):
+                entries = manifest.get(section) or []
+                if not entries:
+                    continue
+                lines.append(f"{header}:")
+                for entry in entries:
+                    row = f"- `{entry['id']}` — {entry.get('label', entry['id'])}"
+                    if entry.get("argument"):
+                        row += f" (argument: {entry['argument']})"
+                    lines.append(row)
+            lines.append(
+                "Use the tool only for explicit UI requests; answer normal questions "
+                "with speech alone. Never pass a target that is not listed above. "
+                "When the caller asks to go to / open a page, you MUST actually call "
+                f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
+                "saying 'ได้เลยครับ' without the tool call means nothing happened. "
+                "TIMING: the screen changes the instant you call the tool — before "
+                "your voice reaches the caller. HARD RULE for the reply after a "
+                "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "
+                "'จัดให้ครับ' — and STOP. No unprompted page description, no "
+                "'รอสักครู่', no 'กำลังเปิด', no offers of further help, no "
+                "follow-up questions. A one-phrase reply is correct behaviour, not "
+                "rudeness: the caller is watching the screen, not waiting for "
+                "narration."
+            )
+        if isinstance(screen, dict) and screen.get("summary"):
+            if lines:
+                lines.append("")
+            lines += [
+                "## Current screen",
+                "What the caller's screen shows right now (captured when they last spoke):",
+            ]
+            if screen.get("path"):
+                lines.append(f"Path: {screen['path']}")
+            lines.append(str(screen["summary"]))
+            lines.append(
+                "When the caller ASKS what is on their screen (เมนู/ปุ่ม/หัวข้อ "
+                "อะไรบ้าง), answer from this section only — never invent menus or "
+                "buttons that are not listed here. This overrides nothing above: "
+                "the one-phrase rule applies to your reply right after a "
+                "ui_navigate call, while answering the caller's own question "
+                "about the screen is normal conversation."
+            )
+        if not lines:
             return None
-        lines = [
-            "## Voice UI control",
-            "The caller is looking at a screen you can steer with the "
-            f"`{UI_NAVIGATE_TOOL}` tool. Allowed targets (id — what it does):",
-        ]
-        for section, header in (("pages", "Pages"), ("actions", "Actions")):
-            entries = manifest.get(section) or []
-            if not entries:
-                continue
-            lines.append(f"{header}:")
-            for entry in entries:
-                row = f"- `{entry['id']}` — {entry.get('label', entry['id'])}"
-                if entry.get("argument"):
-                    row += f" (argument: {entry['argument']})"
-                lines.append(row)
-        lines.append(
-            "Use the tool only for explicit UI requests; answer normal questions "
-            "with speech alone. Never pass a target that is not listed above. "
-            "When the caller asks to go to / open a page, you MUST actually call "
-            f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
-            "saying 'ได้เลยครับ' without the tool call means nothing happened. "
-            "TIMING: the screen changes the instant you call the tool — before "
-            "your voice reaches the caller. HARD RULE for the reply after a "
-            "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "
-            "'จัดให้ครับ' — and STOP. No page description, no 'รอสักครู่', no "
-            "'กำลังเปิด', no offers of further help, no follow-up questions. "
-            "A one-phrase reply is correct behaviour, not rudeness: the caller "
-            "is watching the screen, not waiting for narration."
-        )
         return PromptBlock(self.name, "\n".join(lines))
 
     def augment_kwargs(
@@ -309,4 +373,5 @@ __all__ = [
     "install_ui_control",
     "match_navigation_intent",
     "sanitize_manifest",
+    "sanitize_ui_context",
 ]

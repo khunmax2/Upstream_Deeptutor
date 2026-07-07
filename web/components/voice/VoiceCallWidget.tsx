@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
+import { collectPageContext } from "./pageContext";
 
 // Steerable-UI whitelist sent to the voice layer as the `ui_manifest` control
 // frame: the model may call `ui_navigate` only with these ids, and this
@@ -409,6 +410,7 @@ export default function VoiceCallWidget() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mascotRef = useRef<MascotHandle | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const recogRef = useRef<any>(null);
   const playingRef = useRef(false);
@@ -525,6 +527,21 @@ export default function VoiceCallWidget() {
     }
   }, [setMascot, stopPlayback]);
 
+  // Stream what the caller's screen currently shows (read-only outline of the
+  // visible DOM, our own panel excluded) so the model can answer "what's on
+  // this page" from reality. Sent before every turn — pages change under a
+  // live call (voice navigation, the user clicking around).
+  const sendUiContext = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== 1) return;
+    try {
+      const context = collectPageContext(panelRef.current);
+      if (context.summary) ws.send(JSON.stringify({ type: "ui_context", context }));
+    } catch {
+      /* a context snapshot must never break the call */
+    }
+  }, []);
+
   const sendText = useCallback(
     (raw: string) => {
       const text = raw.trim();
@@ -533,9 +550,10 @@ export default function VoiceCallWidget() {
       bargeIn();
       addMsg("user", text);
       setMascot("thinking");
+      sendUiContext();
       ws.send(JSON.stringify({ type: "user_text", text }));
     },
-    [addMsg, bargeIn, setMascot],
+    [addMsg, bargeIn, sendUiContext, setMascot],
   );
 
   const hangUp = useCallback(() => {
@@ -589,6 +607,7 @@ export default function VoiceCallWidget() {
           manifest: { pages: UI_PAGES.map(({ id, label }) => ({ id, label })) },
         }),
       );
+      sendUiContext(); // and what the screen shows right now
     };
     ws.onclose = () => {
       if (runningRef.current) setStatus("การเชื่อมต่อหลุด");
@@ -654,7 +673,7 @@ export default function VoiceCallWidget() {
     } else {
       addMsg("sys", "⚠ เบราว์เซอร์นี้ไม่มี Web Speech — พิมพ์คุยแทนได้");
     }
-  }, [addMsg, executeUiAction, isEchoOfBot, playNext, rememberBotText, sendText, setMascot]);
+  }, [addMsg, executeUiAction, isEchoOfBot, playNext, rememberBotText, sendText, sendUiContext, setMascot]);
 
   useEffect(() => hangUp, [hangUp]); // teardown on unmount
 
@@ -690,6 +709,7 @@ export default function VoiceCallWidget() {
           (Botnoi-widget style): transparent scene, page stays interactive */}
       {mounted && (
         <div
+          ref={panelRef}
           style={{
             position: "fixed",
             right: 20,

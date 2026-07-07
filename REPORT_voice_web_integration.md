@@ -32,10 +32,12 @@ Previous chapters: `REPORT_voice_handoff.md` (prototype era),
 ## Architecture (3 layers, unchanged from the locked design)
 
 ```
-Browser  web/components/voice/VoiceCallWidget.tsx
+Browser  web/components/voice/VoiceCallWidget.tsx (+ pageContext.ts)
          call button · fading corner mascot (three.js via CDN, no bundle dep)
          browser STT + 3-layer echo guard · playback queue + lip-sync
          ui_manifest declaration + ui_action executor (whitelist, re-validated)
+         ui_context streaming (read-only DOM outline per turn — "voice sees
+         the screen"; answers "หน้านี้มีอะไรบ้าง" from reality, not guesses)
    │  WS /api/v1/voice/ws (same-origin; web/proxy.ts forwards to backend)
 Voice    deeptutor/services/voice_realtime/   ← all fork-owned
 layer    router (greet + control frames) · session (turn serialisation, barge)
@@ -135,7 +137,11 @@ barge-in via the 2.5× energy gate.
 
 1. **Curated in-page actions** ("เปิด KB กฎหมาย", "สร้างแชทใหม่") — manifest
    `actions` are already supported end-to-end (mock bench proved `open_kb`
-   with an argument); the web widget just doesn't declare any yet.
+   with an argument); the web widget just doesn't declare any yet. The read
+   half is now done (2026-07-07, post-report): the widget streams a
+   `ui_context` screen outline per turn (`pageContext.ts` + "Current screen"
+   system block in `ui_control.py`), so the model already knows what's on
+   the page — curated actions are the natural next rung.
 2. **page-agent** (Alibaba, MIT; cloned at ~/Project/antigravity/page-agent)
    evaluated as the "click anything" tier — defer until curated actions run out.
 3. Widget UI strings are Thai literals pending i18n keys (2 eslint warnings).
