@@ -47,6 +47,11 @@ CONFIRM_NO_ACK_LINE = "โอเคครับ"
 SECRETARY_ON_LINE = "เปิดโหมดเลขาแล้วครับ พูดได้เลย ผมจะพิมพ์ลงแชทให้ทุกประโยค"
 SECRETARY_OFF_LINE = "ปิดโหมดเลขาแล้วครับ"
 
+# Spoken when a dictation arrives while the caller is not on the chat page —
+# the typed message would land somewhere they can't see. Short, states the
+# problem, and the screen is already navigating as this plays.
+SECRETARY_OFFPAGE_LINE = "ตอนนี้ไม่ได้อยู่หน้าแชทครับ ผมพาไปแล้ว พูดอีกครั้งนะครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.
@@ -73,6 +78,7 @@ __all__ = [
     "CONFIRM_NO_ACK_LINE",
     "GREETING_LINE",
     "SECRETARY_OFF_LINE",
+    "SECRETARY_OFFPAGE_LINE",
     "SECRETARY_ON_LINE",
     "HANG_LINE",
     "NAV_ACK_LINE",

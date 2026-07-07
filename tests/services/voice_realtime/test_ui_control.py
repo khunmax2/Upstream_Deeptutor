@@ -354,6 +354,20 @@ def test_mode_command_matcher_falls_through(text: str) -> None:
     assert ui_control.match_mode_command(text) is None
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("ปิดหมดเรขาค", "secretary_off"),  # the exact garble caught live
+        ("ปิดโหมดเรขา", "secretary_off"),  # ร↔ล homophone
+        ("ปิดหมดเลขา", "secretary_off"),  # โ dropped
+        ("เปิดโหมดเรขา", "secretary_on"),  # garbled enter still enters
+    ],
+)
+def test_mode_command_matcher_tolerates_stt_garbles(text: str, expected: str) -> None:
+    """Trapped-in-mode is the worst failure — exit matches generously."""
+    assert ui_control.match_mode_command(text) == expected
+
+
 @pytest.mark.asyncio
 async def test_secretary_mode_types_everything_without_llm(
     monkeypatch: pytest.MonkeyPatch,
@@ -410,6 +424,52 @@ async def test_secretary_mode_types_everything_without_llm(
     )
     assert "secretary" not in nav_state
     assert {"type": "voice_mode", "mode": "normal"} in emitter3.json
+
+
+@pytest.mark.asyncio
+async def test_dictation_off_the_chat_page_warns_and_steers_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """In-mode dictation while not on /home → spoken warning + navigate, no typing."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {"secretary": True}
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ช่วยสรุปมาตรานี้หน่อย",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context={"path": "/settings", "summary": "x"},
+        nav_state=nav_state,
+    )
+
+    assert "ไม่ได้อยู่หน้าแชท" in reply
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {"type": "ui_action", "action": "navigate", "target": "chat", "argument": ""}
+    ]
+    assert nav_state.get("secretary") is True  # still in the mode
+
+    # Back on the chat page, the same dictation types normally.
+    emitter2 = FakeEmitter()
+    await pipe.run_text_turn(
+        emitter2,
+        "ช่วยสรุปมาตรานี้หน่อย",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context={"path": "/home", "summary": "x"},
+        nav_state=nav_state,
+    )
+    typed = [m for m in emitter2.json if m.get("type") == "ui_action"]
+    assert typed and typed[0]["target"] == "type_in_chat"
 
 
 @pytest.mark.asyncio

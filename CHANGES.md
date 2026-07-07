@@ -313,6 +313,21 @@ code is additive and isolated for mergeability.
   boundaries with cached fixed lines and a new `voice_mode` frame. Files:
   `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `VoiceActionBridge.tsx`.
+  **Round 2 — two gaps from live testing:** (1) *Trapped in the mode*: STT
+  garbled the exit command ("ปิดโหมดเลขา" heard as "ปิดหมดเรขาค"), which
+  therefore got typed into the chat instead of exiting — the exact trap the
+  design warned about. Mode commands now get the phonetic fuzzy pass too
+  (ร→ล joined the homophone table; length-scaled edit budget, first-char
+  anchor, and an on/off tie declines rather than guessing) — matching the
+  exit generously beats trapping the caller. (2) *Silent off-page redirect*:
+  dictating after clicking away from the chat page only showed a widget
+  text note; the server now uses the streamed `ui_context.path` to detect
+  it, speaks a short "ตอนนี้ไม่ได้อยู่หน้าแชทครับ ผมพาไปแล้ว พูดอีกครั้งนะครับ"
+  and steers back — deterministic, before any typing. E2E extended to 6/6
+  including the verbatim live garble. Known deferral: answering the chat's
+  interactive ask-user prompts by voice while dictating (typed messages
+  don't reach a pending option picker). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers

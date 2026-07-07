@@ -265,6 +265,7 @@ def _normalize_nav_text(text: str) -> str:
 _THAI_HOMOPHONES = str.maketrans(
     {
         "ใ": "ไ",
+        "ร": "ล",  # casual Thai pronounces ร as ล — STT swaps them freely (เลขา↔เรขา)
         "ณ": "น",
         "ฎ": "ด",
         "ฏ": "ต",
@@ -467,11 +468,34 @@ _SECRETARY_OFF_FORMS = {
 _MAX_MODE_CHARS = 32
 
 
+def _fuzzy_form_distance(t: str, forms: set[str]) -> int | None:
+    """Best phonetic edit distance from *t* to any form within its budget.
+
+    Budget scales with form length (``len // 4``, min 1) and the first char
+    must match, so short unrelated words can't drift in. Live STT produced
+    "ปิดหมดเรขาค" for "ปิดโหมดเลขา" — phonetic normalisation (ร→ล) plus two
+    edits — and a caller inside dictation mode MUST be able to leave: for the
+    exit command, matching too eagerly beats trapping the user.
+    """
+    best: int | None = None
+    tp = _phonetic(t)
+    for form in forms:
+        budget = max(1, len(form) // 4)
+        if not t or not form or t[0] != form[0]:
+            continue
+        d = _edit_distance(tp, _phonetic(form))
+        if d <= budget and (best is None or d < best):
+            best = d
+    return best
+
+
 def match_mode_command(text: str) -> str | None:
     """``"secretary_on"`` / ``"secretary_off"`` for a bare mode command, else ``None``.
 
-    Exact-after-normalisation like every control matcher here — "โหมดเลขา
-    คืออะไร" is a question and must reach the LLM, not flip the mode.
+    Exact-after-normalisation first, like every control matcher here —
+    "โหมดเลขาคืออะไร" is a question and must reach the LLM. A fuzzy pass then
+    absorbs STT garbles ("ปิดหมดเรขาค"); when a garble sits equally close to
+    the on- and off-forms the matcher declines rather than guessing.
     """
     t = (text or "").strip().lower()
     if not t or len(t) > _MAX_MODE_CHARS:
@@ -482,6 +506,12 @@ def match_mode_command(text: str) -> str | None:
         return "secretary_on"
     if t in _SECRETARY_OFF_FORMS:
         return "secretary_off"
+    d_on = _fuzzy_form_distance(t, _SECRETARY_ON_FORMS)
+    d_off = _fuzzy_form_distance(t, _SECRETARY_OFF_FORMS)
+    if d_off is not None and (d_on is None or d_off < d_on):
+        return "secretary_off"
+    if d_on is not None and (d_off is None or d_on < d_off):
+        return "secretary_on"
     return None
 
 

@@ -587,6 +587,19 @@ async def run_text_turn(
             logger.info("voice rung=mode-on %r", transcript)
             return await _set_secretary_mode(emitter, nav_state, True, turn_t0=t0)
         if nav_state.get("secretary"):
+            # Dictation must land where the caller can see it. The screen
+            # context (streamed with every turn) tells us where they are; if
+            # they clicked away mid-mode, say so briefly and steer back — a
+            # silent redirect with only an on-widget note was missed live.
+            path = str((ui_context or {}).get("path") or "")
+            if path and not path.startswith("/home"):
+                logger.info("voice rung=dictate-offpage path=%s %r", path, transcript)
+                await emitter.send_json(
+                    {"type": "ui_action", "action": "navigate", "target": "chat", "argument": ""}
+                )
+                return await _speak_short_turn(
+                    emitter, narration.SECRETARY_OFFPAGE_LINE, turn_t0=t0
+                )
             logger.info("voice rung=dictate %r", transcript)
             return await _run_secretary_turn(emitter, transcript, turn_t0=t0)
 
