@@ -459,6 +459,24 @@ async def test_llm_click_tool_call_arms_confirmation_for_dangerous(
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+def test_click_matches_mixed_script_garbles_knowledge_center() -> None:
+    """เคสจริงหน้าศูนย์ความรู้: STT ถอดครึ่งไทยครึ่งอังกฤษ / ทับศัพท์เพี้ยน."""
+    ctx = {
+        "buttons": [
+            "LlamaIndex",
+            "PageIndex",
+            "GraphRAG",
+            "LightRAG",
+            "Obsidian",
+            "LAWs_thai",
+        ]
+    }
+    assert ui_control.resolve_click_target("ลามะ index", ctx) == ("hit", "LlamaIndex")
+    assert ui_control.resolve_click_target("ลาวไทย", ctx) == ("hit", "LAWs_thai")
+    assert ui_control.resolve_click_target("กราฟแรก", ctx) == ("hit", "GraphRAG")
+    assert ui_control.resolve_click_target("เพจ index", ctx) == ("hit", "PageIndex")
+
+
 def test_click_matches_loanwords_across_scripts() -> None:
     """คำสั่งจริงที่เคยพลาด: STT ถอด 'persona' แต่จอเขียน 'เพอร์โซนา' (คนละอักษร)."""
     ctx = {"buttons": ["เพอร์โซนา", "สกิล", "เส้นทางสู่ความเชี่ยวชาญ"]}

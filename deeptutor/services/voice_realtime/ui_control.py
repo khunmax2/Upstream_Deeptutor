@@ -581,7 +581,12 @@ _TH_CONSONANT_LATIN = {
     "ห": "h",
     "ฮ": "h",
 }
-_LATIN_SOUND_FOLD = str.maketrans({"c": "k", "q": "k", "x": "s", "z": "s", "v": "w", "j": "y"})
+_LATIN_SOUND_FOLD = str.maketrans({"c": "k", "q": "k", "g": "k", "x": "s", "z": "s", "v": "w"})
+# Dropped entirely, both scripts: `h` is mostly digraph residue (th/ph/gh —
+# Thai ท/ฟ already carry the sound), and the semivowel `y`/ย is written or
+# omitted inconsistently across transliteration ("ไทย" spells /ai/ with ย,
+# "thai" spells it with vowels): ลาวไทย → lwt vs laws_thai → lwst.
+_SKELETON_NOISE = frozenset("hy")
 
 
 def _consonant_skeleton(s: str) -> str:
@@ -593,7 +598,8 @@ def _consonant_skeleton(s: str) -> str:
             out.append(_TH_CONSONANT_LATIN[ch])
         elif ch.isascii() and ch.isalpha() and ch not in "aeiou":
             out.append(ch)
-    return "".join(out).translate(_LATIN_SOUND_FOLD)
+    folded = "".join(out).translate(_LATIN_SOUND_FOLD)
+    return "".join(ch for ch in folded if ch not in _SKELETON_NOISE)
 
 
 def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:

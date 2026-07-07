@@ -169,6 +169,19 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Skeleton sharpened for mixed-script garbles ("ลามะ index",
+  "ลาวไทย").** Live gaps from the Knowledge Center page: STT rendered
+  "LlamaIndex" as "ลามะ index" and "LAWs_thai" as "ลาวไทย". Research
+  (hotword-retrieval fuzzy matching, arXiv 2512.21828; code-switching
+  normalization, AdaCS 2501.07102) confirms the textbook fix is a
+  normalization layer over the known on-screen vocabulary — true ASR biasing
+  needs recognizer hooks Web Speech doesn't expose (deferred to server STT).
+  Sharpened `_consonant_skeleton`: drop `h` (digraph residue: th/ph) and the
+  semivowel `y`/ย (written inconsistently across transliteration — ไทย vs
+  thai), fold g→k; จ/j kept as a real consonant. All four live garbles now
+  hit (ลามะ index, ลาวไทย, กราฟแรก→GraphRAG, เพจ index→PageIndex) with every
+  earlier case regression-locked. File: `services/voice_realtime/ui_control.py`.
+
 - **2026-07-08 — Click matching crosses scripts (loanwords).** Live gap: the
   screen says "เพอร์โซนา" but STT romanised the caller's word to "persona" —
   different scripts, so exact/substring/Thai-phonetic tiers all miss. New
