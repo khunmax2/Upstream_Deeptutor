@@ -209,6 +209,29 @@ def build_voice_context(
     )
 
 
+async def speak_greeting(emitter: VoiceEmitter) -> str:
+    """Speak the call-opening greeting; returns the line spoken ("" on failure).
+
+    Sent as a normal audio frame pair (meta + bytes) plus ``assistant_text`` so
+    every client renders it exactly like a spoken turn (lip-sync, echo-guard
+    fingerprint, chat log). A TTS failure just skips the greeting — a silent
+    pickup is worse than crashing a brand-new call over a nicety.
+    """
+    line = narration.GREETING_LINE
+    try:
+        audio_bytes, content_type = await synthesize_speech(line)
+    except VoiceProviderError:
+        logger.debug("Greeting TTS unavailable; starting the call silent", exc_info=True)
+        return ""
+    if not audio_bytes:
+        return ""
+    audio_bytes, content_type = containerize_audio(audio_bytes, content_type)
+    await emitter.send_json({"type": "audio", "seq": 0, "text": line, "content_type": content_type})
+    await emitter.send_bytes(audio_bytes)
+    await emitter.send_json({"type": "assistant_text", "text": line})
+    return line
+
+
 async def run_turn(
     emitter: VoiceEmitter,
     audio: bytes,
@@ -438,4 +461,5 @@ __all__ = [
     "containerize_audio",
     "run_text_turn",
     "run_turn",
+    "speak_greeting",
 ]

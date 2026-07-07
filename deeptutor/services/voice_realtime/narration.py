@@ -26,6 +26,10 @@ _TOOL_FILLERS: dict[str, str] = {
 
 _DEFAULT_FILLER = "รอสักครู่นะครับ กำลังดำเนินการให้อยู่"
 
+# Spoken once when a call connects, before the caller says anything — a phone
+# that answers with silence feels dead.
+GREETING_LINE = "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 REASSURE_LINE = "ยังค้นข้อมูลอยู่นะครับ อีกสักครู่"
 
@@ -38,4 +42,4 @@ def filler_for_tool(tool_name: str) -> str:
     return _TOOL_FILLERS.get((tool_name or "").strip(), _DEFAULT_FILLER)
 
 
-__all__ = ["filler_for_tool", "REASSURE_LINE", "HANG_LINE"]
+__all__ = ["filler_for_tool", "GREETING_LINE", "HANG_LINE", "REASSURE_LINE"]

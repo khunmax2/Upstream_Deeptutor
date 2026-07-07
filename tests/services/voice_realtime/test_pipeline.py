@@ -65,6 +65,40 @@ def _patch_common(
 
 
 @pytest.mark.asyncio
+async def test_greeting_speaks_line_as_audio_and_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Call pickup → one audio frame pair + assistant_text with the greeting."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    emitter = FakeEmitter()
+
+    line = await pipe.speak_greeting(emitter)
+
+    assert "สวัสดี" in line
+    assert emitter.audio and emitter.audio[0].startswith(b"AUDIO:")
+    kinds = [m["type"] for m in emitter.json]
+    assert kinds == ["audio", "assistant_text"]
+    assert emitter.json[0]["text"] == line
+
+
+@pytest.mark.asyncio
+async def test_greeting_swallows_tts_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TTS down → silent pickup, no frames, no exception."""
+    from deeptutor.services.voice import VoiceProviderError
+
+    async def broken_synthesize(text: str) -> tuple[bytes, str]:
+        raise VoiceProviderError("no credit")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", broken_synthesize)
+    emitter = FakeEmitter()
+
+    assert await pipe.speak_greeting(emitter) == ""
+    assert emitter.json == [] and emitter.audio == []
+
+
+@pytest.mark.asyncio
 async def test_speaks_only_final_response_not_narration(monkeypatch: pytest.MonkeyPatch) -> None:
     events = [
         _content("tool-payload junk", call_kind="tool_result"),  # must NOT be spoken

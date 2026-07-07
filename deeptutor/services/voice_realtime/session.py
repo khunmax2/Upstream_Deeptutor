@@ -19,7 +19,12 @@ import logging
 from typing import Any
 import uuid
 
-from deeptutor.services.voice_realtime.pipeline import VoiceEmitter, run_text_turn, run_turn
+from deeptutor.services.voice_realtime.pipeline import (
+    VoiceEmitter,
+    run_text_turn,
+    run_turn,
+    speak_greeting,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,20 @@ class VoiceSession:
         # until a ``ui_manifest`` control frame arrives.
         self.ui_manifest: dict[str, Any] | None = None
         self._current: asyncio.Task[None] | None = None
+
+    async def greet(self) -> None:
+        """Open the call with a short spoken self-introduction.
+
+        The line lands in history as the assistant's first message so the
+        model knows it already said hello and doesn't greet twice.
+        """
+        try:
+            line = await speak_greeting(self._emitter)
+        except Exception:  # noqa: BLE001 — a failed nicety must not kill the call
+            logger.debug("Greeting failed; continuing silent", exc_info=True)
+            return
+        if line:
+            self.history.append({"role": "assistant", "content": line})
 
     async def handle_utterance(self, audio: bytes) -> None:
         """Start a new turn for *audio*, cancelling any turn still in flight."""

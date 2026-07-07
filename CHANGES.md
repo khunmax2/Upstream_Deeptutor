@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Spoken greeting on call pickup.** The call now answers with
+  "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ" the moment the WebSocket connects:
+  `speak_greeting()` in `services/voice_realtime/pipeline.py` synthesises the
+  line through the same TTS catalog and emits it as a normal audio frame pair
+  + `assistant_text` (so lip-sync, echo-guard fingerprint and the chat log all
+  treat it like a spoken turn); `VoiceSession.greet()` records it in history
+  so the model knows it already said hello. TTS failure = silent pickup, never
+  a dropped call. Line lives in `narration.GREETING_LINE`; router awaits the
+  greeting right after `accept()`. Tests added in `test_pipeline.py`.
+
 - **2026-07-07 — Web widget: mascot no longer idles in a slow spin.** The
   constant yaw drift inherited from the fullscreen prototype looked wrong in
   the small corner pane; the figure now faces the user at rest, still spins

@@ -64,6 +64,7 @@ async def voice_websocket(ws: WebSocket) -> None:
 
     await ws.accept()
     session = VoiceSession(ws)
+    await session.greet()  # answer the phone: "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
     async def safe_send(data: dict[str, Any]) -> None:
         try:
