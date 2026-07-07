@@ -328,6 +328,22 @@ code is additive and isolated for mergeability.
   interactive ask-user prompts by voice while dictating (typed messages
   don't reach a pending option picker). Files:
   `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`.
+  **Round 3 — re-entry failed on a heavier garble:** live round 2 heard
+  "เปิดโหมดเลขา" as "เปิดหมดเลยค่ะ" — after politeness-stripping ("เลย" is a
+  filler but was also the mangled "เลขา") the residue "เปิดหมด" sat outside
+  the fuzzy budget of the full-length forms, fell to the LLM, which then
+  (a) *claimed* the mode was open and (b) answered a stale dictated
+  question. Three fixes: short canonical forms "เปิดโหมด/เข้าโหมด" joined
+  the on-set (bare "open the mode" is unambiguous — there is only one mode —
+  and keeps name-destroying garbles within budget); a VOICE MODES honesty
+  rule in the system block (the LLM has no mode control; a mode request
+  reaching it means the system missed it — ask the caller to repeat, never
+  claim a mode switched); and `VoiceSession._commit` now only records full
+  exchanges — a reply-less dictation turn no longer leaves an unanswered
+  user line in voice history for a later LLM turn to answer out of nowhere.
+  E2E extended to 9/9 (both live garbles verbatim, round-2 re-entry, no
+  stale-answer leakage). Files: `services/voice_realtime/ui_control.py`,
+  `session.py`.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers

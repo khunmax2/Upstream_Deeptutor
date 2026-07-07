@@ -451,6 +451,11 @@ _SECRETARY_ON_FORMS = {
     "เปิดโหมดพิมพ์",
     "เข้าโหมดพิมพ์",
     "โหมดพิมพ์",
+    # Bare "open/enter the mode" — there is only one mode, and live STT can
+    # mangle the mode NAME beyond recovery ("เปิดโหมดเลขา" → "เปิดหมดเลย…"):
+    # the short forms keep such garbles within the fuzzy budget.
+    "เปิดโหมด",
+    "เข้าโหมด",
     "secretarymode",
     "dictationmode",
 }
@@ -659,6 +664,12 @@ class VoiceUICapability:
                 "'คุณหมายถึงหน้าไหนครับ' or 'คุณหมายถึงหน้า X ใช่ไหมครับ'. "
                 "An acknowledgement ('ได้เลยครับ'/'จัดให้ครับ') is ONLY allowed in "
                 "the same reply as a ui_navigate call, never on its own. "
+                "VOICE MODES: you have NO control over voice modes (โหมดเลขา / "
+                "dictation) — the system layer handles those commands before "
+                "you. If a request to open or close โหมดเลขา reaches you, it "
+                "means the system did NOT catch it (garbled speech): NEVER "
+                "claim a mode is now on or off — instead ask the caller to "
+                "repeat clearly, e.g. 'พูดว่า เปิดโหมดเลขา อีกครั้งครับ'. "
                 "TIMING: the screen changes the instant you call the tool — before "
                 "your voice reaches the caller. HARD RULE for the reply after a "
                 "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "

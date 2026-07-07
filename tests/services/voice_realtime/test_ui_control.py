@@ -361,6 +361,9 @@ def test_mode_command_matcher_falls_through(text: str) -> None:
         ("ปิดโหมดเรขา", "secretary_off"),  # ร↔ล homophone
         ("ปิดหมดเลขา", "secretary_off"),  # โ dropped
         ("เปิดโหมดเรขา", "secretary_on"),  # garbled enter still enters
+        ("เปิดหมดเลยค่ะ", "secretary_on"),  # live garble round 2: เลขา → เลยค่ะ
+        ("ปิดหมดเลยครับ", "secretary_off"),  # same garble shape on exit
+        ("ออกจากหมดเลขา", "secretary_off"),  # โหมด → หมด on the long form
     ],
 )
 def test_mode_command_matcher_tolerates_stt_garbles(text: str, expected: str) -> None:

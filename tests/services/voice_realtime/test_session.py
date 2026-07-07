@@ -80,6 +80,23 @@ async def test_session_forwards_manifest_and_screen_context(
 
 
 @pytest.mark.asyncio
+async def test_replyless_turn_stays_out_of_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dictation turns (reply == "") never commit — an unanswered user line
+    left in history makes a later LLM turn answer it out of nowhere."""
+
+    async def dictation_run(emitter, text, history, *, session_id, language, **kwargs):  # noqa: ANN001
+        return ""  # typed into the on-screen chat; nothing spoken
+
+    monkeypatch.setattr(session_mod, "run_text_turn", dictation_run)
+    sess = VoiceSession(_NullEmitter())
+
+    await sess.handle_text("pdpa คืออะไร")
+    await sess._current
+
+    assert sess.history == []
+
+
+@pytest.mark.asyncio
 async def test_new_utterance_cancels_previous_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[bytes] = []
     first_started = asyncio.Event()

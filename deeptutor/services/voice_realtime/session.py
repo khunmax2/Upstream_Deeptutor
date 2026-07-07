@@ -132,11 +132,14 @@ class VoiceSession:
         self._commit(text, reply)
 
     def _commit(self, transcript: str, reply: str) -> None:
-        # Commit to history only after the turn completed without barge-in.
-        if transcript:
+        # Commit to history only after the turn completed without barge-in,
+        # and only as a full exchange: a turn with no spoken reply (dictation
+        # — the utterance belongs to the on-screen chat, not this call) must
+        # not leave an unanswered user question behind, or a later LLM turn
+        # will see it dangling and answer it out of nowhere.
+        if transcript and reply:
             self.history.append({"role": "user", "content": transcript})
-            if reply:
-                self.history.append({"role": "assistant", "content": reply})
+            self.history.append({"role": "assistant", "content": reply})
 
 
 __all__ = ["VoiceSession"]
