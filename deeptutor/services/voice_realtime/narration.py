@@ -24,22 +24,29 @@ _TOOL_FILLERS: dict[str, str] = {
     "github": "ขอดูข้อมูลใน GitHub สักครู่นะครับ",
 }
 
-_DEFAULT_FILLER = "รอสักครู่นะครับ กำลังดำเนินการให้อยู่"
-
 # Spoken once when a call connects, before the caller says anything — a phone
 # that answers with silence feels dead.
 GREETING_LINE = "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
-REASSURE_LINE = "ยังค้นข้อมูลอยู่นะครับ อีกสักครู่"
+# This is the ONLY generic "please wait": a wait line must be earned by an
+# actual wait, never spoken pre-emptively for a tool that may finish instantly.
+REASSURE_LINE = "รอสักครู่นะครับ กำลังทำให้อยู่ครับ"
 
 # Spoken when a turn goes silent past the hard limit and is aborted as hung.
 HANG_LINE = "ขอโทษครับ ใช้เวลานานผิดปกติ รบกวนถามใหม่อีกครั้งได้ไหมครับ"
 
 
 def filler_for_tool(tool_name: str) -> str:
-    """Return the spoken line to play when *tool_name* starts running."""
-    return _TOOL_FILLERS.get((tool_name or "").strip(), _DEFAULT_FILLER)
+    """Spoken line for the start of *tool_name*; "" = stay silent.
+
+    Only tools that are *known slow* (retrieval, web, code) get an immediate
+    spoken filler. Unknown tools stay silent — many finish in well under a
+    second, and announcing a wait that doesn't happen sounds broken. If an
+    unknown tool does run long, the watchdog speaks :data:`REASSURE_LINE`
+    once the silence is real.
+    """
+    return _TOOL_FILLERS.get((tool_name or "").strip(), "")
 
 
 __all__ = ["filler_for_tool", "GREETING_LINE", "HANG_LINE", "REASSURE_LINE"]

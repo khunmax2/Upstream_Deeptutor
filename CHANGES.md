@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — "Please wait" must be earned by a real wait.** Dropped the
+  pre-emptive generic filler ("รอสักครู่นะครับ กำลังดำเนินการให้อยู่") that spoke
+  the moment *any* unmapped tool started — many finish in under a second, and
+  announcing a wait that doesn't happen sounds broken. Now only known-slow
+  tools (rag / web_search / code…) get an immediate specific cue; everything
+  else stays silent, and the existing 8 s watchdog speaks the (reworded)
+  generic wait line only when the silence is real. Files:
+  `services/voice_realtime/narration.py`, `pipeline.py`.
+
 - **2026-07-07 — Natural speech around UI navigation.** With a fast LLM the
   screen now changes *before* the voice arrives, but the model still narrated
   politely ("รอสักครู่นะครับ กำลังพาไป…") — announcing an action the caller

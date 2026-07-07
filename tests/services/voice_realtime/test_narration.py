@@ -15,9 +15,11 @@ def test_known_tools_have_specific_fillers() -> None:
     assert filler_for_tool("read_memory") != filler_for_tool("rag")
 
 
-def test_unknown_tool_gets_generic_filler() -> None:
-    generic = filler_for_tool("some_new_tool")
-    assert generic and generic == filler_for_tool("")
+def test_unknown_tool_stays_silent() -> None:
+    # A "please wait" must be earned by a real wait (the watchdog's job) —
+    # unknown tools may finish instantly, so no pre-emptive filler.
+    assert filler_for_tool("some_new_tool") == ""
+    assert filler_for_tool("") == ""
 
 
 def test_watchdog_lines_are_nonempty_and_speakable() -> None:

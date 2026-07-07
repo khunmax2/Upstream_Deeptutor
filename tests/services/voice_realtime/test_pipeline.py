@@ -309,7 +309,7 @@ async def test_watchdog_reassures_then_aborts_on_hang(monkeypatch: pytest.Monkey
 
     reply = await pipe.run_text_turn(emitter, "q", [], session_id="voice:test")
 
-    assert any("ยังค้นข้อมูลอยู่" in s for s in spoken), spoken  # reassurance
+    assert any("รอสักครู่" in s for s in spoken), spoken  # reassurance (earned wait)
     assert any(m.get("type") == "error" for m in emitter.json)  # hang reported
     assert "ไม่ควรมาถึง" not in reply
 

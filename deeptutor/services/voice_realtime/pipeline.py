@@ -469,7 +469,12 @@ async def _run_text_turn(
                     await emitter.send_json(
                         {"type": "status", "state": "searching", "tool": started_tool}
                     )
-                    await speak(narration.filler_for_tool(started_tool))
+                    # Known-slow tools get an immediate spoken cue; unknown
+                    # tools stay silent — the watchdog speaks only if the
+                    # wait turns out to be real (see narration.filler_for_tool).
+                    filler = narration.filler_for_tool(started_tool)
+                    if filler:
+                        await speak(filler)
             elif event.type == StreamEventType.CONTENT:
                 # Speak the user-visible rounds only (see _SPEAKABLE_CALL_KINDS).
                 if meta.get("call_kind") not in _SPEAKABLE_CALL_KINDS:
