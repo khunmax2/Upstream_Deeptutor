@@ -139,7 +139,7 @@ class UINavigateTool(BaseTool):
         return ToolResult(
             content=(
                 f"Done — the caller's screen already shows {target!r}. "
-                "Say nothing, or at most a three-word acknowledgement."
+                "Reply with EXACTLY 'ได้เลยครับ' and nothing else."
             )
         )
 
@@ -183,11 +183,12 @@ class VoiceUICapability:
             "Use the tool only for explicit UI requests; answer normal questions "
             "with speech alone. Never pass a target that is not listed above. "
             "TIMING: the screen changes the instant you call the tool — before "
-            "your voice reaches the caller. So NEVER say you are 'about to' open "
-            "something or ask them to wait (no 'รอสักครู่', no 'กำลังเปิด'). "
-            "After a ui_navigate call, either say nothing more or confirm in at "
-            "most three words (e.g. 'ได้เลยครับ') — the caller can already see "
-            "the result. Do not describe the destination page."
+            "your voice reaches the caller. HARD RULE for the reply after a "
+            "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "
+            "'จัดให้ครับ' — and STOP. No page description, no 'รอสักครู่', no "
+            "'กำลังเปิด', no offers of further help, no follow-up questions. "
+            "A one-phrase reply is correct behaviour, not rudeness: the caller "
+            "is watching the screen, not waiting for narration."
         )
         return PromptBlock(self.name, "\n".join(lines))
 

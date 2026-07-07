@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Post-navigation reply pinned to one phrase.** Live testing
+  showed two leaks: (1) the generic "รอสักครู่ฯ" heard on navigation was the
+  *pipeline's* default filler triggered by the tool round's `PROGRESS`
+  call-status event — killed by the "earned wait" change below once the
+  server restarts; (2) Gemini watered the "three words max" instruction down
+  to polite paragraphs — the `voice_ui` system block and `ui_navigate` tool
+  result now pin the reply to exactly one allowed phrase ("ได้เลยครับ"),
+  validated 3/3 runs on gemini-3.1-flash-lite. File:
+  `services/voice_realtime/ui_control.py`.
+
 - **2026-07-07 — "Please wait" must be earned by a real wait.** Dropped the
   pre-emptive generic filler ("รอสักครู่นะครับ กำลังดำเนินการให้อยู่") that spoke
   the moment *any* unmapped tool started — many finish in under a second, and
