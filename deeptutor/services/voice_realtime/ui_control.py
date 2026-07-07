@@ -58,6 +58,7 @@ from deeptutor.core.tool_protocol import (
 logger = logging.getLogger(__name__)
 
 UI_NAVIGATE_TOOL = "ui_navigate"
+UI_CLICK_TOOL = "ui_click"
 
 # Guard rails on the client-supplied manifest (it rides a WS control frame).
 MAX_MANIFEST_BYTES = 8_192
@@ -745,6 +746,79 @@ class UINavigateTool(BaseTool):
         )
 
 
+class UIClickTool(BaseTool):
+    """Press a visible button/card/link the caller named.
+
+    The LLM fallback for click phrasings the deterministic shortcut doesn't
+    recognise ("เปิดประวัติแชต", "เลือกสมุดบันทึก"). Same trust model as the
+    shortcut: the tool only *verifies* the name against the buttons the
+    screen actually shows (``_ui_context`` injected by the capability) — the
+    press itself is dispatched by the pipeline, dangerous names go through
+    the spoken-confirmation rung, and the client re-validates before acting.
+    The LLM never chooses a button the caller didn't name.
+    """
+
+    def get_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=UI_CLICK_TOOL,
+            description=(
+                "Press a button/card/link that is VISIBLE on the caller's screen "
+                "during a voice call, when the caller asks to press/click/open it "
+                "by name. `button` must be a name shown in the 'Current screen' "
+                "section of the system prompt — never invent one, never pick a "
+                "button the caller did not name."
+            ),
+            parameters=[
+                ToolParameter(
+                    name="button",
+                    type="string",
+                    description="The visible button name the caller said (verbatim).",
+                ),
+            ],
+        )
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        button = str(kwargs.get("button") or "").strip()
+        ui_context = kwargs.get("_ui_context")
+        if not button:
+            return ToolResult(content="No button name given; nothing pressed.", success=False)
+        outcome, resolved = resolve_click_target(
+            button, ui_context if isinstance(ui_context, dict) else None
+        )
+        if outcome == "missing":
+            return ToolResult(
+                content=(
+                    f"No visible button named {button!r} on the caller's screen right "
+                    "now. Tell the caller honestly (e.g. 'ไม่เห็นปุ่มชื่อนั้นบนจอครับ') — "
+                    "do NOT claim anything was pressed."
+                ),
+                success=False,
+            )
+        if outcome == "ambiguous":
+            return ToolResult(
+                content=(
+                    f"Several visible buttons match {button!r}. Ask the caller which "
+                    "one they mean (say the full names) — nothing was pressed."
+                ),
+                success=False,
+            )
+        if resolved and is_dangerous_button(resolved):
+            return ToolResult(
+                content=(
+                    f"{resolved!r} looks destructive, so it was NOT pressed. Ask the "
+                    f"caller to confirm in one short sentence (e.g. 'ปุ่ม{resolved}"
+                    "อาจมีผลถาวรนะครับ ให้กดเลยไหมครับ') — if they answer ใช่, the "
+                    "system presses it."
+                )
+            )
+        return ToolResult(
+            content=(
+                f"Pressed {resolved!r} — already done on the caller's screen. "
+                "Reply with EXACTLY 'ได้เลยครับ' and nothing else."
+            )
+        )
+
+
 class VoiceUICapability:
     """LoopCapability that mounts ``ui_navigate`` when a UI manifest is present.
 
@@ -754,7 +828,7 @@ class VoiceUICapability:
     """
 
     name = "voice_ui"
-    owned_tools = (UI_NAVIGATE_TOOL,)
+    owned_tools = (UI_NAVIGATE_TOOL, UI_CLICK_TOOL)
 
     def is_active(self, context: UnifiedContext) -> bool:
         return bool(context.metadata.get("ui_manifest")) or bool(context.metadata.get("ui_context"))
@@ -838,7 +912,16 @@ class VoiceUICapability:
                 "conversation history suggests. This overrides nothing else "
                 "above: the one-phrase rule applies to your reply right after a "
                 "ui_navigate call, while answering the caller's own question "
-                "about the screen is normal conversation."
+                "about the screen is normal conversation. "
+                f"PRESSING THINGS: with `{UI_CLICK_TOOL}` you can press a "
+                "button/card/link listed above when the caller asks to press or "
+                "open it by name — pass the caller's words as `button`; the "
+                "system verifies visibility, handles destructive-button "
+                "confirmation, and presses. You MUST actually call the tool: "
+                "'ได้เลยครับ' without a tool call means nothing happened. Follow "
+                "the tool result exactly — if it says nothing was pressed, never "
+                "claim otherwise. Only press what the caller named; never choose "
+                "a button for them."
             )
         if not lines:
             return None
@@ -850,7 +933,13 @@ class VoiceUICapability:
         kwargs: dict[str, Any],
         context: UnifiedContext,
     ) -> dict[str, Any]:
-        _ = tool_name, context
+        if tool_name == UI_CLICK_TOOL:
+            # The click tool verifies names against what the screen actually
+            # shows — inject the turn's streamed context (server-owned, the
+            # model cannot fabricate it).
+            updated = dict(kwargs)
+            updated["_ui_context"] = context.metadata.get("ui_context")
+            return updated
         return kwargs
 
     def pre_loop_seed(self, context: UnifiedContext) -> str:
@@ -872,6 +961,9 @@ def install_ui_control() -> None:
     if tool_registry.get(UI_NAVIGATE_TOOL) is None:
         tool_registry.register(UINavigateTool())
         logger.info("voice_ui: registered %s tool", UI_NAVIGATE_TOOL)
+    if tool_registry.get(UI_CLICK_TOOL) is None:
+        tool_registry.register(UIClickTool())
+        logger.info("voice_ui: registered %s tool", UI_CLICK_TOOL)
 
     caps = capability_registry.LOOP_CAPABILITIES
     if not any(getattr(cap, "name", "") == VoiceUICapability.name for cap in caps):
@@ -881,7 +973,9 @@ def install_ui_control() -> None:
 
 __all__ = [
     "MAX_MANIFEST_BYTES",
+    "UI_CLICK_TOOL",
     "UI_NAVIGATE_TOOL",
+    "UIClickTool",
     "UINavigateTool",
     "VoiceUICapability",
     "allowed_target_ids",

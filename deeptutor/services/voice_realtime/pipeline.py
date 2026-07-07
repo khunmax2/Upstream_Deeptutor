@@ -695,6 +695,7 @@ async def run_text_turn(
             turn_t0=turn_t0,
             ui_manifest=ui_manifest,
             ui_context=ui_context,
+            nav_state=nav_state,
         )
     finally:
         if token is not None:
@@ -711,6 +712,7 @@ async def _run_text_turn(
     turn_t0: float | None = None,
     ui_manifest: dict[str, Any] | None = None,
     ui_context: dict[str, str] | None = None,
+    nav_state: dict[str, Any] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
@@ -825,6 +827,38 @@ async def _run_text_turn(
                         "argument": str(args.get("argument") or ""),
                     }
                 )
+                continue
+            if (
+                event.type == StreamEventType.TOOL_CALL
+                and event.content == ui_control.UI_CLICK_TOOL
+            ):
+                # LLM-initiated click. Same resolver + danger rung as the
+                # deterministic shortcut (the tool result the LLM sees is
+                # computed from the identical resolve, so speech and action
+                # can't disagree): safe hit → press; dangerous hit → arm the
+                # spoken-confirmation state, press nothing; miss/ambiguous →
+                # nothing (the tool result already tells the LLM to be honest).
+                args = meta.get("args") or {}
+                outcome, button = ui_control.resolve_click_target(
+                    str(args.get("button") or ""), ui_context
+                )
+                if outcome == "hit" and button:
+                    if ui_control.is_dangerous_button(button):
+                        if nav_state is not None:
+                            nav_state["pending_click"] = button
+                        logger.info("voice rung=llm-click-danger button=%r", button)
+                    else:
+                        logger.info("voice rung=llm-click button=%r", button)
+                        await emitter.send_json(
+                            {
+                                "type": "ui_action",
+                                "action": "navigate",
+                                "target": "click_element",
+                                "argument": button,
+                            }
+                        )
+                else:
+                    logger.info("voice rung=llm-click-%s %r", outcome, args.get("button"))
                 continue
             started_tool = _tool_starting(event, meta)
             if started_tool is not None:

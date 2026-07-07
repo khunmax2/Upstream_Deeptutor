@@ -363,6 +363,102 @@ def test_click_matcher_falls_through(text: str) -> None:
     assert ui_control.match_click_intent(text) is None
 
 
+# ── ui_click: the LLM fallback tool for click phrasings ────────────────
+
+CLICK_SCREEN = {"path": "/space", "summary": "x", "buttons": ["ประวัติแชต", "สมุดบันทึก", "ลบโน้ต"]}
+
+
+def test_capability_owns_and_wires_the_click_tool() -> None:
+    cap = ui_control.VoiceUICapability()
+    assert ui_control.UI_CLICK_TOOL in cap.owned_tools
+    ctx = pipe.build_voice_context(
+        transcript="q", history=[], session_id="s", knowledge_bases=[], ui_context=CLICK_SCREEN
+    )
+    # augment injects the screen into the click tool's kwargs (and only its)
+    injected = cap.augment_kwargs(ui_control.UI_CLICK_TOOL, {"button": "x"}, ctx)
+    assert injected["_ui_context"] == CLICK_SCREEN
+    assert "_ui_context" not in cap.augment_kwargs("rag", {}, ctx)
+    block = cap.system_block(ctx, language="th", prompts={})
+    assert block is not None and ui_control.UI_CLICK_TOOL in block.content
+
+
+@pytest.mark.asyncio
+async def test_click_tool_execute_outcomes() -> None:
+    tool = ui_control.UIClickTool()
+    hit = await tool.execute(button="ประวัติแชท", _ui_context=CLICK_SCREEN)  # ท↔ต fuzzy
+    assert hit.success and "ประวัติแชต" in hit.content and "ได้เลยครับ" in hit.content
+    missing = await tool.execute(button="ปุ่มที่ไม่มีจริง", _ui_context=CLICK_SCREEN)
+    assert not missing.success and "NOT claim" in missing.content
+    danger = await tool.execute(button="ลบโน้ต", _ui_context=CLICK_SCREEN)
+    assert danger.success and "NOT pressed" in danger.content
+    empty = await tool.execute(_ui_context=CLICK_SCREEN)
+    assert not empty.success
+
+
+@pytest.mark.asyncio
+async def test_llm_click_tool_call_presses_safe_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TOOL_CALL ui_click (safe hit) → ui_action click_element with the resolved name."""
+    events = [
+        StreamEvent(
+            type=StreamEventType.TOOL_CALL,
+            source="chat",
+            content=ui_control.UI_CLICK_TOOL,
+            metadata={"args": {"button": "ประวัติแชท"}},
+        ),
+        _content("ได้เลยครับ", call_kind="llm_final_response"),
+        StreamEvent(type=StreamEventType.RESULT, source="chat", metadata={"response": "ได้เลยครับ"}),
+    ]
+    _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter, "ช่วยเปิดประวัติแชตให้หน่อยสิ", [], session_id="voice:test", ui_context=CLICK_SCREEN
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "click_element",
+            "argument": "ประวัติแชต",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_llm_click_tool_call_arms_confirmation_for_dangerous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TOOL_CALL ui_click on a dangerous button → pending_click armed, nothing pressed."""
+    events = [
+        StreamEvent(
+            type=StreamEventType.TOOL_CALL,
+            source="chat",
+            content=ui_control.UI_CLICK_TOOL,
+            metadata={"args": {"button": "ลบโน้ต"}},
+        ),
+        _content("ปุ่มลบโน้ตอาจมีผลถาวรนะครับ ให้กดเลยไหมครับ", call_kind="llm_final_response"),
+    ]
+    _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "ช่วยเปิดลบโน้ตหน่อย",
+        [],
+        session_id="voice:test",
+        ui_context=CLICK_SCREEN,
+        nav_state=nav_state,
+    )
+
+    assert nav_state.get("pending_click") == "ลบโน้ต"
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
 def test_click_resolves_the_live_chat_history_gap() -> None:
     """คำสั่งจริงที่เคยพลาด: 'กดที่ประวัติแชท' ปะทะปุ่มจริง 'ประวัติแชต' (ท↔ต)."""
     ctx = {"buttons": ["ประวัติแชต", "สมุดบันทึก", "คลังคำถาม"]}

@@ -169,6 +169,22 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — `ui_click`: the LLM can now press visible buttons too.**
+  Click gained the same ladder navigation already had: phrasings the
+  deterministic shortcut doesn't recognise ("เปิดประวัติแชต",
+  "เลือกสมุดบันทึก") used to dead-end — the LLM understood but had no tool to
+  act. New `UIClickTool` (registered runtime like `ui_navigate`): the
+  capability injects the turn's streamed `ui_context` into the tool's kwargs,
+  so its result is computed from the same `resolve_click_target` the pipeline
+  uses — speech and action cannot disagree. Safe hit → pipeline forwards
+  `ui_action click_element` (client re-validates); dangerous hit → NOT
+  pressed, the existing spoken-confirmation state is armed and the LLM asks;
+  miss/ambiguous → the tool result orders honesty ("do NOT claim anything was
+  pressed"). System block teaches the press rules (must call the tool, never
+  choose a button the caller didn't name). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`; tests in
+  `test_ui_control.py` (174 green).
+
 - **2026-07-08 — Click matcher: leading connectives no longer leak into the
   name.** Live gap: "กดที่ประวัติแชท" extracted the name as "ที่ประวัติแชท", so
   even the phonetic tier (which handles the ท↔ต mismatch against the real
