@@ -37,6 +37,10 @@ NAV_ACK_LINE = "ได้เลยครับ"
 # "stop talking" is near-silence, never a paragraph about having stopped.
 STOP_ACK_LINE = "ครับ"
 
+# Spoken when the caller answers "ไม่" to a navigation confirmation
+# ("คุณหมายถึงให้เปิด X ใช่ไหมครับ") — acknowledge and wait, no LLM turn.
+CONFIRM_NO_ACK_LINE = "โอเคครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.
@@ -60,6 +64,7 @@ def filler_for_tool(tool_name: str) -> str:
 
 __all__ = [
     "filler_for_tool",
+    "CONFIRM_NO_ACK_LINE",
     "GREETING_LINE",
     "HANG_LINE",
     "NAV_ACK_LINE",

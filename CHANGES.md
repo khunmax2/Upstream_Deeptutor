@@ -232,6 +232,28 @@ code is additive and isolated for mergeability.
   `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/pageContext.ts`.
 
+- **2026-07-07 — Garbled/unclear navigation now confirms instead of
+  ack-without-action.** Live log showed two failure shapes: STT garbling the
+  verb ("ไฟหน้าหน่วยความจำ" for ไปหน้า…) and unlisted aliases
+  ("ศูนย์ความรู้") — both fell to the LLM, which sometimes said "ได้เลยครับ"
+  *without navigating*. Three-layer fix, all deterministic: (1) common STT
+  garbles of "ไปหน้า" ("ไฟหน้า", "ใบหน้า") are normalised before matching, so
+  those become direct commands; (2) manifest labels gain the aliases callers
+  actually say ("หน่วยความจำ", "ศูนย์ความรู้"); (3) a **confirm-first rung**
+  in the intent ladder — a short utterance that names exactly one page but
+  lacks a verb (and isn't a question) gets "คุณหมายถึงให้เปิด X ใช่ไหมครับ";
+  a bare "ใช่/ครับ" then executes the navigation, "ไม่" acknowledges, and
+  anything else clears the pending question and is processed normally
+  (state lives in session-owned `nav_state`; both ask and confirm are no-LLM
+  turns through the fixed-line TTS cache). The `voice_ui` system block now
+  also hard-forbids a bare acknowledgement — for unmappable navigation the
+  model must ask, never say ได้เลยครับ on its own. Turn routing now logs
+  which ladder rung handled each utterance (`voice rung=…`). E2E: all three
+  failing log lines now navigate (garble → direct, alias → direct, verbless
+  → confirm → ใช่ → navigate). Files: `services/voice_realtime/
+  ui_control.py`, `pipeline.py`, `narration.py`, `session.py`,
+  `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;

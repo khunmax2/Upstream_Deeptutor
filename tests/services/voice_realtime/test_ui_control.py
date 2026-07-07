@@ -253,6 +253,55 @@ def test_shortcut_requires_unambiguous_page() -> None:
     assert ui_control.match_navigation_intent("ไปหน้า settings", None) is None
 
 
+def test_shortcut_normalizes_stt_garbles_of_pai_naa() -> None:
+    """STT hears "ไฟหน้า"/"ใบหน้า" for "ไปหน้า" — still a direct command."""
+    assert ui_control.match_navigation_intent("ไฟหน้าตั้งค่า", MANIFEST) == {"target": "settings"}
+    assert ui_control.match_navigation_intent("ใบหน้าตั้งค่าหน่อย", MANIFEST) == {"target": "settings"}
+
+
+# ── confirm-first navigation guess ─────────────────────────────────────
+
+
+def test_guess_fires_for_verbless_page_naming() -> None:
+    guess = ui_control.match_navigation_guess("หน้าตั้งค่า", MANIFEST)
+    assert guess == {"target": "settings", "label": "หน้าตั้งค่า"}
+    # Aliased label speaks its first alias only.
+    guess = ui_control.match_navigation_guess("หน้าแรก", MANIFEST)
+    assert guess is not None and guess["label"] == "หน้าแชทหลัก"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ไปหน้าตั้งค่า",  # verbed → direct shortcut's job, not a guess
+        "หน้าตั้งค่าคืออะไร",  # question about the page
+        "หน้าตั้งค่ามีอะไรบ้าง",  # question
+        "หน้าไหนดี",  # names no page
+        "",
+    ],
+)
+def test_guess_stays_quiet_otherwise(text: str) -> None:
+    assert ui_control.match_navigation_guess(text, MANIFEST) is None
+
+
+@pytest.mark.parametrize("text", ["ใช่", "ใช่ครับ", "ครับ", "ตกลงค่ะ", "yes"])
+def test_affirmative_forms(text: str) -> None:
+    assert ui_control.is_affirmative(text)
+    assert not ui_control.is_negative(text)
+
+
+@pytest.mark.parametrize("text", ["ไม่", "ไม่ใช่ครับ", "ไม่ต้อง", "ยกเลิก"])
+def test_negative_forms(text: str) -> None:
+    assert ui_control.is_negative(text)
+    assert not ui_control.is_affirmative(text)
+
+
+@pytest.mark.parametrize("text", ["ใช่ไหมนะ ไม่แน่ใจ", "ไปหน้า settings", "อะไรนะ"])
+def test_neither_yes_nor_no(text: str) -> None:
+    assert not ui_control.is_affirmative(text)
+    assert not ui_control.is_negative(text)
+
+
 # ── pipeline forwarding ────────────────────────────────────────────────
 
 
@@ -354,6 +403,94 @@ async def test_where_am_i_without_page_falls_through_to_llm(
 
     # The LLM (not the shortcut) owned the turn — proven by the LLM-path reply.
     assert "อยู่หน้ารายละเอียดเอกสาร" in reply
+
+
+@pytest.mark.asyncio
+async def test_confirm_flow_asks_then_navigates_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verbless page naming → 'คุณหมายถึง…ใช่ไหม' → 'ใช่' → ui_action. No LLM."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run in the confirm flow")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {}
+
+    # Turn 1: probable command, no verb (STT dropped it) → asks back, no ui_action.
+    emitter1 = FakeEmitter()
+    reply1 = await pipe.run_text_turn(
+        emitter1, "หน้าตั้งค่า", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert reply1 == "คุณหมายถึงให้เปิดหน้าตั้งค่าใช่ไหมครับ"
+    assert nav_state == {"pending": "settings"}
+    assert not [m for m in emitter1.json if m.get("type") == "ui_action"]
+
+    # Turn 2: bare yes → navigation executes, pending cleared.
+    emitter2 = FakeEmitter()
+    reply2 = await pipe.run_text_turn(
+        emitter2, "ใช่ครับ", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert reply2 == "ได้เลยครับ"
+    assert emitter2.json[0] == {
+        "type": "ui_action",
+        "action": "navigate",
+        "target": "settings",
+        "argument": "",
+    }
+    assert nav_state == {}
+
+
+@pytest.mark.asyncio
+async def test_confirm_flow_no_clears_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {"pending": "settings"}
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter, "ไม่ใช่ครับ", [], session_id="v", ui_manifest=MANIFEST, nav_state=nav_state
+    )
+    assert reply == "โอเคครับ"
+    assert nav_state == {}
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_flow_unrelated_utterance_moves_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Neither yes nor no → pending is dropped and the turn runs normally."""
+    events = [
+        _content("ตอบตามปกติครับ.", call_kind="llm_final_response"),
+        StreamEvent(
+            type=StreamEventType.RESULT, source="chat", metadata={"response": "ตอบตามปกติครับ"}
+        ),
+    ]
+    _patch_common(monkeypatch, events=events)
+    nav_state: dict[str, Any] = {"pending": "settings"}
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter,
+        "มาตรา 112 คืออะไร",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        nav_state=nav_state,
+    )
+    assert "ตอบตามปกติ" in reply
+    assert nav_state == {}  # a new topic clears the stale question
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
 @pytest.mark.asyncio

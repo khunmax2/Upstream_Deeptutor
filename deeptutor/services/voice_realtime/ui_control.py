@@ -239,33 +239,113 @@ def _page_match_strings(entry: dict[str, Any]) -> set[str]:
     return out
 
 
+# Frequent STT garbles of "ไปหน้า" heard in live calls ("ไฟหน้าหน่วยความจำ",
+# "ใบหน้าหนังสือ"). Normalised before matching — the same vocab-bias trick the
+# STT guard uses. Safe because the shortcut still requires a unique manifest
+# page match: a genuine sentence about headlights or faces won't name one.
+_STT_GARBLES = (("ไฟหน้า", "ไปหน้า"), ("ใบหน้า", "ไปหน้า"))
+
+# Words that mark the utterance as a *question about* a page rather than a
+# command to open it ("หน้าความจำคืออะไร") — those belong to the LLM.
+_QUESTION_WORDS = ("อะไร", "คือ", "ไหม", "ทำไม", "ยังไง", "อย่างไร", "ที่ไหน", "เมื่อไหร่")
+
+
+def _normalize_nav_text(text: str) -> str:
+    t = (text or "").strip().lower()
+    for garble, fix in _STT_GARBLES:
+        t = t.replace(garble, fix)
+    return t
+
+
+def _unique_page_hit(t: str, manifest: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The single manifest page named in *t*, or ``None`` if zero/ambiguous."""
+    hits: list[dict[str, Any]] = []
+    for entry in (manifest or {}).get("pages") or []:
+        if not isinstance(entry, dict):
+            continue
+        if any(m in t for m in _page_match_strings(entry)):
+            if entry.get("id") and entry not in hits:
+                hits.append(entry)
+    return hits[0] if len(hits) == 1 else None
+
+
 def match_navigation_intent(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
     """Return ``{"target": id}`` when *text* is an unambiguous page command.
 
     Conservative on purpose: requires a navigation verb, a page word, a short
     utterance, and exactly ONE matching manifest page. Everything else returns
     ``None`` and the LLM decides (multi-intent, ambiguity, non-UI questions).
+    Common STT garbles of "ไปหน้า" are normalised first (see ``_STT_GARBLES``).
     """
     if not manifest:
         return None
-    t = (text or "").strip().lower()
+    t = _normalize_nav_text(text)
     if not t or len(t) > _MAX_SHORTCUT_CHARS:
         return None
     if not any(w in t for w in _NAV_PAGE_WORDS):
         return None
     if not any(v in t for v in _NAV_VERBS):
         return None
-    hits: list[str] = []
-    for entry in manifest.get("pages") or []:
-        if not isinstance(entry, dict):
-            continue
-        if any(m in t for m in _page_match_strings(entry)):
-            target = str(entry.get("id") or "")
-            if target and target not in hits:
-                hits.append(target)
-    if len(hits) != 1:
+    hit = _unique_page_hit(t, manifest)
+    if hit is None:
         return None
-    return {"target": hits[0]}
+    return {"target": str(hit["id"])}
+
+
+def match_navigation_guess(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
+    """A *probable* page command that needs spoken confirmation first.
+
+    Fires when the utterance is short, names exactly one manifest page with a
+    page word, is NOT a question — but lacks a navigation verb (usually STT
+    dropping/garbling it, e.g. "หน้าหน่วยความจำ"). The caller should be asked
+    "คุณหมายถึงให้เปิด X ใช่ไหมครับ" rather than silently guessing or, worse,
+    acknowledging without acting. Returns ``{"target", "label"}`` with a
+    speakable label, or ``None``.
+    """
+    if not manifest:
+        return None
+    t = _normalize_nav_text(text)
+    if not t or len(t) > _MAX_SHORTCUT_CHARS:
+        return None
+    if not any(w in t for w in _NAV_PAGE_WORDS):
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    if any(v in t for v in _NAV_VERBS):
+        return None  # a verbed command is match_navigation_intent's job
+    hit = _unique_page_hit(t, manifest)
+    if hit is None:
+        return None
+    label = str(hit.get("label") or hit["id"]).split("(")[0].split("/")[0].strip()
+    return {"target": str(hit["id"]), "label": label or str(hit["id"])}
+
+
+# Bare yes/no for the confirmation turn (exact after stripping politeness —
+# same discipline as the stop matcher).
+_YES_FORMS = {"ใช่", "ช่าย", "ถูกต้อง", "ตกลง", "เอา", "yes", "yeah", "ok", ""}
+_NO_FORMS = {"ไม่", "ไม่ใช่", "ไม่เอา", "ไม่ต้อง", "ยกเลิก", "no", "nope"}
+_MAX_CONFIRM_CHARS = 20
+
+
+def _strip_polite(text: str) -> str | None:
+    t = (text or "").strip().lower()
+    if not t or len(t) > _MAX_CONFIRM_CHARS:
+        return None
+    for bit in ("ครับ", "ค่ะ", "คะ", "จ้า", "จ้ะ", "เลย", "นะ", " "):
+        t = t.replace(bit, "")
+    return t
+
+
+def is_affirmative(text: str) -> bool:
+    """Bare yes ("ใช่", "ใช่ครับ", plain "ครับ") for a pending confirmation."""
+    t = _strip_polite(text)
+    return t is not None and t in _YES_FORMS
+
+
+def is_negative(text: str) -> bool:
+    """Bare no ("ไม่", "ไม่ใช่ครับ") for a pending confirmation."""
+    t = _strip_polite(text)
+    return t is not None and t in _NO_FORMS
 
 
 def allowed_target_ids(manifest: dict[str, Any]) -> set[str]:
@@ -369,6 +449,12 @@ class VoiceUICapability:
                 "When the caller asks to go to / open a page, you MUST actually call "
                 f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
                 "saying 'ได้เลยครับ' without the tool call means nothing happened. "
+                "If the request sounds like navigation but you cannot map it to "
+                "one listed target (speech recognition garbles words), do NOT "
+                "acknowledge and do NOT guess: ask one short question instead — "
+                "'คุณหมายถึงหน้าไหนครับ' or 'คุณหมายถึงหน้า X ใช่ไหมครับ'. "
+                "An acknowledgement ('ได้เลยครับ'/'จัดให้ครับ') is ONLY allowed in "
+                "the same reply as a ui_navigate call, never on its own. "
                 "TIMING: the screen changes the instant you call the tool — before "
                 "your voice reaches the caller. HARD RULE for the reply after a "
                 "ui_navigate call: output EXACTLY one short phrase — 'ได้เลยครับ' or "
@@ -447,6 +533,9 @@ __all__ = [
     "VoiceUICapability",
     "allowed_target_ids",
     "install_ui_control",
+    "is_affirmative",
+    "is_negative",
+    "match_navigation_guess",
     "match_navigation_intent",
     "match_where_am_i",
     "sanitize_manifest",

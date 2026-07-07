@@ -24,9 +24,9 @@ import { collectPageContext } from "./pageContext";
 // pushing the route (defense in depth — see services/voice_realtime/ui_control).
 const UI_PAGES: { id: string; label: string; path: string }[] = [
   { id: "chat", label: "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepTutor)", path: "/home" },
-  { id: "knowledge", label: "หน้า Knowledge Base (คลังความรู้/เอกสาร)", path: "/knowledge" },
+  { id: "knowledge", label: "หน้า Knowledge Base (คลังความรู้/ศูนย์ความรู้/เอกสาร)", path: "/knowledge" },
   { id: "notebook", label: "หน้าสมุดโน้ต", path: "/notebook" },
-  { id: "memory", label: "หน้าความจำ (memory)", path: "/memory" },
+  { id: "memory", label: "หน้าความจำ / หน่วยความจำ (memory)", path: "/memory" },
   { id: "agents", label: "หน้าเอเจนต์ของฉัน", path: "/agents" },
   { id: "book", label: "หน้าสร้างหนังสือ (book)", path: "/book" },
   { id: "co_writer", label: "หน้าเขียนงานร่วมกัน (co-writer)", path: "/co-writer" },

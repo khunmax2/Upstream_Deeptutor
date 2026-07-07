@@ -43,6 +43,9 @@ class VoiceSession:
         # Latest current-screen snapshot the client streamed (``ui_context``
         # frames); refreshed per turn by the client, read-only on this side.
         self.ui_context: dict[str, str] | None = None
+        # Cross-turn navigation state (pending "คุณหมายถึง X ใช่ไหม"
+        # confirmation); owned here, mutated by the pipeline each turn.
+        self.nav_state: dict[str, Any] = {}
         self._current: asyncio.Task[None] | None = None
 
     async def greet(self) -> None:
@@ -100,6 +103,7 @@ class VoiceSession:
                 language=self._language,
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
+                nav_state=self.nav_state,
             )
         except asyncio.CancelledError:
             raise
@@ -118,6 +122,7 @@ class VoiceSession:
                 language=self._language,
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
+                nav_state=self.nav_state,
             )
         except asyncio.CancelledError:
             raise

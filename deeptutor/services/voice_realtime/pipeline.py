@@ -310,16 +310,8 @@ async def _speak_fixed_line(emitter: VoiceEmitter, text: str, *, seq: int = 0) -
     return True
 
 
-async def _run_where_shortcut(emitter: VoiceEmitter, page: str, *, turn_t0: float) -> str:
-    """Answer "ตอนนี้อยู่หน้าไหน" from the streamed screen context; no LLM.
-
-    Deterministic and model-independent: the server already knows the page
-    (latest ``ui_context`` frame), so the answer can't be dragged wrong by
-    navigation turns in history — the failure mode the prompt-side note only
-    mitigates. Line goes through the fixed-line TTS cache (one synthesis per
-    distinct page per process).
-    """
-    line = f"ตอนนี้อยู่{page}ครับ" if page.startswith("หน้า") else f"ตอนนี้อยู่ที่หน้า {page} ครับ"
+async def _speak_short_turn(emitter: VoiceEmitter, line: str, *, turn_t0: float) -> str:
+    """Emit a complete no-LLM turn (cached audio + assistant_text + done)."""
     spoke = await _speak_fixed_line(emitter, line)
     await emitter.send_json({"type": "assistant_text", "text": line})
     await emitter.send_json(
@@ -330,6 +322,40 @@ async def _run_where_shortcut(emitter: VoiceEmitter, page: str, *, turn_t0: floa
         }
     )
     return line
+
+
+async def _run_where_shortcut(emitter: VoiceEmitter, page: str, *, turn_t0: float) -> str:
+    """Answer "ตอนนี้อยู่หน้าไหน" from the streamed screen context; no LLM.
+
+    Deterministic and model-independent: the server already knows the page
+    (latest ``ui_context`` frame), so the answer can't be dragged wrong by
+    navigation turns in history — the failure mode the prompt-side note only
+    mitigates. Line goes through the fixed-line TTS cache (one synthesis per
+    distinct page per process).
+    """
+    line = f"ตอนนี้อยู่{page}ครับ" if page.startswith("หน้า") else f"ตอนนี้อยู่ที่หน้า {page} ครับ"
+    return await _speak_short_turn(emitter, line, turn_t0=turn_t0)
+
+
+async def _run_confirm_shortcut(
+    emitter: VoiceEmitter,
+    guess: dict[str, str],
+    nav_state: dict[str, Any],
+    *,
+    turn_t0: float,
+) -> str:
+    """Ask "คุณหมายถึงให้เปิด X ใช่ไหม" for a probable-but-unverbed page command.
+
+    STT garbles verbs often enough ("ไฟหน้า…") that guessing silently would
+    misfire and — worse — the LLM sometimes acknowledges such turns without
+    acting. Asking back is deterministic, honest, and one syllable away from
+    executing: the pending target lands in *nav_state* and the next bare
+    "ใช่/ครับ" runs the navigation without any LLM round.
+    """
+    nav_state["pending"] = guess["target"]
+    label = guess.get("label") or guess["target"]
+    line = f"คุณหมายถึงให้เปิด{label}ใช่ไหมครับ"
+    return await _speak_short_turn(emitter, line, turn_t0=turn_t0)
 
 
 async def _run_navigation_shortcut(
@@ -390,6 +416,7 @@ async def run_turn(
     language: str = "th",
     ui_manifest: dict[str, Any] | None = None,
     ui_context: dict[str, str] | None = None,
+    nav_state: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Run one voice turn (audio in) and stream events/audio to *emitter*.
 
@@ -424,6 +451,7 @@ async def run_turn(
         turn_t0=turn_t0,
         ui_manifest=ui_manifest,
         ui_context=ui_context,
+        nav_state=nav_state,
     )
     return transcript, reply
 
@@ -477,13 +505,17 @@ async def run_text_turn(
     turn_t0: float | None = None,
     ui_manifest: dict[str, Any] | None = None,
     ui_context: dict[str, str] | None = None,
+    nav_state: dict[str, Any] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
     Unambiguous page commands short-circuit deterministically (no LLM at
-    all — see ``ui_control.match_navigation_intent``). Everything else runs
-    under a scoped LLM config with reasoning disabled and low temperature
-    (see ``_VOICE_REASONING_EFFORT`` / ``_VOICE_TEMPERATURE``).
+    all — see ``ui_control.match_navigation_intent``); probable-but-unverbed
+    ones ask for confirmation first (``match_navigation_guess`` +
+    *nav_state*, the session-owned dict carrying the pending target to the
+    next turn). Everything else runs under a scoped LLM config with reasoning
+    disabled and low temperature (see ``_VOICE_REASONING_EFFORT`` /
+    ``_VOICE_TEMPERATURE``).
     """
     from deeptutor.services.llm.config import reset_scoped_llm_config
 
@@ -491,18 +523,42 @@ async def run_text_turn(
     if is_stop_command(transcript):
         # The session already cancelled the previous (speaking) turn when this
         # utterance arrived — just acknowledge, never start an LLM turn.
+        if nav_state is not None:
+            nav_state.pop("pending", None)
+        logger.info("voice rung=stop %r", transcript)
         return await _run_stop_shortcut(emitter, turn_t0=t0)
+
+    # A pending "คุณหมายถึง X ใช่ไหม" owns the very next utterance: bare yes
+    # executes, bare no acknowledges, anything else just clears it and is
+    # processed normally (the caller moved on).
+    pending = nav_state.pop("pending", None) if nav_state is not None else None
+    if pending:
+        if ui_control.is_affirmative(transcript):
+            logger.info("voice rung=confirm-yes target=%s %r", pending, transcript)
+            return await _run_navigation_shortcut(emitter, {"target": pending}, turn_t0=t0)
+        if ui_control.is_negative(transcript):
+            logger.info("voice rung=confirm-no %r", transcript)
+            return await _speak_short_turn(emitter, narration.CONFIRM_NO_ACK_LINE, turn_t0=t0)
 
     if ui_control.match_where_am_i(transcript):
         # Known-true answer held server-side; no page name in the context
         # (page outside the manifest) → fall through to the LLM instead.
         page = ui_control.spoken_page_name(ui_context)
         if page:
+            logger.info("voice rung=where page=%s %r", page, transcript)
             return await _run_where_shortcut(emitter, page, turn_t0=t0)
 
     action = ui_control.match_navigation_intent(transcript, ui_manifest)
     if action is not None:
+        logger.info("voice rung=nav target=%s %r", action.get("target"), transcript)
         return await _run_navigation_shortcut(emitter, action, turn_t0=t0)
+
+    guess = ui_control.match_navigation_guess(transcript, ui_manifest)
+    if guess is not None and nav_state is not None:
+        logger.info("voice rung=confirm-ask target=%s %r", guess.get("target"), transcript)
+        return await _run_confirm_shortcut(emitter, guess, nav_state, turn_t0=t0)
+
+    logger.info("voice rung=llm %r", transcript)
 
     token = _enter_fast_voice_llm_scope()
     try:
