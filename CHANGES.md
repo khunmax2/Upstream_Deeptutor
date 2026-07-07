@@ -169,6 +169,17 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Click matching crosses scripts (loanwords).** Live gap: the
+  screen says "เพอร์โซนา" but STT romanised the caller's word to "persona" —
+  different scripts, so exact/substring/Thai-phonetic tiers all miss. New
+  final tier in `resolve_click_target`: compare Latin *consonant skeletons*
+  (Thai consonants transliterated, karan-silenced ones dropped, vowels — the
+  unstable part of transliteration — ignored, sound-alike Latin letters
+  folded): เพอร์โซนา→psn vs persona→prsn, distance 1 → hit. Works both
+  directions (Thai speech vs English UI) and covers the network/เน็ตเวิร์ก
+  family. Only consulted when every same-script tier found nothing; the
+  ambiguity guard still applies. File: `services/voice_realtime/ui_control.py`.
+
 - **2026-07-08 — `ui_click`: the LLM can now press visible buttons too.**
   Click gained the same ladder navigation already had: phrasings the
   deterministic shortcut doesn't recognise ("เปิดประวัติแชต",

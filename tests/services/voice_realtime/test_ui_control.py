@@ -459,6 +459,25 @@ async def test_llm_click_tool_call_arms_confirmation_for_dangerous(
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+def test_click_matches_loanwords_across_scripts() -> None:
+    """คำสั่งจริงที่เคยพลาด: STT ถอด 'persona' แต่จอเขียน 'เพอร์โซนา' (คนละอักษร)."""
+    ctx = {"buttons": ["เพอร์โซนา", "สกิล", "เส้นทางสู่ความเชี่ยวชาญ"]}
+    assert ui_control.resolve_click_target("persona", ctx) == ("hit", "เพอร์โซนา")
+    # And the reverse: English UI, Thai speech.
+    ctx_en = {"buttons": ["Persona", "Skills", "Mastery Path"]}
+    assert ui_control.resolve_click_target("เพอร์โซนา", ctx_en) == ("hit", "Persona")
+    # Another common loanword shape.
+    assert ui_control.resolve_click_target("network", {"buttons": ["เน็ตเวิร์ก", "โมเดล"]}) == (
+        "hit",
+        "เน็ตเวิร์ก",
+    )
+    # Unrelated names must not cross-match.
+    assert ui_control.resolve_click_target("persona", {"buttons": ["สมุดบันทึก"]}) == (
+        "missing",
+        None,
+    )
+
+
 def test_click_resolves_the_live_chat_history_gap() -> None:
     """คำสั่งจริงที่เคยพลาด: 'กดที่ประวัติแชท' ปะทะปุ่มจริง 'ประวัติแชต' (ท↔ต)."""
     ctx = {"buttons": ["ประวัติแชต", "สมุดบันทึก", "คลังคำถาม"]}

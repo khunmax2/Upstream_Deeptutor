@@ -533,22 +533,90 @@ def match_click_intent(text: str) -> str | None:
     return None
 
 
+# Cross-script matching for transliterated loanwords: the screen says
+# "เพอร์โซนา" but STT romanises the caller's word to "persona" (or the UI is
+# English and the caller speaks Thai). Comparing *consonant skeletons* in
+# Latin bridges the scripts: vowels are the unstable part of transliteration,
+# consonants survive. Karan-marked consonants (ร์ in เพอร์) are silent — drop.
+_KARAN = "์"
+_TH_CONSONANT_LATIN = {
+    "ก": "k",
+    "ข": "k",
+    "ค": "k",
+    "ฆ": "k",
+    "ง": "g",
+    "จ": "j",
+    "ฉ": "c",
+    "ช": "c",
+    "ฌ": "c",
+    "ซ": "s",
+    "ญ": "y",
+    "ฎ": "d",
+    "ฏ": "t",
+    "ฐ": "t",
+    "ฑ": "t",
+    "ฒ": "t",
+    "ณ": "n",
+    "ด": "d",
+    "ต": "t",
+    "ถ": "t",
+    "ท": "t",
+    "ธ": "t",
+    "น": "n",
+    "บ": "b",
+    "ป": "p",
+    "ผ": "p",
+    "พ": "p",
+    "ฟ": "f",
+    "ภ": "p",
+    "ม": "m",
+    "ย": "y",
+    "ร": "r",
+    "ล": "l",
+    "ฬ": "l",
+    "ว": "w",
+    "ศ": "s",
+    "ษ": "s",
+    "ส": "s",
+    "ห": "h",
+    "ฮ": "h",
+}
+_LATIN_SOUND_FOLD = str.maketrans({"c": "k", "q": "k", "x": "s", "z": "s", "v": "w", "j": "y"})
+
+
+def _consonant_skeleton(s: str) -> str:
+    """Latin consonant skeleton of Thai or Latin text ("เพอร์โซนา"/"persona" → psn/prsn)."""
+    s = re.sub(f".{_KARAN}", "", s.lower())  # karan'd consonant is silent
+    out: list[str] = []
+    for ch in s:
+        if ch in _TH_CONSONANT_LATIN:
+            out.append(_TH_CONSONANT_LATIN[ch])
+        elif ch.isascii() and ch.isalpha() and ch not in "aeiou":
+            out.append(ch)
+    return "".join(out).translate(_LATIN_SOUND_FOLD)
+
+
 def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
     """Resolve a spoken button *name* against the visible buttons.
 
     Returns ``("hit", button_text)`` for exactly one match, ``("ambiguous",
     None)`` for several, ``("missing", None)`` for none / no context. Match
     order: exact (normalised) → substring either way → phonetic fuzzy (STT
-    garbles button names too) — each tier only consulted when the previous
-    found nothing.
+    garbles button names too) → cross-script consonant skeleton (loanwords:
+    spoken "persona" vs on-screen "เพอร์โซนา") — each tier only consulted when
+    the previous found nothing.
     """
     spoken = (name or "").replace(" ", "").lower()
     buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
     if not spoken or not buttons:
         return ("missing", None)
+    spoken_skeleton = _consonant_skeleton(spoken)
 
     def tiers() -> list[list[str]]:
-        exact, contains, fuzzy = [], [], []
+        exact: list[str] = []
+        contains: list[str] = []
+        fuzzy: list[str] = []
+        cross: list[str] = []
         for button in buttons:
             b = button.replace(" ", "").lower()
             if b == spoken:
@@ -557,7 +625,15 @@ def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[
                 contains.append(button)
             elif _edit_distance(_phonetic(spoken), _phonetic(b)) <= max(1, len(b) // 4):
                 fuzzy.append(button)
-        return [exact, contains, fuzzy]
+            else:
+                bs = _consonant_skeleton(b)
+                if (
+                    len(spoken_skeleton) >= 3
+                    and len(bs) >= 3
+                    and _edit_distance(spoken_skeleton, bs) <= max(1, len(bs) // 3)
+                ):
+                    cross.append(button)
+        return [exact, contains, fuzzy, cross]
 
     for hits in tiers():
         if len(hits) == 1:
