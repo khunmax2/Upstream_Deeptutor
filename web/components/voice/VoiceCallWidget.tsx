@@ -14,7 +14,25 @@
 // layout.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
+
+// Steerable-UI whitelist sent to the voice layer as the `ui_manifest` control
+// frame: the model may call `ui_navigate` only with these ids, and this
+// component re-validates every `ui_action` against the same table before
+// pushing the route (defense in depth — see services/voice_realtime/ui_control).
+const UI_PAGES: { id: string; label: string; path: string }[] = [
+  { id: "chat", label: "หน้าแชทหลัก (คุยกับ DeepTutor)", path: "/" },
+  { id: "knowledge", label: "หน้า Knowledge Base (คลังความรู้/เอกสาร)", path: "/knowledge" },
+  { id: "notebook", label: "หน้าสมุดโน้ต", path: "/notebook" },
+  { id: "memory", label: "หน้าความจำ (memory)", path: "/memory" },
+  { id: "agents", label: "หน้าเอเจนต์ของฉัน", path: "/agents" },
+  { id: "book", label: "หน้าสร้างหนังสือ (book)", path: "/book" },
+  { id: "co_writer", label: "หน้าเขียนงานร่วมกัน (co-writer)", path: "/co-writer" },
+  { id: "space", label: "หน้า space", path: "/space" },
+  { id: "settings", label: "หน้าตั้งค่า (settings)", path: "/settings" },
+  { id: "profile", label: "หน้าโปรไฟล์ผู้ใช้", path: "/profile" },
+];
 
 const THREE_CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
 const FADE_MS = 500;
@@ -366,6 +384,7 @@ interface LogMsg {
 }
 
 export default function VoiceCallWidget() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false); // overlay in the DOM
   const [visible, setVisible] = useState(false); // fade state (opacity)
   const [status, setStatus] = useState("กำลังเชื่อมต่อ…");
@@ -407,6 +426,22 @@ export default function VoiceCallWidget() {
   const setMascot = useCallback((s: MascotState) => {
     mascotRef.current?.setState(s);
   }, []);
+
+  // Execute a voice-driven UI action — only targets we declared in the
+  // manifest are honoured, everything else is reported and ignored.
+  const executeUiAction = useCallback(
+    (m: any) => {
+      const target = String(m.target || "");
+      const page = UI_PAGES.find((p) => p.id === target);
+      if (page) {
+        addMsg("sys", `🖱 ไปหน้า ${page.label}`);
+        router.push(page.path);
+      } else {
+        addMsg("sys", `⚠ ไม่รู้จักปลายทาง: ${target}`);
+      }
+    },
+    [addMsg, router],
+  );
 
   const stopPlayback = useCallback(() => {
     queueRef.current = [];
@@ -531,6 +566,13 @@ export default function VoiceCallWidget() {
     ws.onopen = () => {
       setStatus("ฟังอยู่…");
       setMascot("listening");
+      // Declare the steerable pages so the model can drive navigation.
+      ws.send(
+        JSON.stringify({
+          type: "ui_manifest",
+          manifest: { pages: UI_PAGES.map(({ id, label }) => ({ id, label })) },
+        }),
+      );
     };
     ws.onclose = () => {
       if (runningRef.current) setStatus("การเชื่อมต่อหลุด");
@@ -564,7 +606,8 @@ export default function VoiceCallWidget() {
           setStatus("ฟังอยู่…");
           setMascot("listening");
         }
-      } else if (m.type === "error") addMsg("sys", `⚠ ${m.message}`);
+      } else if (m.type === "ui_action") executeUiAction(m);
+      else if (m.type === "error") addMsg("sys", `⚠ ${m.message}`);
     };
 
     // Browser STT with the echo mute-guard (see prototype bench).
@@ -595,7 +638,7 @@ export default function VoiceCallWidget() {
     } else {
       addMsg("sys", "⚠ เบราว์เซอร์นี้ไม่มี Web Speech — พิมพ์คุยแทนได้");
     }
-  }, [addMsg, isEchoOfBot, playNext, rememberBotText, sendText, setMascot]);
+  }, [addMsg, executeUiAction, isEchoOfBot, playNext, rememberBotText, sendText, setMascot]);
 
   useEffect(() => hangUp, [hangUp]); // teardown on unmount
 

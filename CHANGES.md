@@ -169,6 +169,16 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Voice page-navigation wired into the web widget.**
+  `VoiceCallWidget` now declares the app's real pages (chat / knowledge /
+  notebook / memory / agents / book / co-writer / space / settings / profile)
+  as the `ui_manifest` whitelist on connect, and executes incoming
+  `ui_action` frames via the Next router (`router.push`), re-validating the
+  target against the same table first. Say "พาไปหน้า settings" mid-call and
+  the app navigates while the call continues (the widget lives in the root
+  layout). Server side unchanged — same `ui_navigate` seam the mock bench
+  proved. File: `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-07 — Web widget mounted globally (root layout).** The widget was
   mounted in the workspace layout, so navigating to another route group
   unmounted it mid-call (button gone, call dropped). Moved the two mount
