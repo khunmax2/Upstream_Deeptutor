@@ -253,6 +253,23 @@ code is additive and isolated for mergeability.
   → confirm → ใช่ → navigate). Files: `services/voice_realtime/
   ui_control.py`, `pipeline.py`, `narration.py`, `session.py`,
   `web/components/voice/VoiceCallWidget.tsx`.
+  **Round 2 — the garble list replaced by a general fix (two industry-style
+  layers):** (1) *Phonetic fuzzy verb slot* — the hardcoded "ไฟหน้า/ใบหน้า"
+  pairs are gone; the matcher now takes the 2–4 characters before the page
+  word, normalises Thai homophone letters (ใ→ไ, ณ→น, ศ/ษ→ส, …) and tone
+  marks, and accepts edit distance ≤ 1 from any navigation verb — so
+  "ไอหน้า", "ไผ่หน้า" and every future variant work without new entries
+  (guarded by the unique-page + short-utterance + question-word checks, and
+  `match_navigation_intent` gains the question guard too). (2) *N-best
+  rescue* — the widget now requests `maxAlternatives = 3` from Web Speech
+  and, when the top hypothesis is nav-adjacent (mentions a page) but fails
+  the command shape while a runner-up passes it AND names a known page, the
+  runner-up is sent instead; ordinary conversation always keeps rank #1
+  (`web/components/voice/speechAlternatives.ts`, node-tested). E2E:
+  never-hardcoded garbles now navigate correctly. Files:
+  `services/voice_realtime/ui_control.py`,
+  `web/components/voice/speechAlternatives.ts` (new),
+  `VoiceCallWidget.tsx`, `web/tests/voice-speech-alternatives.test.ts`.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers

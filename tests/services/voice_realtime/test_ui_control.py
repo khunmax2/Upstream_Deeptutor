@@ -253,10 +253,25 @@ def test_shortcut_requires_unambiguous_page() -> None:
     assert ui_control.match_navigation_intent("ไปหน้า settings", None) is None
 
 
-def test_shortcut_normalizes_stt_garbles_of_pai_naa() -> None:
-    """STT hears "ไฟหน้า"/"ใบหน้า" for "ไปหน้า" — still a direct command."""
-    assert ui_control.match_navigation_intent("ไฟหน้าตั้งค่า", MANIFEST) == {"target": "settings"}
-    assert ui_control.match_navigation_intent("ใบหน้าตั้งค่าหน่อย", MANIFEST) == {"target": "settings"}
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ไฟหน้าตั้งค่า",  # ไฟ ~ ไป (1 sub)
+        "ใบหน้าตั้งค่าหน่อย",  # ใบ →(homophone ใ→ไ)→ ไบ ~ ไป
+        "ไอหน้าตั้งค่า",  # ไอ ~ ไป — never seen live yet; the fuzzy rule covers it
+        "ไผ่หน้าตั้งค่า",  # tone mark stripped, ไผ ~ ไป
+    ],
+)
+def test_shortcut_tolerates_garbled_nav_verbs(text: str) -> None:
+    """STT-garbled "ไปหน้า" variants are direct commands via phonetic fuzz."""
+    assert ui_control.match_navigation_intent(text, MANIFEST) == {"target": "settings"}
+
+
+def test_garbled_verb_does_not_hijack_plain_speech() -> None:
+    # Question guard still wins even with a garble-like prefix.
+    assert ui_control.match_navigation_intent("ไฟหน้าตั้งค่าคืออะไร", MANIFEST) is None
+    # No page named → nothing to navigate to, however verb-like it sounds.
+    assert ui_control.match_navigation_intent("ไฟหน้ารถเสีย", MANIFEST) is None
 
 
 # ── confirm-first navigation guess ─────────────────────────────────────

@@ -239,22 +239,87 @@ def _page_match_strings(entry: dict[str, Any]) -> set[str]:
     return out
 
 
-# Frequent STT garbles of "ไปหน้า" heard in live calls ("ไฟหน้าหน่วยความจำ",
-# "ใบหน้าหนังสือ"). Normalised before matching — the same vocab-bias trick the
-# STT guard uses. Safe because the shortcut still requires a unique manifest
-# page match: a genuine sentence about headlights or faces won't name one.
-_STT_GARBLES = (("ไฟหน้า", "ไปหน้า"), ("ใบหน้า", "ไปหน้า"))
-
 # Words that mark the utterance as a *question about* a page rather than a
 # command to open it ("หน้าความจำคืออะไร") — those belong to the LLM.
 _QUESTION_WORDS = ("อะไร", "คือ", "ไหม", "ทำไม", "ยังไง", "อย่างไร", "ที่ไหน", "เมื่อไหร่")
 
 
 def _normalize_nav_text(text: str) -> str:
-    t = (text or "").strip().lower()
-    for garble, fix in _STT_GARBLES:
-        t = t.replace(garble, fix)
-    return t
+    return (text or "").strip().lower()
+
+
+# ── fuzzy verb slot (STT-garble tolerance, the generalised fix) ────────
+#
+# Browser STT garbles the navigation verb constantly: "ไปหน้า" arrives as
+# "ไฟหน้า", "ใบหน้า", "ไอหน้า", … A hardcoded garble list loses that war one
+# entry at a time. The industry answer is phonetic-aware fuzzy matching on the
+# verb slot: take the 2–4 characters right before the page word, normalise
+# Thai homophone letters (ใ/ไ are pronounced identically, ณ/น, ศ ษ/ส, …) and
+# strip tone marks (STT swaps them freely), then accept an edit distance ≤ 1
+# from any known verb. "ไฟ→ไป" (1 sub), "ใบ→ไบ→ไป" (homophone + 1 sub) and
+# every future variant land automatically. Safe because the shortcut ALSO
+# requires a short utterance naming exactly one manifest page — and anything
+# that misses the fuzzy bar entirely still falls into the confirm rung
+# ("คุณหมายถึง…ใช่ไหม") rather than being dropped.
+
+_THAI_HOMOPHONES = str.maketrans(
+    {
+        "ใ": "ไ",
+        "ณ": "น",
+        "ฎ": "ด",
+        "ฏ": "ต",
+        "ศ": "ส",
+        "ษ": "ส",
+        "ฬ": "ล",
+        "ฆ": "ค",
+        "ฑ": "ท",
+        "ฒ": "ท",
+        "ภ": "พ",
+        "ฐ": "ถ",
+    }
+)
+_TONE_MARKS = re.compile(r"[่-๋์]")  # ่ ้ ๊ ๋ ์
+
+
+def _phonetic(s: str) -> str:
+    return _TONE_MARKS.sub("", s.translate(_THAI_HOMOPHONES))
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Plain Levenshtein — the strings here are 2–5 chars, no need for speed."""
+    if len(a) < len(b):
+        a, b = b, a
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _has_nav_verb(t: str) -> bool:
+    """Whether *t* carries a navigation verb — exact, or garbled within reason.
+
+    Fuzzy pass: for each page word occurrence, compare the 2–4 preceding
+    characters (the verb slot) against every verb of length ≥ 2, phonetically
+    normalised, accepting edit distance ≤ 1.
+    """
+    if any(v in t for v in _NAV_VERBS):
+        return True
+    for w in _NAV_PAGE_WORDS:
+        start = t.find(w)
+        if start <= 0:
+            continue
+        prefix = t[max(0, start - 4) : start]
+        for length in (2, 3, 4):
+            cand = _phonetic(prefix[-length:])
+            if len(cand) < 2:
+                continue
+            for verb in _NAV_VERBS:
+                if len(verb) >= 2 and _edit_distance(cand, _phonetic(verb)) <= 1:
+                    return True
+    return False
 
 
 def _unique_page_hit(t: str, manifest: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -272,10 +337,11 @@ def _unique_page_hit(t: str, manifest: dict[str, Any] | None) -> dict[str, Any] 
 def match_navigation_intent(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
     """Return ``{"target": id}`` when *text* is an unambiguous page command.
 
-    Conservative on purpose: requires a navigation verb, a page word, a short
-    utterance, and exactly ONE matching manifest page. Everything else returns
-    ``None`` and the LLM decides (multi-intent, ambiguity, non-UI questions).
-    Common STT garbles of "ไปหน้า" are normalised first (see ``_STT_GARBLES``).
+    Conservative on purpose: requires a navigation verb (exact or an STT
+    garble within one phonetic edit — see ``_has_nav_verb``), a page word, a
+    short utterance, and exactly ONE matching manifest page. Everything else
+    returns ``None`` and the LLM decides (multi-intent, ambiguity, non-UI
+    questions).
     """
     if not manifest:
         return None
@@ -284,7 +350,9 @@ def match_navigation_intent(text: str, manifest: dict[str, Any] | None) -> dict[
         return None
     if not any(w in t for w in _NAV_PAGE_WORDS):
         return None
-    if not any(v in t for v in _NAV_VERBS):
+    if any(q in t for q in _QUESTION_WORDS):
+        return None  # "ไฟหน้าตั้งค่าคืออะไร" is a question, not a command
+    if not _has_nav_verb(t):
         return None
     hit = _unique_page_hit(t, manifest)
     if hit is None:
@@ -311,8 +379,8 @@ def match_navigation_guess(text: str, manifest: dict[str, Any] | None) -> dict[s
         return None
     if any(q in t for q in _QUESTION_WORDS):
         return None
-    if any(v in t for v in _NAV_VERBS):
-        return None  # a verbed command is match_navigation_intent's job
+    if _has_nav_verb(t):
+        return None  # a (possibly garbled) verbed command is match_navigation_intent's job
     hit = _unique_page_hit(t, manifest)
     if hit is None:
         return None

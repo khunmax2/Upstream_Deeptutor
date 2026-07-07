@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
 import { collectPageContext } from "./pageContext";
+import { pickUtterance } from "./speechAlternatives";
 
 // Steerable-UI whitelist sent to the voice layer as the `ui_manifest` control
 // frame: the model may call `ui_navigate` only with these ids, and this
@@ -654,12 +655,21 @@ export default function VoiceCallWidget() {
       recog.lang = "th-TH";
       recog.continuous = true;
       recog.interimResults = true;
+      recog.maxAlternatives = 3; // runner-up hypotheses rescue garbled commands
       recog.onresult = (ev: any) => {
         if (playingRef.current || Date.now() < muteUntilRef.current) return;
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          if (!ev.results[i].isFinal) continue;
-          const heard = ev.results[i][0].transcript;
-          if (isEchoOfBot(heard)) continue; // our own TTS leaking back in
+          const result = ev.results[i];
+          if (!result.isFinal) continue;
+          const alternatives = Array.from(
+            { length: result.length },
+            (_, k) => String(result[k]?.transcript || ""),
+          );
+          const heard = pickUtterance(
+            alternatives,
+            UI_PAGES.map((p) => p.label),
+          );
+          if (!heard || isEchoOfBot(heard)) continue; // our own TTS leaking back in
           sendText(heard);
         }
       };
