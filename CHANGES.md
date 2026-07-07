@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Web widget: two more echo defenses (abort + fingerprint).**
+  The time-based mute guard alone still leaked: Web Speech buffers what it
+  hears during playback and delivers the final result *after* the mute
+  window. The widget now (1) aborts recognition the instant bot audio starts
+  (discarding the buffer) and restarts it 800 ms after playback ends, and
+  (2) drops any recognised utterance whose normalised text matches what the
+  bot recently spoke (Botnoi's textFingerprint technique). File:
+  `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-07 — Voice call in the real web app (branch
   `feat/voice-web-integration`).** New
   `web/components/voice/VoiceCallWidget.tsx`: a floating 📞 button in the

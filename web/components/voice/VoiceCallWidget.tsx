@@ -382,6 +382,23 @@ export default function VoiceCallWidget() {
   const queueRef = useRef<Blob[]>([]);
   const pendingMetaRef = useRef<any>(null);
   const runningRef = useRef(false);
+  // Echo fingerprint: everything the bot spoke recently — a "user" utterance
+  // matching it is the mic hearing our own TTS, not the caller.
+  const botTextsRef = useRef<string[]>([]);
+  const restartTimerRef = useRef<number | null>(null);
+
+  const rememberBotText = useCallback((text: string) => {
+    if (!text) return;
+    botTextsRef.current = [...botTextsRef.current.slice(-11), text];
+  }, []);
+
+  const isEchoOfBot = useCallback((heard: string) => {
+    const norm = (s: string) => s.toLowerCase().replace(/[\s.,!?…ๆฯ"'`-]/g, "");
+    const h = norm(heard);
+    if (h.length < 3) return false;
+    const spoken = norm(botTextsRef.current.join(""));
+    return spoken.includes(h);
+  }, []);
 
   const addMsg = useCallback((who: LogMsg["who"], text: string) => {
     setLog((l) => [...l.slice(-19), { who, text }]);
@@ -411,8 +428,29 @@ export default function VoiceCallWidget() {
       if (runningRef.current) {
         setStatus("ฟังอยู่…");
         setMascot("listening");
+        // Resume recognition after the echo tail (it was aborted at playback start).
+        if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = window.setTimeout(() => {
+          if (runningRef.current && !playingRef.current) {
+            try {
+              recogRef.current?.start();
+            } catch {
+              /* already running */
+            }
+          }
+        }, 800);
       }
       return;
+    }
+    // Kill speech recognition the moment audio starts: Web Speech buffers what
+    // it hears during playback and would deliver it *after* the mute window,
+    // so a time-guard alone is not enough — abort discards that buffer.
+    if (!playingRef.current) {
+      try {
+        recogRef.current?.abort();
+      } catch {
+        /* already stopped */
+      }
     }
     playingRef.current = true;
     setMascot("speaking");
@@ -451,6 +489,7 @@ export default function VoiceCallWidget() {
 
   const hangUp = useCallback(() => {
     runningRef.current = false;
+    if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
     if (recogRef.current) {
       recogRef.current.onend = null;
       recogRef.current.stop();
@@ -509,8 +548,13 @@ export default function VoiceCallWidget() {
       if (m.type === "transcript") {
         addMsg("user", m.text);
         setMascot("thinking");
-      } else if (m.type === "audio") pendingMetaRef.current = m;
-      else if (m.type === "assistant_text") addMsg("bot", m.text);
+      } else if (m.type === "audio") {
+        pendingMetaRef.current = m;
+        rememberBotText(String(m.text || "")); // fingerprint source per chunk
+      } else if (m.type === "assistant_text") {
+        addMsg("bot", m.text);
+        rememberBotText(String(m.text || ""));
+      }
       else if (m.type === "status") {
         if (m.state) setMascot(m.state);
         if (m.state === "searching") setStatus("🔎 กำลังค้นข้อมูล…");
@@ -534,11 +578,15 @@ export default function VoiceCallWidget() {
       recog.onresult = (ev: any) => {
         if (playingRef.current || Date.now() < muteUntilRef.current) return;
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          if (ev.results[i].isFinal) sendText(ev.results[i][0].transcript);
+          if (!ev.results[i].isFinal) continue;
+          const heard = ev.results[i][0].transcript;
+          if (isEchoOfBot(heard)) continue; // our own TTS leaking back in
+          sendText(heard);
         }
       };
       recog.onend = () => {
-        if (runningRef.current && recogRef.current) recog.start();
+        // Stay silent while the bot speaks; playback-end schedules the restart.
+        if (runningRef.current && recogRef.current && !playingRef.current) recog.start();
       };
       recog.onerror = (e: any) => {
         if (e.error !== "no-speech") console.warn("speech:", e.error);
@@ -547,7 +595,7 @@ export default function VoiceCallWidget() {
     } else {
       addMsg("sys", "⚠ เบราว์เซอร์นี้ไม่มี Web Speech — พิมพ์คุยแทนได้");
     }
-  }, [addMsg, playNext, sendText, setMascot]);
+  }, [addMsg, isEchoOfBot, playNext, rememberBotText, sendText, setMascot]);
 
   useEffect(() => hangUp, [hangUp]); // teardown on unmount
 
