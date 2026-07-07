@@ -274,6 +274,55 @@ def test_garbled_verb_does_not_hijack_plain_speech() -> None:
     assert ui_control.match_navigation_intent("ไฟหน้ารถเสีย", MANIFEST) is None
 
 
+# ── deterministic in-page action shortcut ──────────────────────────────
+
+ACTIONS_MANIFEST = {
+    **MANIFEST,
+    "actions": [
+        {"id": "new_chat", "label": "สร้างแชทใหม่"},
+        {"id": "go_back", "label": "ย้อนกลับ"},
+        {"id": "open_kb", "label": "เปิดคลังความรู้", "argument": "ชื่อ KB"},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("text", "target"),
+    [
+        ("สร้างแชทใหม่ให้หน่อย", "new_chat"),
+        ("ขอเริ่มแชทใหม่", "new_chat"),
+        ("ย้อนกลับหน้าที่แล้วหน่อย", "go_back"),
+        ("ถอยกลับที", "go_back"),
+    ],
+)
+def test_action_matcher_fires_for_declared_actions(text: str, target: str) -> None:
+    assert ui_control.match_action_intent(text, ACTIONS_MANIFEST) == {"target": target}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "เปิดคลังความรู้ LAWs_thai",  # open_kb needs the LLM (name argument)
+        "สร้างแชทใหม่ยังไง",  # question, not a command
+        "ย้อนกลับไปดูมาตราที่แล้วอีกทีได้ไหม",  # long/compound + question word
+        "",
+    ],
+)
+def test_action_matcher_falls_through(text: str) -> None:
+    assert ui_control.match_action_intent(text, ACTIONS_MANIFEST) is None
+
+
+def test_action_matcher_requires_declaration() -> None:
+    # Same phrasing, but the manifest declares no actions → LLM's turn.
+    assert ui_control.match_action_intent("สร้างแชทใหม่", MANIFEST) is None
+
+
+def test_page_naming_beats_go_back() -> None:
+    """'ย้อนกลับไปหน้าหลัก' names a page → navigation, not go_back."""
+    nav = ui_control.match_navigation_intent("ย้อนกลับไปหน้าหลัก", ACTIONS_MANIFEST)
+    assert nav == {"target": "chat"}
+
+
 # ── confirm-first navigation guess ─────────────────────────────────────
 
 

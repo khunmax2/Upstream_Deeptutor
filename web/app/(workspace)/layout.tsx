@@ -2,6 +2,7 @@ import WorkspaceSidebar from "@/components/sidebar/WorkspaceSidebar";
 import { CapabilityAccessProvider } from "@/components/access/CapabilityAccessContext";
 import CapabilityGate from "@/components/access/CapabilityGate";
 import { UnifiedChatProvider } from "@/context/UnifiedChatContext";
+import VoiceActionBridge from "@/components/voice/VoiceActionBridge";
 
 export default function WorkspaceLayout({
   children,
@@ -11,6 +12,7 @@ export default function WorkspaceLayout({
   return (
     <CapabilityAccessProvider>
       <UnifiedChatProvider>
+        <VoiceActionBridge />
         <div className="flex h-screen overflow-hidden">
           <WorkspaceSidebar />
           <main className="flex-1 overflow-hidden bg-[var(--background)]">

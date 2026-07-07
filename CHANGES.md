@@ -271,6 +271,28 @@ code is additive and isolated for mergeability.
   `web/components/voice/speechAlternatives.ts` (new),
   `VoiceCallWidget.tsx`, `web/tests/voice-speech-alternatives.test.ts`.
 
+- **2026-07-07 — First curated in-page actions: voice can now DO things, not
+  just navigate.** The web widget declares its first `actions` whitelist —
+  `new_chat` (สร้างแชทใหม่), `open_kb <ชื่อ>` (เปิดคลังความรู้ตามชื่อ),
+  `go_back` (ย้อนกลับ) — and `executeUiAction` gains their handlers. Two
+  integration seams: `new_chat` needs the workspace session store, which the
+  root-mounted widget can't reach, so a new `VoiceActionBridge` (own file,
+  one-line mount inside the workspace provider) executes it with the real
+  store functions (cancel streaming turn → new draft session → /home); when
+  no bridge is mounted (caller on a non-workspace page) the widget falls
+  back to plain `/home` navigation, which is a fresh draft session there by
+  design. `open_kb` navigates to `/knowledge?kb=<name>` — E2E showed the
+  model calling it with an empty argument, fixed by an ARGUMENT RULE in the
+  tool definition + system block (pass the spoken/on-screen name verbatim;
+  verified live: 'เปิดคลังความรู้ LAWs_thai' → `open_kb('LAWs_thai')`).
+  Fixed-shape action commands ("สร้างแชทใหม่", "ย้อนกลับ") also joined the
+  deterministic ladder (`match_action_intent`, declared-actions-only,
+  page-naming utterances win first) after E2E caught the LLM coin-flip
+  acknowledging go_back without acting. E2E 3/3. Files:
+  `web/components/voice/VoiceActionBridge.tsx` (new), `VoiceCallWidget.tsx`,
+  `web/app/(workspace)/layout.tsx` (2-line mount),
+  `services/voice_realtime/ui_control.py`, `pipeline.py`.
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;

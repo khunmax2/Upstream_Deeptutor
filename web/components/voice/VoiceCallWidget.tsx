@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
 import { collectPageContext } from "./pageContext";
 import { pickUtterance } from "./speechAlternatives";
+import { VOICE_ACTION_EVENT, type VoiceActionDetail } from "./VoiceActionBridge";
 
 // Steerable-UI whitelist sent to the voice layer as the `ui_manifest` control
 // frame: the model may call `ui_navigate` only with these ids, and this
@@ -43,6 +44,27 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
 // a new page.tsx appears without a manifest entry.
 export const VOICE_MANIFEST_EXCLUDED_ROUTES = ["/login", "/register"];
 export { UI_PAGES };
+
+// In-page actions the voice may trigger — the first rung beyond navigation.
+// Same whitelist discipline as pages: only what is declared here can run,
+// and executeUiAction re-validates before acting. Curated low-risk set only
+// (nothing destructive, nothing that changes settings).
+const UI_ACTIONS: { id: string; label: string; argument?: string }[] = [
+  {
+    id: "new_chat",
+    label: "สร้างแชทใหม่ / เริ่มแชทใหม่ / คุยเรื่องใหม่ (new chat)",
+  },
+  {
+    id: "open_kb",
+    label: "เปิดคลังความรู้ (knowledge base) ตามชื่อ",
+    argument: "ชื่อ KB ตามที่ปรากฏบนจอหรือที่ผู้ใช้พูด",
+  },
+  {
+    id: "go_back",
+    label: "ย้อนกลับหน้าก่อนหน้า (back)",
+  },
+];
+export { UI_ACTIONS };
 
 const THREE_CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
 const FADE_MS = 500;
@@ -451,12 +473,42 @@ export default function VoiceCallWidget() {
   const executeUiAction = useCallback(
     (m: any) => {
       const target = String(m.target || "");
+      const argument = String(m.argument || "");
       const page = UI_PAGES.find((p) => p.id === target);
       if (page) {
         addMsg("sys", `🖱 ไปหน้า ${page.label}`);
         router.push(page.path);
-      } else {
-        addMsg("sys", `⚠ ไม่รู้จักปลายทาง: ${target}`);
+        return;
+      }
+      switch (target) {
+        case "go_back":
+          addMsg("sys", "🖱 ย้อนกลับ");
+          router.back();
+          return;
+        case "open_kb":
+          addMsg("sys", `🖱 เปิดคลังความรู้${argument ? ` ${argument}` : ""}`);
+          router.push(
+            argument ? `/knowledge?kb=${encodeURIComponent(argument)}` : "/knowledge",
+          );
+          return;
+        case "new_chat": {
+          // Workspace pages own the session store — hand over via the bridge;
+          // elsewhere a plain /home visit already starts a fresh draft session.
+          let handled = false;
+          const detail: VoiceActionDetail = {
+            target,
+            argument,
+            handled: () => {
+              handled = true;
+            },
+          };
+          window.dispatchEvent(new CustomEvent(VOICE_ACTION_EVENT, { detail }));
+          addMsg("sys", "🖱 สร้างแชทใหม่");
+          if (!handled) router.push("/home");
+          return;
+        }
+        default:
+          addMsg("sys", `⚠ ไม่รู้จักปลายทาง: ${target}`);
       }
     },
     [addMsg, router],
@@ -602,11 +654,14 @@ export default function VoiceCallWidget() {
     ws.onopen = () => {
       setStatus("ฟังอยู่…");
       setMascot("listening");
-      // Declare the steerable pages so the model can drive navigation.
+      // Declare the steerable pages + curated in-page actions.
       ws.send(
         JSON.stringify({
           type: "ui_manifest",
-          manifest: { pages: UI_PAGES.map(({ id, label }) => ({ id, label })) },
+          manifest: {
+            pages: UI_PAGES.map(({ id, label }) => ({ id, label })),
+            actions: UI_ACTIONS,
+          },
         }),
       );
       sendUiContext(); // and what the screen shows right now

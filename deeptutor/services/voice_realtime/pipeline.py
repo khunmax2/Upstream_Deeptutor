@@ -553,6 +553,13 @@ async def run_text_turn(
         logger.info("voice rung=nav target=%s %r", action.get("target"), transcript)
         return await _run_navigation_shortcut(emitter, action, turn_t0=t0)
 
+    # Declared in-page actions with fixed-shape phrasings ("สร้างแชทใหม่",
+    # "ย้อนกลับ") — after the page matcher so page-naming utterances win.
+    act = ui_control.match_action_intent(transcript, ui_manifest)
+    if act is not None:
+        logger.info("voice rung=action target=%s %r", act.get("target"), transcript)
+        return await _run_navigation_shortcut(emitter, act, turn_t0=t0)
+
     guess = ui_control.match_navigation_guess(transcript, ui_manifest)
     if guess is not None and nav_state is not None:
         logger.info("voice rung=confirm-ask target=%s %r", guess.get("target"), transcript)

@@ -388,6 +388,51 @@ def match_navigation_guess(text: str, manifest: dict[str, Any] | None) -> dict[s
     return {"target": str(hit["id"]), "label": label or str(hit["id"])}
 
 
+# ── deterministic in-page action shortcut ──────────────────────────────
+#
+# Fixed-shape action commands ("สร้างแชทใหม่", "ย้อนกลับ") get the same
+# treatment as page navigation: match with rules, dispatch without the LLM.
+# The E2E lesson repeating itself — the LLM sometimes acknowledges these
+# without calling the tool (sampling), and a fixed-shape command should never
+# be a coin flip. Only actions whose utterance carries everything needed are
+# listed here; open_kb stays on the LLM path because it needs the KB *name*
+# interpreted (often against what's visible on screen).
+
+_ACTION_PATTERNS: dict[str, tuple[str, ...]] = {
+    "new_chat": ("สร้างแชทใหม่", "เริ่มแชทใหม่", "เปิดแชทใหม่", "แชทใหม่", "คุยเรื่องใหม่", "new chat"),
+    "go_back": ("ย้อนกลับ", "กลับหน้าเดิม", "กลับหน้าที่แล้ว", "ถอยกลับ", "go back"),
+}
+
+
+def match_action_intent(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
+    """Return ``{"target": id}`` when *text* is a clear declared-action command.
+
+    Same conservatism as the page matcher: short utterance, not a question,
+    exactly ONE matching action, and the action must be declared in the
+    manifest. Runs AFTER the page matcher so "ย้อนกลับไปหน้าหลัก" (which names
+    a page) navigates rather than triggering go_back.
+    """
+    if not manifest:
+        return None
+    t = _normalize_nav_text(text)
+    if not t or len(t) > _MAX_SHORTCUT_CHARS:
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    declared = {
+        str(entry.get("id"))
+        for entry in manifest.get("actions") or []
+        if isinstance(entry, dict) and entry.get("id")
+    }
+    hits: list[str] = []
+    for action_id, patterns in _ACTION_PATTERNS.items():
+        if action_id in declared and any(p in t for p in patterns):
+            hits.append(action_id)
+    if len(hits) != 1:
+        return None
+    return {"target": hits[0]}
+
+
 # Bare yes/no for the confirmation turn (exact after stripping politeness —
 # same discipline as the stop matcher).
 _YES_FORMS = {"ใช่", "ช่าย", "ถูกต้อง", "ตกลง", "เอา", "yes", "yeah", "ok", ""}
@@ -452,7 +497,12 @@ class UINavigateTool(BaseTool):
                 ToolParameter(
                     name="argument",
                     type="string",
-                    description="Optional argument for the target (e.g. a KB name).",
+                    description=(
+                        "REQUIRED whenever the chosen target declares an argument in "
+                        "the system prompt: pass the exact value the caller named or "
+                        "that is visible on their screen (e.g. the KB name, verbatim, "
+                        "like 'LAWs_thai'). Only omit it when the caller named none."
+                    ),
                     required=False,
                 ),
             ],
@@ -514,6 +564,10 @@ class VoiceUICapability:
             lines.append(
                 "Use the tool only for explicit UI requests; answer normal questions "
                 "with speech alone. Never pass a target that is not listed above. "
+                "ARGUMENT RULE: when a target above declares an (argument: …) and "
+                "the caller named one — e.g. 'เปิดคลังความรู้ LAWs_thai' — you MUST "
+                "pass it verbatim as `argument`; calling the tool without it opens "
+                "the wrong thing. "
                 "When the caller asks to go to / open a page, you MUST actually call "
                 f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
                 "saying 'ได้เลยครับ' without the tool call means nothing happened. "
@@ -603,6 +657,7 @@ __all__ = [
     "install_ui_control",
     "is_affirmative",
     "is_negative",
+    "match_action_intent",
     "match_navigation_guess",
     "match_navigation_intent",
     "match_where_am_i",
