@@ -120,13 +120,34 @@ export function collectPageContext(
 const CLICKABLE_SELECTOR =
   "button, [role='button'], [role='tab'], a[role='menuitem'], a[href]";
 
+// A card's whole text ("LlamaIndex พร้อมใช้งาน Local vector retrieval…") is
+// unmatchable by voice; past this length we fall back to the card's first
+// text chunk, which is its visible title.
+const MAX_WHOLE_LABEL_CHARS = 40;
+
+/** First rendered text chunk inside *el* — a card's title, whatever tag it is. */
+function firstTextChunk(el: HTMLElement): string {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+    if (text.length >= 2) return text;
+  }
+  return "";
+}
+
 /** Short spoken-friendly label for a clickable: aria-label, else the heading
- * inside it (cards), else its full text. */
+ * inside it, else its full text when short, else its first text chunk (card
+ * titles are often plain <span>s — the Knowledge-Center engine cards). */
 function clickableLabel(el: HTMLElement): string {
   const aria = el.getAttribute("aria-label") || "";
   const heading = el.querySelector("h1, h2, h3, h4, h5, h6")?.textContent || "";
-  const text = aria || heading || el.textContent || "";
-  return text.replace(/\s+/g, " ").trim().slice(0, MAX_ITEM_CHARS);
+  const full = (el.textContent || "").replace(/\s+/g, " ").trim();
+  const text =
+    aria.trim() ||
+    heading.replace(/\s+/g, " ").trim() ||
+    (full.length <= MAX_WHOLE_LABEL_CHARS ? full : firstTextChunk(el) || full);
+  return text.slice(0, MAX_ITEM_CHARS);
 }
 
 /**

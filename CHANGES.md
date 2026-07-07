@@ -169,6 +169,15 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Card labels: first text chunk, not the whole card.** Second
+  half of the "กด LlamaIndex ไม่เจอ" gap: the Knowledge-Center engine cards
+  are `<button>`s whose title is a plain `<span>` (no heading, no aria-label),
+  so `clickableLabel` fell back to the card's ENTIRE text ("LlamaIndex
+  พร้อมใช้งาน Local vector retrieval…") — unmatchable by voice. Labels longer
+  than 40 chars now fall back to the element's first rendered text chunk (the
+  visible title), via a TreeWalker. Client-side only (refresh, no server
+  restart). File: `web/components/voice/pageContext.ts`.
+
 - **2026-07-08 — Skeleton sharpened for mixed-script garbles ("ลามะ index",
   "ลาวไทย").** Live gaps from the Knowledge Center page: STT rendered
   "LlamaIndex" as "ลามะ index" and "LAWs_thai" as "ลาวไทย". Research
