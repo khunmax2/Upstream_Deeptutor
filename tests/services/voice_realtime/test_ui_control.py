@@ -97,6 +97,24 @@ def test_system_block_lists_targets() -> None:
     assert "Current screen" not in block.content  # no context streamed
 
 
+def test_screen_context_pins_identity_next_to_the_turn() -> None:
+    """The current-page line rides the user message itself (recency wins)."""
+    ctx = pipe.build_voice_context(
+        transcript="ตอนนี้อยู่หน้าไหน",
+        history=[],
+        session_id="s",
+        knowledge_bases=[],
+        ui_context={"path": "/notebook", "summary": "หน้าปัจจุบัน: หน้าสมุดโน้ต (/notebook)\nปุ่ม: ลบ"},
+    )
+    assert "จอของผู้ใช้ขณะพูดประโยคนี้: หน้าปัจจุบัน: หน้าสมุดโน้ต (/notebook)" in ctx.user_message
+    assert "ปุ่ม: ลบ" not in ctx.user_message  # only the identity line, not the outline
+
+    bare = pipe.build_voice_context(
+        transcript="ตอนนี้อยู่หน้าไหน", history=[], session_id="s", knowledge_bases=[]
+    )
+    assert "จอของผู้ใช้" not in bare.user_message
+
+
 def test_screen_context_activates_and_lands_in_system_block() -> None:
     cap = ui_control.VoiceUICapability()
     ctx = pipe.build_voice_context(

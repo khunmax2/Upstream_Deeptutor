@@ -93,6 +93,31 @@ _VOICE_TURN_REMINDER = (
     "no markdown or symbols — they will be read aloud]"
 )
 
+
+def _screen_turn_note(ui_context: dict[str, str] | None) -> str:
+    """Per-turn current-screen note appended to the user message.
+
+    The full screen outline lives in the ``voice_ui`` system block, but that
+    sits at the top of the prompt — live testing showed a recency-biased model
+    answering "ตอนนี้อยู่หน้าไหน" from the *navigation turns in history* (loud,
+    adjacent) instead of the system block (far away). Pinning the current-page
+    identity right next to the question wins that fight. Same mechanism as
+    ``_VOICE_TURN_REMINDER``: history commits the bare transcript, so the note
+    never leaks into later turns.
+    """
+    if not ui_context:
+        return ""
+    where = str(ui_context.get("summary") or "").split("\n", 1)[0].strip()
+    if not where:
+        where = str(ui_context.get("path") or "").strip()
+    if not where:
+        return ""
+    return (
+        f"\n\n[จอของผู้ใช้ขณะพูดประโยคนี้: {where} — คำถามว่าอยู่หน้าไหน/บนจอมีอะไร "
+        "ให้ยึดข้อมูลนี้ ไม่ใช่การนำทางในบทสนทนาก่อนหน้า]"
+    )
+
+
 # Cap a chunk so a runaway clause can't block first-audio; the chunker already
 # soft-breaks near this, this is just the synthesis budget.
 _CHUNK_MAX_CHARS = 120
@@ -207,7 +232,7 @@ def build_voice_context(
         metadata["ui_context"] = ui_context
     return UnifiedContext(
         session_id=session_id,
-        user_message=transcript + _VOICE_TURN_REMINDER,
+        user_message=transcript + _screen_turn_note(ui_context) + _VOICE_TURN_REMINDER,
         conversation_history=list(history),
         active_capability="chat",
         language=language,

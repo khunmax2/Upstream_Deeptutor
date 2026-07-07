@@ -212,6 +212,14 @@ code is additive and isolated for mergeability.
   this section counts, never past navigation turns. Files:
   `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`,
   `services/voice_realtime/ui_control.py`.
+  **Round 2 (same day):** the system-block rule alone still lost — reproduced
+  live: a recency-biased model answered from the adjacent navigation turns in
+  history rather than the far-away system block. Decisive fix: the
+  current-page identity line now also rides *the user message itself* per
+  turn (`_screen_turn_note()` in `pipeline.py`, same mechanism as
+  `_VOICE_TURN_REMINDER` — history commits the bare transcript, so it never
+  leaks into later turns). E2E scenario (voice-nav to settings → hand-click
+  to notebook → "ตอนนี้อยู่หน้าไหน") now passes 2/2 against the live server.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
