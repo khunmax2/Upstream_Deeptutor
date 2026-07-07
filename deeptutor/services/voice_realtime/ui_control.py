@@ -68,6 +68,8 @@ _MAX_TARGETS = 64
 # re-inject into every turn's prompt) well under that.
 _MAX_CONTEXT_SUMMARY_CHARS = 3_000
 _MAX_CONTEXT_PATH_CHARS = 200
+_MAX_BUTTONS = 40
+_MAX_BUTTON_CHARS = 60
 
 
 def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
@@ -109,7 +111,7 @@ def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 
 
-def sanitize_ui_context(raw: Any) -> dict[str, str] | None:
+def sanitize_ui_context(raw: Any) -> dict[str, Any] | None:
     """Validate + trim a client screen-context frame; ``None`` when unusable.
 
     Keeps only ``path``, ``page`` (the manifest label of the current page) and
@@ -122,13 +124,27 @@ def sanitize_ui_context(raw: Any) -> dict[str, str] | None:
     path = _CONTROL_CHARS.sub("", str(raw.get("path") or "").strip())
     page = _CONTROL_CHARS.sub("", str(raw.get("page") or "").strip())
     summary = _CONTROL_CHARS.sub("", str(raw.get("summary") or "").strip())
-    out: dict[str, str] = {}
+    out: dict[str, Any] = {}
     if path:
         out["path"] = path[:_MAX_CONTEXT_PATH_CHARS]
     if page:
         out["page"] = page[:_MAX_CONTEXT_PATH_CHARS]
     if summary:
         out["summary"] = summary[:_MAX_CONTEXT_SUMMARY_CHARS]
+    # Structured clickables (visible button/tab texts) — the click-by-name
+    # rung resolves spoken names against THIS list, never by parsing the
+    # summary prose.
+    raw_buttons = raw.get("buttons")
+    if isinstance(raw_buttons, list):
+        buttons: list[str] = []
+        for item in raw_buttons:
+            text = _CONTROL_CHARS.sub("", str(item or "").strip())[:_MAX_BUTTON_CHARS]
+            if text and text not in buttons:
+                buttons.append(text)
+            if len(buttons) >= _MAX_BUTTONS:
+                break
+        if buttons:
+            out["buttons"] = buttons
     return out or None
 
 
@@ -241,7 +257,7 @@ def _page_match_strings(entry: dict[str, Any]) -> set[str]:
 
 # Words that mark the utterance as a *question about* a page rather than a
 # command to open it ("หน้าความจำคืออะไร") — those belong to the LLM.
-_QUESTION_WORDS = ("อะไร", "คือ", "ไหม", "ทำไม", "ยังไง", "อย่างไร", "ที่ไหน", "เมื่อไหร่")
+_QUESTION_WORDS = ("อะไร", "คือ", "ไหม", "ทำไม", "ยังไง", "อย่างไร", "ไหน", "เมื่อไหร่")
 
 
 def _normalize_nav_text(text: str) -> str:
@@ -432,6 +448,116 @@ def match_action_intent(text: str, manifest: dict[str, Any] | None) -> dict[str,
     if len(hits) != 1:
         return None
     return {"target": hits[0]}
+
+
+# ── click-by-name: press a visible button the caller names ─────────────
+#
+# The middle rung between curated actions and a full page-agent: the CALLER
+# points ("กดปุ่มสร้างโน้ตใหม่"), the system only verifies the named button is
+# actually visible right now (the streamed ui_context carries the clickable
+# texts) and tells the client to press that exact text. No LLM chooses a
+# button, ever — see → name → act, with the human doing the naming.
+
+_CLICK_PREFIXES = (  # longest first so "กดปุ่ม" wins over "กด"
+    "ช่วยกดปุ่ม",
+    "ช่วยคลิกปุ่ม",
+    "กดปุ่ม",
+    "คลิกปุ่ม",
+    "แตะปุ่ม",
+    "จิ้มปุ่ม",
+    "ช่วยกด",
+    "ช่วยคลิก",
+    "กด",
+    "คลิก",
+    "แตะ",
+    "click",
+)
+_CLICK_TRAILING = ("ให้หน่อย", "หน่อย", "ให้ที", "ที", "ครับ", "ค่ะ", "คะ", "นะ", "เลย", "ด้วย")
+_MAX_CLICK_CHARS = 48
+
+# Button texts that may have irreversible effects — never pressed without a
+# spoken confirmation (the Siri send-message lesson).
+_DANGER_WORDS = (
+    "ลบ",
+    "ยกเลิก",
+    "ล้าง",
+    "รีเซ็ต",
+    "ออกจากระบบ",
+    "delete",
+    "remove",
+    "reset",
+    "clear",
+    "logout",
+    "sign out",
+)
+
+
+def match_click_intent(text: str) -> str | None:
+    """The button name in a "กดปุ่ม X" command, else ``None``.
+
+    Requires the utterance to START with a click verb (mid-sentence "กด" is
+    conversation), be short, and not be a question. The returned name is what
+    the caller said — resolution against the actually visible buttons happens
+    in :func:`resolve_click_target`.
+    """
+    t = _normalize_nav_text(text)
+    if not t or len(t) > _MAX_CLICK_CHARS:
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    for prefix in _CLICK_PREFIXES:
+        if t.startswith(prefix):
+            name = t[len(prefix) :].strip()
+            # Peel trailing politeness until stable ("…ให้หน่อยครับ").
+            while True:
+                trimmed = name
+                for tail in _CLICK_TRAILING:
+                    trimmed = trimmed.removesuffix(tail).strip()
+                if trimmed == name:
+                    break
+                name = trimmed
+            return name or None
+    return None
+
+
+def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
+    """Resolve a spoken button *name* against the visible buttons.
+
+    Returns ``("hit", button_text)`` for exactly one match, ``("ambiguous",
+    None)`` for several, ``("missing", None)`` for none / no context. Match
+    order: exact (normalised) → substring either way → phonetic fuzzy (STT
+    garbles button names too) — each tier only consulted when the previous
+    found nothing.
+    """
+    spoken = (name or "").replace(" ", "").lower()
+    buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
+    if not spoken or not buttons:
+        return ("missing", None)
+
+    def tiers() -> list[list[str]]:
+        exact, contains, fuzzy = [], [], []
+        for button in buttons:
+            b = button.replace(" ", "").lower()
+            if b == spoken:
+                exact.append(button)
+            elif (len(spoken) >= 3 and spoken in b) or (len(b) >= 3 and b in spoken):
+                contains.append(button)
+            elif _edit_distance(_phonetic(spoken), _phonetic(b)) <= max(1, len(b) // 4):
+                fuzzy.append(button)
+        return [exact, contains, fuzzy]
+
+    for hits in tiers():
+        if len(hits) == 1:
+            return ("hit", hits[0])
+        if len(hits) > 1:
+            return ("ambiguous", None)
+    return ("missing", None)
+
+
+def is_dangerous_button(text: str) -> bool:
+    """Whether a button press must be confirmed by voice before executing."""
+    t = (text or "").lower()
+    return any(w in t for w in _DANGER_WORDS)
 
 
 # ── secretary (dictation) mode commands ────────────────────────────────
@@ -749,12 +875,15 @@ __all__ = [
     "allowed_target_ids",
     "install_ui_control",
     "is_affirmative",
+    "is_dangerous_button",
     "is_negative",
     "match_action_intent",
+    "match_click_intent",
     "match_mode_command",
     "match_navigation_guess",
     "match_navigation_intent",
     "match_where_am_i",
+    "resolve_click_target",
     "sanitize_manifest",
     "sanitize_ui_context",
     "spoken_page_name",

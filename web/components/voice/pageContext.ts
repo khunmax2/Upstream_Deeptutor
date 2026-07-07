@@ -90,7 +90,7 @@ function grabTexts(selector: string, exclude: Element | null): string[] {
 export function collectPageContext(
   exclude: Element | null,
   pageName?: string,
-): { path: string; page?: string; summary: string } {
+): { path: string; page?: string; summary: string; buttons: string[] } {
   const outline: PageOutline = {
     path: window.location.pathname,
     pageName,
@@ -100,7 +100,41 @@ export function collectPageContext(
     tabs: grabTexts("[role='tab']", exclude),
     buttons: grabTexts("button, [role='button'], a[role='menuitem']", exclude),
   };
-  // `page` rides as its own field (not only inside the summary text) so the
-  // server can answer "ตอนนี้อยู่หน้าไหน" deterministically, without the LLM.
-  return { path: outline.path, page: pageName, summary: formatPageContext(outline) };
+  // `page` and `buttons` ride as structured fields (not only inside the
+  // summary prose): `page` answers "ตอนนี้อยู่หน้าไหน" deterministically and
+  // `buttons` is what click-by-name resolves spoken names against.
+  return {
+    path: outline.path,
+    page: pageName,
+    summary: formatPageContext(outline),
+    buttons: cleanItems([...outline.buttons, ...outline.tabs]),
+  };
+}
+
+const CLICKABLE_SELECTOR = "button, [role='button'], [role='tab'], a[role='menuitem']";
+
+/**
+ * Click the visible element whose text matches *name* (exact normalised
+ * match first, then substring). Returns whether something was clicked. Only
+ * elements outside `exclude` (the widget's own panel) are considered — the
+ * same set collectPageContext reported, so the server can only name what the
+ * caller could see.
+ */
+export function clickVisibleByText(name: string, exclude: Element | null): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const target = norm(name);
+  if (!target) return false;
+  let exact: HTMLElement | null = null;
+  let partial: HTMLElement | null = null;
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR))) {
+    if (exclude && exclude.contains(el)) continue;
+    if (!isVisible(el)) continue;
+    const text = norm(el.textContent || el.getAttribute("aria-label") || "");
+    if (!text) continue;
+    if (text === target && !exact) exact = el;
+    else if (!partial && (text.includes(target) || target.includes(text))) partial = el;
+  }
+  const chosen = exact ?? partial;
+  chosen?.click();
+  return Boolean(chosen);
 }

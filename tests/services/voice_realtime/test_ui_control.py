@@ -323,6 +323,156 @@ def test_page_naming_beats_go_back() -> None:
     assert nav == {"target": "chat"}
 
 
+# ── click-by-name ──────────────────────────────────────────────────────
+
+CLICK_CONTEXT = {
+    "path": "/notebook",
+    "summary": "x",
+    "buttons": ["สร้างโน้ตใหม่", "ลบโน้ต", "บันทึก", "Export"],
+}
+
+
+@pytest.mark.parametrize(
+    ("text", "name"),
+    [
+        ("กดปุ่มสร้างโน้ตใหม่", "สร้างโน้ตใหม่"),
+        ("ช่วยกดปุ่มบันทึกให้หน่อยครับ", "บันทึก"),
+        ("คลิก export", "export"),
+        ("แตะปุ่มลบโน้ตหน่อย", "ลบโน้ต"),
+    ],
+)
+def test_click_matcher_extracts_button_name(text: str, name: str) -> None:
+    assert ui_control.match_click_intent(text) == name
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "อย่ากดดันผมสิ",  # mid-sentence กด is conversation
+        "กดปุ่มไหนดีครับ",  # question
+        "ไปหน้า settings",
+        "",
+    ],
+)
+def test_click_matcher_falls_through(text: str) -> None:
+    assert ui_control.match_click_intent(text) is None
+
+
+def test_resolve_click_target_tiers() -> None:
+    assert ui_control.resolve_click_target("สร้างโน้ตใหม่", CLICK_CONTEXT) == (
+        "hit",
+        "สร้างโน้ตใหม่",
+    )
+    # Substring: "โน้ตใหม่" names one button; "โน้ต" alone names two → ambiguous.
+    assert ui_control.resolve_click_target("โน้ตใหม่", CLICK_CONTEXT) == ("hit", "สร้างโน้ตใหม่")
+    assert ui_control.resolve_click_target("โน้ต", CLICK_CONTEXT) == ("ambiguous", None)
+    # Phonetic fuzz on a garbled name.
+    assert ui_control.resolve_click_target("บันทึด", CLICK_CONTEXT) == ("hit", "บันทึก")
+    assert ui_control.resolve_click_target("ปุ่มที่ไม่มี", CLICK_CONTEXT) == ("missing", None)
+    assert ui_control.resolve_click_target("บันทึก", None) == ("missing", None)
+
+
+def test_dangerous_button_words() -> None:
+    assert ui_control.is_dangerous_button("ลบโน้ต")
+    assert ui_control.is_dangerous_button("Delete all")
+    assert not ui_control.is_dangerous_button("บันทึก")
+
+
+@pytest.mark.asyncio
+async def test_click_by_name_presses_visible_button_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a click turn")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {}
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter,
+        "กดปุ่มสร้างโน้ตใหม่",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context=CLICK_CONTEXT,
+        nav_state=nav_state,
+    )
+    assert reply == "ได้เลยครับ"
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "click_element",
+            "argument": "สร้างโน้ตใหม่",
+        }
+    ]
+
+    # Missing button = honest dead-end, still no LLM.
+    emitter2 = FakeEmitter()
+    reply2 = await pipe.run_text_turn(
+        emitter2,
+        "กดปุ่มชำระเงิน",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context=CLICK_CONTEXT,
+        nav_state=nav_state,
+    )
+    assert "ไม่เห็นปุ่ม" in reply2
+    assert not [m for m in emitter2.json if m.get("type") == "ui_action"]
+
+
+@pytest.mark.asyncio
+async def test_dangerous_click_requires_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    nav_state: dict[str, Any] = {}
+
+    # Turn 1: names a dangerous button → asks, does NOT click.
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter,
+        "กดปุ่มลบโน้ต",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context=CLICK_CONTEXT,
+        nav_state=nav_state,
+    )
+    assert "ให้กดเลยไหม" in reply
+    assert nav_state == {"pending_click": "ลบโน้ต"}
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+    # Turn 2: bare yes → the click executes.
+    emitter2 = FakeEmitter()
+    reply2 = await pipe.run_text_turn(
+        emitter2,
+        "ใช่ครับ",
+        [],
+        session_id="v",
+        ui_manifest=MANIFEST,
+        ui_context=CLICK_CONTEXT,
+        nav_state=nav_state,
+    )
+    assert reply2 == "ได้เลยครับ"
+    actions = [m for m in emitter2.json if m.get("type") == "ui_action"]
+    assert actions and actions[0]["argument"] == "ลบโน้ต"
+    assert nav_state == {}
+
+
 # ── secretary (dictation) mode ─────────────────────────────────────────
 
 

@@ -169,6 +169,24 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Click-by-name: press a visible button the caller names.**
+  The middle rung between curated actions and a full page-agent, completed
+  from the previous session's in-progress work: the caller points ("กดปุ่ม
+  สร้างโน้ตใหม่"), the system only verifies that name against the buttons the
+  page actually shows right now and presses exactly that — no LLM ever
+  chooses a button. Server: `ui_context` now carries a structured `buttons`
+  list (≤40, sanitised); `match_click_intent` (utterance must START with a
+  click verb, question words excluded) + `resolve_click_target` (exact →
+  substring → phonetic-fuzzy tiers; ambiguous → "พูดชื่อเต็มอีกครั้ง",
+  missing → honest "ไม่เห็นปุ่มชื่อนั้นบนจอ"); dangerous names (ลบ/ยกเลิก/
+  รีเซ็ต/logout…) require a spoken yes via the existing confirm rung before
+  the press. Client: `clickVisibleByText` presses only elements outside the
+  widget's own panel that were visible — the same set the context reported.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `narration.py`, `web/components/voice/pageContext.ts`,
+  `VoiceCallWidget.tsx`; tests in `tests/services/voice_realtime/
+  test_ui_control.py` (pytest 166 green, node 178 green).
+
 - **2026-07-07 — Voice manifest completed + parity test.** The hand-written
   `UI_PAGES` table had drifted from the app's real routes: `/partners` and
   `/playground` were missing, so the caller was told those pages don't exist.

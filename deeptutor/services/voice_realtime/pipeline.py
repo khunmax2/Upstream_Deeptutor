@@ -310,6 +310,14 @@ async def _speak_fixed_line(emitter: VoiceEmitter, text: str, *, seq: int = 0) -
     return True
 
 
+async def _run_click_shortcut(emitter: VoiceEmitter, button: str, *, turn_t0: float) -> str:
+    """Press a visible, caller-named button: `ui_action click_element` + ack."""
+    await emitter.send_json(
+        {"type": "ui_action", "action": "navigate", "target": "click_element", "argument": button}
+    )
+    return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
+
+
 async def _run_secretary_turn(emitter: VoiceEmitter, transcript: str, *, turn_t0: float) -> str:
     """Type one dictated utterance into the on-screen chat; say nothing.
 
@@ -606,6 +614,14 @@ async def run_text_turn(
     # A pending "คุณหมายถึง X ใช่ไหม" owns the very next utterance: bare yes
     # executes, bare no acknowledges, anything else just clears it and is
     # processed normally (the caller moved on).
+    pending_click = nav_state.pop("pending_click", None) if nav_state is not None else None
+    if pending_click:
+        if ui_control.is_affirmative(transcript):
+            logger.info("voice rung=click-confirmed button=%r", pending_click)
+            return await _run_click_shortcut(emitter, pending_click, turn_t0=t0)
+        if ui_control.is_negative(transcript):
+            logger.info("voice rung=click-declined %r", transcript)
+            return await _speak_short_turn(emitter, narration.CONFIRM_NO_ACK_LINE, turn_t0=t0)
     pending = nav_state.pop("pending", None) if nav_state is not None else None
     if pending:
         if ui_control.is_affirmative(transcript):
@@ -634,6 +650,32 @@ async def run_text_turn(
     if act is not None:
         logger.info("voice rung=action target=%s %r", act.get("target"), transcript)
         return await _run_navigation_shortcut(emitter, act, turn_t0=t0)
+
+    # Click-by-name: the caller names a button; we only verify it is visible
+    # right now (ui_context.buttons) and press exactly that. Dangerous names
+    # (ลบ/ยกเลิก/…) are confirmed by voice first; misses are honest dead-ends.
+    click_name = ui_control.match_click_intent(transcript)
+    if click_name is not None and ui_context is not None:
+        outcome, button = ui_control.resolve_click_target(click_name, ui_context)
+        if outcome == "hit" and button:
+            if ui_control.is_dangerous_button(button):
+                if nav_state is not None:
+                    nav_state["pending_click"] = button
+                    logger.info("voice rung=click-danger button=%r %r", button, transcript)
+                    return await _speak_short_turn(
+                        emitter,
+                        f"ปุ่ม{button}อาจมีผลถาวรนะครับ ให้กดเลยไหมครับ",
+                        turn_t0=t0,
+                    )
+            else:
+                logger.info("voice rung=click button=%r %r", button, transcript)
+                return await _run_click_shortcut(emitter, button, turn_t0=t0)
+        elif outcome == "ambiguous":
+            logger.info("voice rung=click-ambiguous %r", transcript)
+            return await _speak_short_turn(emitter, narration.CLICK_AMBIGUOUS_LINE, turn_t0=t0)
+        elif outcome == "missing":
+            logger.info("voice rung=click-miss %r", transcript)
+            return await _speak_short_turn(emitter, narration.CLICK_MISS_LINE, turn_t0=t0)
 
     guess = ui_control.match_navigation_guess(transcript, ui_manifest)
     if guess is not None and nav_state is not None:

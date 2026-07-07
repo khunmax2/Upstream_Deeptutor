@@ -52,6 +52,11 @@ SECRETARY_OFF_LINE = "ปิดโหมดเลขาแล้วครับ"
 # problem, and the screen is already navigating as this plays.
 SECRETARY_OFFPAGE_LINE = "ตอนนี้ไม่ได้อยู่หน้าแชทครับ ผมพาไปแล้ว พูดอีกครั้งนะครับ"
 
+# Click-by-name outcomes. The miss/ambiguous lines are honest dead-ends —
+# never guess a button the caller didn't clearly name.
+CLICK_MISS_LINE = "ไม่เห็นปุ่มชื่อนั้นบนจอครับ"
+CLICK_AMBIGUOUS_LINE = "มีปุ่มชื่อคล้ายกันหลายปุ่มครับ พูดชื่อเต็มอีกครั้งครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.
@@ -75,6 +80,8 @@ def filler_for_tool(tool_name: str) -> str:
 
 __all__ = [
     "filler_for_tool",
+    "CLICK_AMBIGUOUS_LINE",
+    "CLICK_MISS_LINE",
     "CONFIRM_NO_ACK_LINE",
     "GREETING_LINE",
     "SECRETARY_OFF_LINE",

@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
-import { collectPageContext } from "./pageContext";
+import { clickVisibleByText, collectPageContext } from "./pageContext";
 import { pickUtterance } from "./speechAlternatives";
 import { VOICE_ACTION_EVENT, type VoiceActionDetail } from "./VoiceActionBridge";
 
@@ -484,6 +484,16 @@ export default function VoiceCallWidget() {
         return;
       }
       switch (target) {
+        case "click_element": {
+          // Click-by-name: press the visible element whose text the caller
+          // named (server already verified it against the streamed context).
+          if (argument && clickVisibleByText(argument, panelRef.current)) {
+            addMsg("sys", `🖱 กดปุ่ม ${argument}`);
+          } else {
+            addMsg("sys", `⚠ หาปุ่ม "${argument}" บนจอไม่เจอแล้ว`);
+          }
+          return;
+        }
         case "go_back":
           addMsg("sys", "🖱 ย้อนกลับ");
           router.back();
