@@ -138,8 +138,8 @@ class UINavigateTool(BaseTool):
             return ToolResult(content="No target given; nothing dispatched.", success=False)
         return ToolResult(
             content=(
-                f"UI command dispatched to the caller's screen (target={target!r}). "
-                "Confirm it briefly to the user in speech."
+                f"Done — the caller's screen already shows {target!r}. "
+                "Say nothing, or at most a three-word acknowledgement."
             )
         )
 
@@ -181,7 +181,13 @@ class VoiceUICapability:
                 lines.append(row)
         lines.append(
             "Use the tool only for explicit UI requests; answer normal questions "
-            "with speech alone. Never pass a target that is not listed above."
+            "with speech alone. Never pass a target that is not listed above. "
+            "TIMING: the screen changes the instant you call the tool — before "
+            "your voice reaches the caller. So NEVER say you are 'about to' open "
+            "something or ask them to wait (no 'รอสักครู่', no 'กำลังเปิด'). "
+            "After a ui_navigate call, either say nothing more or confirm in at "
+            "most three words (e.g. 'ได้เลยครับ') — the caller can already see "
+            "the result. Do not describe the destination page."
         )
         return PromptBlock(self.name, "\n".join(lines))
 

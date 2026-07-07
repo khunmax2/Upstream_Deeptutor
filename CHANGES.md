@@ -169,6 +169,14 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-07 — Natural speech around UI navigation.** With a fast LLM the
+  screen now changes *before* the voice arrives, but the model still narrated
+  politely ("รอสักครู่นะครับ กำลังพาไป…") — announcing an action the caller
+  already saw. The `voice_ui` system block and the `ui_navigate` tool result
+  now tell the model the change is already visible: say nothing or confirm in
+  at most three words, never "wait a moment", never describe the destination.
+  File: `services/voice_realtime/ui_control.py`.
+
 - **2026-07-07 — Latency: reasoning disabled for voice turns (TTFT 21 s → <1 s).**
   Diagnosis: ~85–90% of call latency was the LLM's hybrid-thinking phase
   (Qwen3.5/Nemotron reason for 20 s+ before the first token), not the voice
