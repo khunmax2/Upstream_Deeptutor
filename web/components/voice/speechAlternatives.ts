@@ -13,6 +13,13 @@
 
 const NAV_SHAPE = /(ไป|เปิด|พา|เข้า|กลับ|สลับ|ขอ)\s*(ที่|ยัง)?\s*(หน้า|page)/i;
 
+// Voice-mode commands ("เปิดโหมดเลขา", "ออกจากโหมด") — the other command
+// family worth rescuing from a garbled top hypothesis. MODE_ADJACENT lists
+// the fragments the garbles leave behind (โหมด→หมด, เลขา→เรขา/เลย) — a top
+// hypothesis carrying none of them is ordinary speech and is never replaced.
+const MODE_SHAPE = /(เปิด|ปิด|เข้า|ออกจาก|ใช้|เลิก)\s*โหมด/;
+const MODE_ADJACENT = /(โหมด|หมด|เลขา|เรขา)/;
+
 /** Tokens (length ≥ 3) from manifest labels, for the "names a known page" check. */
 export function labelTokens(labels: string[]): string[] {
   const out = new Set<string>();
@@ -39,10 +46,10 @@ function looksLikeNavCommand(text: string, tokens: string[]): boolean {
 /**
  * Choose the utterance to send from a recognizer's ranked alternatives.
  *
- * Rank #1 wins unless it is *nav-adjacent* — it already talks about a page
- * ("หน้า" or a known page name is in there) yet fails the full command
- * shape — while a lower-ranked alternative passes it. A top hypothesis with
- * no page reference at all is ordinary conversation and is never replaced.
+ * Rank #1 wins unless it is *command-adjacent* — it already carries page or
+ * mode fragments yet fails the full command shape — while a lower-ranked
+ * alternative passes that family's shape. A top hypothesis with no such
+ * fragment is ordinary conversation and is never replaced.
  */
 export function pickUtterance(alternatives: string[], labels: string[]): string {
   const ranked = alternatives.map((a) => a.trim()).filter(Boolean);
@@ -50,7 +57,15 @@ export function pickUtterance(alternatives: string[], labels: string[]): string 
   if (ranked.length === 1) return ranked[0];
   const tokens = labelTokens(labels);
   const top = ranked[0].toLowerCase();
+  if (looksLikeNavCommand(ranked[0], tokens) || MODE_SHAPE.test(top)) return ranked[0];
   const navAdjacent = top.includes("หน้า") || tokens.some((token) => top.includes(token));
-  if (!navAdjacent || looksLikeNavCommand(ranked[0], tokens)) return ranked[0];
-  return ranked.slice(1).find((a) => looksLikeNavCommand(a, tokens)) ?? ranked[0];
+  if (navAdjacent) {
+    const better = ranked.slice(1).find((a) => looksLikeNavCommand(a, tokens));
+    if (better) return better;
+  }
+  if (MODE_ADJACENT.test(top)) {
+    const better = ranked.slice(1).find((a) => MODE_SHAPE.test(a.toLowerCase()));
+    if (better) return better;
+  }
+  return ranked[0];
 }

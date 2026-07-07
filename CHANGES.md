@@ -344,6 +344,15 @@ code is additive and isolated for mergeability.
   E2E extended to 9/9 (both live garbles verbatim, round-2 re-entry, no
   stale-answer leakage). Files: `services/voice_realtime/ui_control.py`,
   `session.py`.
+  **Round 4 — N-best rescue extended to mode commands:** the widget's
+  runner-up promotion previously only recognised the navigation shape, so a
+  garbled top hypothesis for "เปิดโหมดเลขา" was sent as-is even when the
+  correct phrase sat in hypothesis #2. `pickUtterance` now also knows the
+  mode-command shape (เปิด/ปิด/ออกจาก + โหมด), gated on mode-adjacent
+  fragments in the top hypothesis (โหมด/หมด/เลขา/เรขา) so ordinary speech
+  is still never rewritten. Both live garbles covered by node tests.
+  Files: `web/components/voice/speechAlternatives.ts`,
+  `web/tests/voice-speech-alternatives.test.ts`.
 
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers

@@ -61,6 +61,30 @@ test("labelTokens extracts aliases incl. หน้า-stripped forms", () => {
   assert.ok(tokens.includes("knowledge"));
 });
 
+test("garbled mode command loses to a mode-shaped runner-up", () => {
+  // The exact live garble: 'เปิดโหมดเลขา' heard as 'เปิดหมดเลยค่ะ' while the
+  // correct phrase sat in hypothesis #2.
+  const picked = pickUtterance(["เปิดหมดเลยค่ะ", "เปิดโหมดเลขา"], LABELS);
+  assert.equal(picked, "เปิดโหมดเลขา");
+  const exit = pickUtterance(["ปิดหมดเรขาค", "ปิดโหมดเลขา"], LABELS);
+  assert.equal(exit, "ปิดโหมดเลขา");
+});
+
+test("mode-shaped rank #1 is never replaced", () => {
+  const picked = pickUtterance(["เปิดโหมดเลขา", "เปิดโหมดพิมพ์"], LABELS);
+  assert.equal(picked, "เปิดโหมดเลขา");
+});
+
+test("speech without mode fragments keeps rank #1 despite a mode runner-up", () => {
+  const picked = pickUtterance(["วันนี้ไปเที่ยวมา", "เปิดโหมดเลขา"], LABELS);
+  assert.equal(picked, "วันนี้ไปเที่ยวมา");
+});
+
+test("mode-adjacent chatter without a mode runner-up keeps rank #1", () => {
+  const picked = pickUtterance(["ปิดไฟหมดเลยนะ", "ปิดไฟหมดแล้วนะ"], LABELS);
+  assert.equal(picked, "ปิดไฟหมดเลยนะ");
+});
+
 test("normal conversation keeps rank #1 exactly (no rewriting)", () => {
   // The exact failure to prevent: a chat sentence replaced by hypothesis #2.
   const picked = pickUtterance(
