@@ -14,6 +14,8 @@
 
 export interface PageOutline {
   path: string;
+  /** Human page name from the UI_PAGES manifest (when the path matches). */
+  pageName?: string;
   title: string;
   headings: string[];
   navLinks: string[];
@@ -50,6 +52,11 @@ export function formatPageContext(o: PageOutline): string {
     ["ปุ่ม", cleanItems(o.buttons)],
   ];
   const lines: string[] = [];
+  // Current-page identity first and in plain words — the model must answer
+  // "ตอนนี้อยู่หน้าไหน" from here, not from stale navigation turns in the
+  // conversation history (the caller can click around by hand at any time).
+  const pageName = (o.pageName || "").replace(/\s+/g, " ").trim();
+  if (pageName) lines.push(`หน้าปัจจุบัน: ${pageName.slice(0, MAX_ITEM_CHARS)} (${o.path})`);
   const title = o.title.replace(/\s+/g, " ").trim();
   if (title) lines.push(`ชื่อหน้า: ${title.slice(0, MAX_ITEM_CHARS)}`);
   for (const [label, items] of sections) {
@@ -76,11 +83,17 @@ function grabTexts(selector: string, exclude: Element | null): string[] {
 /**
  * Read the visible page into a `{path, summary}` context ready to send as a
  * `ui_context` frame. `exclude` is the widget's own root element so the call
- * panel never describes itself.
+ * panel never describes itself; `pageName` is the human label for the current
+ * path (from the UI_PAGES manifest) so "which page am I on" has a plain-words
+ * answer.
  */
-export function collectPageContext(exclude: Element | null): { path: string; summary: string } {
+export function collectPageContext(
+  exclude: Element | null,
+  pageName?: string,
+): { path: string; summary: string } {
   const outline: PageOutline = {
     path: window.location.pathname,
+    pageName,
     title: document.title,
     headings: grabTexts("h1, h2, h3", exclude),
     navLinks: grabTexts("nav a, aside a, [role='navigation'] a", exclude),

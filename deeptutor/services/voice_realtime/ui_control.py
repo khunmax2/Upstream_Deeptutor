@@ -320,8 +320,13 @@ class VoiceUICapability:
             lines.append(
                 "When the caller ASKS what is on their screen (เมนู/ปุ่ม/หัวข้อ "
                 "อะไรบ้าง), answer from this section only — never invent menus or "
-                "buttons that are not listed here. This overrides nothing above: "
-                "the one-phrase rule applies to your reply right after a "
+                "buttons that are not listed here. STALENESS RULE: the caller can "
+                "navigate by hand (clicking) at any moment, so pages you steered "
+                "to in earlier turns are NOT evidence of where they are now. For "
+                "'ตอนนี้อยู่หน้าไหน' trust ONLY this section — it always reflects "
+                "the screen at their latest utterance and overrides anything the "
+                "conversation history suggests. This overrides nothing else "
+                "above: the one-phrase rule applies to your reply right after a "
                 "ui_navigate call, while answering the caller's own question "
                 "about the screen is normal conversation."
             )

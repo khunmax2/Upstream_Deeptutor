@@ -535,7 +535,8 @@ export default function VoiceCallWidget() {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== 1) return;
     try {
-      const context = collectPageContext(panelRef.current);
+      const pageName = UI_PAGES.find((p) => p.path === window.location.pathname)?.label;
+      const context = collectPageContext(panelRef.current, pageName);
       if (context.summary) ws.send(JSON.stringify({ type: "ui_context", context }));
     } catch {
       /* a context snapshot must never break the call */

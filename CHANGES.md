@@ -200,6 +200,19 @@ code is additive and isolated for mergeability.
   greeting change (its `FakeSession` lacked `greet()`) — the greeting commit
   only ran the `tests/services/voice_realtime` suite.
 
+- **2026-07-07 — Fix: "ตอนนี้อยู่หน้าไหน" answered from stale navigation
+  history.** Live testing found that after voice-navigating and then clicking
+  to another page by hand, the model reported the last *steered* page — the
+  fresh `ui_context` was streamed correctly, but its raw `Path: /notebook`
+  line lost to the louder "ไปหน้า settings → ได้เลยครับ" turns in history.
+  Two-sided fix: the summary now leads with a plain-words identity line
+  ("หน้าปัจจุบัน: หน้าสมุดโน้ต (/notebook)", label resolved from `UI_PAGES`),
+  and the `voice_ui` "Current screen" block gains a STALENESS RULE — the
+  caller can navigate by hand at any moment, so for "which page am I on" only
+  this section counts, never past navigation turns. Files:
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`.
+
 - **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
   gaps closed: the widget's chat-page label gains the aliases callers
   actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;

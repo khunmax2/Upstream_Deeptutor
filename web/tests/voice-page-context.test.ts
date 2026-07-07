@@ -31,6 +31,17 @@ test("formats sections with Thai labels, skipping empty ones", () => {
   assert.doesNotMatch(out, /เมนู|แท็บ/); // empty sections stay out
 });
 
+test("current-page identity leads the summary when the manifest names it", () => {
+  // "ตอนนี้อยู่หน้าไหน" must be answerable from the summary itself — in plain
+  // words, first line — so stale navigation turns in history can't win.
+  const out = formatPageContext({
+    ...base,
+    pageName: "หน้าตั้งค่า (settings)",
+    headings: ["ตั้งค่าระบบ"],
+  });
+  assert.match(out.split("\n")[0], /^หน้าปัจจุบัน: หน้าตั้งค่า \(settings\) \(\/settings\)$/);
+});
+
 test("dedupes repeats and collapses whitespace", () => {
   const out = formatPageContext({
     ...base,
