@@ -182,6 +182,17 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Mode-command fuzzy anchor compares sound classes, not glyphs
+  (the "บิดหมดเลขา" trap).** Live: "ปิดโหมดเลขา" arrived as "บิดหมดเลขา" —
+  within the fuzzy edit budget, but the matcher's first-char anchor required
+  an exact glyph match (บ ≠ ป), so the exit command was typed into chat as
+  dictation text and the caller was trapped in secretary mode. The anchor now
+  compares onset *sound classes* (Thai→Latin homophone fold + voiced→voiceless:
+  บ/ป, ด/ต, ก/ค one class); dictation sentences that merely start with the
+  same sound ("บิดามารดา…", "ปิดเทอม…") still fall through on the edit budget.
+  File: `services/voice_realtime/ui_control.py`; regression params in
+  `tests/services/voice_realtime/test_ui_control.py` (pytest 219 green).
+
 - **2026-07-08 — Fill values corrected against the screen's vocabulary (the
   "ลาวไทย" gap).** STT transliterates on-screen names (~always: spoken
   "LAWs_thai" arrives as "ลาวไทย"), and typing the transcript verbatim put

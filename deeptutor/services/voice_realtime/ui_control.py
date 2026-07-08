@@ -929,20 +929,35 @@ _SECRETARY_OFF_FORMS = {
 _MAX_MODE_CHARS = 32
 
 
+# First-char anchor for the fuzzy form matcher — by SOUND class, not glyph.
+# STT swaps same-place stops freely on the onset too: live it produced
+# "บิดหมดเลขา" for "ปิดโหมดเลขา" (บ↔ป), which the old exact-char anchor
+# rejected even though the edit distance was within budget — trapping the
+# caller in dictation mode. Fold Thai consonants to Latin (homophone table),
+# then voiced→voiceless so บ/ป, ด/ต, ก/ค land in one class.
+_ONSET_VOICE_FOLD = str.maketrans({"b": "p", "d": "t", "g": "k", "j": "c"})
+
+
+def _onset_class(ch: str) -> str:
+    latin = _TH_CONSONANT_LATIN.get(ch, ch.lower())
+    return latin.translate(_LATIN_SOUND_FOLD).translate(_ONSET_VOICE_FOLD)
+
+
 def _fuzzy_form_distance(t: str, forms: set[str]) -> int | None:
     """Best phonetic edit distance from *t* to any form within its budget.
 
     Budget scales with form length (``len // 4``, min 1) and the first char
-    must match, so short unrelated words can't drift in. Live STT produced
-    "ปิดหมดเรขาค" for "ปิดโหมดเลขา" — phonetic normalisation (ร→ล) plus two
-    edits — and a caller inside dictation mode MUST be able to leave: for the
-    exit command, matching too eagerly beats trapping the user.
+    must match by sound class (see ``_onset_class``), so short unrelated
+    words can't drift in. Live STT produced "ปิดหมดเรขาค" for "ปิดโหมดเลขา" —
+    phonetic normalisation (ร→ล) plus two edits — and a caller inside
+    dictation mode MUST be able to leave: for the exit command, matching too
+    eagerly beats trapping the user.
     """
     best: int | None = None
     tp = _phonetic(t)
     for form in forms:
         budget = max(1, len(form) // 4)
-        if not t or not form or t[0] != form[0]:
+        if not t or not form or _onset_class(t[0]) != _onset_class(form[0]):
             continue
         d = _edit_distance(tp, _phonetic(form))
         if d <= budget and (best is None or d < best):

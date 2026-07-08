@@ -1037,6 +1037,8 @@ def test_mode_command_matcher_falls_through(text: str) -> None:
         ("เปิดหมดเลยค่ะ", "secretary_on"),  # live garble round 2: เลขา → เลยค่ะ
         ("ปิดหมดเลยครับ", "secretary_off"),  # same garble shape on exit
         ("ออกจากหมดเลขา", "secretary_off"),  # โหมด → หมด on the long form
+        ("บิดหมดเลขา", "secretary_off"),  # live garble round 3: ป → บ on the FIRST char
+        ("เบิดโหมดเลขา", "secretary_on"),  # same swap on enter
     ],
 )
 def test_mode_command_matcher_tolerates_stt_garbles(text: str, expected: str) -> None:
