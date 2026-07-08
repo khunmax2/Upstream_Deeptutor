@@ -182,6 +182,22 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Fill values corrected against the screen's vocabulary (the
+  "ลาวไทย" gap).** STT transliterates on-screen names (~always: spoken
+  "LAWs_thai" arrives as "ลาวไทย"), and typing the transcript verbatim put
+  the garble into the form. New `resolve_fill_value` (ui_control): a
+  dropdown's value MUST resolve to one of its streamed options (shared
+  cross-script tiers; no match → honest "ช่องนั้นไม่มีตัวเลือกตามที่พูดครับ"
+  instead of a silent non-select behind an ack); a plain input keeps free
+  text verbatim EXCEPT when it uniquely names something visible on screen
+  (case-insensitive exact or consonant-skeleton hit vs buttons/cards), in
+  which case the on-screen spelling is typed. Applied on all three paths
+  (deterministic shortcut, `ui_fill` tool result, LLM tool-call forwarding)
+  so speech and action never disagree. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`;
+  tests in `tests/services/voice_realtime/test_ui_control.py` (pytest 217
+  green).
+
 - **2026-07-08 — Fill-by-voice: type into / pick dropdown options in visible
   form fields (#2 of the page-agent-parity queue).** "พิมพ์ กฎหมายแรงงาน
   ในช่องค้นหา" now types into the search box; "เลือก ไทย ในช่องภาษา" picks a

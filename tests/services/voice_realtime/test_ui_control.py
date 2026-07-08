@@ -601,6 +601,63 @@ def test_resolve_field_target_matches_on_label_part() -> None:
     assert ui_control.field_label("ภาษา (เลือกได้: ไทย | English)") == "ภาษา"
 
 
+# The knowledge page as the caller sees it: KB names visible as cards
+# (buttons) plus a search box and a dropdown of engines.
+FILL_KB_SCREEN = {
+    "path": "/knowledge",
+    "summary": "x",
+    "buttons": ["LAWs_thai", "GraphRAG", "สร้างคลังใหม่"],
+    "fields": ["ค้นหา", "ชื่อคลังความรู้", "เครื่องมือ (เลือกได้: LlamaIndex | GraphRAG)"],
+}
+
+
+def test_field_options_parses_the_marker() -> None:
+    assert ui_control.field_options("เครื่องมือ (เลือกได้: LlamaIndex | GraphRAG)") == [
+        "LlamaIndex",
+        "GraphRAG",
+    ]
+    assert ui_control.field_options("ค้นหา") == []
+    assert ui_control.field_options_for("เครื่องมือ", FILL_KB_SCREEN) == [
+        "LlamaIndex",
+        "GraphRAG",
+    ]
+    assert ui_control.field_options_for("ค้นหา", FILL_KB_SCREEN) == []
+
+
+def test_fill_value_dropdown_resolves_cross_script() -> None:
+    """The "ลาวไทย gap": STT transliterates on-screen names — a dropdown value
+    must resolve to a real option, never be typed as the garble."""
+    assert ui_control.resolve_fill_value("ลามะ index", "เครื่องมือ", FILL_KB_SCREEN) == (
+        "ok",
+        "LlamaIndex",
+    )
+    assert ui_control.resolve_fill_value("GraphRAG", "เครื่องมือ", FILL_KB_SCREEN) == (
+        "ok",
+        "GraphRAG",
+    )
+    # Not an option → honest no_option, nothing typed behind an ack.
+    assert ui_control.resolve_fill_value("ฝรั่งเศส", "เครื่องมือ", FILL_KB_SCREEN) == (
+        "no_option",
+        None,
+    )
+
+
+def test_fill_value_text_field_takes_on_screen_spelling() -> None:
+    # "ใส่ LAWs_thai" arrives as "ลาวไทย"; the KB card on screen carries the
+    # real spelling — the unique cross-script hit wins.
+    assert ui_control.resolve_fill_value("ลาวไทย", "ชื่อคลังความรู้", FILL_KB_SCREEN) == (
+        "ok",
+        "LAWs_thai",
+    )
+    # Free text that names nothing on screen stays verbatim.
+    assert ui_control.resolve_fill_value("กฎหมายแรงงาน", "ค้นหา", FILL_KB_SCREEN) == (
+        "ok",
+        "กฎหมายแรงงาน",
+    )
+    # No screen context at all → verbatim.
+    assert ui_control.resolve_fill_value("อะไรก็ได้", "ค้นหา", None) == ("ok", "อะไรก็ได้")
+
+
 def test_sanitize_ui_context_keeps_fields_capped() -> None:
     cleaned = ui_control.sanitize_ui_context({**SCREEN, "fields": [f"ช่อง{i}" for i in range(50)]})
     assert cleaned is not None
@@ -690,6 +747,57 @@ async def test_fill_shortcut_miss_is_honest(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     assert reply == "ไม่เห็นช่องชื่อนั้นบนจอครับ"
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
+@pytest.mark.asyncio
+async def test_fill_shortcut_corrects_value_to_screen_spelling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ "ใส่ ลาวไทย ในช่องชื่อคลังความรู้" types the on-screen "LAWs_thai"."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter,
+        "ใส่ลาวไทยในช่องชื่อคลังความรู้ให้หน่อย",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_KB_SCREEN,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions and actions[0]["argument"] == "LAWs_thai"
+    assert actions[0]["field"] == "ชื่อคลังความรู้"
+
+
+@pytest.mark.asyncio
+async def test_fill_shortcut_dropdown_without_matching_option_asks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dropdown value that matches no option → honest line, nothing dispatched."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "เลือกฝรั่งเศสในช่องเครื่องมือ",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_KB_SCREEN,
+    )
+
+    assert reply == "ช่องนั้นไม่มีตัวเลือกตามที่พูดครับ ลองพูดชื่อตัวเลือกอีกครั้งครับ"
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 

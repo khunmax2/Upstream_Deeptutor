@@ -713,13 +713,20 @@ async def run_text_turn(
 
     # Fill-by-voice: the caller names a field and the value ("พิมพ์ X ในช่อง
     # Y"); we verify the field is visible right now (ui_context.fields) and
-    # set exactly that. Typing never submits — no danger rung needed.
+    # set exactly that. The value is corrected against the screen's own
+    # vocabulary first (STT says "ลาวไทย", the screen says "LAWs_thai") and a
+    # dropdown value must be one of its options — an honest ask beats a
+    # silent non-select. Typing never submits — no danger rung needed.
     fill = ui_control.match_fill_intent(transcript)
     if fill is not None and ui_context is not None:
         outcome, field = ui_control.resolve_field_target(fill["field"], ui_context)
         if outcome == "hit" and field:
-            logger.info("voice rung=fill field=%r %r", field, transcript)
-            return await _run_fill_shortcut(emitter, field, fill["value"], turn_t0=t0)
+            value_status, value = ui_control.resolve_fill_value(fill["value"], field, ui_context)
+            if value_status != "ok" or value is None:
+                logger.info("voice rung=fill-no-option field=%r %r", field, transcript)
+                return await _speak_short_turn(emitter, narration.FILL_NO_OPTION_LINE, turn_t0=t0)
+            logger.info("voice rung=fill field=%r value=%r %r", field, value, transcript)
+            return await _run_fill_shortcut(emitter, field, value, turn_t0=t0)
         if outcome == "ambiguous":
             logger.info("voice rung=fill-ambiguous %r", transcript)
             return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
@@ -920,16 +927,25 @@ async def _run_text_turn(
                     str(args.get("field") or ""), ui_context
                 )
                 if outcome == "hit" and field and value:
-                    logger.info("voice rung=llm-fill field=%r", field)
-                    await emitter.send_json(
-                        {
-                            "type": "ui_action",
-                            "action": "navigate",
-                            "target": "fill_field",
-                            "argument": value,
-                            "field": field,
-                        }
+                    # Same value correction as the shortcut (and as the tool
+                    # result the LLM sees): dropdown values must be real
+                    # options, cross-script garbles take the on-screen form.
+                    value_status, final_value = ui_control.resolve_fill_value(
+                        value, field, ui_context
                     )
+                    if value_status == "ok" and final_value:
+                        logger.info("voice rung=llm-fill field=%r value=%r", field, final_value)
+                        await emitter.send_json(
+                            {
+                                "type": "ui_action",
+                                "action": "navigate",
+                                "target": "fill_field",
+                                "argument": final_value,
+                                "field": field,
+                            }
+                        )
+                    else:
+                        logger.info("voice rung=llm-fill-no-option field=%r", field)
                 else:
                     logger.info("voice rung=llm-fill-%s %r", outcome, args.get("field"))
                 continue

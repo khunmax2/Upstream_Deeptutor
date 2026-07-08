@@ -803,6 +803,71 @@ def field_label(entry: str) -> str:
     return entry.split(_FIELD_OPTIONS_MARKER)[0].strip()
 
 
+def field_options(entry: str) -> list[str]:
+    """A streamed field entry's dropdown options ([] for a plain input)."""
+    if _FIELD_OPTIONS_MARKER not in entry:
+        return []
+    tail = entry.split(_FIELD_OPTIONS_MARKER, 1)[1].rstrip(")")
+    return [opt.strip() for opt in tail.split("|") if opt.strip()]
+
+
+def field_options_for(label: str, ui_context: dict[str, Any] | None) -> list[str]:
+    """The options of the visible field whose label part equals *label*."""
+    for entry in (ui_context or {}).get("fields") or []:
+        if isinstance(entry, str) and field_label(entry) == label:
+            return field_options(entry)
+    return []
+
+
+def resolve_fill_value(
+    value: str, field: str, ui_context: dict[str, Any] | None
+) -> tuple[str, str | None]:
+    """The value to actually type, corrected against the screen's vocabulary.
+
+    STT transliterates on-screen names freely ("LAWs_thai" arrives as
+    "ลาวไทย") — typing the transcript verbatim would put the garble into the
+    form. The screen is the vocabulary:
+
+    - Dropdown (the resolved *field* declares options): the value MUST be one
+      of them — resolve through the shared tiers. ``("ok", option)`` /
+      ``("no_option", None)`` (missing or ambiguous): better an honest ask
+      than a silent non-select behind a spoken "ได้เลยครับ".
+    - Plain input: free text stays verbatim, EXCEPT when the value uniquely
+      names something visible on screen cross-script (case-insensitive exact
+      or consonant-skeleton hit vs buttons/cards): then the on-screen
+      spelling wins — that is what the caller was reading aloud. Fuzzy
+      substring tiers are deliberately NOT used here: a search term must
+      never be rewritten just for resembling a button.
+    """
+    options = field_options_for(field, ui_context)
+    if options:
+        outcome, resolved = _resolve_spoken_name(value, options)
+        return ("ok", resolved) if outcome == "hit" else ("no_option", None)
+    spoken = value.replace(" ", "").lower()
+    spoken_skeleton = _consonant_skeleton(spoken)
+    candidates = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
+    exact: list[str] = []
+    cross: list[str] = []
+    for candidate in candidates:
+        c = candidate.replace(" ", "").lower()
+        if c == spoken:
+            exact.append(candidate)
+        else:
+            cs = _consonant_skeleton(c)
+            if (
+                len(spoken_skeleton) >= 3
+                and len(cs) >= 3
+                and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 3)
+            ):
+                cross.append(candidate)
+    for hits in (exact, cross):
+        if len(hits) == 1:
+            return ("ok", hits[0])
+        if hits:
+            break  # several look-alikes → trust the caller's own words
+    return ("ok", value)
+
+
 def resolve_field_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
     """Resolve a spoken form-field *name* against the visible fields.
 
@@ -1142,10 +1207,25 @@ class UIFillTool(BaseTool):
                 ),
                 success=False,
             )
+        value_status, final_value = resolve_fill_value(
+            value, resolved or "", ui_context if isinstance(ui_context, dict) else None
+        )
+        if value_status != "ok" or final_value is None:
+            options = field_options_for(
+                resolved, ui_context if isinstance(ui_context, dict) else None
+            )
+            return ToolResult(
+                content=(
+                    f"{resolved!r} is a dropdown and none of its options matches "
+                    f"{value!r}. Its options are: {' | '.join(options)}. Ask the "
+                    "caller which option they mean — nothing was selected."
+                ),
+                success=False,
+            )
         return ToolResult(
             content=(
-                f"Typed {value!r} into {resolved!r} — already done on the caller's "
-                "screen. Reply with EXACTLY 'ได้เลยครับ' and nothing else."
+                f"Typed {final_value!r} into {resolved!r} — already done on the "
+                "caller's screen. Reply with EXACTLY 'ได้เลยครับ' and nothing else."
             )
         )
 
@@ -1330,6 +1410,8 @@ __all__ = [
     "VoiceUICapability",
     "allowed_target_ids",
     "field_label",
+    "field_options",
+    "field_options_for",
     "install_ui_control",
     "is_affirmative",
     "is_dangerous_button",
@@ -1343,6 +1425,7 @@ __all__ = [
     "match_where_am_i",
     "resolve_click_target",
     "resolve_field_target",
+    "resolve_fill_value",
     "sanitize_manifest",
     "sanitize_ui_context",
     "spoken_page_name",
