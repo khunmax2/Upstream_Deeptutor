@@ -296,14 +296,10 @@ function setNativeValue(el: FillableElement, value: string): void {
  * set. Uses the same collector as collectPageContext, so the server can only
  * name what the caller could see.
  */
-export function fillFieldByVoice(
-  fieldLabel: string,
-  value: string,
-  exclude: Element | null
-): boolean {
+function findFieldByLabel(fieldLabel: string, exclude: Element | null): FieldEntry | null {
   const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
   const target = norm(fieldLabel)
-  if (!target || !value) return false
+  if (!target) return null
   let exact: FieldEntry | null = null
   let partial: FieldEntry | null = null
   for (const entry of visibleFields(exclude)) {
@@ -311,8 +307,17 @@ export function fillFieldByVoice(
     if (text === target && !exact) exact = entry
     else if (!partial && (text.includes(target) || target.includes(text))) partial = entry
   }
-  const chosen = exact ?? partial
-  if (!chosen) return false
+  return exact ?? partial
+}
+
+export function fillFieldByVoice(
+  fieldLabel: string,
+  value: string,
+  exclude: Element | null
+): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+  const chosen = findFieldByLabel(fieldLabel, exclude)
+  if (!chosen || !value) return false
   const el = chosen.el
   if (el instanceof HTMLSelectElement) {
     const wanted = norm(value)
@@ -328,6 +333,44 @@ export function fillFieldByVoice(
   } else {
     setNativeValue(el, value)
   }
+  el.focus?.()
+  return true
+}
+
+/** *text* without its last word. Thai has no spaces between words —
+ * Intl.Segmenter (word granularity) finds the real boundary; the whitespace
+ * fallback covers runtimes without it. Pure, node-testable. */
+export function removeLastWord(text: string): string {
+  if (!text) return text
+  const trimmed = text.replace(/\s+$/, '')
+  try {
+    const segments = [...new Intl.Segmenter('th', { granularity: 'word' }).segment(trimmed)]
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (segments[i].isWordLike) {
+        return (
+          trimmed.slice(0, segments[i].index) +
+          trimmed.slice(segments[i].index + segments[i].segment.length)
+        ).replace(/\s+$/, '')
+      }
+    }
+    return ''
+  } catch {
+    return trimmed.replace(/\S+$/, '').replace(/\s+$/, '')
+  }
+}
+
+/**
+ * Undo typing in the visible field matching *fieldLabel*: `op` is "clear"
+ * (empty the field) or "delete_word" (drop the last word — Thai-aware).
+ * Selects are not editable this way. Returns whether anything changed.
+ */
+export function editFieldByVoice(fieldLabel: string, op: string, exclude: Element | null): boolean {
+  const chosen = findFieldByLabel(fieldLabel, exclude)
+  if (!chosen || chosen.el instanceof HTMLSelectElement) return false
+  const el = chosen.el
+  if (op === 'clear') setNativeValue(el, '')
+  else if (op === 'delete_word') setNativeValue(el, removeLastWord(el.value))
+  else return false
   el.focus?.()
   return true
 }

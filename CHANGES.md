@@ -182,6 +182,22 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Edit-by-voice: undo typing ("ล้างช่อง X", "ลบคำสุดท้าย").**
+  The correction half of fill-by-voice — typed wrong or changed your mind,
+  fix it by voice. Two curated ops: clear the whole field, or remove the
+  last word (client-side `removeLastWord` uses `Intl.Segmenter` for Thai's
+  space-less word boundaries, whitespace fallback elsewhere). A bare command
+  ("ลบคำสุดท้าย") applies to the last field filled this call — the pipeline
+  remembers it in nav_state, Voice-Control style; before any fill it asks
+  honestly which field. Deterministic and silent (scroll's reasoning: rapid-
+  fire, effect visible). Guard: a remainder that names no field ("ลบโน้ตนี้",
+  "ล้างจานให้หน่อย") falls through — deleting content elsewhere stays behind
+  click/confirm. Prompt: the LLM is told the system owns erase commands and
+  that re-filling replaces — never claim text was deleted. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`; tests
+  (pytest 233 green, node 181 green).
+
 - **2026-07-08 — Mode-command fuzzy anchor compares sound classes, not glyphs
   (the "บิดหมดเลขา" trap).** Live: "ปิดโหมดเลขา" arrived as "บิดหมดเลขา" —
   within the fuzzy edit budget, but the matcher's first-char anchor required

@@ -13,6 +13,7 @@ import {
   formatFieldEntry,
   formatPageContext,
   MAX_SUMMARY_CHARS,
+  removeLastWord,
 } from '../components/voice/pageContext'
 
 const base = {
@@ -90,6 +91,17 @@ test('field list obeys per-entry and total char budgets (frame stays under 8K)',
   assert.ok(capped.length >= 1)
   for (const entry of capped) assert.ok(entry.length <= 120)
   assert.ok(capped.reduce((n, e) => n + e.length, 0) <= 1500)
+})
+
+test('removeLastWord drops the final word, Thai-aware', () => {
+  assert.equal(removeLastWord('hello world'), 'hello')
+  assert.equal(removeLastWord('one'), '')
+  assert.equal(removeLastWord(''), '')
+  assert.equal(removeLastWord('hello world  '), 'hello')
+  // Thai has no spaces — Intl.Segmenter finds the word boundary.
+  const thai = removeLastWord('กฎหมายแรงงาน')
+  assert.ok(thai.length < 'กฎหมายแรงงาน'.length)
+  assert.ok(thai === 'กฎหมาย' || thai === '', `unexpected: ${thai}`)
 })
 
 test('empty outline yields an empty summary (widget then skips the frame)', () => {

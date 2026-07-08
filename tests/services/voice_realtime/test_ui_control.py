@@ -801,6 +801,115 @@ async def test_fill_shortcut_dropdown_without_matching_option_asks(
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+# ── edit-by-voice: undo typing ─────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "op", "field"),
+    [
+        ("ล้างช่องค้นหา", "clear", "ค้นหา"),
+        ("ลบข้อความในช่องชื่อคลังความรู้", "clear", "ชื่อคลังความรู้"),
+        ("เคลียร์ช่องค้นหาให้หน่อย", "clear", "ค้นหา"),
+        ("ล้าง", "clear", ""),  # bare → last filled field
+        ("ลบคำสุดท้าย", "delete_word", ""),
+        ("ลบคำสุดท้ายในช่องค้นหาหน่อยครับ", "delete_word", "ค้นหา"),
+        ("ช่วยลบคำล่าสุดออก", "delete_word", ""),
+    ],
+)
+def test_edit_matcher_extracts_op_and_field(text: str, op: str, field: str) -> None:
+    assert ui_control.match_edit_intent(text) == {"op": op, "field": field}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ลบโน้ตนี้ทิ้ง",  # deleting content elsewhere — click/confirm territory
+        "ล้างจานให้หน่อย",  # remainder names no field
+        "ลบคำว่ากฎหมายออก",  # names a word, not a field position
+        "ลบยังไง",  # question
+        "",
+    ],
+)
+def test_edit_matcher_falls_through(text: str) -> None:
+    assert ui_control.match_edit_intent(text) is None
+
+
+@pytest.mark.asyncio
+async def test_edit_shortcut_remembers_last_filled_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fill then a bare "ลบคำสุดท้าย" — the edit lands on the same field, silently."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for fill/edit commands")
+
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "พิมพ์กฎหมายแรงงานในช่องค้นหา",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_KB_SCREEN,
+        nav_state=nav_state,
+    )
+    assert nav_state.get("last_field") == "ค้นหา"
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ลบคำสุดท้าย",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_KB_SCREEN,
+        nav_state=nav_state,
+    )
+
+    assert reply == ""  # silent, like scroll
+    edits = [m for m in emitter.json if m.get("target") == "edit_field"]
+    assert edits == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "edit_field",
+            "argument": "delete_word",
+            "field": "ค้นหา",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_edit_without_any_field_asks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bare edit before any fill this call → honest ask, nothing dispatched."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ลบคำสุดท้าย",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_KB_SCREEN,
+        nav_state={},
+    )
+
+    assert "ยังไม่รู้ว่าช่องไหน" in reply
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
 @pytest.mark.asyncio
 async def test_llm_fill_tool_call_dispatches_fill(monkeypatch: pytest.MonkeyPatch) -> None:
     """TOOL_CALL ui_fill (hit) → ui_action fill_field with the resolved label."""

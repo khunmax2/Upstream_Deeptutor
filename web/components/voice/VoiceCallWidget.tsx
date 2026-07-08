@@ -19,6 +19,7 @@ import { wsUrl } from '@/lib/api'
 import {
   clickVisibleByText,
   collectPageContext,
+  editFieldByVoice,
   fillFieldByVoice,
   scrollByVoice,
 } from './pageContext'
@@ -624,6 +625,19 @@ export default function VoiceCallWidget() {
             addMsg('sys', `⌨️ พิมพ์ "${argument}" ในช่อง ${field}`)
           } else {
             addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+          }
+          return
+        }
+        case 'edit_field': {
+          // Correction: clear the field or drop its last word (argument = op).
+          const field = String(m.field || '')
+          if (field && editFieldByVoice(field, argument, panelRef.current)) {
+            addMsg(
+              'sys',
+              argument === 'clear' ? `🧹 ล้างช่อง ${field}` : `⌫ ลบคำสุดท้ายในช่อง ${field}`
+            )
+          } else {
+            addMsg('sys', `⚠ แก้ข้อความในช่อง "${field}" ไม่ได้`)
           }
           return
         }

@@ -671,6 +671,83 @@ def match_fill_intent(text: str) -> dict[str, str] | None:
     return None
 
 
+# ── edit-by-voice: undo typing in a field ("ล้างช่อง X", "ลบคำสุดท้าย") ──
+#
+# The correction half of fill-by-voice. Two curated ops only: clear the whole
+# field, or remove the last word. A missing field name means "the field I
+# just typed into" — the pipeline remembers the last fill target per call
+# (nav_state), Voice-Control style. Anything with a remainder that is not a
+# field reference ("ลบโน้ตนี้", "ล้างจานให้หน่อย") falls through: deleting
+# *content* elsewhere stays behind the click/confirm rungs.
+
+_EDIT_POLITE_PREFIXES = ("ช่วย", "ขอ", "รบกวน")
+# Longest first. Tone-dropped twins (ล้าง→ลาง) are listed outright — the
+# cheap fix for a closed, short list.
+_EDIT_CLEAR_PREFIXES = (
+    "ลบข้อความทั้งหมด",
+    "ลบข้อความ",
+    "ลบทั้งหมด",
+    "ลบที่พิมพ์",
+    "ล้างข้อความ",
+    "ลางข้อความ",
+    "เคลียร์",
+    "เคลีย",
+    "ล้าง",
+    "ลาง",
+    "clear",
+)
+_EDIT_WORD_PREFIXES = (
+    "ลบคำสุดท้าย",
+    "ลบคำล่าสุด",
+    "ลบคำท้าย",
+    "ลบหนึ่งคำ",
+    "ลบอีกคำ",
+    "ถอยหนึ่งคำ",
+    "ลบคำ",
+    "deletelastword",
+)
+_EDIT_FIELD_LEADS = ("ในช่อง", "ที่ช่อง", "ของช่อง", "ช่อง")
+_MAX_EDIT_CHARS = 48
+
+
+def match_edit_intent(text: str) -> dict[str, str] | None:
+    """``{"op": "clear"|"delete_word", "field": name-or-""}`` for an edit
+    command, else ``None``.
+
+    The utterance (politeness peeled) must BE a known edit form: the verb at
+    the start and, after it, nothing but an optional field reference. ``""``
+    field = apply to the last field this call typed into.
+    """
+    t = _normalize_nav_text(text).replace(" ", "")
+    if not t or len(t) > _MAX_EDIT_CHARS:
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    for prefix in _EDIT_POLITE_PREFIXES:
+        if t.startswith(prefix):
+            t = t[len(prefix) :]
+            break
+    while True:  # peel trailing politeness ("…ให้หน่อยครับ")
+        trimmed = t
+        for tail in _CLICK_TRAILING:
+            trimmed = trimmed.removesuffix(tail)
+        if trimmed == t:
+            break
+        t = trimmed
+    for op, prefixes in (("delete_word", _EDIT_WORD_PREFIXES), ("clear", _EDIT_CLEAR_PREFIXES)):
+        for prefix in prefixes:
+            if not t.startswith(prefix):
+                continue
+            rest = t[len(prefix) :].removeprefix("ออก")
+            if not rest:
+                return {"op": op, "field": ""}
+            for lead in _EDIT_FIELD_LEADS:
+                if rest.startswith(lead) and rest[len(lead) :]:
+                    return {"op": op, "field": rest[len(lead) :]}
+            return None  # a remainder that names no field = not our command
+    return None
+
+
 # Cross-script matching for transliterated loanwords: the screen says
 # "เพอร์โซนา" but STT romanises the caller's word to "persona" (or the UI is
 # English and the caller speaks Thai). Comparing *consonant skeletons* in
@@ -1361,7 +1438,12 @@ class VoiceUICapability:
                 "anything; pressing a button is a separate request. The same "
                 "honesty rules apply: call the tool (no bare 'ได้เลยครับ'), "
                 "follow its result, never pick a field or invent a value the "
-                "caller did not say."
+                "caller did not say. CORRECTIONS: you have no erase tool — the "
+                "system layer handles 'ล้างช่อง X' (clear) and 'ลบคำสุดท้าย' "
+                "(remove last word) before you, and typing into a field again "
+                "REPLACES its value. If an erase request reaches you, it means "
+                "the system did not catch it: never claim text was deleted — "
+                "tell the caller those commands instead."
             )
         if not lines:
             return None
@@ -1433,6 +1515,7 @@ __all__ = [
     "is_negative",
     "match_action_intent",
     "match_click_intent",
+    "match_edit_intent",
     "match_fill_intent",
     "match_mode_command",
     "match_navigation_guess",

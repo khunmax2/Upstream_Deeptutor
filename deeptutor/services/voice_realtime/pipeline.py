@@ -339,6 +339,31 @@ async def _run_fill_shortcut(
     return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
 
 
+async def _run_edit_shortcut(emitter: VoiceEmitter, field: str, op: str, *, turn_t0: float) -> str:
+    """Undo typing in a visible field: `ui_action edit_field`, silent.
+
+    Correction commands are rapid-fire and their effect is instantly visible
+    (same reasoning as scroll) — no spoken ack.
+    """
+    await emitter.send_json(
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "edit_field",
+            "argument": op,
+            "field": field,
+        }
+    )
+    await emitter.send_json(
+        {
+            "type": "done",
+            "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+            "first_audio_ms": None,
+        }
+    )
+    return ""
+
+
 async def _run_secretary_turn(emitter: VoiceEmitter, transcript: str, *, turn_t0: float) -> str:
     """Type one dictated utterance into the on-screen chat; say nothing.
 
@@ -725,12 +750,37 @@ async def run_text_turn(
             if value_status != "ok" or value is None:
                 logger.info("voice rung=fill-no-option field=%r %r", field, transcript)
                 return await _speak_short_turn(emitter, narration.FILL_NO_OPTION_LINE, turn_t0=t0)
+            if nav_state is not None:
+                nav_state["last_field"] = field  # "ลบคำสุดท้าย" knows where
             logger.info("voice rung=fill field=%r value=%r %r", field, value, transcript)
             return await _run_fill_shortcut(emitter, field, value, turn_t0=t0)
         if outcome == "ambiguous":
             logger.info("voice rung=fill-ambiguous %r", transcript)
             return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
         logger.info("voice rung=fill-miss %r", transcript)
+        return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
+
+    # Edit-by-voice: undo typing ("ล้างช่องค้นหา", "ลบคำสุดท้าย"). A bare
+    # command applies to the last field filled this call (nav_state memory).
+    edit = ui_control.match_edit_intent(transcript)
+    if edit is not None and ui_context is not None:
+        if edit["field"]:
+            outcome, field = ui_control.resolve_field_target(edit["field"], ui_context)
+        else:
+            field = (nav_state or {}).get("last_field")
+            outcome = "hit" if field else "missing"
+            if not field:
+                logger.info("voice rung=edit-no-field %r", transcript)
+                return await _speak_short_turn(emitter, narration.EDIT_NO_FIELD_LINE, turn_t0=t0)
+        if outcome == "hit" and field:
+            if nav_state is not None:
+                nav_state["last_field"] = field
+            logger.info("voice rung=edit op=%s field=%r %r", edit["op"], field, transcript)
+            return await _run_edit_shortcut(emitter, field, edit["op"], turn_t0=t0)
+        if outcome == "ambiguous":
+            logger.info("voice rung=edit-ambiguous %r", transcript)
+            return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
+        logger.info("voice rung=edit-miss %r", transcript)
         return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
 
     guess = ui_control.match_navigation_guess(transcript, ui_manifest)
@@ -934,6 +984,8 @@ async def _run_text_turn(
                         value, field, ui_context
                     )
                     if value_status == "ok" and final_value:
+                        if nav_state is not None:
+                            nav_state["last_field"] = field
                         logger.info("voice rung=llm-fill field=%r value=%r", field, final_value)
                         await emitter.send_json(
                             {
