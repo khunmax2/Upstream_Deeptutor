@@ -182,6 +182,23 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Action matcher tolerates STT garbles (voice-scroll gap fix).**
+  Live gap: "เลื่อนลง" worked only when STT transcribed it letter-perfect —
+  "เลือนลง" (tone mark dropped), "เลื่อน ลง" (space inserted), "เลื่อนหลง"
+  (one phonetic edit) all fell past the shortcut to the LLM, which sometimes
+  acked "ได้ครับ" without calling the tool (nothing moved). `_ACTION_PATTERNS`
+  matching now folds text and patterns through the same phonetic normalisation
+  the navigation verbs already use (homophones + tone marks + spaces), plus a
+  start-anchored edit-distance-1 pass for patterns ≥5 folded chars — anchored
+  to the utterance head so mid-sentence sound-alikes ("เอาเลื่อยลงมา…") stay
+  out of reach; bare-"เลื่อน" and ambiguity guards unchanged. Prompt hardening
+  for the residue: the no-ack-without-tool-call rule now covers listed
+  *actions* (was navigation/click only), and the voice persona asks a short
+  clarifying question when a turn is an out-of-context short fragment (whole-
+  word mishears like "เริ่มต้น") instead of guessing a topic and lecturing.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`; regression
+  tests in `tests/services/voice_realtime/test_ui_control.py` (9 new params).
+
 - **2026-07-08 — Card labels: first text chunk, not the whole card.** Second
   half of the "กด LlamaIndex ไม่เจอ" gap: the Knowledge-Center engine cards
   are `<button>`s whose title is a plain `<span>` (no heading, no aria-label),

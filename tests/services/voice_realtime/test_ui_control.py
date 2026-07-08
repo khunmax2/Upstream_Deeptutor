@@ -253,6 +253,35 @@ def test_scroll_commands_fall_through(text: str) -> None:
     assert ui_control.match_action_intent(text, SCROLL_MANIFEST) is None
 
 
+@pytest.mark.parametrize(
+    ("text", "target"),
+    [
+        ("เลื่อน ลง", "scroll_down"),  # STT inserts a space
+        ("เลื่อน ลง หน่อย", "scroll_down"),
+        ("เลือนลง", "scroll_down"),  # STT drops the tone mark
+        ("เลื่อนหลง", "scroll_down"),  # ลง → หลง, one phonetic edit
+        ("เลือนขึ้น", "scroll_up"),
+        ("เรื่อนลงหน่อย", "scroll_down"),  # ล↔ร homophone swap
+    ],
+)
+def test_scroll_commands_match_stt_garbles(text: str, target: str) -> None:
+    """Live gap: STT-garbled scroll commands fell past the shortcut to the
+    LLM, which sometimes acked without acting ("ได้ครับ" + nothing moves)."""
+    assert ui_control.match_action_intent(text, SCROLL_MANIFEST) == {"target": target}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "เริ่มต้น",  # whole-word mishear of "เลื่อนลง" — no anchor left, must not guess
+        "เลื่อนนัดประชุมให้หน่อย",  # still safe with fuzzy folding on
+        "ช่วยเอาเลื่อยลงมาให้หน่อยนะ",  # เลื่อย (saw) ≠ เลื่อน, and utterance is long
+    ],
+)
+def test_scroll_fuzzy_stays_conservative(text: str) -> None:
+    assert ui_control.match_action_intent(text, SCROLL_MANIFEST) is None
+
+
 @pytest.mark.asyncio
 async def test_scroll_shortcut_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Scroll acts without a spoken ack (rapid-fire commands, visible effect)."""

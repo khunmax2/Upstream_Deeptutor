@@ -428,6 +428,41 @@ _ACTION_PATTERNS: dict[str, tuple[str, ...]] = {
     "scroll_top": ("บนสุด", "หัวหน้าเพจ", "ต้นหน้า", "scroll to top"),
 }
 
+# Action patterns get the same STT-garble tolerance as navigation verbs:
+# match on the phonetic fold (homophones + tone marks + spaces), then a
+# start-anchored edit-distance-1 pass. Live failure this closes: "เลื่อนลง"
+# arriving as "เลือนลง"/"เลื่อน ลง"/"เลื่อนหลง" fell past the shortcut to the
+# LLM, which sometimes acked without acting. The fuzzy pass is anchored to the
+# utterance head (commands start with the verb; a polite prefix may precede
+# it) so mid-sentence sound-alikes ("เอาเลื่อยลงมา…") stay out of reach.
+_ACTION_POLITE_PREFIXES = ("ช่วย", "ขอ", "รบกวน", "please")
+_ACTION_FUZZY_MIN_CHARS = 5
+_ACTION_FUZZY_MAX_OFFSET = 3
+
+
+def _fold_action_text(s: str) -> str:
+    return _phonetic(s.lower()).replace(" ", "")
+
+
+def _action_pattern_hit(t_fold: str, pattern: str) -> bool:
+    p = _fold_action_text(pattern)
+    if p in t_fold:
+        return True
+    if len(p) < _ACTION_FUZZY_MIN_CHARS:
+        return False
+    head = t_fold
+    for prefix in _ACTION_POLITE_PREFIXES:
+        folded = _fold_action_text(prefix)
+        if head.startswith(folded):
+            head = head[len(folded) :]
+            break
+    for offset in range(_ACTION_FUZZY_MAX_OFFSET):
+        for width in (len(p) - 1, len(p), len(p) + 1):
+            seg = head[offset : offset + width]
+            if len(seg) >= len(p) - 1 and _edit_distance(seg, p) <= 1:
+                return True
+    return False
+
 
 def match_action_intent(text: str, manifest: dict[str, Any] | None) -> dict[str, str] | None:
     """Return ``{"target": id}`` when *text* is a clear declared-action command.
@@ -449,9 +484,10 @@ def match_action_intent(text: str, manifest: dict[str, Any] | None) -> dict[str,
         for entry in manifest.get("actions") or []
         if isinstance(entry, dict) and entry.get("id")
     }
+    t_fold = _fold_action_text(t)
     hits: list[str] = []
     for action_id, patterns in _ACTION_PATTERNS.items():
-        if action_id in declared and any(p in t for p in patterns):
+        if action_id in declared and any(_action_pattern_hit(t_fold, p) for p in patterns):
             hits.append(action_id)
     if len(hits) != 1:
         return None
@@ -956,13 +992,16 @@ class VoiceUICapability:
                 "the caller named one — e.g. 'เปิดคลังความรู้ LAWs_thai' — you MUST "
                 "pass it verbatim as `argument`; calling the tool without it opens "
                 "the wrong thing. "
-                "When the caller asks to go to / open a page, you MUST actually call "
-                f"`{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement alone: "
-                "saying 'ได้เลยครับ' without the tool call means nothing happened. "
-                "If the request sounds like navigation but you cannot map it to "
-                "one listed target (speech recognition garbles words), do NOT "
-                "acknowledge and do NOT guess: ask one short question instead — "
-                "'คุณหมายถึงหน้าไหนครับ' or 'คุณหมายถึงหน้า X ใช่ไหมครับ'. "
+                "When the caller asks to go to / open a page OR to perform a "
+                "listed action (scroll, new chat, go back, …), you MUST actually "
+                f"call `{UI_NAVIGATE_TOOL}` — never answer with an acknowledgement "
+                "alone: saying 'ได้เลยครับ' without the tool call means nothing "
+                "happened. "
+                "If the request sounds like a UI command (navigation, scrolling, "
+                "pressing) but you cannot map it to one listed target (speech "
+                "recognition garbles words), do NOT acknowledge and do NOT guess: "
+                "ask one short question instead — 'คุณหมายถึงหน้าไหนครับ' or "
+                "'คุณหมายถึงหน้า X ใช่ไหมครับ'. "
                 "An acknowledgement ('ได้เลยครับ'/'จัดให้ครับ') is ONLY allowed in "
                 "the same reply as a ui_navigate call, never on its own. "
                 "VOICE MODES: you have NO control over voice modes (โหมดเลขา / "

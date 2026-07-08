@@ -80,7 +80,12 @@ VOICE_STYLE_DIRECTIVE = (
     "caller wants more detail. NEVER end with generic offers of further help "
     "('หากมีคำถามเพิ่มเติม…', 'บอกได้เลยนะครับ', 'ผมพร้อมช่วยเสมอ') — this is a "
     "live call, the caller already knows they can keep talking; end at the "
-    "content. Before any destructive or irreversible action "
+    "content. GARBLED SPEECH: the transcript comes from speech recognition and "
+    "is sometimes misheard. If a turn is a very short fragment (a word or two) "
+    "that fits neither the conversation nor the screen — e.g. a bare 'เริ่มต้น' "
+    "out of nowhere — do NOT guess a topic and explain it: ask one short "
+    "clarifying question ('ขอโทษครับ ผมฟังไม่ถนัด พูดอีกครั้งได้ไหมครับ'). "
+    "Before any destructive or irreversible action "
     "(deleting, overwriting, sending something), say what you are about to do "
     "and get the caller's confirmation first."
 )
