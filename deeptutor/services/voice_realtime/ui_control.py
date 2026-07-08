@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 UI_NAVIGATE_TOOL = "ui_navigate"
 UI_CLICK_TOOL = "ui_click"
+UI_FILL_TOOL = "ui_fill"
 
 # Guard rails on the client-supplied manifest (it rides a WS control frame).
 MAX_MANIFEST_BYTES = 8_192
@@ -71,6 +72,10 @@ _MAX_CONTEXT_SUMMARY_CHARS = 3_000
 _MAX_CONTEXT_PATH_CHARS = 200
 _MAX_BUTTONS = 40
 _MAX_BUTTON_CHARS = 60
+# Visible form fields (labels, with a dropdown's options folded into the
+# string client-side) — fewer than buttons but each entry can be longer.
+_MAX_FIELDS = 20
+_MAX_FIELD_CHARS = 120
 
 
 def sanitize_manifest(raw: Any) -> dict[str, Any] | None:
@@ -146,6 +151,20 @@ def sanitize_ui_context(raw: Any) -> dict[str, Any] | None:
                 break
         if buttons:
             out["buttons"] = buttons
+    # Structured visible form fields — what fill-by-voice resolves spoken
+    # field names against (same contract as `buttons` for clicks). A dropdown
+    # entry carries its options inline: "ภาษา (เลือกได้: ไทย | English)".
+    raw_fields = raw.get("fields")
+    if isinstance(raw_fields, list):
+        fields: list[str] = []
+        for item in raw_fields:
+            text = _CONTROL_CHARS.sub("", str(item or "").strip())[:_MAX_FIELD_CHARS]
+            if text and text not in fields:
+                fields.append(text)
+            if len(fields) >= _MAX_FIELDS:
+                break
+        if fields:
+            out["fields"] = fields
     return out or None
 
 
@@ -576,6 +595,82 @@ def match_click_intent(text: str) -> str | None:
     return None
 
 
+# ── fill-by-voice: type into / select in a form field the caller names ─
+#
+# Same trust model as click-by-name: the CALLER points at a field and says
+# the value ("พิมพ์ กฎหมายแรงงาน ในช่องค้นหา"); the system only verifies the
+# named field is visible right now (ui_context.fields) and tells the client
+# to set that exact field. The LLM never picks a field or invents a value.
+# Typing is non-destructive by design — nothing is submitted; pressing a
+# submit button stays a separate (click) step with its own danger rung.
+
+_FILL_VERBS = (  # longest first so "ช่วยพิมพ์" wins over "พิมพ์"
+    "ช่วยพิมพ์",
+    "ช่วยใส่",
+    "ช่วยกรอก",
+    "ช่วยเลือก",
+    "พิมพ์",
+    "ใส่",
+    "กรอก",
+    "เขียน",
+    "เลือก",
+    "type",
+    "fill",
+    "select",
+)
+_FIELD_MARKERS = (  # longest first: "ลงในช่อง" must win over "ในช่อง"
+    "ลงในช่อง",
+    "ในช่อง",
+    "ลงช่อง",
+    "ที่ช่อง",
+    "ตรงช่อง",
+    "ช่อง",
+)
+# Values are free text — allow longer utterances than nav/click commands.
+_MAX_FILL_CHARS = 80
+
+
+def match_fill_intent(text: str) -> dict[str, str] | None:
+    """The ``{"field", "value"}`` of a "พิมพ์ X ในช่อง Y" command, else ``None``.
+
+    Requires the utterance to START with a fill verb, name the field behind an
+    explicit "ช่อง" marker, and not be a question. The value keeps the
+    caller's original casing/spacing ("LAWs_thai" must be typed as said);
+    field resolution against the actually visible fields happens in
+    :func:`resolve_field_target`.
+    """
+    t_orig = (text or "").strip()
+    t = t_orig.lower()
+    if not t or len(t) > _MAX_FILL_CHARS:
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    for verb in _FILL_VERBS:
+        if not t.startswith(verb):
+            continue
+        rest_orig = t_orig[len(verb) :].strip()
+        rest = rest_orig.lower()
+        for marker in _FIELD_MARKERS:
+            # rfind: the VALUE may itself contain "ช่อง"; the field name
+            # (last, short) realistically never contains a marker again.
+            idx = rest.rfind(marker)
+            if idx <= 0:
+                continue
+            value = rest_orig[:idx].strip()
+            field = rest_orig[idx + len(marker) :].strip()
+            while True:  # peel trailing politeness off the field name
+                trimmed = field
+                for tail in _CLICK_TRAILING:
+                    trimmed = trimmed.removesuffix(tail).strip()
+                if trimmed == field:
+                    break
+                field = trimmed
+            if value and field:
+                return {"field": field, "value": value}
+        return None
+    return None
+
+
 # Cross-script matching for transliterated loanwords: the screen says
 # "เพอร์โซนา" but STT romanises the caller's word to "persona" (or the UI is
 # English and the caller speaks Thai). Comparing *consonant skeletons* in
@@ -645,19 +740,18 @@ def _consonant_skeleton(s: str) -> str:
     return "".join(ch for ch in folded if ch not in _SKELETON_NOISE)
 
 
-def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
-    """Resolve a spoken button *name* against the visible buttons.
+def _resolve_spoken_name(name: str, candidates: list[str]) -> tuple[str, str | None]:
+    """Resolve a spoken *name* against visible candidate texts.
 
-    Returns ``("hit", button_text)`` for exactly one match, ``("ambiguous",
-    None)`` for several, ``("missing", None)`` for none / no context. Match
-    order: exact (normalised) → substring either way → phonetic fuzzy (STT
-    garbles button names too) → cross-script consonant skeleton (loanwords:
-    spoken "persona" vs on-screen "เพอร์โซนา") — each tier only consulted when
-    the previous found nothing.
+    Returns ``("hit", text)`` for exactly one match, ``("ambiguous", None)``
+    for several, ``("missing", None)`` for none. Match order: exact
+    (normalised) → substring either way → phonetic fuzzy (STT garbles names
+    too) → cross-script consonant skeleton (loanwords: spoken "persona" vs
+    on-screen "เพอร์โซนา") — each tier only consulted when the previous found
+    nothing. Shared by click-by-name (buttons) and fill-by-voice (fields).
     """
     spoken = (name or "").replace(" ", "").lower()
-    buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
-    if not spoken or not buttons:
+    if not spoken or not candidates:
         return ("missing", None)
     spoken_skeleton = _consonant_skeleton(spoken)
 
@@ -666,22 +760,22 @@ def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[
         contains: list[str] = []
         fuzzy: list[str] = []
         cross: list[str] = []
-        for button in buttons:
-            b = button.replace(" ", "").lower()
-            if b == spoken:
-                exact.append(button)
-            elif (len(spoken) >= 3 and spoken in b) or (len(b) >= 3 and b in spoken):
-                contains.append(button)
-            elif _edit_distance(_phonetic(spoken), _phonetic(b)) <= max(1, len(b) // 4):
-                fuzzy.append(button)
+        for candidate in candidates:
+            c = candidate.replace(" ", "").lower()
+            if c == spoken:
+                exact.append(candidate)
+            elif (len(spoken) >= 3 and spoken in c) or (len(c) >= 3 and c in spoken):
+                contains.append(candidate)
+            elif _edit_distance(_phonetic(spoken), _phonetic(c)) <= max(1, len(c) // 4):
+                fuzzy.append(candidate)
             else:
-                bs = _consonant_skeleton(b)
+                cs = _consonant_skeleton(c)
                 if (
                     len(spoken_skeleton) >= 3
-                    and len(bs) >= 3
-                    and _edit_distance(spoken_skeleton, bs) <= max(1, len(bs) // 3)
+                    and len(cs) >= 3
+                    and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 3)
                 ):
-                    cross.append(button)
+                    cross.append(candidate)
         return [exact, contains, fuzzy, cross]
 
     for hits in tiers():
@@ -690,6 +784,39 @@ def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[
         if len(hits) > 1:
             return ("ambiguous", None)
     return ("missing", None)
+
+
+def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
+    """Resolve a spoken button *name* against the visible buttons."""
+    buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
+    return _resolve_spoken_name(name, buttons)
+
+
+# A dropdown field entry folds its options into the streamed string
+# ("ภาษา (เลือกได้: ไทย | English)"); only the label part left of the marker
+# counts when resolving what the caller named.
+_FIELD_OPTIONS_MARKER = " (เลือกได้:"
+
+
+def field_label(entry: str) -> str:
+    """The spoken-matchable label part of a streamed field entry."""
+    return entry.split(_FIELD_OPTIONS_MARKER)[0].strip()
+
+
+def resolve_field_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
+    """Resolve a spoken form-field *name* against the visible fields.
+
+    Same outcome contract and tiers as :func:`resolve_click_target`; matching
+    runs on the label part only, and the returned text is that label (what
+    the client looks the element up by).
+    """
+    labels: list[str] = []
+    for entry in (ui_context or {}).get("fields") or []:
+        if isinstance(entry, str):
+            label = field_label(entry)
+            if label and label not in labels:
+                labels.append(label)
+    return _resolve_spoken_name(name, labels)
 
 
 def is_dangerous_button(text: str) -> bool:
@@ -944,6 +1071,85 @@ class UIClickTool(BaseTool):
         )
 
 
+class UIFillTool(BaseTool):
+    """Type a caller-named value into a visible form field (or pick a
+    dropdown option).
+
+    The LLM fallback for fill phrasings the deterministic shortcut doesn't
+    recognise ("ช่องค้นหาใส่คำว่ากฎหมายให้หน่อย"). Same trust model as click:
+    the tool only *verifies* the field name against the fields the screen
+    actually shows (``_ui_context``); the client sets the value with native
+    setters and dispatches nothing else — no form is submitted, so there is
+    no danger rung. The LLM never chooses a field or invents a value the
+    caller didn't say.
+    """
+
+    def get_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=UI_FILL_TOOL,
+            description=(
+                "Type a value into a form field (or choose a dropdown option) "
+                "that is VISIBLE on the caller's screen during a voice call, when "
+                "the caller says what to put where. `field` must be a field name "
+                "shown in the 'Current screen' section of the system prompt — "
+                "never invent one, never pick a field the caller did not name. "
+                "Nothing is submitted: filling is preview-only until the caller "
+                "asks to press a button."
+            ),
+            parameters=[
+                ToolParameter(
+                    name="field",
+                    type="string",
+                    description="The visible field name the caller said (verbatim).",
+                ),
+                ToolParameter(
+                    name="value",
+                    type="string",
+                    description=(
+                        "The exact text to type (or dropdown option to choose), "
+                        "verbatim as the caller said it."
+                    ),
+                ),
+            ],
+        )
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        field = str(kwargs.get("field") or "").strip()
+        value = str(kwargs.get("value") or "").strip()
+        ui_context = kwargs.get("_ui_context")
+        if not field or not value:
+            return ToolResult(
+                content="Field name and value are both required; nothing was typed.",
+                success=False,
+            )
+        outcome, resolved = resolve_field_target(
+            field, ui_context if isinstance(ui_context, dict) else None
+        )
+        if outcome == "missing":
+            return ToolResult(
+                content=(
+                    f"No visible form field named {field!r} on the caller's screen "
+                    "right now. Tell the caller honestly (e.g. 'ไม่เห็นช่องชื่อนั้น"
+                    "บนจอครับ') — do NOT claim anything was typed."
+                ),
+                success=False,
+            )
+        if outcome == "ambiguous":
+            return ToolResult(
+                content=(
+                    f"Several visible fields match {field!r}. Ask the caller which "
+                    "one they mean (say the full field names) — nothing was typed."
+                ),
+                success=False,
+            )
+        return ToolResult(
+            content=(
+                f"Typed {value!r} into {resolved!r} — already done on the caller's "
+                "screen. Reply with EXACTLY 'ได้เลยครับ' and nothing else."
+            )
+        )
+
+
 class VoiceUICapability:
     """LoopCapability that mounts ``ui_navigate`` when a UI manifest is present.
 
@@ -953,7 +1159,7 @@ class VoiceUICapability:
     """
 
     name = "voice_ui"
-    owned_tools = (UI_NAVIGATE_TOOL, UI_CLICK_TOOL)
+    owned_tools = (UI_NAVIGATE_TOOL, UI_CLICK_TOOL, UI_FILL_TOOL)
 
     def is_active(self, context: UnifiedContext) -> bool:
         return bool(context.metadata.get("ui_manifest")) or bool(context.metadata.get("ui_context"))
@@ -1029,6 +1235,9 @@ class VoiceUICapability:
             if screen.get("path"):
                 lines.append(f"Path: {screen['path']}")
             lines.append(str(screen["summary"]))
+            fields = [f for f in screen.get("fields") or [] if isinstance(f, str)]
+            if fields:
+                lines.append("ช่องกรอกที่มองเห็น (form fields): " + " | ".join(fields))
             lines.append(
                 "When the caller ASKS what is on their screen (เมนู/ปุ่ม/หัวข้อ "
                 "อะไรบ้าง), answer from this section only — never invent menus or "
@@ -1049,7 +1258,15 @@ class VoiceUICapability:
                 "'ได้เลยครับ' without a tool call means nothing happened. Follow "
                 "the tool result exactly — if it says nothing was pressed, never "
                 "claim otherwise. Only press what the caller named; never choose "
-                "a button for them."
+                "a button for them. "
+                f"TYPING: with `{UI_FILL_TOOL}` you can type into a form field "
+                "(or choose a dropdown option) listed under 'ช่องกรอกที่มองเห็น' "
+                "when the caller says what to put where — pass the field name "
+                "and the caller's value verbatim. Filling never submits "
+                "anything; pressing a button is a separate request. The same "
+                "honesty rules apply: call the tool (no bare 'ได้เลยครับ'), "
+                "follow its result, never pick a field or invent a value the "
+                "caller did not say."
             )
         if not lines:
             return None
@@ -1061,8 +1278,8 @@ class VoiceUICapability:
         kwargs: dict[str, Any],
         context: UnifiedContext,
     ) -> dict[str, Any]:
-        if tool_name == UI_CLICK_TOOL:
-            # The click tool verifies names against what the screen actually
+        if tool_name in (UI_CLICK_TOOL, UI_FILL_TOOL):
+            # Click and fill verify names against what the screen actually
             # shows — inject the turn's streamed context (server-owned, the
             # model cannot fabricate it).
             updated = dict(kwargs)
@@ -1092,6 +1309,9 @@ def install_ui_control() -> None:
     if tool_registry.get(UI_CLICK_TOOL) is None:
         tool_registry.register(UIClickTool())
         logger.info("voice_ui: registered %s tool", UI_CLICK_TOOL)
+    if tool_registry.get(UI_FILL_TOOL) is None:
+        tool_registry.register(UIFillTool())
+        logger.info("voice_ui: registered %s tool", UI_FILL_TOOL)
 
     caps = capability_registry.LOOP_CAPABILITIES
     if not any(getattr(cap, "name", "") == VoiceUICapability.name for cap in caps):
@@ -1102,22 +1322,27 @@ def install_ui_control() -> None:
 __all__ = [
     "MAX_MANIFEST_BYTES",
     "UI_CLICK_TOOL",
+    "UI_FILL_TOOL",
     "UI_NAVIGATE_TOOL",
     "UIClickTool",
+    "UIFillTool",
     "UINavigateTool",
     "VoiceUICapability",
     "allowed_target_ids",
+    "field_label",
     "install_ui_control",
     "is_affirmative",
     "is_dangerous_button",
     "is_negative",
     "match_action_intent",
     "match_click_intent",
+    "match_fill_intent",
     "match_mode_command",
     "match_navigation_guess",
     "match_navigation_intent",
     "match_where_am_i",
     "resolve_click_target",
+    "resolve_field_target",
     "sanitize_manifest",
     "sanitize_ui_context",
     "spoken_page_name",

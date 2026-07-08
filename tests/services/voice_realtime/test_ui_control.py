@@ -548,6 +548,186 @@ async def test_llm_click_tool_call_arms_confirmation_for_dangerous(
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+# ── fill-by-voice: type into / select in a caller-named field ──────────
+
+FILL_SCREEN = {
+    "path": "/knowledge",
+    "summary": "x",
+    "fields": ["ค้นหา", "ชื่อคลังความรู้", "ภาษา (เลือกได้: ไทย | English)"],
+}
+
+
+@pytest.mark.parametrize(
+    ("text", "field", "value"),
+    [
+        ("พิมพ์กฎหมายแรงงานในช่องค้นหา", "ค้นหา", "กฎหมายแรงงาน"),
+        ("พิมพ์ LAWs_thai ลงในช่องชื่อคลังความรู้ให้หน่อย", "ชื่อคลังความรู้", "LAWs_thai"),
+        ("ช่วยกรอก สมุดกฎหมาย ในช่องชื่อคลังความรู้", "ชื่อคลังความรู้", "สมุดกฎหมาย"),
+        ("เลือกไทยในช่องภาษา", "ภาษา", "ไทย"),
+        ("ใส่ 42 ที่ช่องค้นหาหน่อยครับ", "ค้นหา", "42"),
+    ],
+)
+def test_fill_matcher_extracts_field_and_value(text: str, field: str, value: str) -> None:
+    assert ui_control.match_fill_intent(text) == {"field": field, "value": value}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "พิมพ์อะไรในช่องนี้ได้บ้าง",  # question
+        "พิมพ์สวัสดีครับ",  # no field marker → not a fill command
+        "เลือกสมุดบันทึก",  # click-ish "เลือก", no marker
+        "ช่องค้นหาอยู่ตรงไหน",  # question, no verb start
+        "",
+    ],
+)
+def test_fill_matcher_falls_through(text: str) -> None:
+    assert ui_control.match_fill_intent(text) is None
+
+
+def test_fill_value_keeps_original_casing() -> None:
+    got = ui_control.match_fill_intent("พิมพ์ LAWs_thai ในช่องค้นหา")
+    assert got is not None and got["value"] == "LAWs_thai"
+
+
+def test_resolve_field_target_matches_on_label_part() -> None:
+    # The dropdown's options suffix never joins the match; garbles get the
+    # same tiers as buttons (shared resolver).
+    assert ui_control.resolve_field_target("ภาษา", FILL_SCREEN) == ("hit", "ภาษา")
+    assert ui_control.resolve_field_target("ช่องค้นหา", FILL_SCREEN)[0] == "hit"
+    assert ui_control.resolve_field_target("คนหา", FILL_SCREEN) == ("hit", "ค้นหา")  # tone drop
+    assert ui_control.resolve_field_target("ช่องที่ไม่มี", FILL_SCREEN) == ("missing", None)
+    assert ui_control.resolve_field_target("ค้นหา", None) == ("missing", None)
+    assert ui_control.field_label("ภาษา (เลือกได้: ไทย | English)") == "ภาษา"
+
+
+def test_sanitize_ui_context_keeps_fields_capped() -> None:
+    cleaned = ui_control.sanitize_ui_context({**SCREEN, "fields": [f"ช่อง{i}" for i in range(50)]})
+    assert cleaned is not None
+    assert len(cleaned["fields"]) == 20
+    assert cleaned["fields"][0] == "ช่อง0"
+
+
+def test_capability_owns_and_wires_the_fill_tool() -> None:
+    cap = ui_control.VoiceUICapability()
+    assert ui_control.UI_FILL_TOOL in cap.owned_tools
+    ctx = pipe.build_voice_context(
+        transcript="q", history=[], session_id="s", knowledge_bases=[], ui_context=FILL_SCREEN
+    )
+    injected = cap.augment_kwargs(ui_control.UI_FILL_TOOL, {"field": "x", "value": "y"}, ctx)
+    assert injected["_ui_context"] == FILL_SCREEN
+    block = cap.system_block(ctx, language="th", prompts={})
+    assert block is not None and ui_control.UI_FILL_TOOL in block.content
+    # The streamed field list (with the dropdown's options) reaches the prompt.
+    assert "ภาษา (เลือกได้: ไทย | English)" in block.content
+
+
+@pytest.mark.asyncio
+async def test_fill_tool_execute_outcomes() -> None:
+    tool = ui_control.UIFillTool()
+    hit = await tool.execute(field="ช่องค้นหา", value="กฎหมาย", _ui_context=FILL_SCREEN)
+    assert hit.success and "ค้นหา" in hit.content and "ได้เลยครับ" in hit.content
+    missing = await tool.execute(field="ช่องที่ไม่มีจริง", value="x", _ui_context=FILL_SCREEN)
+    assert not missing.success and "NOT claim" in missing.content
+    no_value = await tool.execute(field="ค้นหา", _ui_context=FILL_SCREEN)
+    assert not no_value.success
+
+
+@pytest.mark.asyncio
+async def test_fill_shortcut_types_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deterministic rung: "พิมพ์ X ในช่อง Y" → ui_action fill_field + ack, no LLM."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a fill command")
+
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter,
+        "พิมพ์กฎหมายแรงงานในช่องค้นหา",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_SCREEN,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "fill_field",
+            "argument": "กฎหมายแรงงาน",
+            "field": "ค้นหา",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fill_shortcut_miss_is_honest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Named field not on screen → honest dead-end line, nothing dispatched."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "พิมพ์ทดสอบในช่องอีเมล",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_SCREEN,
+    )
+
+    assert reply == "ไม่เห็นช่องชื่อนั้นบนจอครับ"
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
+@pytest.mark.asyncio
+async def test_llm_fill_tool_call_dispatches_fill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TOOL_CALL ui_fill (hit) → ui_action fill_field with the resolved label."""
+    events = [
+        StreamEvent(
+            type=StreamEventType.TOOL_CALL,
+            source="chat",
+            content=ui_control.UI_FILL_TOOL,
+            metadata={"args": {"field": "ชื่อคลังความรู้", "value": "LAWs_thai"}},
+        ),
+        _content("ได้เลยครับ", call_kind="llm_final_response"),
+    ]
+    _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter,
+        "ช่องชื่อคลังความรู้ใส่คำว่า LAWs_thai ให้หน่อย",
+        [],
+        session_id="voice:test",
+        ui_context=FILL_SCREEN,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "fill_field",
+            "argument": "LAWs_thai",
+            "field": "ชื่อคลังความรู้",
+        }
+    ]
+
+
 def test_click_matches_mixed_script_garbles_knowledge_center() -> None:
     """เคสจริงหน้าศูนย์ความรู้: STT ถอดครึ่งไทยครึ่งอังกฤษ / ทับศัพท์เพี้ยน."""
     ctx = {

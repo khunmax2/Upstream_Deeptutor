@@ -323,6 +323,22 @@ async def _run_click_shortcut(emitter: VoiceEmitter, button: str, *, turn_t0: fl
     return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
 
 
+async def _run_fill_shortcut(
+    emitter: VoiceEmitter, field: str, value: str, *, turn_t0: float
+) -> str:
+    """Type a caller-named value into a visible field: `ui_action fill_field` + ack."""
+    await emitter.send_json(
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "fill_field",
+            "argument": value,
+            "field": field,
+        }
+    )
+    return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
+
+
 async def _run_secretary_turn(emitter: VoiceEmitter, transcript: str, *, turn_t0: float) -> str:
     """Type one dictated utterance into the on-screen chat; say nothing.
 
@@ -695,6 +711,21 @@ async def run_text_turn(
             logger.info("voice rung=click-miss %r", transcript)
             return await _speak_short_turn(emitter, narration.CLICK_MISS_LINE, turn_t0=t0)
 
+    # Fill-by-voice: the caller names a field and the value ("พิมพ์ X ในช่อง
+    # Y"); we verify the field is visible right now (ui_context.fields) and
+    # set exactly that. Typing never submits — no danger rung needed.
+    fill = ui_control.match_fill_intent(transcript)
+    if fill is not None and ui_context is not None:
+        outcome, field = ui_control.resolve_field_target(fill["field"], ui_context)
+        if outcome == "hit" and field:
+            logger.info("voice rung=fill field=%r %r", field, transcript)
+            return await _run_fill_shortcut(emitter, field, fill["value"], turn_t0=t0)
+        if outcome == "ambiguous":
+            logger.info("voice rung=fill-ambiguous %r", transcript)
+            return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
+        logger.info("voice rung=fill-miss %r", transcript)
+        return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
+
     guess = ui_control.match_navigation_guess(transcript, ui_manifest)
     if guess is not None and nav_state is not None:
         logger.info("voice rung=confirm-ask target=%s %r", guess.get("target"), transcript)
@@ -877,6 +908,30 @@ async def _run_text_turn(
                         )
                 else:
                     logger.info("voice rung=llm-click-%s %r", outcome, args.get("button"))
+                continue
+            if event.type == StreamEventType.TOOL_CALL and event.content == ui_control.UI_FILL_TOOL:
+                # LLM-initiated fill. Same resolver as the deterministic
+                # shortcut (and as the tool result the LLM sees): hit → the
+                # client types the value; miss/ambiguous → nothing (the tool
+                # result already tells the LLM to be honest).
+                args = meta.get("args") or {}
+                value = str(args.get("value") or "")
+                outcome, field = ui_control.resolve_field_target(
+                    str(args.get("field") or ""), ui_context
+                )
+                if outcome == "hit" and field and value:
+                    logger.info("voice rung=llm-fill field=%r", field)
+                    await emitter.send_json(
+                        {
+                            "type": "ui_action",
+                            "action": "navigate",
+                            "target": "fill_field",
+                            "argument": value,
+                            "field": field,
+                        }
+                    )
+                else:
+                    logger.info("voice rung=llm-fill-%s %r", outcome, args.get("field"))
                 continue
             started_tool = _tool_starting(event, meta)
             if started_tool is not None:

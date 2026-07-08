@@ -57,6 +57,10 @@ SECRETARY_OFFPAGE_LINE = "ตอนนี้ไม่ได้อยู่หน
 CLICK_MISS_LINE = "ไม่เห็นปุ่มชื่อนั้นบนจอครับ"
 CLICK_AMBIGUOUS_LINE = "มีปุ่มชื่อคล้ายกันหลายปุ่มครับ พูดชื่อเต็มอีกครั้งครับ"
 
+# Fill-by-voice outcomes — same honesty contract as the click lines.
+FILL_MISS_LINE = "ไม่เห็นช่องชื่อนั้นบนจอครับ"
+FILL_AMBIGUOUS_LINE = "มีช่องชื่อคล้ายกันหลายช่องครับ พูดชื่อเต็มของช่องอีกครั้งครับ"
+
 # Spoken by the watchdog when a tool run stays silent past the soft threshold.
 # This is the ONLY generic "please wait": a wait line must be earned by an
 # actual wait, never spoken pre-emptively for a tool that may finish instantly.

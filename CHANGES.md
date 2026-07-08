@@ -182,6 +182,32 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Fill-by-voice: type into / pick dropdown options in visible
+  form fields (#2 of the page-agent-parity queue).** "พิมพ์ กฎหมายแรงงาน
+  ในช่องค้นหา" now types into the search box; "เลือก ไทย ในช่องภาษา" picks a
+  native dropdown option. Same see→name→act trust model as click-by-name:
+  the client streams the visible fields (`ui_context.fields` — labels from
+  aria-label/<label>/placeholder/name; a <select>'s options folded in behind
+  the " (เลือกได้:" marker; password/hidden/checkbox/radio/file inputs never
+  listed, values never read), the server verifies the caller-named field
+  against that list (shared `_resolve_spoken_name` tiers, refactored out of
+  the click resolver), and the client sets the value through the native
+  prototype setter + input/change events so React controlled inputs accept
+  it (the page-agent framework-patch lesson). Two paths: deterministic
+  shortcut (`match_fill_intent`, verb + explicit "ช่อง" marker, value keeps
+  original casing) and the `ui_fill` LLM tool for free phrasings — both
+  converge on one `ui_action fill_field` frame. Filling never submits;
+  pressing a button stays a separate (click) step with its own danger rung.
+  Frame-size guard: the fields list is char-budgeted client-side (120/entry,
+  1500 total) so a dropdown-heavy page can't push the ui_context frame past
+  the server's 8K drop threshold. Also made the manifest-parity node test
+  quote-agnostic (prettier's repo style uses single quotes). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`; tests in
+  `tests/services/voice_realtime/test_ui_control.py` (pytest 212 green),
+  `web/tests/voice-page-context.test.ts`, `voice-manifest-parity.test.ts`
+  (node 180 green).
+
 - **2026-07-08 — Action matcher tolerates STT garbles (voice-scroll gap fix).**
   Live gap: "เลื่อนลง" worked only when STT transcribed it letter-perfect —
   "เลือนลง" (tone mark dropped), "เลื่อน ลง" (space inserted), "เลื่อนหลง"
