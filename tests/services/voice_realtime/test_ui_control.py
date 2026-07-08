@@ -590,6 +590,12 @@ def test_fill_value_keeps_original_casing() -> None:
     assert got is not None and got["value"] == "LAWs_thai"
 
 
+def test_fill_value_peels_quoting_kham_wa() -> None:
+    """ "พิมพ์คำว่าสวัสดี…" — "คำว่า" is quoting, not content (live gap)."""
+    got = ui_control.match_fill_intent("พิมพ์คำว่าสวัสดีในช่องแชท")
+    assert got == {"field": "แชท", "value": "สวัสดี"}
+
+
 def test_resolve_field_target_matches_on_label_part() -> None:
     # The dropdown's options suffix never joins the match; garbles get the
     # same tiers as buttons (shared resolver).
@@ -798,6 +804,125 @@ async def test_fill_shortcut_dropdown_without_matching_option_asks(
     )
 
     assert reply == "ช่องนั้นไม่มีตัวเลือกตามที่พูดครับ ลองพูดชื่อตัวเลือกอีกครั้งครับ"
+    assert not [m for m in emitter.json if m.get("type") == "ui_action"]
+
+
+# ── click on fields: focus, and the live mis-target regressions ────────
+
+SIDEBAR_BUTTONS = ["หน้าหลัก", "พาร์ทเนอร์", "เอเจนต์ของฉัน", "Co-Writer", "หนังสือ", "การตั้งค่า"]
+
+
+def test_cross_skeleton_budget_blocks_the_agent_misclick() -> None:
+    """Live gap: "กดตรงช่องค้นหา" skeleton-matched "เอเจนต์ของฉัน" (ed 2 under
+    the old //3 budget). The tightened budget rejects it; real cross-script
+    hits (all ed ≤ 1) keep working."""
+    assert ui_control.resolve_click_target("ช่องค้นหา", {"buttons": SIDEBAR_BUTTONS}) == (
+        "missing",
+        None,
+    )
+
+
+def test_exact_field_hit_prefers_the_field_over_contained_buttons() -> None:
+    ctx = {"buttons": SIDEBAR_BUTTONS, "fields": ["ค้นหาหนังสือ"]}
+    assert ui_control.exact_field_hit("ค้นหาหนังสือ", ctx) == "ค้นหาหนังสือ"
+    assert ui_control.exact_field_hit("ช่องค้นหาหนังสือ", ctx) == "ค้นหาหนังสือ"
+    assert ui_control.exact_field_hit("หนังสือ", ctx) is None  # not exact → buttons' turn
+    assert ui_control.exact_field_hit("ค้นหาหนังสือ", None) is None
+
+
+@pytest.mark.asyncio
+async def test_click_on_chong_focuses_the_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "กดตรงช่องค้นหา" → focus_field on the search box, never a button."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a focus command")
+
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "กดตรงช่องค้นหา",
+        [],
+        session_id="voice:test",
+        ui_context={**FILL_KB_SCREEN, "buttons": SIDEBAR_BUTTONS},
+        nav_state=nav_state,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "focus_field",
+            "argument": "",
+            "field": "ค้นหา",
+        }
+    ]
+    assert nav_state.get("last_field") == "ค้นหา"
+
+
+@pytest.mark.asyncio
+async def test_click_exact_field_name_beats_contained_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ "กดที่ค้นหาหนังสือ" → the search box, not the "หนังสือ" sidebar button."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter,
+        "กดที่ค้นหาหนังสือ",
+        [],
+        session_id="voice:test",
+        ui_context={
+            "path": "/book",
+            "summary": "x",
+            "buttons": SIDEBAR_BUTTONS,
+            "fields": ["ค้นหาหนังสือ"],
+        },
+        nav_state={},
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert [a["target"] for a in actions] == ["focus_field"]
+    assert actions[0]["field"] == "ค้นหาหนังสือ"
+
+
+@pytest.mark.asyncio
+async def test_click_on_missing_chong_is_honest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "กดที่ช่องอีเมล" with no such field → field-miss line, no button fallback."""
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "กดที่ช่องอีเมล",
+        [],
+        session_id="voice:test",
+        ui_context={**FILL_KB_SCREEN, "buttons": SIDEBAR_BUTTONS},
+        nav_state={},
+    )
+
+    assert reply == "ไม่เห็นช่องชื่อนั้นบนจอครับ"
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 

@@ -10,9 +10,10 @@
 
 const CURSOR_SIZE = 26
 const CURSOR_Z = 2147483000
-const MOVE_MS = 450
-const SETTLE_MS = 120
-const SCROLL_WAIT_MS = 350
+// Fast glide: visible pointing without a felt delay (~a quarter second).
+const MOVE_MS = 200
+const SETTLE_MS = 40
+const SCROLL_WAIT_MS = 250
 const IDLE_HIDE_MS = 1600
 
 let cursor: HTMLDivElement | null = null

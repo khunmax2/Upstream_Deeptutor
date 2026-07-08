@@ -656,7 +656,8 @@ def match_fill_intent(text: str) -> dict[str, str] | None:
             idx = rest.rfind(marker)
             if idx <= 0:
                 continue
-            value = rest_orig[:idx].strip()
+            # "พิมพ์คำว่าสวัสดี" — "คำว่า" is quoting, not content.
+            value = rest_orig[:idx].strip().removeprefix("คำว่า").strip()
             field = rest_orig[idx + len(marker) :].strip()
             while True:  # peel trailing politeness off the field name
                 trimmed = field
@@ -847,10 +848,13 @@ def _resolve_spoken_name(name: str, candidates: list[str]) -> tuple[str, str | N
                 fuzzy.append(candidate)
             else:
                 cs = _consonant_skeleton(c)
+                # Budget len//4 (was //3): the looser budget let "ช่องค้นหา"
+                # (kkkn) reach "เอเจนต์ของฉัน" (jnkkkn, ed 2) — a live
+                # mis-click. All intended cross-script hits sit at ed ≤ 1.
                 if (
                     len(spoken_skeleton) >= 3
                     and len(cs) >= 3
-                    and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 3)
+                    and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 4)
                 ):
                     cross.append(candidate)
         return [exact, contains, fuzzy, cross]
@@ -943,6 +947,27 @@ def resolve_fill_value(
         if hits:
             break  # several look-alikes → trust the caller's own words
     return ("ok", value)
+
+
+def exact_field_hit(name: str, ui_context: dict[str, Any] | None) -> str | None:
+    """The visible field whose label equals *name* exactly (normalised; the
+    spoken side may carry a "ช่อง" prefix).
+
+    Used by the click rung to prefer FOCUSING a field over a fuzzy button
+    match: "กดที่ค้นหาหนังสือ" means the search box labelled exactly that, not
+    the sidebar button "หนังสือ" it happens to contain.
+    """
+    spoken = (name or "").replace(" ", "").lower()
+    if not spoken:
+        return None
+    for entry in (ui_context or {}).get("fields") or []:
+        if not isinstance(entry, str):
+            continue
+        label = field_label(entry)
+        folded = label.replace(" ", "").lower()
+        if spoken in (folded, f"ช่อง{folded}"):
+            return label
+    return None
 
 
 def resolve_field_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
@@ -1506,6 +1531,7 @@ __all__ = [
     "UINavigateTool",
     "VoiceUICapability",
     "allowed_target_ids",
+    "exact_field_hit",
     "field_label",
     "field_options",
     "field_options_for",

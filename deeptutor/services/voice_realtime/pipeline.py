@@ -339,6 +339,20 @@ async def _run_fill_shortcut(
     return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
 
 
+async def _run_focus_shortcut(emitter: VoiceEmitter, field: str, *, turn_t0: float) -> str:
+    """Focus a visible form field the caller pointed at: `ui_action focus_field` + ack."""
+    await emitter.send_json(
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "focus_field",
+            "argument": "",
+            "field": field,
+        }
+    )
+    return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
+
+
 async def _run_edit_shortcut(emitter: VoiceEmitter, field: str, op: str, *, turn_t0: float) -> str:
     """Undo typing in a visible field: `ui_action edit_field`, silent.
 
@@ -715,6 +729,30 @@ async def run_text_turn(
     # (ลบ/ยกเลิก/…) are confirmed by voice first; misses are honest dead-ends.
     click_name = ui_control.match_click_intent(transcript)
     if click_name is not None and ui_context is not None:
+        # "กดที่ช่อง X" points at a form FIELD, not a button — focus it. An
+        # explicit "ช่อง" never falls back to the button tiers (live gap:
+        # "กดตรงช่องค้นหา" skeleton-matched the sidebar's "เอเจนต์ของฉัน").
+        if click_name.startswith("ช่อง"):
+            f_outcome, focus_field = ui_control.resolve_field_target(click_name, ui_context)
+            if f_outcome == "hit" and focus_field:
+                if nav_state is not None:
+                    nav_state["last_field"] = focus_field
+                logger.info("voice rung=focus field=%r %r", focus_field, transcript)
+                return await _run_focus_shortcut(emitter, focus_field, turn_t0=t0)
+            if f_outcome == "ambiguous":
+                logger.info("voice rung=focus-ambiguous %r", transcript)
+                return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
+            logger.info("voice rung=focus-miss %r", transcript)
+            return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
+        # A name that equals a visible field label EXACTLY is that field, even
+        # without "ช่อง" — beats any fuzzy button ("กดที่ค้นหาหนังสือ" is the
+        # search box, not the "หนังสือ" button it contains).
+        exact_field = ui_control.exact_field_hit(click_name, ui_context)
+        if exact_field:
+            if nav_state is not None:
+                nav_state["last_field"] = exact_field
+            logger.info("voice rung=focus-exact field=%r %r", exact_field, transcript)
+            return await _run_focus_shortcut(emitter, exact_field, turn_t0=t0)
         outcome, button = ui_control.resolve_click_target(click_name, ui_context)
         if outcome == "hit" and button:
             if ui_control.is_dangerous_button(button):

@@ -647,6 +647,23 @@ export default function VoiceCallWidget() {
           }
           return
         }
+        case 'focus_field': {
+          // "กดที่ช่อง X" — place the caret in the named field (no typing).
+          const field = String(m.field || '')
+          const focusEl = field ? findFieldElement(field, panelRef.current) : null
+          if (focusEl) {
+            void (async () => {
+              await pointAt(focusEl)
+              clickPulse()
+              focusEl.focus?.()
+              focusEl.click?.()
+              addMsg('sys', `🎯 โฟกัสช่อง ${field}`)
+            })()
+          } else {
+            addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+          }
+          return
+        }
         case 'edit_field': {
           // Correction: clear the field or drop its last word (argument = op).
           const field = String(m.field || '')

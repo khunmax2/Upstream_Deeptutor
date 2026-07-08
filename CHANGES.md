@@ -182,6 +182,23 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Click mis-target fixes + faster cursor.** Three live gaps
+  from the same session log, plus a speed pass: (1) "กด/คลิกที่ช่อง X" now
+  FOCUSES the named form field (new `focus_field` ui_action + client caret
+  placement) instead of searching buttons — explicit "ช่อง" never falls back
+  to button tiers, and a click name that equals a visible field label
+  exactly prefers the field ("กดที่ค้นหาหนังสือ" = the search box, not the
+  contained sidebar button "หนังสือ"); the focused field becomes the
+  edit-command target (`last_field`). (2) Cross-script skeleton budget
+  tightened len//3 → len//4 — "กดตรงช่องค้นหา" (kkkn) can no longer reach
+  "เอเจนต์ของฉัน" (jnkkkn, ed 2); every intended cross-script hit sits at
+  ed ≤ 1 and stays green. (3) Fill values peel the quoting word "คำว่า"
+  ("พิมพ์คำว่าสวัสดี" types "สวัสดี"). Simulator cursor glide 450 ms → 200 ms
+  (~quarter-second pointing, no felt delay). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `simulatorCursor.ts`; tests
+  (pytest 239 green, node 182 green).
+
 - **2026-07-08 — Simulator cursor: the caller sees where the agent acts
   (#6 of the page-agent-parity queue).** Before a voice-driven click / fill /
   edit touches the page, a virtual cursor glides onto the target, pulses,
