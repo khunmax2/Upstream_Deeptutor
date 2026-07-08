@@ -17,12 +17,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { wsUrl } from '@/lib/api'
 import {
-  clickVisibleByText,
   collectPageContext,
   editFieldByVoice,
   fillFieldByVoice,
+  findClickableByText,
+  findFieldElement,
   scrollByVoice,
 } from './pageContext'
+import { clickPulse, disposeCursor, pointAt } from './simulatorCursor'
 import { pickUtterance } from './speechAlternatives'
 import { VOICE_ACTION_EVENT, type VoiceActionDetail } from './VoiceActionBridge'
 
@@ -601,8 +603,16 @@ export default function VoiceCallWidget() {
         case 'click_element': {
           // Click-by-name: press the visible element whose text the caller
           // named (server already verified it against the streamed context).
-          if (argument && clickVisibleByText(argument, panelRef.current)) {
-            addMsg('sys', `🖱 กดปุ่ม ${argument}`)
+          // The simulator cursor glides onto the target first, so the caller
+          // sees WHERE the agent is pressing before the effect happens.
+          const el = argument ? findClickableByText(argument, panelRef.current) : null
+          if (el) {
+            void (async () => {
+              await pointAt(el)
+              clickPulse()
+              el.click()
+              addMsg('sys', `🖱 กดปุ่ม ${argument}`)
+            })()
           } else {
             addMsg('sys', `⚠ หาปุ่ม "${argument}" บนจอไม่เจอแล้ว`)
           }
@@ -621,8 +631,17 @@ export default function VoiceCallWidget() {
           // Fill-by-voice: type the caller's value into the visible field the
           // server resolved (against the streamed context). Nothing submits.
           const field = String(m.field || '')
-          if (field && argument && fillFieldByVoice(field, argument, panelRef.current)) {
-            addMsg('sys', `⌨️ พิมพ์ "${argument}" ในช่อง ${field}`)
+          const fieldEl = field && argument ? findFieldElement(field, panelRef.current) : null
+          if (fieldEl) {
+            void (async () => {
+              await pointAt(fieldEl)
+              clickPulse()
+              const ok = fillFieldByVoice(field, argument, panelRef.current)
+              addMsg(
+                'sys',
+                ok ? `⌨️ พิมพ์ "${argument}" ในช่อง ${field}` : `⚠ พิมพ์ลงช่อง "${field}" ไม่ได้`
+              )
+            })()
           } else {
             addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
           }
@@ -631,11 +650,21 @@ export default function VoiceCallWidget() {
         case 'edit_field': {
           // Correction: clear the field or drop its last word (argument = op).
           const field = String(m.field || '')
-          if (field && editFieldByVoice(field, argument, panelRef.current)) {
-            addMsg(
-              'sys',
-              argument === 'clear' ? `🧹 ล้างช่อง ${field}` : `⌫ ลบคำสุดท้ายในช่อง ${field}`
-            )
+          const editEl = field ? findFieldElement(field, panelRef.current) : null
+          if (editEl) {
+            void (async () => {
+              await pointAt(editEl)
+              clickPulse()
+              const ok = editFieldByVoice(field, argument, panelRef.current)
+              addMsg(
+                'sys',
+                !ok
+                  ? `⚠ แก้ข้อความในช่อง "${field}" ไม่ได้`
+                  : argument === 'clear'
+                    ? `🧹 ล้างช่อง ${field}`
+                    : `⌫ ลบคำสุดท้ายในช่อง ${field}`
+              )
+            })()
           } else {
             addMsg('sys', `⚠ แก้ข้อความในช่อง "${field}" ไม่ได้`)
           }
@@ -799,6 +828,7 @@ export default function VoiceCallWidget() {
       recogRef.current = null
     }
     stopPlayback()
+    disposeCursor() // the simulator cursor must not outlive its call
     wsRef.current?.close()
     wsRef.current = null
     setMascot('idle')

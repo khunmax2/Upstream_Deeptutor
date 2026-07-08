@@ -182,6 +182,22 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-08 — Simulator cursor: the caller sees where the agent acts
+  (#6 of the page-agent-parity queue).** Before a voice-driven click / fill /
+  edit touches the page, a virtual cursor glides onto the target, pulses,
+  and only then does the action execute — the page-agent "SimulatorMask"
+  idea. Pure presentation in one new file
+  (`web/components/voice/simulatorCursor.ts`): a singleton fixed overlay on
+  <body> (survives route changes, `pointer-events: none`, never performs
+  actions itself), scrolls off-screen targets into view first, points at the
+  entry area of tall textareas rather than their geometric middle, honors
+  `prefers-reduced-motion` (jump, no pulse), fades after idle, and is
+  disposed on hang-up. `pageContext.ts` gains find-only exports
+  (`findClickableByText`, `findFieldElement`) so the widget can point before
+  acting while executors stay the only hands. Files: `simulatorCursor.ts`
+  (new), `pageContext.ts`, `VoiceCallWidget.tsx`; node test for the pure
+  pointing math (node 182 green).
+
 - **2026-07-08 — Edit-by-voice: undo typing ("ล้างช่อง X", "ลบคำสุดท้าย").**
   The correction half of fill-by-voice — typed wrong or changed your mind,
   fix it by voice. Two curated ops: clear the whole field, or remove the

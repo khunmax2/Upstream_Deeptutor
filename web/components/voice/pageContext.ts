@@ -422,10 +422,10 @@ export function scrollByVoice(direction: string, exclude: Element | null): boole
  * the same collector as collectPageContext, so the server can only name what
  * the caller could see.
  */
-export function clickVisibleByText(name: string, exclude: Element | null): boolean {
+export function findClickableByText(name: string, exclude: Element | null): HTMLElement | null {
   const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
   const target = norm(name)
-  if (!target) return false
+  if (!target) return null
   let exact: HTMLElement | null = null
   let partial: HTMLElement | null = null
   for (const { el, label } of visibleClickables(exclude)) {
@@ -433,7 +433,17 @@ export function clickVisibleByText(name: string, exclude: Element | null): boole
     if (text === target && !exact) exact = el
     else if (!partial && (text.includes(target) || target.includes(text))) partial = el
   }
-  const chosen = exact ?? partial
+  return exact ?? partial
+}
+
+export function clickVisibleByText(name: string, exclude: Element | null): boolean {
+  const chosen = findClickableByText(name, exclude)
   chosen?.click()
   return Boolean(chosen)
+}
+
+/** The DOM element of the visible field matching *fieldLabel* (same matcher
+ * the fill/edit executors use) — for pointing at it before acting. */
+export function findFieldElement(fieldLabel: string, exclude: Element | null): HTMLElement | null {
+  return findFieldByLabel(fieldLabel, exclude)?.el ?? null
 }

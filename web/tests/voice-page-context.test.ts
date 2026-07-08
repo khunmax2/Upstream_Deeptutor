@@ -15,6 +15,7 @@ import {
   MAX_SUMMARY_CHARS,
   removeLastWord,
 } from '../components/voice/pageContext'
+import { targetPoint } from '../components/voice/simulatorCursor'
 
 const base = {
   path: '/settings',
@@ -102,6 +103,17 @@ test('removeLastWord drops the final word, Thai-aware', () => {
   const thai = removeLastWord('กฎหมายแรงงาน')
   assert.ok(thai.length < 'กฎหมายแรงงาน'.length)
   assert.ok(thai === 'กฎหมาย' || thai === '', `unexpected: ${thai}`)
+})
+
+test('simulator cursor points at the centre, capped for tall targets', () => {
+  // A button: dead centre.
+  assert.deepEqual(targetPoint({ left: 100, top: 50, width: 40, height: 20 }), { x: 120, y: 60 })
+  // A tall textarea: horizontal centre, but the entry area near the top —
+  // pointing at the geometric middle of a 500px box reads as "nowhere".
+  assert.deepEqual(targetPoint({ left: 0, top: 100, width: 300, height: 500 }), {
+    x: 150,
+    y: 180,
+  })
 })
 
 test('empty outline yields an empty summary (widget then skips the frame)', () => {
