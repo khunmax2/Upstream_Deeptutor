@@ -419,6 +419,13 @@ def match_navigation_guess(text: str, manifest: dict[str, Any] | None) -> dict[s
 _ACTION_PATTERNS: dict[str, tuple[str, ...]] = {
     "new_chat": ("สร้างแชทใหม่", "เริ่มแชทใหม่", "เปิดแชทใหม่", "แชทใหม่", "คุยเรื่องใหม่", "new chat"),
     "go_back": ("ย้อนกลับ", "กลับหน้าเดิม", "กลับหน้าที่แล้ว", "ถอยกลับ", "go back"),
+    # Scroll: verb+direction pairs so bare "เลื่อน" ("เลื่อนนัดประชุม" =
+    # reschedule!) never triggers. "เลื่อนลงล่างสุด" hits two ids → ambiguous
+    # → LLM decides; fine, it's rare.
+    "scroll_down": ("เลื่อนลง", "ปัดลง", "สกอลง", "scroll down", "เลื่อนหน้าจอลง"),
+    "scroll_up": ("เลื่อนขึ้น", "ปัดขึ้น", "สกอขึ้น", "scroll up", "เลื่อนหน้าจอขึ้น"),
+    "scroll_bottom": ("ล่างสุด", "ท้ายสุดของหน้า", "ท้ายหน้า", "scroll to bottom"),
+    "scroll_top": ("บนสุด", "หัวหน้าเพจ", "ต้นหน้า", "scroll to top"),
 }
 
 

@@ -169,6 +169,47 @@ function visibleClickables(exclude: Element | null): { el: HTMLElement; label: s
 }
 
 /**
+ * The page's main scrollable container. DeepTutor's shell is
+ * `h-screen overflow-hidden`, so `window` almost never scrolls — the real
+ * scroller is some inner div. Pick the visible scrollable element (outside
+ * the widget) with the largest viewport area; fall back to the document.
+ */
+function mainScrollable(exclude: Element | null): HTMLElement | null {
+  const doc = document.scrollingElement as HTMLElement | null;
+  let best: HTMLElement | null = null;
+  let bestArea = 0;
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
+    if (exclude && exclude.contains(el)) continue;
+    if (el.scrollHeight <= el.clientHeight + 40) continue;
+    const style = getComputedStyle(el);
+    if (style.overflowY !== "auto" && style.overflowY !== "scroll") continue;
+    if (!isVisible(el)) continue;
+    const rect = el.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    if (area > bestArea) {
+      best = el;
+      bestArea = area;
+    }
+  }
+  if (best) return best;
+  if (doc && doc.scrollHeight > doc.clientHeight + 40) return doc;
+  return null;
+}
+
+/** Voice scroll: direction is one of scroll_down/up/bottom/top. */
+export function scrollByVoice(direction: string, exclude: Element | null): boolean {
+  const el = mainScrollable(exclude);
+  if (!el) return false;
+  const page = el.clientHeight * 0.75;
+  if (direction === "scroll_down") el.scrollBy({ top: page, behavior: "smooth" });
+  else if (direction === "scroll_up") el.scrollBy({ top: -page, behavior: "smooth" });
+  else if (direction === "scroll_bottom") el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  else if (direction === "scroll_top") el.scrollTo({ top: 0, behavior: "smooth" });
+  else return false;
+  return true;
+}
+
+/**
  * Click the visible element whose label matches *name* (exact normalised
  * match first, then substring). Returns whether something was clicked. Uses
  * the same collector as collectPageContext, so the server can only name what

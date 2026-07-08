@@ -169,6 +169,19 @@ code is additive and isolated for mergeability.
   `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
   (covered by `selftest.py` + `tests/`).
 
+- **2026-07-08 — Voice scroll ("เลื่อนลง/ขึ้น/ล่างสุด/บนสุด").** First of the
+  page-agent-parity actions. Four new declared actions
+  (scroll_down/up/bottom/top) ride the existing action framework: clear
+  verb+direction phrasings hit the deterministic shortcut (bare "เลื่อน" —
+  reschedule! — never triggers; "เลื่อนลงล่างสุด" is ambiguous → LLM), free
+  phrasings go through the LLM's `ui_navigate`. Scroll acts *silently*
+  (rapid-fire commands + instantly visible effect — no "ได้เลยครับ" spam).
+  Client `scrollByVoice` finds the page's real scroller (DeepTutor's shell is
+  `h-screen overflow-hidden`, so `window` never scrolls — pick the largest
+  visible scrollable container outside the widget) and scrolls smoothly.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
+
 - **2026-07-08 — Card labels: first text chunk, not the whole card.** Second
   half of the "กด LlamaIndex ไม่เจอ" gap: the Knowledge-Center engine cards
   are `<button>`s whose title is a plain `<span>` (no heading, no aria-label),

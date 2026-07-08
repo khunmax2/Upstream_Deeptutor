@@ -214,6 +214,66 @@ async def test_tool_execute_requires_target() -> None:
     assert not missing.success
 
 
+# ── scroll shortcuts ───────────────────────────────────────────────────
+
+SCROLL_MANIFEST = {
+    "pages": [{"id": "settings", "label": "หน้าตั้งค่า"}],
+    "actions": [
+        {"id": "scroll_down", "label": "เลื่อนลง"},
+        {"id": "scroll_up", "label": "เลื่อนขึ้น"},
+        {"id": "scroll_bottom", "label": "ล่างสุด"},
+        {"id": "scroll_top", "label": "บนสุด"},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("text", "target"),
+    [
+        ("เลื่อนลงหน่อย", "scroll_down"),
+        ("เลื่อนขึ้นหน่อยครับ", "scroll_up"),
+        ("เลื่อนไปล่างสุดเลย", "scroll_bottom"),
+        ("ไปบนสุดของหน้า", "scroll_top"),
+        ("scroll down", "scroll_down"),
+    ],
+)
+def test_scroll_commands_match(text: str, target: str) -> None:
+    assert ui_control.match_action_intent(text, SCROLL_MANIFEST) == {"target": target}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "เลื่อนนัดประชุมให้หน่อย",  # "เลื่อน" = reschedule, no direction word
+        "ช่วยเลื่อนวันสอบได้ไหม",
+        "เลื่อนลงล่างสุด",  # hits two ids → ambiguous → LLM decides
+    ],
+)
+def test_scroll_commands_fall_through(text: str) -> None:
+    assert ui_control.match_action_intent(text, SCROLL_MANIFEST) is None
+
+
+@pytest.mark.asyncio
+async def test_scroll_shortcut_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scroll acts without a spoken ack (rapid-fire commands, visible effect)."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for a scroll command")
+
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+    emitter = FakeEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter, "เลื่อนลงหน่อย", [], session_id="voice:test", ui_manifest=SCROLL_MANIFEST
+    )
+
+    assert reply == ""
+    assert [m["type"] for m in emitter.json] == ["ui_action", "done"]
+    assert emitter.json[0]["target"] == "scroll_down"
+    assert emitter.audio == []  # silent
+
+
 # ── deterministic navigation shortcut ─────────────────────────────────
 
 

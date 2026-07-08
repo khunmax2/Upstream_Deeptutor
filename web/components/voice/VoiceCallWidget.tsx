@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { wsUrl } from "@/lib/api";
-import { clickVisibleByText, collectPageContext } from "./pageContext";
+import { clickVisibleByText, collectPageContext, scrollByVoice } from "./pageContext";
 import { pickUtterance } from "./speechAlternatives";
 import { VOICE_ACTION_EVENT, type VoiceActionDetail } from "./VoiceActionBridge";
 
@@ -63,6 +63,10 @@ const UI_ACTIONS: { id: string; label: string; argument?: string }[] = [
     id: "go_back",
     label: "ย้อนกลับหน้าก่อนหน้า (back)",
   },
+  { id: "scroll_down", label: "เลื่อนหน้าจอลง (scroll down)" },
+  { id: "scroll_up", label: "เลื่อนหน้าจอขึ้น (scroll up)" },
+  { id: "scroll_bottom", label: "เลื่อนไปล่างสุดของหน้า (scroll to bottom)" },
+  { id: "scroll_top", label: "เลื่อนไปบนสุดของหน้า (scroll to top)" },
 ];
 export { UI_ACTIONS };
 
@@ -491,6 +495,15 @@ export default function VoiceCallWidget() {
             addMsg("sys", `🖱 กดปุ่ม ${argument}`);
           } else {
             addMsg("sys", `⚠ หาปุ่ม "${argument}" บนจอไม่เจอแล้ว`);
+          }
+          return;
+        }
+        case "scroll_down":
+        case "scroll_up":
+        case "scroll_bottom":
+        case "scroll_top": {
+          if (!scrollByVoice(target, panelRef.current)) {
+            addMsg("sys", "⚠ หน้านี้ไม่มีส่วนที่เลื่อนได้");
           }
           return;
         }

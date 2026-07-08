@@ -421,14 +421,27 @@ async def _run_navigation_shortcut(
     assistant_text → done) so every client behaves identically, just ~an LLM
     round-trip faster and 100% deterministic.
     """
+    target = action.get("target", "")
     await emitter.send_json(
         {
             "type": "ui_action",
             "action": "navigate",
-            "target": action.get("target", ""),
+            "target": target,
             "argument": action.get("argument", ""),
         }
     )
+    # Scroll commands are repeated rapid-fire and their effect is instantly
+    # visible — a spoken ack every time ("เลื่อนลง…ได้เลยครับ…เลื่อนลง…") is
+    # noise. Voice-Control style: act silently.
+    if target.startswith("scroll_"):
+        await emitter.send_json(
+            {
+                "type": "done",
+                "total_ms": round((time.perf_counter() - turn_t0) * 1000),
+                "first_audio_ms": None,
+            }
+        )
+        return ""
     ack = narration.NAV_ACK_LINE
     spoke = await _speak_fixed_line(emitter, ack)
     first_audio_ms = round((time.perf_counter() - turn_t0) * 1000) if spoke else None
