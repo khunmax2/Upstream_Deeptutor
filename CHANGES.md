@@ -23,6 +23,14 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-07-09 — Gemini 3 `thought_signature` preserved through the agent-loop
+  replay.** Gemini 3 attaches a `thought_signature` to tool-call deltas (it rides
+  `extra_content`) and requires it echoed back on replay. `agents/chat/agent_loop.py`
+  dropped it, so EVERY multi-round turn returned HTTP 400 and the forced finish made
+  the model **hallucinate success** ("พิมพ์แล้วครับ" while nothing was typed). Fixed by
+  round-tripping `model_extra`. Red/green-proven against the live API.
+  Candidate for an upstream PR.
+
 - **2026-06-20 — `allowFrom` empty no longer crashes the whole backend.**
   `ChannelManager._validate_allow_from` (`deeptutor/partners/channels/manager.py`)
   used to `raise SystemExit` when any *enabled* channel had `allow_from == []`,
