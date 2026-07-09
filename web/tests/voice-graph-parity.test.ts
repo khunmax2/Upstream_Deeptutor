@@ -91,7 +91,7 @@ test('every graph control is well-formed', () => {
         `control ${control.capability}: missing click text`
       )
       assert.ok(
-        ['button', 'toggle', 'link'].includes(control.kind),
+        ['button', 'toggle', 'link', 'field'].includes(control.kind),
         `control ${control.capability}: unknown kind ${control.kind}`
       )
       assert.ok(

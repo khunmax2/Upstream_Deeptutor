@@ -43,10 +43,13 @@ _GRAPH_PATH = Path(__file__).with_name("ui_graph.json")
 PENDING_STEP_TTL_SECONDS = 15.0
 
 # Goal verbs a cross-page command starts with ("เปลี่ยนธีมเป็นโหมดมืด",
-# "ใช้ธีมครีม"). Longest first so the most specific form wins the strip.
+# "ใช้ธีมครีม", "สร้างคลังความรู้"). Most specific first so it wins the strip;
+# bare "สร้าง" is safe LAST because a graph miss falls through untouched (and
+# the declared-action rung, e.g. new_chat, runs before this rung anyway).
 _GRAPH_VERBS = (
-    "เปลี่ยนธีมเป็น",
     "เปลี่ยนธีมไปเป็น",
+    "เปลี่ยนธีมเป็น",
+    "เปลี่ยนภาษาเป็น",
     "เปลี่ยนเป็น",
     "เปลี่ยนไปใช้",
     "สลับเป็น",
@@ -54,6 +57,7 @@ _GRAPH_VERBS = (
     "ใช้ธีม",
     "เอาธีม",
     "เปิดใช้",
+    "สร้าง",
 )
 _MAX_GRAPH_CHARS = 48
 
@@ -144,15 +148,25 @@ def plan_graph_step(
     """The (navigate?, act) plan for a resolved graph control.
 
     Returns ``(navigate_frame, action_frame)``; ``navigate_frame`` is ``None``
-    when the caller is already on the control's page (the click executor's
-    element poll covers late mounts either way).
+    when the caller is already on the control's page (the client's element
+    poll covers late mounts either way). A ``field``-kind control plans a
+    FOCUS (caret placed, nothing typed) instead of a click.
     """
-    action = {
-        "type": "ui_action",
-        "action": "navigate",
-        "target": "click_element",
-        "argument": str(control.get("click") or ""),
-    }
+    if str(control.get("kind") or "") == "field":
+        action: dict[str, Any] = {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "focus_field",
+            "argument": "",
+            "field": str(control.get("click") or ""),
+        }
+    else:
+        action = {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "click_element",
+            "argument": str(control.get("click") or ""),
+        }
     path = str(node.get("path") or "")
     if current_path.split("?")[0] == path:
         return (None, action)

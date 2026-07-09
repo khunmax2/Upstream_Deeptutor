@@ -295,6 +295,23 @@ code is additive and isolated for mergeability.
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
 
+- **2026-07-09 — Graph catalog: language switch + create-KB; field-kind
+  controls.** Extends the Website Graph's curated catalog with
+  source-verified controls: the three language buttons on
+  /settings/appearance (click texts are endonyms — "ภาษาไทย" / "English" /
+  "中文" — identical in every locale, so locale-proof) and the "Knowledge
+  Base ใหม่" create button on /knowledge (Thai-locale text; a non-Thai UI
+  degrades to an honest verify-failure). New goal verbs
+  ("เปลี่ยนภาษาเป็น", bare "สร้าง" last — a graph miss falls through
+  untouched). `plan_graph_step` now supports `kind: "field"` controls
+  (cross-page plan ends in a FOCUS, caret placed, nothing typed) — the
+  mechanism is tested; no field control is curated yet. New guard test:
+  every click text and alias in the SHIPPED graph must resolve uniquely to
+  its own control, so future catalog entries can't silently shadow each
+  other. Files: `services/voice_realtime/ui_graph.{py,json}`,
+  `web/tests/voice-graph-parity.test.ts` (field kind); tests
+  (pytest 302 green, node 187 green).
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action

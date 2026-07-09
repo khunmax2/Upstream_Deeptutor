@@ -118,6 +118,23 @@ def test_find_graph_control_never_auto_presses_danger() -> None:
     assert ui_graph.find_graph_control("ล้างข้อมูล", GRAPH) == ("missing", None, None)
 
 
+def test_curated_graph_has_no_vocabulary_collisions() -> None:
+    """Every control in the SHIPPED graph must be reachable by its own click
+    text and every alias — uniquely. This is the guard that keeps future
+    catalog entries from silently shadowing each other."""
+    graph = ui_graph.load_graph()
+    for node in graph["nodes"]:
+        for control in node["controls"]:
+            for spoken in [control["click"], *control["aliases"]]:
+                outcome, _, hit = ui_graph.find_graph_control(spoken, graph)
+                assert outcome == "hit" and hit is not None, (
+                    f"{control['capability']}: {spoken!r} → {outcome}"
+                )
+                assert hit["capability"] == control["capability"], (
+                    f"{spoken!r} resolved to {hit['capability']} instead of {control['capability']}"
+                )
+
+
 # ── plan shapes ─────────────────────────────────────────────────────────
 
 
@@ -143,6 +160,19 @@ def test_plan_same_page_skips_navigation() -> None:
     navigate, action = ui_graph.plan_graph_step(node, control, "/settings/appearance")
     assert navigate is None
     assert action["argument"] == "Dark"
+
+
+def test_plan_field_kind_focuses_instead_of_clicking() -> None:
+    node = {"id": "kb", "path": "/knowledge", "label": "x", "controls": []}
+    control = {"capability": "kb_search", "click": "ค้นหา", "kind": "field", "aliases": []}
+    _, action = ui_graph.plan_graph_step(node, control, "/home")
+    assert action == {
+        "type": "ui_action",
+        "action": "navigate",
+        "target": "focus_field",
+        "argument": "",
+        "field": "ค้นหา",
+    }
 
 
 # ── pending step lifecycle ──────────────────────────────────────────────
@@ -250,6 +280,50 @@ async def test_click_miss_falls_back_to_the_graph(monkeypatch: pytest.MonkeyPatc
     actions = [m for m in emitter.json if m.get("type") == "ui_action"]
     assert [a["target"] for a in actions] == ["open_path"]
     assert nav_state["pending_graph_step"]["action"]["argument"] == "Dark"
+
+
+@pytest.mark.asyncio
+async def test_language_switch_plans_cross_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "เปลี่ยนภาษาเป็นไทย" from /home → open the appearance page, press ภาษาไทย."""
+    _patch_tts(monkeypatch)
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "เปลี่ยนภาษาเป็นไทย",
+        [],
+        session_id="voice:test",
+        ui_context={"path": "/home", "summary": "x"},
+        nav_state=nav_state,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert [a["target"] for a in actions] == ["open_path"]
+    assert actions[0]["argument"] == "/settings/appearance"
+    assert nav_state["pending_graph_step"]["action"]["argument"] == "ภาษาไทย"
+
+
+@pytest.mark.asyncio
+async def test_create_kb_plans_cross_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "สร้างคลังความรู้" from /home → open /knowledge, press the create button."""
+    _patch_tts(monkeypatch)
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "สร้างคลังความรู้ให้หน่อย",
+        [],
+        session_id="voice:test",
+        ui_context={"path": "/home", "summary": "x"},
+        nav_state=nav_state,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert [a["target"] for a in actions] == ["open_path"]
+    assert actions[0]["argument"] == "/knowledge"
+    assert nav_state["pending_graph_step"]["action"]["argument"] == "Knowledge Base ใหม่"
 
 
 @pytest.mark.asyncio
