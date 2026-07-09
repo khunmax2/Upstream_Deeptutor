@@ -124,7 +124,9 @@ export function collectPageContext(
     page: pageName,
     summary: formatPageContext(outline),
     buttons: cleanItems(visibleClickables(exclude).map(c => c.label)),
-    fields: capFieldEntries(visibleFields(exclude).map(f => formatFieldEntry(f.label, f.options))),
+    fields: capFieldEntries(
+      visibleFields(exclude).map(f => formatFieldEntry(f.label, f.options, f.valueType))
+    ),
     // The field with the caret right now — a bare "พิมพ์ X" (no field named)
     // targets it first (Tier A implicit fill). Empty when nothing fillable is
     // focused (or the caret is in our own panel).
@@ -256,10 +258,27 @@ const SKIP_INPUT_TYPES = new Set([
 
 type FillableElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 
+// Input types whose semantics help the model map a value to its field
+// (Tier B implicit fill: "พิมพ์ aom@x.com" → the email field). Plain
+// text/search carry no signal beyond the label, so they stay unannotated
+// and cost nothing on the frame budget.
+const SEMANTIC_INPUT_TYPES = new Set([
+  'email',
+  'number',
+  'date',
+  'time',
+  'datetime-local',
+  'month',
+  'week',
+  'tel',
+  'url',
+])
+
 interface FieldEntry {
   el: FillableElement
   label: string
   options: string[] // non-empty = a <select>'s choices
+  valueType: string // semantic input type ('' = plain text)
 }
 
 /** Spoken-friendly label for a form field: aria-label → its <label> →
@@ -278,10 +297,13 @@ function fieldLabelFor(el: FillableElement): string {
   return text.replace(/\s+/g, ' ').slice(0, MAX_ITEM_CHARS)
 }
 
-/** Marker must match the server's `_FIELD_OPTIONS_MARKER` (ui_control.py). */
-export function formatFieldEntry(label: string, options: string[]): string {
-  if (!options.length) return label
-  return `${label} (เลือกได้: ${options.join(' | ')})`
+/** Markers must match the server's `_FIELD_OPTIONS_MARKER` /
+ * `_FIELD_TYPE_MARKER` (ui_control.py). Options and type are mutually
+ * exclusive in practice (selects have options, inputs have a type). */
+export function formatFieldEntry(label: string, options: string[], valueType = ''): string {
+  if (options.length) return `${label} (เลือกได้: ${options.join(' | ')})`
+  if (valueType) return `${label} (ชนิด: ${valueType})`
+  return label
 }
 
 function visibleFields(exclude: Element | null): FieldEntry[] {
@@ -305,7 +327,9 @@ function visibleFields(exclude: Element | null): FieldEntry[] {
             .slice(0, MAX_FIELD_OPTIONS)
             .map(o => o.slice(0, MAX_OPTION_CHARS))
         : []
-    out.push({ el, label, options })
+    const valueType =
+      el instanceof HTMLInputElement && SEMANTIC_INPUT_TYPES.has(el.type) ? el.type : ''
+    out.push({ el, label, options, valueType })
     if (out.length >= MAX_FIELDS) break
   }
   return out

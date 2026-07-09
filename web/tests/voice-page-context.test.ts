@@ -84,6 +84,16 @@ test("field entries fold a dropdown's options behind the server's marker", () =>
   assert.equal(formatFieldEntry('ภาษา', ['ไทย', 'English']), 'ภาษา (เลือกได้: ไทย | English)')
 })
 
+test("field entries declare a semantic input type behind the server's marker", () => {
+  // The " (ชนิด:" marker must match ui_control._FIELD_TYPE_MARKER — Tier B
+  // implicit fill uses it to map a value to its field by meaning.
+  assert.equal(formatFieldEntry('อีเมล', [], 'email'), 'อีเมล (ชนิด: email)')
+  assert.equal(formatFieldEntry('วันเกิด', [], 'date'), 'วันเกิด (ชนิด: date)')
+  // Plain text stays bare; options win over type (mutually exclusive anyway).
+  assert.equal(formatFieldEntry('ค้นหา', [], ''), 'ค้นหา')
+  assert.equal(formatFieldEntry('ภาษา', ['ไทย'], 'email'), 'ภาษา (เลือกได้: ไทย)')
+})
+
 test('field list obeys per-entry and total char budgets (frame stays under 8K)', () => {
   // An oversized ui_context frame is dropped whole by the server — the
   // fields list must never be what pushes it over.

@@ -696,6 +696,78 @@ async def test_fill_tool_execute_outcomes() -> None:
     assert not no_value.success
 
 
+# ── Tier B: implicit fill through the LLM (value→field by meaning) ──────
+
+# A form with several typed fields — what Tier A can't resolve (nothing
+# focused/remembered) and Tier B exists for.
+TIER_B_SCREEN = {
+    "path": "/settings",
+    "summary": "x",
+    "fields": ["ชื่อ", "อีเมล (ชนิด: email)", "วันเกิด (ชนิด: date)"],
+}
+
+
+def test_field_label_strips_the_type_marker() -> None:
+    assert ui_control.field_label("อีเมล (ชนิด: email)") == "อีเมล"
+    # A typed entry declares no dropdown options.
+    assert ui_control.field_options("อีเมล (ชนิด: email)") == []
+    # Resolution runs on the label part, so the model's semantic pick
+    # ("อีเมล") matches the annotated entry.
+    assert ui_control.resolve_field_target("อีเมล", TIER_B_SCREEN) == ("hit", "อีเมล")
+
+
+@pytest.mark.asyncio
+async def test_fill_tool_semantic_pick_is_still_verified() -> None:
+    """The model's value→field pick goes through the same resolver."""
+    tool = ui_control.UIFillTool()
+    hit = await tool.execute(field="อีเมล", value="aom@example.com", _ui_context=TIER_B_SCREEN)
+    assert hit.success and "อีเมล" in hit.content
+    invented = await tool.execute(field="เบอร์โทร", value="0812345678", _ui_context=TIER_B_SCREEN)
+    assert not invented.success and "NOT claim" in invented.content
+
+
+@pytest.mark.asyncio
+async def test_fill_tool_omitted_field_single_field_fills_it() -> None:
+    """One visible field → an omitted `field` is unambiguous."""
+    tool = ui_control.UIFillTool()
+    one_field = {"path": "/x", "summary": "x", "fields": ["ค้นหา"]}
+    got = await tool.execute(value="กฎหมาย", _ui_context=one_field)
+    assert got.success and "ค้นหา" in got.content
+
+
+@pytest.mark.asyncio
+async def test_fill_tool_omitted_field_ambiguous_hands_schema_back() -> None:
+    """2+ fields and no `field` → the tool demands an explicit pick; the
+    schema (with type annotations) rides in the result so the model can
+    choose. Nothing is typed."""
+    tool = ui_control.UIFillTool()
+    got = await tool.execute(value="aom@example.com", _ui_context=TIER_B_SCREEN)
+    assert not got.success
+    assert "อีเมล (ชนิด: email)" in got.content
+    assert "Nothing was typed" in got.content
+
+
+@pytest.mark.asyncio
+async def test_fill_tool_omitted_field_no_fields_fails_honestly() -> None:
+    tool = ui_control.UIFillTool()
+    got = await tool.execute(value="x", _ui_context={"path": "/x", "summary": "x"})
+    assert not got.success and "Nothing was typed" in got.content
+
+
+def test_system_block_carries_the_field_choice_rule() -> None:
+    """The prompt must both allow the semantic pick and forbid guessing."""
+    cap = ui_control.VoiceUICapability()
+    ctx = pipe.build_voice_context(
+        transcript="q", history=[], session_id="s", knowledge_bases=[], ui_context=TIER_B_SCREEN
+    )
+    block = cap.system_block(ctx, language="th", prompts={})
+    assert block is not None
+    assert "FIELD CHOICE" in block.content
+    assert "(ชนิด: email)" in block.content
+    # The annotated schema itself reaches the prompt.
+    assert "อีเมล (ชนิด: email)" in block.content
+
+
 @pytest.mark.asyncio
 async def test_fill_shortcut_types_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Deterministic rung: "พิมพ์ X ในช่อง Y" → ui_action fill_field + ack, no LLM."""

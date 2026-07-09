@@ -945,14 +945,17 @@ def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[
 
 
 # A dropdown field entry folds its options into the streamed string
-# ("ภาษา (เลือกได้: ไทย | English)"); only the label part left of the marker
-# counts when resolving what the caller named.
+# ("ภาษา (เลือกได้: ไทย | English)"), and a typed input its value type
+# ("อีเมล (ชนิด: email)" — Tier B semantics); only the label part left of a
+# marker counts when resolving what the caller named. Markers must match the
+# client's `formatFieldEntry` (pageContext.ts).
 _FIELD_OPTIONS_MARKER = " (เลือกได้:"
+_FIELD_TYPE_MARKER = " (ชนิด:"
 
 
 def field_label(entry: str) -> str:
     """The spoken-matchable label part of a streamed field entry."""
-    return entry.split(_FIELD_OPTIONS_MARKER)[0].strip()
+    return entry.split(_FIELD_OPTIONS_MARKER)[0].split(_FIELD_TYPE_MARKER)[0].strip()
 
 
 def field_options(entry: str) -> list[str]:
@@ -1333,8 +1336,16 @@ class UIFillTool(BaseTool):
     the tool only *verifies* the field name against the fields the screen
     actually shows (``_ui_context``); the client sets the value with native
     setters and dispatches nothing else — no form is submitted, so there is
-    no danger rung. The LLM never chooses a field or invents a value the
-    caller didn't say.
+    no danger rung. The LLM never invents a value the caller didn't say.
+
+    Tier B (implicit fill): when the caller named NO field and the screen
+    shows several, the model picks the field whose *meaning* matches the
+    value from the streamed schema (labels + declared type/options) — but
+    the pick still goes through :func:`resolve_field_target`, so only a
+    visible field can ever be filled (trust model intact). ``field`` may
+    even be omitted: one visible field is unambiguous; otherwise the tool
+    hands the schema back and demands an explicit choice — the server
+    never guesses on the model's behalf.
     """
 
     def get_definition(self) -> ToolDefinition:
@@ -1343,9 +1354,12 @@ class UIFillTool(BaseTool):
             description=(
                 "Type a value into a form field (or choose a dropdown option) "
                 "that is VISIBLE on the caller's screen during a voice call, when "
-                "the caller says what to put where. `field` must be a field name "
+                "the caller says what to type. `field` must be a field name "
                 "shown in the 'Current screen' section of the system prompt — "
-                "never invent one, never pick a field the caller did not name. "
+                "never invent one. If the caller named the field, use their "
+                "words; if they only said what to type, pick the visible field "
+                "whose MEANING matches the value (an email address goes in the "
+                "email-typed field, a date in the date field). "
                 "Nothing is submitted: filling is preview-only until the caller "
                 "asks to press a button."
             ),
@@ -1353,7 +1367,12 @@ class UIFillTool(BaseTool):
                 ToolParameter(
                     name="field",
                     type="string",
-                    description="The visible field name the caller said (verbatim).",
+                    description=(
+                        "The visible field name: the caller's words verbatim when "
+                        "they named one, else the listed field whose meaning "
+                        "matches the value. Omit only when you cannot tell."
+                    ),
+                    required=False,
                 ),
                 ToolParameter(
                     name="value",
@@ -1370,14 +1389,29 @@ class UIFillTool(BaseTool):
         field = str(kwargs.get("field") or "").strip()
         value = str(kwargs.get("value") or "").strip()
         ui_context = kwargs.get("_ui_context")
-        if not field or not value:
-            return ToolResult(
-                content="Field name and value are both required; nothing was typed.",
-                success=False,
-            )
-        outcome, resolved = resolve_field_target(
-            field, ui_context if isinstance(ui_context, dict) else None
-        )
+        ctx = ui_context if isinstance(ui_context, dict) else None
+        if not value:
+            return ToolResult(content="A value is required; nothing was typed.", success=False)
+        if not field:
+            # Tier B safety net: the model omitted the field. One visible
+            # field is unambiguous; several → hand the schema back and make
+            # the model choose explicitly (or ask the caller). The server
+            # never picks a field on the model's behalf.
+            entries = [e for e in (ctx or {}).get("fields") or [] if isinstance(e, str)]
+            if len(entries) == 1:
+                field = field_label(entries[0])
+            else:
+                listing = " | ".join(entries) if entries else "(none)"
+                return ToolResult(
+                    content=(
+                        f"No `field` was given. Visible fields: {listing}. Call "
+                        "the tool again with `field` set to the ONE whose meaning "
+                        "matches the value — or, if none clearly matches, ask the "
+                        "caller which field they mean. Nothing was typed."
+                    ),
+                    success=False,
+                )
+        outcome, resolved = resolve_field_target(field, ctx)
         if outcome == "missing":
             return ToolResult(
                 content=(
@@ -1395,13 +1429,9 @@ class UIFillTool(BaseTool):
                 ),
                 success=False,
             )
-        value_status, final_value = resolve_fill_value(
-            value, resolved or "", ui_context if isinstance(ui_context, dict) else None
-        )
+        value_status, final_value = resolve_fill_value(value, resolved or "", ctx)
         if value_status != "ok" or final_value is None:
-            options = field_options_for(
-                resolved, ui_context if isinstance(ui_context, dict) else None
-            )
+            options = field_options_for(resolved, ctx)
             return ToolResult(
                 content=(
                     f"{resolved!r} is a dropdown and none of its options matches "
@@ -1529,11 +1559,17 @@ class VoiceUICapability:
                 "a button for them. "
                 f"TYPING: with `{UI_FILL_TOOL}` you can type into a form field "
                 "(or choose a dropdown option) listed under 'ช่องกรอกที่มองเห็น' "
-                "when the caller says what to put where — pass the field name "
-                "and the caller's value verbatim. Filling never submits "
-                "anything; pressing a button is a separate request. The same "
-                "honesty rules apply: call the tool (no bare 'ได้เลยครับ'), "
-                "follow its result, never pick a field or invent a value the "
+                "when the caller says what to type — pass the caller's value "
+                "verbatim. FIELD CHOICE: when the caller names the field, pass "
+                "their words verbatim; when they only say what to type "
+                "('พิมพ์ X') and several fields are visible, pick the listed "
+                "field whose MEANING matches the value — an entry may declare "
+                "its type ('(ชนิด: email)') or its options ('(เลือกได้: …)'); "
+                "use those to decide. If no field clearly matches, ask the "
+                "caller which field they mean instead of guessing. Filling "
+                "never submits anything; pressing a button is a separate "
+                "request. The same honesty rules apply: call the tool (no bare "
+                "'ได้เลยครับ'), follow its result, never invent a value the "
                 "caller did not say. CORRECTIONS: you have no erase tool — the "
                 "system layer handles 'ล้างช่อง X' (clear) and 'ลบคำสุดท้าย' "
                 "(remove last word) before you, and typing into a field again "

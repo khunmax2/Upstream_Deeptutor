@@ -204,6 +204,24 @@ code is additive and isolated for mergeability.
   (pytest 252 green, node 183 green). Also added a **Cost & tradeoffs** section
   to `DESIGN_voice_grounding.md`.
 
+- **2026-07-09 — Implicit fill (Tier B): LLM value→field pick, verified.**
+  The ambiguous half Tier A deliberately leaves untouched (2+ fields, none
+  focused/remembered) now reaches the LLM with permission to pick the field
+  whose *meaning* matches the value — an email address goes in the
+  email-typed field. Field entries in `ui_context` now declare a semantic
+  input type behind a new marker ("อีเมล (ชนิด: email)", matching the
+  existing options marker pattern; plain text stays bare, so the frame
+  budget is untouched for unannotated fields). `ui_fill`'s `field` param is
+  optional: omitted with one visible field → that field; with several → the
+  tool hands the schema back and demands an explicit pick (the server never
+  guesses). Trust model intact: every pick — the model's included — still
+  goes through `resolve_field_target` against the visible fields. Files:
+  `services/voice_realtime/ui_control.py` (`_FIELD_TYPE_MARKER`,
+  `field_label`, `UIFillTool` definition/execute, `system_block` FIELD
+  CHOICE rule), `web/components/voice/pageContext.ts`
+  (`SEMANTIC_INPUT_TYPES`, `formatFieldEntry` type param); tests
+  (pytest 258 green, node 184 green).
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action
