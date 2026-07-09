@@ -24,7 +24,7 @@ import {
   findFieldElement,
   scrollByVoice,
 } from './pageContext'
-import { clickPulse, disposeCursor, pointAt } from './simulatorCursor'
+import { clickPulse, disposeCursor, glowField, pointAt } from './simulatorCursor'
 import { pickUtterance } from './speechAlternatives'
 import { VOICE_ACTION_EVENT, type VoiceActionDetail } from './VoiceActionBridge'
 
@@ -637,6 +637,7 @@ export default function VoiceCallWidget() {
               await pointAt(fieldEl)
               clickPulse()
               const ok = fillFieldByVoice(field, argument, panelRef.current)
+              if (ok) glowField(fieldEl, 'pulse') // soft shimmer while it fills
               addMsg(
                 'sys',
                 ok ? `⌨️ พิมพ์ "${argument}" ในช่อง ${field}` : `⚠ พิมพ์ลงช่อง "${field}" ไม่ได้`
@@ -655,6 +656,7 @@ export default function VoiceCallWidget() {
             void (async () => {
               await pointAt(focusEl)
               clickPulse()
+              glowField(focusEl, 'flash') // a shimmer on the locked field
               focusEl.focus?.()
               focusEl.click?.()
               addMsg('sys', `🎯 โฟกัสช่อง ${field}`)
@@ -673,6 +675,7 @@ export default function VoiceCallWidget() {
               await pointAt(editEl)
               clickPulse()
               const ok = editFieldByVoice(field, argument, panelRef.current)
+              if (ok) glowField(editEl, 'pulse')
               addMsg(
                 'sys',
                 !ok

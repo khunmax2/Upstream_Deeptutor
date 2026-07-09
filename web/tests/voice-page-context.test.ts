@@ -15,7 +15,7 @@ import {
   MAX_SUMMARY_CHARS,
   removeLastWord,
 } from '../components/voice/pageContext'
-import { targetPoint } from '../components/voice/simulatorCursor'
+import { glowBox, targetPoint } from '../components/voice/simulatorCursor'
 
 const base = {
   path: '/settings',
@@ -114,6 +114,18 @@ test('simulator cursor points at the centre, capped for tall targets', () => {
     x: 150,
     y: 180,
   })
+})
+
+test('field glow box grows the rect by the pad on every side', () => {
+  assert.deepEqual(glowBox({ left: 100, top: 50, width: 200, height: 40 }), {
+    left: 96,
+    top: 46,
+    width: 208,
+    height: 48,
+  })
+  // Degenerate rect: never a negative size.
+  const g = glowBox({ left: 0, top: 0, width: 0, height: 0 })
+  assert.ok(g.width >= 0 && g.height >= 0)
 })
 
 test('empty outline yields an empty summary (widget then skips the frame)', () => {

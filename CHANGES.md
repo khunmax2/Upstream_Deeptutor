@@ -182,6 +182,18 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-09 — Field glow: the locked-on field blooms so the caller sees
+  the pick.** Companion to focus/fill/edit — once the target field is
+  resolved, a halo shimmers around it: one quick flash on focus-lock, a few
+  soft pulses while typing/editing. Presentation-only, added to the simulator
+  cursor module (`web/components/voice/simulatorCursor.ts`): one singleton
+  overlay on <body>, `pointer-events: none`, positioned over the field's rect
+  (grown by a 4px pad, corner radius matched), `prefers-reduced-motion` → a
+  single static fade, disposed on hang-up alongside the cursor. Wired into the
+  `focus_field` / `fill_field` / `edit_field` handlers. Files:
+  `simulatorCursor.ts`, `VoiceCallWidget.tsx`; node test for the pure glow-box
+  math (node 183 green).
+
 - **2026-07-08 — Click mis-target fixes + faster cursor.** Three live gaps
   from the same session log, plus a speed pass: (1) "กด/คลิกที่ช่อง X" now
   FOCUSES the named form field (new `focus_field` ui_action + client caret

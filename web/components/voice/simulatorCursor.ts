@@ -124,4 +124,84 @@ export function disposeCursor(): void {
   hideTimer = null
   cursor?.remove()
   cursor = null
+  glow?.remove()
+  glow = null
+}
+
+// ── field glow: a halo around the field the agent just locked onto ──────
+//
+// The visual companion to focus/fill/edit: once the target field is resolved,
+// its outline blooms so the caller SEES which box the agent chose — a quick
+// flash on focus, a few soft pulses while typing. Same rules as the cursor:
+// one singleton overlay, pointer-events none, never touches the field itself.
+
+const GLOW_PAD = 4
+let glow: HTMLDivElement | null = null
+
+/** The fixed-overlay box for a halo around *rect* — the element rect grown by
+ * GLOW_PAD on every side, clamped to non-negative size. Pure, node-testable. */
+export function glowBox(rect: { left: number; top: number; width: number; height: number }): {
+  left: number
+  top: number
+  width: number
+  height: number
+} {
+  return {
+    left: rect.left - GLOW_PAD,
+    top: rect.top - GLOW_PAD,
+    width: Math.max(0, rect.width) + GLOW_PAD * 2,
+    height: Math.max(0, rect.height) + GLOW_PAD * 2,
+  }
+}
+
+function ensureGlow(): HTMLDivElement {
+  if (glow && document.body.contains(glow)) return glow
+  const el = document.createElement('div')
+  el.setAttribute('aria-hidden', 'true')
+  el.style.cssText =
+    `position:fixed;pointer-events:none;z-index:${CURSOR_Z - 1};opacity:0;` +
+    'border-radius:12px;border:2px solid rgba(63,131,248,.9);' +
+    'box-shadow:0 0 18px 3px rgba(63,131,248,.55),inset 0 0 8px rgba(63,131,248,.25);'
+  document.body.appendChild(el)
+  glow = el
+  return el
+}
+
+/**
+ * Bloom a halo around *el*: `mode` "flash" is one quick shimmer (focus lock),
+ * "pulse" is a few gentle cycles (typing / editing). Positions itself over the
+ * field's current rect and matches its corner radius. reduced-motion → a
+ * single static fade.
+ */
+export function glowField(el: Element, mode: 'flash' | 'pulse' = 'flash'): void {
+  const g = ensureGlow()
+  const rect = el.getBoundingClientRect()
+  const box = glowBox(rect)
+  g.style.left = `${box.left}px`
+  g.style.top = `${box.top}px`
+  g.style.width = `${box.width}px`
+  g.style.height = `${box.height}px`
+  const radius = getComputedStyle(el as HTMLElement).borderRadius
+  if (radius && radius !== '0px') g.style.borderRadius = `calc(${radius} + ${GLOW_PAD}px)`
+  if (reducedMotion()) {
+    g.style.transition = 'opacity 200ms ease'
+    g.style.opacity = '0.9'
+    setTimeout(() => {
+      if (glow) glow.style.opacity = '0'
+    }, 600)
+    return
+  }
+  g.style.transition = 'none'
+  const cycles = mode === 'pulse' ? 3 : 1
+  const frames: Keyframe[] =
+    mode === 'pulse'
+      ? [
+          { opacity: 0 },
+          { opacity: 1, offset: 0.15 },
+          { opacity: 0.35, offset: 0.5 },
+          { opacity: 0.9, offset: 0.75 },
+          { opacity: 0 },
+        ]
+      : [{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }]
+  g.animate(frames, { duration: 420 * cycles + 260, easing: 'ease-in-out' })
 }
