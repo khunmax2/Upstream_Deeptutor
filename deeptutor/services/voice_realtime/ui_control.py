@@ -197,6 +197,11 @@ def sanitize_action_result(raw: Any) -> dict[str, Any] | None:
     field = _CONTROL_CHARS.sub("", str(raw.get("field") or "").strip())
     if field:
         out["field"] = field[:_MAX_FIELD_CHARS]
+    # open_path results carry the landed path here — the pending cross-page
+    # step (ui_graph.take_pending_step) matches on it.
+    argument = _CONTROL_CHARS.sub("", str(raw.get("argument") or "").strip())
+    if argument:
+        out["argument"] = argument[:_MAX_RESULT_CHARS]
     return out
 
 

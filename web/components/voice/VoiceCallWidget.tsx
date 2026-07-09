@@ -22,6 +22,7 @@ import {
   fillFieldByVoice,
   findClickableByText,
   findFieldElement,
+  findWithPoll,
   scrollByVoice,
   verifyFieldFocused,
   verifyFieldValue,
@@ -597,7 +598,7 @@ export default function VoiceCallWidget() {
   // trust that a step finished before taking the next. Failures also surface
   // in the widget log.
   const reportActionResult = useCallback(
-    (target: string, field: string, verdict: UiActionVerdict) => {
+    (target: string, field: string, verdict: UiActionVerdict, argument = '') => {
       if (!verdict.ok) {
         addMsg('sys', `⚠ ตรวจผลแล้วยังไม่สำเร็จ: ${target}${field ? ` (${field})` : ''}`)
       }
@@ -605,7 +606,7 @@ export default function VoiceCallWidget() {
         wsRef.current.send(
           JSON.stringify({
             type: 'ui_action_result',
-            result: { target, field, ok: verdict.ok, detail: verdict.detail },
+            result: { target, field, argument, ok: verdict.ok, detail: verdict.detail },
           })
         )
       }
@@ -628,22 +629,46 @@ export default function VoiceCallWidget() {
         return
       }
       switch (target) {
+        case 'open_path': {
+          // Website Graph navigation: a path (possibly a sub-page like
+          // /settings/appearance) instead of a page id. Whitelist discipline
+          // holds — only paths under a declared UI_PAGES page are honoured.
+          const allowed = UI_PAGES.some(
+            p => argument === p.path || argument.startsWith(p.path + '/')
+          )
+          if (!allowed || !argument.startsWith('/')) {
+            addMsg('sys', `⚠ เส้นทางไม่อยู่ในรายการ: ${argument}`)
+            reportActionResult(target, '', { ok: false, detail: 'path_not_allowed' }, argument)
+            return
+          }
+          addMsg('sys', `🖱 เปิด ${argument}`)
+          router.push(argument)
+          // The verified arrival is what releases the parked follow-up step
+          // on the server — the poll IS the page-load wait.
+          void verifyPath(argument).then(v => reportActionResult(target, '', v, argument))
+          return
+        }
         case 'click_element': {
           // Click-by-name: press the visible element whose text the caller
-          // named (server already verified it against the streamed context).
-          // The simulator cursor glides onto the target first, so the caller
-          // sees WHERE the agent is pressing before the effect happens.
-          const el = argument ? findClickableByText(argument, panelRef.current) : null
-          if (el) {
-            void (async () => {
-              await pointAt(el)
-              clickPulse()
-              el.click()
-              addMsg('sys', `🖱 กดปุ่ม ${argument}`)
-            })()
-          } else {
-            addMsg('sys', `⚠ หาปุ่ม "${argument}" บนจอไม่เจอแล้ว`)
-          }
+          // named (server already verified it against the streamed context —
+          // or, for a cross-page graph step, against the curated graph).
+          // The find POLLS briefly: right after a navigation the control may
+          // not be mounted yet. The simulator cursor glides onto the target
+          // first, so the caller sees WHERE the agent is pressing.
+          void (async () => {
+            const el = argument
+              ? await findWithPoll(() => findClickableByText(argument, panelRef.current))
+              : null
+            if (!el) {
+              addMsg('sys', `⚠ หาปุ่ม "${argument}" บนจอไม่เจอแล้ว`)
+              reportActionResult(target, '', { ok: false, detail: 'element_not_found' }, argument)
+              return
+            }
+            await pointAt(el)
+            clickPulse()
+            el.click()
+            addMsg('sys', `🖱 กดปุ่ม ${argument}`)
+          })()
           return
         }
         case 'scroll_down':
@@ -662,9 +687,12 @@ export default function VoiceCallWidget() {
           // can revert a native-setter write on re-render) — retry the write
           // once on failure, then report the verdict either way.
           const field = String(m.field || '')
-          const fieldEl = field && argument ? findFieldElement(field, panelRef.current) : null
-          if (fieldEl) {
-            void (async () => {
+          void (async () => {
+            const fieldEl =
+              field && argument
+                ? await findWithPoll(() => findFieldElement(field, panelRef.current))
+                : null
+            if (fieldEl) {
               await pointAt(fieldEl)
               clickPulse()
               let written = fillFieldByVoice(field, argument, panelRef.current)
@@ -688,19 +716,22 @@ export default function VoiceCallWidget() {
                     : await verifyFieldValue(field, written, panelRef.current)
               }
               reportActionResult(target, field, verdict)
-            })()
-          } else {
-            addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
-            reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
-          }
+            } else {
+              addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+              reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
+            }
+          })()
           return
         }
         case 'focus_field': {
           // "กดที่ช่อง X" — place the caret in the named field (no typing).
+          // The find polls briefly (late mounts after navigation).
           const field = String(m.field || '')
-          const focusEl = field ? findFieldElement(field, panelRef.current) : null
-          if (focusEl) {
-            void (async () => {
+          void (async () => {
+            const focusEl = field
+              ? await findWithPoll(() => findFieldElement(field, panelRef.current))
+              : null
+            if (focusEl) {
               await pointAt(focusEl)
               clickPulse()
               glowField(focusEl, 'flash') // a shimmer on the locked field
@@ -708,11 +739,11 @@ export default function VoiceCallWidget() {
               focusEl.click?.()
               addMsg('sys', `🎯 โฟกัสช่อง ${field}`)
               reportActionResult(target, field, await verifyFieldFocused(field, panelRef.current))
-            })()
-          } else {
-            addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
-            reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
-          }
+            } else {
+              addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+              reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
+            }
+          })()
           return
         }
         case 'edit_field': {

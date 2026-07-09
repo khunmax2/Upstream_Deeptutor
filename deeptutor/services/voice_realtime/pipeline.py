@@ -33,7 +33,7 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
-from deeptutor.services.voice_realtime import narration, ui_control
+from deeptutor.services.voice_realtime import narration, ui_control, ui_graph
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
 
@@ -399,6 +399,33 @@ async def _run_focus_shortcut(emitter: VoiceEmitter, field: str, *, turn_t0: flo
         }
     )
     return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
+
+
+async def _run_graph_plan(
+    emitter: VoiceEmitter,
+    node: dict[str, Any],
+    control: dict[str, Any],
+    ui_context: dict[str, Any] | None,
+    nav_state: dict[str, Any] | None,
+    *,
+    turn_t0: float,
+) -> str:
+    """Execute a Website-Graph plan: act now (same page) or navigate + park.
+
+    Cross-page: emit ``open_path`` and park the follow-up click on
+    ``nav_state`` — the router dispatches it when the client's post-action
+    verify confirms the route landed (poll + verify, never a sleep). The
+    client's element poll covers the control mounting late either way.
+    """
+    current_path = str((ui_context or {}).get("path") or "")
+    navigate, action = ui_graph.plan_graph_step(node, control, current_path)
+    if navigate is None:
+        await emitter.send_json(action)
+        return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
+    if nav_state is not None:
+        nav_state["pending_graph_step"] = ui_graph.make_pending_step(node, action)
+    await emitter.send_json(navigate)
+    return await _speak_short_turn(emitter, narration.GRAPH_CROSS_PAGE_LINE, turn_t0=turn_t0)
 
 
 async def _run_edit_shortcut(emitter: VoiceEmitter, field: str, op: str, *, turn_t0: float) -> str:
@@ -821,6 +848,20 @@ async def run_text_turn(
             logger.info("voice rung=click-ambiguous %r", transcript)
             return await _speak_short_turn(emitter, narration.CLICK_AMBIGUOUS_LINE, turn_t0=t0)
         elif outcome == "missing":
+            # Not on THIS screen — before the honest dead-end, ask the
+            # Website Graph whether another page owns the named control
+            # ("กดโหมดมืด" from /home → /settings/appearance → press).
+            g_outcome, g_node, g_control = ui_graph.find_graph_control(click_name)
+            if g_outcome == "hit" and g_node and g_control:
+                logger.info(
+                    "voice rung=graph-click control=%r page=%r %r",
+                    g_control.get("capability"),
+                    g_node.get("path"),
+                    transcript,
+                )
+                return await _run_graph_plan(
+                    emitter, g_node, g_control, ui_context, nav_state, turn_t0=t0
+                )
             logger.info("voice rung=click-miss %r", transcript)
             return await _speak_short_turn(emitter, narration.CLICK_MISS_LINE, turn_t0=t0)
 
@@ -892,6 +933,24 @@ async def run_text_turn(
             return await _speak_short_turn(emitter, narration.FILL_AMBIGUOUS_LINE, turn_t0=t0)
         logger.info("voice rung=edit-miss %r", transcript)
         return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
+
+    # Website Graph, goal phrasings: "เปลี่ยนธีมเป็นโหมดมืด" carries no click
+    # verb, so the click rung never sees it — but the graph knows which page
+    # owns the control. Deterministic, no LLM; a miss falls through untouched
+    # (never hijacks conversation).
+    graph_name = ui_graph.match_graph_intent(transcript)
+    if graph_name and ui_context is not None:
+        g_outcome, g_node, g_control = ui_graph.find_graph_control(graph_name)
+        if g_outcome == "hit" and g_node and g_control:
+            logger.info(
+                "voice rung=graph-goal control=%r page=%r %r",
+                g_control.get("capability"),
+                g_node.get("path"),
+                transcript,
+            )
+            return await _run_graph_plan(
+                emitter, g_node, g_control, ui_context, nav_state, turn_t0=t0
+            )
 
     guess = ui_control.match_navigation_guess(transcript, ui_manifest)
     if guess is not None and nav_state is not None:

@@ -165,6 +165,52 @@ async def test_ui_action_result_lands_on_nav_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_verified_navigation_releases_the_parked_graph_step() -> None:
+    """Website Graph: the parked follow-up fires when (and only when) the
+    client's post-action verify confirms the planned page landed."""
+    import time as _time
+
+    ws = FakeWebSocket(
+        [
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_action_result", "result": '
+                '{"target": "open_path", "argument": "/settings/appearance", '
+                '"ok": true, "detail": "route_changed"}}',
+            },
+        ]
+    )
+
+    # Park a step before the frames run: FakeSession is created inside
+    # voice_websocket, so plant via a wrapper.
+    orig_init = FakeSession.__init__
+
+    def init_with_pending(self: FakeSession, emitter: Any, *, language: str = "th") -> None:
+        orig_init(self, emitter, language=language)
+        self.nav_state["pending_graph_step"] = {
+            "page_path": "/settings/appearance",
+            "action": {
+                "type": "ui_action",
+                "action": "navigate",
+                "target": "click_element",
+                "argument": "Dark",
+            },
+            "expires_at": _time.time() + 15,
+        }
+
+    FakeSession.__init__ = init_with_pending  # type: ignore[method-assign]
+    try:
+        await vr.voice_websocket(ws)
+    finally:
+        FakeSession.__init__ = orig_init  # type: ignore[method-assign]
+
+    sess = FakeSession.last
+    assert sess is not None
+    assert "pending_graph_step" not in sess.nav_state  # consumed
+    assert any('"click_element"' in t and '"Dark"' in t for t in ws.sent_text)
+
+
+@pytest.mark.asyncio
 async def test_ui_action_result_malformed_is_dropped() -> None:
     ws = FakeWebSocket(
         [

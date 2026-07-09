@@ -490,6 +490,19 @@ async function pollUntil(
   }
 }
 
+/** Poll for an element that may not be mounted yet (e.g. right after a
+ * cross-page navigation): retry *find* until it returns something or the
+ * deadline passes. Resolves null on timeout — the caller reports honestly. */
+export async function findWithPoll<T>(find: () => T | null, timeoutMs = 1600): Promise<T | null> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const got = find()
+    if (got) return got
+    if (Date.now() >= deadline) return null
+    await wait(VERIFY_INTERVAL_MS)
+  }
+}
+
 /** Current value of the field matching *fieldLabel* (null = not found). */
 export function readFieldValue(fieldLabel: string, exclude: Element | null): string | null {
   const chosen = findFieldByLabel(fieldLabel, exclude)

@@ -678,6 +678,11 @@ def test_sanitize_action_result_trims_and_validates() -> None:
     # Control chars stripped, lengths capped.
     got = ui_control.sanitize_action_result({"target": "x\x00y", "ok": True, "detail": "d" * 500})
     assert got is not None and got["target"] == "xy" and len(got["detail"]) == 80
+    # open_path results carry the landed path as `argument`.
+    got = ui_control.sanitize_action_result(
+        {"target": "open_path", "argument": "/settings/appearance", "ok": True, "detail": ""}
+    )
+    assert got is not None and got["argument"] == "/settings/appearance"
 
 
 def test_sanitize_ui_context_keeps_fields_capped() -> None:

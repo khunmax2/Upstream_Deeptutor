@@ -52,6 +52,7 @@ from deeptutor.services.voice_realtime.ui_control import (
     sanitize_manifest,
     sanitize_ui_context,
 )
+from deeptutor.services.voice_realtime.ui_graph import take_pending_step
 from deeptutor.services.voice_realtime.vad import is_utterance_too_large
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,13 @@ async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> No
             session.nav_state["last_action_result"] = result
             if not result.get("ok"):
                 logger.warning("voice ui_action verify FAILED: %s", result)
+            # Website Graph: a parked cross-page step fires the moment the
+            # client CONFIRMS the planned page landed — verify-gated, once,
+            # TTL-bounded (ui_graph.take_pending_step owns those rules).
+            step = take_pending_step(session.nav_state, result)
+            if step is not None:
+                logger.info("voice graph step dispatched: %s", step.get("argument"))
+                await safe_send(step)
 
 
 __all__ = ["router"]

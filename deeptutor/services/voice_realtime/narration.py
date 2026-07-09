@@ -57,6 +57,11 @@ SECRETARY_OFFPAGE_LINE = "ตอนนี้ไม่ได้อยู่หน
 CLICK_MISS_LINE = "ไม่เห็นปุ่มชื่อนั้นบนจอครับ"
 CLICK_AMBIGUOUS_LINE = "มีปุ่มชื่อคล้ายกันหลายปุ่มครับ พูดชื่อเต็มอีกครั้งครับ"
 
+# Website Graph cross-page plan: the target lives on another page — the
+# screen is already navigating as this plays; the parked follow-up fires
+# when the client verifies the route landed. Fixed line = cacheable TTS.
+GRAPH_CROSS_PAGE_LINE = "ได้เลยครับ กำลังเปิดหน้านั้นแล้วจัดการให้ครับ"
+
 # Fill-by-voice outcomes — same honesty contract as the click lines.
 FILL_MISS_LINE = "ไม่เห็นช่องชื่อนั้นบนจอครับ"
 FILL_AMBIGUOUS_LINE = "มีช่องชื่อคล้ายกันหลายช่องครับ พูดชื่อเต็มของช่องอีกครั้งครับ"
@@ -94,6 +99,7 @@ __all__ = [
     "SECRETARY_OFF_LINE",
     "SECRETARY_OFFPAGE_LINE",
     "SECRETARY_ON_LINE",
+    "GRAPH_CROSS_PAGE_LINE",
     "HANG_LINE",
     "NAV_ACK_LINE",
     "REASSURE_LINE",

@@ -1,0 +1,37 @@
+{
+  "origin": "deeptutor",
+  "nodes": [
+    {
+      "id": "settings_appearance",
+      "path": "/settings/appearance",
+      "label": "หน้าตั้งค่าลักษณะที่ปรากฏ (ธีมและภาษา)",
+      "controls": [
+        {
+          "capability": "theme_dark",
+          "click": "Dark",
+          "kind": "button",
+          "aliases": ["โหมดมืด", "ธีมมืด", "ธีมดำ", "โหมดกลางคืน", "dark mode", "ธีม dark"]
+        },
+        {
+          "capability": "theme_default",
+          "click": "ค่าเริ่มต้น",
+          "kind": "button",
+          "aliases": ["ธีมค่าเริ่มต้น", "ธีมปกติ", "โหมดสว่าง", "ธีมสว่าง", "ธีมขาว", "default theme"]
+        },
+        {
+          "capability": "theme_cream",
+          "click": "ครีม",
+          "kind": "button",
+          "aliases": ["ธีมครีม", "โหมดครีม", "cream"]
+        },
+        {
+          "capability": "theme_glass",
+          "click": "Glass",
+          "kind": "button",
+          "aliases": ["ธีมกลาส", "ธีมแก้ว", "ธีมกระจก", "glass"]
+        }
+      ]
+    }
+  ],
+  "edges": [{ "from": "*", "to": "*", "via": "navigate", "cost": 1 }]
+}

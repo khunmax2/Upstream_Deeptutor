@@ -266,6 +266,35 @@ code is additive and isolated for mergeability.
   `api/routers/voice_realtime.py` (frame dispatch + protocol doc); tests
   (pytest 276 green, node 184 green).
 
+- **2026-07-09 — Website Graph: cross-page single commands ("เปลี่ยนธีมเป็น
+  โหมดมืด" from any page).** The grounding design's Website Graph /
+  Navigation Reasoning stage. A curated, provenance-agnostic graph
+  (`services/voice_realtime/ui_graph.json`: nodes = routes with an action
+  catalog of capability id + visible click text + spoken aliases) lets the
+  ladder answer a command whose control is NOT on the current screen:
+  resolve the name against the graph (same weighted scorer → same garble
+  tolerance), then plan `open_path(/settings/appearance) → click "Dark"`.
+  Execution is verify-gated: the pipeline emits `open_path` and PARKS the
+  follow-up click on `nav_state["pending_graph_step"]`; the router
+  dispatches it only when the client's post-action verify confirms the
+  planned route landed (fires once, TTL-bounded, dropped on failed/wrong
+  navigation — never a sleep). Two entry rungs: goal phrasings
+  ("เปลี่ยนธีมเป็น X", `match_graph_intent`) and the click rung's miss
+  branch ("กดโหมดมืด" from /home). Destructive-sounding controls resolve as
+  a miss (never auto-pressed cross-page). Client: new `open_path` action
+  honours only paths under the UI_PAGES whitelist; click/fill/focus
+  executors now POLL for their element (late mounts after navigation).
+  Curated controls (phase 1): the four theme tiles on /settings/appearance.
+  New parity test `web/tests/voice-graph-parity.test.ts` fails CI when
+  graph paths and real routes/whitelist drift. Files: new
+  `services/voice_realtime/ui_graph.{py,json}`, `pipeline.py` (graph rungs +
+  `_run_graph_plan`), `narration.py` (`GRAPH_CROSS_PAGE_LINE`),
+  `ui_control.py` (`argument` in `sanitize_action_result`),
+  `api/routers/voice_realtime.py` (pending-step dispatch),
+  `web/components/voice/VoiceCallWidget.tsx` (`open_path`, poll-find),
+  `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
+  green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action
