@@ -182,6 +182,13 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-09 — Handoff report for account move.** Added
+  `REPORT_voice_handoff_2026-07-09.md` — a self-contained handoff of the whole
+  voice-UI-control effort (state, branch/merge plan, architecture map, feature
+  inventory, verify/run steps, the strategic decisions previously held only in
+  auto-memory, the prioritized backlog, and diagnostic patterns) so a fresh
+  agent in another cowork account can continue cold. Doc only.
+
 - **2026-07-09 — Implicit fill (Tier A): "พิมพ์ X" without naming the field.**
   The "he didn't even name the field" UX from the grounding design. A bare type
   command now targets, deterministically and without the LLM: the focused field
