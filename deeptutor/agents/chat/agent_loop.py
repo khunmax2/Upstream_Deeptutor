@@ -523,10 +523,20 @@ class AgentLoop:
 
                 for tc_delta in getattr(delta, "tool_calls", None) or []:
                     index = int(getattr(tc_delta, "index", 0) or 0)
-                    acc = tool_acc.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    acc = tool_acc.setdefault(
+                        index, {"id": "", "name": "", "arguments": "", "extra": {}}
+                    )
                     tcid = getattr(tc_delta, "id", None)
                     if tcid:
                         acc["id"] += str(tcid)
+                    # Provider extras on the tool-call delta (pydantic
+                    # model_extra) must survive the round trip: Gemini 3
+                    # rides its REQUIRED thought_signature in
+                    # `extra_content` here — dropping it makes every
+                    # follow-up round 400 ("missing a thought_signature").
+                    tc_extra = getattr(tc_delta, "model_extra", None)
+                    if tc_extra:
+                        acc["extra"].update(tc_extra)
                     fn = getattr(tc_delta, "function", None)
                     if fn is None:
                         continue
@@ -557,6 +567,7 @@ class AgentLoop:
                 "id": data.get("id") or f"call_{idx}",
                 "name": data.get("name", ""),
                 "arguments": data.get("arguments") or "{}",
+                "extra": data.get("extra") or {},
             }
             for idx, data in sorted(tool_acc.items())
             if data.get("name")
@@ -636,21 +647,24 @@ def _assistant_message_with_tool_calls(
     content: str,
     tool_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    return {
-        "role": "assistant",
-        "content": content or None,
-        "tool_calls": [
-            {
-                "id": tc["id"],
-                "type": "function",
-                "function": {
-                    "name": tc["name"],
-                    "arguments": tc.get("arguments") or "{}",
-                },
-            }
-            for tc in tool_calls
-        ],
-    }
+    entries: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        entry: dict[str, Any] = {
+            "id": tc["id"],
+            "type": "function",
+            "function": {
+                "name": tc["name"],
+                "arguments": tc.get("arguments") or "{}",
+            },
+        }
+        # Echo provider extras captured from the stream (e.g. Gemini 3's
+        # `extra_content.google.thought_signature`) — the provider REQUIRES
+        # them back on replay; without them the next round is rejected with
+        # a 400 and the turn degrades to a forced finish.
+        for key, value in (tc.get("extra") or {}).items():
+            entry.setdefault(key, value)
+        entries.append(entry)
+    return {"role": "assistant", "content": content or None, "tool_calls": entries}
 
 
 def _message_content_chars(message: dict[str, Any]) -> int:

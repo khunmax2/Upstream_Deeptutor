@@ -23,6 +23,25 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-07-09 — Gemini 3 tool calls no longer 400 on the second agent-loop
+  round (`thought_signature`).** Gemini 3 models attach a REQUIRED
+  `thought_signature` to every function call (delivered as `extra_content`
+  on the streamed tool-call delta via the OpenAI-compat endpoint) and reject
+  any follow-up request whose replayed assistant message lacks it
+  (`400 INVALID_ARGUMENT: Function call is missing a thought_signature`).
+  The agent loop (`deeptutor/agents/chat/agent_loop.py`) accumulated only
+  `id`/`name`/`arguments` from stream deltas and rebuilt a minimal
+  OpenAI-shape message, so with a Gemini 3 chat model EVERY multi-round turn
+  failed at round 2 and degraded to a forced finish — whose summary could
+  claim tool actions that never ran (live symptom: voice UI said
+  "พิมพ์แล้วครับ" while nothing was typed). Fix: provider extras from
+  `model_extra` on the tool-call delta are accumulated and echoed back
+  verbatim in `_assistant_message_with_tool_calls`. Provider-agnostic
+  (extras pass through untouched; absent extras are a no-op). Reproduced
+  red/green against the live API before the fix; regression test
+  `tests/agents/chat/test_agent_loop.py::test_tool_call_provider_extras_survive_the_replay`.
+  Candidate for an upstream PR.
+
 - **2026-06-20 — `allowFrom` empty no longer crashes the whole backend.**
   `ChannelManager._validate_allow_from` (`deeptutor/partners/channels/manager.py`)
   used to `raise SystemExit` when any *enabled* channel had `allow_from == []`,
@@ -294,6 +313,16 @@ code is additive and isolated for mergeability.
   `web/components/voice/VoiceCallWidget.tsx` (`open_path`, poll-find),
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
+
+- **2026-07-09 — Graph goal matcher: generic "เปลี่ยน/สลับ … เป็น X" form.**
+  Live gap: "เปลี่ยนภาษาอินเตอร์เฟสเป็นภาษาอังกฤษ" matched no fixed verb (the
+  padding vocabulary between the verb and "เป็น" is unbounded), so the
+  command fell to the LLM. `match_graph_intent` now also accepts an
+  utterance starting with เปลี่ยน/สลับ that contains "เป็น", taking what
+  follows as the target — safe because the name still has to hit the curated
+  graph and a miss falls through untouched. Files:
+  `services/voice_realtime/ui_graph.py`; tests (pytest 330 green across the
+  voice + ws + agent-loop suites).
 
 - **2026-07-09 — Graph catalog: language switch + create-KB; field-kind
   controls.** Extends the Website Graph's curated catalog with

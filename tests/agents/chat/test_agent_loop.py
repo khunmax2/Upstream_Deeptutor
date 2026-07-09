@@ -44,6 +44,9 @@ def _llm_chunk(
                     name=tc.get("name"),
                     arguments=tc.get("arguments"),
                 ),
+                # Unrecognized provider fields ride pydantic's model_extra on
+                # the real SDK objects (e.g. Gemini 3's extra_content).
+                model_extra=tc.get("model_extra"),
             )
             for i, tc in enumerate(tool_calls)
         ]
@@ -432,6 +435,53 @@ async def test_tool_round_then_finish(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.metadata["rounds"] == 2
     # Only the finish round's text is the persisted answer.
     assert result.metadata["response"] == "Found what was needed."
+
+
+@pytest.mark.asyncio
+async def test_tool_call_provider_extras_survive_the_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gemini 3 attaches a REQUIRED thought_signature to each tool call
+    (`extra_content` on the delta, via pydantic model_extra) and rejects the
+    next round with a 400 if the replayed assistant message lacks it. The
+    live symptom: every multi-round voice turn degraded to a forced finish
+    that claimed success for actions that never ran."""
+    signature = {"extra_content": {"google": {"thought_signature": "sig-abc123"}}}
+    registry = _Registry()
+    client = _ScriptedChatClient(
+        [
+            [
+                _llm_chunk(
+                    tool_calls=[
+                        {
+                            "id": "call-1",
+                            "name": "web_search",
+                            "arguments": json.dumps({"query": "q"}),
+                            "model_extra": signature,
+                        }
+                    ]
+                ),
+            ],
+            [_llm_chunk(content="done.")],
+        ]
+    )
+    pipeline = AgenticChatPipeline(language="en")
+    pipeline.registry = registry
+    monkeypatch.setattr(pipeline, "_compose_enabled_tools", lambda _context: ["web_search"])
+    monkeypatch.setattr(pipeline, "_build_openai_client", lambda: client)
+
+    await _run(
+        pipeline,
+        UnifiedContext(session_id="s1", user_message="find q", enabled_tools=["web_search"]),
+    )
+
+    second_round = client.calls[1]["messages"]
+    assistant_tc = [m for m in second_round if m.get("role") == "assistant" and m.get("tool_calls")]
+    assert assistant_tc, "round 2 must replay the assistant tool-call message"
+    entry = assistant_tc[0]["tool_calls"][0]
+    # The provider extra rides back verbatim, next to the OpenAI-shape keys.
+    assert entry["extra_content"] == {"google": {"thought_signature": "sig-abc123"}}
+    assert entry["function"]["name"] == "web_search"
 
 
 @pytest.mark.asyncio
