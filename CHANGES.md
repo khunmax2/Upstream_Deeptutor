@@ -182,6 +182,16 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
+  Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
+  target-locking (Website Graph / Navigation Reasoning / Scoring / post-action
+  Verify / implicit field targeting), written to keep the engine portable to a
+  future standalone connector: a gated (fast-path + fallback) pipeline, a
+  clean core/per-site-knowledge split, a provenance-agnostic Website Graph
+  schema (source-generated for DeepTutor, runtime-learnable for foreign sites),
+  a signal-priority for grounding (DOM/AX first, vision/OCR deferred), and an
+  app-ignorant `lockTarget` interface. Doc only — no code change.
+
 - **2026-07-09 — Cursor snappiness, field visibility robustness, TTS retry.**
   Three live-feedback fixes: (1) the simulator cursor felt like it lagged the
   actual click on first use — it was dashing across the whole screen from its
