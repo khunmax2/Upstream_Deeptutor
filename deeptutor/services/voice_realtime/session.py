@@ -28,6 +28,10 @@ from deeptutor.services.voice_realtime.pipeline import (
 
 logger = logging.getLogger(__name__)
 
+# How long the deep rung waits for the client's ui_inventory reply. A silent
+# client costs the turn this much at worst and degrades to the honest miss.
+INVENTORY_TIMEOUT_SECONDS = 2.5
+
 
 class VoiceSession:
     """Drive voice turns for one WebSocket connection, with barge-in support."""
@@ -47,6 +51,34 @@ class VoiceSession:
         # confirmation); owned here, mutated by the pipeline each turn.
         self.nav_state: dict[str, Any] = {}
         self._current: asyncio.Task[None] | None = None
+        # In-flight deep-rung inventory request (ui_scan → ui_inventory):
+        # the pipeline awaits this future; the router resolves it when the
+        # client's reply frame arrives.
+        self._inventory_future: asyncio.Future[Any] | None = None
+
+    async def request_ui_inventory(self) -> Any:
+        """Ask the client for its indexed element inventory; ``None`` on timeout.
+
+        The deep rung's eyes: sends a ``ui_scan`` frame and awaits the
+        client's ``ui_inventory`` reply (resolved by the router via
+        :meth:`resolve_ui_inventory`). Bounded — a silent client costs the
+        turn 2.5s at worst and degrades to the honest miss line.
+        """
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+        self._inventory_future = future
+        try:
+            await self._emitter.send_json({"type": "ui_scan"})
+            return await asyncio.wait_for(future, timeout=INVENTORY_TIMEOUT_SECONDS)
+        except (TimeoutError, asyncio.TimeoutError):
+            return None
+        finally:
+            self._inventory_future = None
+
+    def resolve_ui_inventory(self, items: Any) -> None:
+        """Deliver a client ``ui_inventory`` frame to the awaiting turn."""
+        future = self._inventory_future
+        if future is not None and not future.done():
+            future.set_result(items)
 
     async def greet(self) -> None:
         """Open the call with a short spoken self-introduction.
@@ -104,6 +136,7 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
+                inventory_getter=self.request_ui_inventory,
             )
         except asyncio.CancelledError:
             raise
@@ -123,6 +156,7 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
+                inventory_getter=self.request_ui_inventory,
             )
         except asyncio.CancelledError:
             raise

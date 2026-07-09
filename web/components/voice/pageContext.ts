@@ -246,17 +246,20 @@ function clickableLabel(el: HTMLElement): string {
 // reports them as interactive, so filter them out of the clickables list.
 const FILLABLE_TAGS = new Set(['input', 'textarea', 'select', 'option'])
 
+/** Legacy CSS-selector collector — the fallback when the engine throws. */
+function legacyClickables(exclude: Element | null): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR)).filter(
+    el => !(exclude && exclude.contains(el)) && isVisible(el)
+  )
+}
+
 function visibleClickables(exclude: Element | null): { el: HTMLElement; label: string }[] {
   // Engine path first: behavioral interactive detection (cursor:pointer,
   // event handlers, tabindex, ARIA — the vendored browser-use walker) sees
   // div-based clickables and icon buttons the CSS list below never did.
   // Any engine failure falls back to the legacy selector — a broken
   // snapshot must never break the call.
-  const els =
-    collectInteractiveElements(exclude) ??
-    Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR)).filter(
-      el => !(exclude && exclude.contains(el)) && isVisible(el)
-    )
+  const els = collectInteractiveElements(exclude) ?? legacyClickables(exclude)
   const main: { el: HTMLElement; label: string }[] = []
   const nav: { el: HTMLElement; label: string }[] = []
   for (const el of els) {
@@ -557,6 +560,67 @@ export async function findWithPoll<T>(find: () => T | null, timeoutMs = 1600): P
 export function readFieldValue(fieldLabel: string, exclude: Element | null): string | null {
   const chosen = findFieldByLabel(fieldLabel, exclude)
   return chosen ? chosen.el.value : null
+}
+
+// ── deep rung (Phase B): indexed inventory + click-by-index ─────────────
+//
+// On a fast-path miss the server asks for the FULL indexed element list
+// (ui_scan → ui_inventory frames) and an LLM picks the index — no name
+// matching, no buttons budget — so icon-only and duplicate-labelled
+// elements become reachable. The scan keeps live element refs;
+// `click_index` acts on them moments later.
+
+export interface InventoryItem {
+  i: number
+  tag: string
+  label: string
+  hint: string
+}
+
+const MAX_INVENTORY_ITEMS = 150
+// ui_inventory rides the same 8K control-frame cap as everything else.
+const MAX_INVENTORY_CHARS = 6500
+
+let lastScan: HTMLElement[] = []
+
+/** Extra scent for the LLM when the label is weak: a link's href, an
+ * input's placeholder/name, or the nav/main region. */
+function inventoryHint(el: HTMLElement): string {
+  if (el instanceof HTMLAnchorElement && el.getAttribute('href')) {
+    return (el.getAttribute('href') || '').slice(0, 40)
+  }
+  if (el instanceof HTMLInputElement) {
+    return (el.placeholder || el.name || el.type || '').slice(0, 40)
+  }
+  return el.closest("nav, aside, [role='navigation']") ? 'nav' : ''
+}
+
+/** Snapshot the page's interactive elements as numbered items (refs kept
+ * for click_index). Items with neither label nor hint are unaddressable
+ * even for an LLM and are skipped. */
+export function scanInventory(exclude: Element | null): InventoryItem[] {
+  const els = collectInteractiveElements(exclude) ?? legacyClickables(exclude)
+  const items: InventoryItem[] = []
+  lastScan = []
+  let total = 0
+  for (const el of els) {
+    if (items.length >= MAX_INVENTORY_ITEMS) break
+    const label = clickableLabel(el)
+    const hint = inventoryHint(el)
+    if (!label && !hint) continue
+    const size = label.length + hint.length + 14
+    if (total + size > MAX_INVENTORY_CHARS) break
+    lastScan.push(el)
+    items.push({ i: lastScan.length - 1, tag: el.tagName.toLowerCase(), label, hint })
+    total += size
+  }
+  return items
+}
+
+/** The still-mounted element for a scan index, or null (page moved on). */
+export function findScannedElement(index: number): HTMLElement | null {
+  const el = lastScan[index]
+  return el && document.contains(el) ? el : null
 }
 
 /** Verify a fill/edit landed: the field holds *expected* and keeps holding

@@ -314,6 +314,33 @@ code is additive and isolated for mergeability.
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
 
+- **2026-07-10 — Deep target-locking rung (Phase B): an LLM picks the
+  element INDEX when every deterministic rung misses.** The page-agent
+  accuracy inside our gated pipeline: on a click miss (after the graph
+  fallback) the server pulls a full *indexed* inventory of interactive
+  elements from the client (new ``ui_scan`` server→client and
+  ``ui_inventory`` client→server frames; the client keeps live refs,
+  budgets to the 8K frame cap, and always replies — an empty scan beats a
+  timeout), then ONE scoped LLM call maps the utterance to an index
+  (garble-tolerant by instruction), and the client clicks by index
+  (``click_index`` action) — no name matching, no buttons budget, so
+  icon-only buttons, duplicate labels and long-tail phrasings become
+  reachable. Trust rules pinned by tests: the LLM may only answer with an
+  index from the list, destructive-sounding labels are refused
+  server-side whatever the model says, every failure mode (scan timeout,
+  LLM error, NONE) falls through to the honest miss line, and clear
+  commands never pay for any of it. Also adds a per-snapshot diagnosis
+  line in the widget log ("📸 อ่านจอ: N ปุ่ม M ช่อง") so collection
+  problems and naming problems are distinguishable at a glance. Files:
+  new `services/voice_realtime/ui_deep.py`, `pipeline.py`
+  (`_run_deep_click` + `inventory_getter` kwarg), `session.py`
+  (ui_scan/ui_inventory future round trip, `INVENTORY_TIMEOUT_SECONDS`),
+  `api/routers/voice_realtime.py` (frame dispatch + protocol doc),
+  `web/components/voice/pageContext.ts` (`scanInventory`,
+  `findScannedElement`), `VoiceCallWidget.tsx` (`ui_scan` reply,
+  `click_index` executor, snapshot log line); tests (pytest 314 green
+  incl. new `test_ui_deep.py`, node 189 green).
+
 - **2026-07-09 — Collector "eyes" upgrade: vendored browser-use dom_tree
   engine; char-budgeted buttons; duplicate suffixes; mutation-aware
   refresh (Phase A of the hybrid plan).** Live testing showed "หาปุ่มไม่เจอ"

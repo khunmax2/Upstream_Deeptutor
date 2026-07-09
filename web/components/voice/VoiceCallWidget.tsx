@@ -22,7 +22,10 @@ import {
   fillFieldByVoice,
   findClickableByText,
   findFieldElement,
+  findScannedElement,
   findWithPoll,
+  type InventoryItem,
+  scanInventory,
   scrollByVoice,
   verifyFieldFocused,
   verifyFieldValue,
@@ -648,6 +651,24 @@ export default function VoiceCallWidget() {
           void verifyPath(argument).then(v => reportActionResult(target, '', v, argument))
           return
         }
+        case 'click_index': {
+          // Deep rung: the server's LLM picked an element by scan INDEX —
+          // the live ref from the last ui_scan, verified still mounted.
+          const label = String(m.label || '')
+          void (async () => {
+            const el = findScannedElement(parseInt(argument, 10))
+            if (!el) {
+              addMsg('sys', `⚠ เป้าจากการสแกนหายไปแล้ว (${label || argument})`)
+              reportActionResult(target, '', { ok: false, detail: 'scan_target_gone' }, argument)
+              return
+            }
+            await pointAt(el)
+            clickPulse()
+            el.click()
+            addMsg('sys', `🖱 กด ${label || `รายการที่ ${argument}`}`)
+          })()
+          return
+        }
         case 'click_element': {
           // Click-by-name: press the visible element whose text the caller
           // named (server already verified it against the streamed context —
@@ -910,11 +931,35 @@ export default function VoiceCallWidget() {
     try {
       const pageName = UI_PAGES.find(p => p.path === window.location.pathname)?.label
       const context = collectPageContext(panelRef.current, pageName)
+      // Diagnosis line: what the voice layer can actually SEE right now —
+      // a miss with a healthy count is a naming problem; a tiny count is a
+      // collection problem; no line at all means the frame never went out.
+      addMsg('sys', `📸 อ่านจอ: ${context.buttons.length} ปุ่ม ${context.fields.length} ช่อง`)
       if (context.summary) ws.send(JSON.stringify({ type: 'ui_context', context }))
     } catch {
       /* a context snapshot must never break the call */
     }
-  }, [])
+  }, [addMsg])
+
+  // Deep-rung reply: the server hit a fast-path miss and asks for the FULL
+  // indexed element inventory (no name matching, no buttons budget). Always
+  // answer — an empty reply beats letting the server wait out its timeout.
+  const sendInventory = useCallback(() => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== 1) return
+    let items: InventoryItem[] = []
+    try {
+      items = scanInventory(panelRef.current)
+      addMsg('sys', `🔎 สแกนจอลึก: ${items.length} รายการ`)
+    } catch {
+      /* scan must never break the call — reply empty below */
+    }
+    try {
+      ws.send(JSON.stringify({ type: 'ui_inventory', inventory: items }))
+    } catch {
+      /* socket died mid-turn; the server times out honestly */
+    }
+  }, [addMsg])
 
   // Staleness guard: pages mutate under a live call (async cards mounting,
   // menus opening). Re-stream the screen context once the DOM settles so the
@@ -1051,6 +1096,7 @@ export default function VoiceCallWidget() {
           setMascot('listening')
         }
       } else if (m.type === 'ui_action') executeUiAction(m)
+      else if (m.type === 'ui_scan') sendInventory()
       else if (m.type === 'voice_mode') {
         const on = m.mode === 'secretary'
         setSecretary(on)

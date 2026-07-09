@@ -46,7 +46,11 @@ class FakeSession:
         self.ui_manifest: Any = None
         self.ui_context: Any = None
         self.nav_state: dict[str, Any] = {}
+        self.inventories: list[Any] = []
         FakeSession.last = self
+
+    def resolve_ui_inventory(self, items: Any) -> None:
+        self.inventories.append(items)
 
     async def greet(self) -> None:
         self.greeted = True
@@ -208,6 +212,26 @@ async def test_verified_navigation_releases_the_parked_graph_step() -> None:
     assert sess is not None
     assert "pending_graph_step" not in sess.nav_state  # consumed
     assert any('"click_element"' in t and '"Dark"' in t for t in ws.sent_text)
+
+
+@pytest.mark.asyncio
+async def test_ui_inventory_frame_reaches_the_session() -> None:
+    """A ui_inventory reply is delivered to the awaiting turn, silently."""
+    ws = FakeWebSocket(
+        [
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_inventory", "inventory": '
+                '[{"i": 0, "tag": "button", "label": "ส่ง", "hint": ""}]}',
+            },
+        ]
+    )
+    await vr.voice_websocket(ws)
+
+    sess = FakeSession.last
+    assert sess is not None
+    assert sess.inventories == [[{"i": 0, "tag": "button", "label": "ส่ง", "hint": ""}]]
+    assert not any("ui_inventory" in t for t in ws.sent_text)  # no ack
 
 
 @pytest.mark.asyncio
