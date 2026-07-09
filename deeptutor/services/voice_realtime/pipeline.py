@@ -846,6 +846,24 @@ async def run_text_turn(
         logger.info("voice rung=fill-miss %r", transcript)
         return await _speak_short_turn(emitter, narration.FILL_MISS_LINE, turn_t0=t0)
 
+    # Implicit fill (Tier A): "พิมพ์ X" with no field named → the focused
+    # field, else the last field filled this call, else the only visible field.
+    # Deterministic, no LLM. Falls through untouched when no target resolves
+    # (ambiguous) so it never hijacks conversation.
+    implicit_value = ui_control.match_implicit_fill(transcript)
+    if implicit_value and ui_context is not None:
+        field = ui_control.implicit_fill_field(ui_context, nav_state)
+        if field:
+            value_status, value = ui_control.resolve_fill_value(implicit_value, field, ui_context)
+            if value_status != "ok" or value is None:
+                logger.info("voice rung=implicit-fill-no-option field=%r %r", field, transcript)
+                return await _speak_short_turn(emitter, narration.FILL_NO_OPTION_LINE, turn_t0=t0)
+            if nav_state is not None:
+                nav_state["last_field"] = field
+            logger.info("voice rung=implicit-fill field=%r value=%r %r", field, value, transcript)
+            return await _run_fill_shortcut(emitter, field, value, turn_t0=t0)
+        # No target could be inferred — let the LLM/normal path handle it.
+
     # Edit-by-voice: undo typing ("ล้างช่องค้นหา", "ลบคำสุดท้าย"). A bare
     # command applies to the last field filled this call (nav_state memory).
     edit = ui_control.match_edit_intent(transcript)

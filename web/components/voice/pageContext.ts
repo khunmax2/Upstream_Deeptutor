@@ -96,7 +96,14 @@ function grabTexts(selector: string, exclude: Element | null): string[] {
 export function collectPageContext(
   exclude: Element | null,
   pageName?: string
-): { path: string; page?: string; summary: string; buttons: string[]; fields: string[] } {
+): {
+  path: string
+  page?: string
+  summary: string
+  buttons: string[]
+  fields: string[]
+  activeField?: string
+} {
   const outline: PageOutline = {
     path: window.location.pathname,
     pageName,
@@ -118,7 +125,33 @@ export function collectPageContext(
     summary: formatPageContext(outline),
     buttons: cleanItems(visibleClickables(exclude).map(c => c.label)),
     fields: capFieldEntries(visibleFields(exclude).map(f => formatFieldEntry(f.label, f.options))),
+    // The field with the caret right now — a bare "พิมพ์ X" (no field named)
+    // targets it first (Tier A implicit fill). Empty when nothing fillable is
+    // focused (or the caret is in our own panel).
+    activeField: activeFieldLabel(exclude) || undefined,
   }
+}
+
+/** The label of the currently focused fillable field, or "" — the caret's
+ * field, used by implicit fill. Same label rule and exclusions as
+ * visibleFields, so it names something the fill executor can find. */
+function activeFieldLabel(exclude: Element | null): string {
+  const el = document.activeElement
+  if (
+    !el ||
+    !(
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement
+    )
+  ) {
+    return ''
+  }
+  if (exclude && exclude.contains(el)) return ''
+  if (!isVisible(el)) return ''
+  if (el.disabled || ('readOnly' in el && el.readOnly)) return ''
+  if (el instanceof HTMLInputElement && SKIP_INPUT_TYPES.has(el.type)) return ''
+  return fieldLabelFor(el)
 }
 
 // The whole ui_context frame must stay under the server's 8K cap alongside

@@ -926,6 +926,96 @@ async def test_click_on_missing_chong_is_honest(monkeypatch: pytest.MonkeyPatch)
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+# ── implicit fill (Tier A): "พิมพ์ X" with no field named ──────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "value"),
+    [
+        ("พิมพ์สวัสดี", "สวัสดี"),
+        ("พิมพ์ว่าสวัสดี", "สวัสดี"),
+        ("พิมพ์คำว่ากฎหมายแรงงาน", "กฎหมายแรงงาน"),
+        ("ใส่ 42 หน่อยครับ", "42"),
+        ("เขียนว่าทดสอบ", "ทดสอบ"),
+    ],
+)
+def test_match_implicit_fill_extracts_value(text: str, value: str) -> None:
+    assert ui_control.match_implicit_fill(text) == value
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "พิมพ์กฎหมายในช่องค้นหา",  # names a field → explicit path owns it
+        "พิมพ์อะไรดีครับ",  # question
+        "เลือกไทย",  # select is not an implicit-type verb (too ambiguous)
+        "กดที่ค้นหา",  # not a type verb
+        "",
+    ],
+)
+def test_match_implicit_fill_falls_through(text: str) -> None:
+    assert ui_control.match_implicit_fill(text) is None
+
+
+def test_implicit_fill_field_priority() -> None:
+    fields = ["ค้นหา", "ชื่อคลังความรู้"]
+    ctx_active = {"fields": fields, "activeField": "ชื่อคลังความรู้"}
+    # Focused field wins outright.
+    assert ui_control.implicit_fill_field(ctx_active, {"last_field": "ค้นหา"}) == "ชื่อคลังความรู้"
+    # No focus → last_field, but only if still on screen.
+    assert ui_control.implicit_fill_field({"fields": fields}, {"last_field": "ค้นหา"}) == "ค้นหา"
+    assert ui_control.implicit_fill_field({"fields": fields}, {"last_field": "อีเมล"}) is None
+    # No focus, no memory, single field → that one.
+    assert ui_control.implicit_fill_field({"fields": ["ค้นหา"]}, {}) == "ค้นหา"
+    # Ambiguous (2+ fields, nothing to disambiguate) → None (don't guess).
+    assert ui_control.implicit_fill_field({"fields": fields}, {}) is None
+
+
+def test_sanitize_ui_context_keeps_active_field() -> None:
+    cleaned = ui_control.sanitize_ui_context({**SCREEN, "activeField": "ค้นหา"})
+    assert cleaned is not None and cleaned["activeField"] == "ค้นหา"
+
+
+@pytest.mark.asyncio
+async def test_implicit_fill_targets_focused_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "พิมพ์สวัสดี" with a focused field → fill_field on it, no LLM."""
+
+    class _MustNotRun:
+        def __init__(self) -> None:
+            raise AssertionError("orchestrator must not run for an implicit fill")
+
+    monkeypatch.setattr("deeptutor.runtime.orchestrator.ChatOrchestrator", _MustNotRun)
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    pipe._FIXED_LINE_CACHE.clear()
+    emitter = FakeEmitter()
+    nav_state: dict = {}
+
+    await pipe.run_text_turn(
+        emitter,
+        "พิมพ์สวัสดี",
+        [],
+        session_id="voice:test",
+        ui_context={**FILL_KB_SCREEN, "activeField": "ค้นหา"},
+        nav_state=nav_state,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "fill_field",
+            "argument": "สวัสดี",
+            "field": "ค้นหา",
+        }
+    ]
+    assert nav_state.get("last_field") == "ค้นหา"
+
+
 # ── edit-by-voice: undo typing ─────────────────────────────────────────
 
 

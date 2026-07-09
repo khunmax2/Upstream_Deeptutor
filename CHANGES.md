@@ -182,6 +182,21 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-09 — Implicit fill (Tier A): "พิมพ์ X" without naming the field.**
+  The "he didn't even name the field" UX from the grounding design. A bare type
+  command now targets, deterministically and without the LLM: the focused field
+  (client streams `activeField` = the caret's field in `ui_context`), else the
+  last field filled this call (`last_field`, if still on screen), else the only
+  visible field; ambiguous (2+ fields, nothing to disambiguate) falls through
+  untouched so it never hijacks conversation. Type verbs only
+  (พิมพ์/ใส่/กรอก/เขียน) — "เลือก" (implicit dropdown pick) is excluded as too
+  ambiguous. Value still corrected against on-screen vocabulary. Files:
+  `services/voice_realtime/ui_control.py` (`match_implicit_fill`,
+  `implicit_fill_field`, `activeField` in `sanitize_ui_context`), `pipeline.py`,
+  `web/components/voice/pageContext.ts` (streams `activeField`); tests
+  (pytest 252 green, node 183 green). Also added a **Cost & tradeoffs** section
+  to `DESIGN_voice_grounding.md`.
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action

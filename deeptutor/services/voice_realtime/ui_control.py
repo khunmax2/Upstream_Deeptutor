@@ -130,6 +130,7 @@ def sanitize_ui_context(raw: Any) -> dict[str, Any] | None:
     path = _CONTROL_CHARS.sub("", str(raw.get("path") or "").strip())
     page = _CONTROL_CHARS.sub("", str(raw.get("page") or "").strip())
     summary = _CONTROL_CHARS.sub("", str(raw.get("summary") or "").strip())
+    active_field = _CONTROL_CHARS.sub("", str(raw.get("activeField") or "").strip())
     out: dict[str, Any] = {}
     if path:
         out["path"] = path[:_MAX_CONTEXT_PATH_CHARS]
@@ -137,6 +138,9 @@ def sanitize_ui_context(raw: Any) -> dict[str, Any] | None:
         out["page"] = page[:_MAX_CONTEXT_PATH_CHARS]
     if summary:
         out["summary"] = summary[:_MAX_CONTEXT_SUMMARY_CHARS]
+    if active_field:
+        # The field with the caret right now — Tier A implicit fill targets it.
+        out["activeField"] = active_field[:_MAX_FIELD_CHARS]
     # Structured clickables (visible button/tab texts) — the click-by-name
     # rung resolves spoken names against THIS list, never by parsing the
     # summary prose.
@@ -669,6 +673,73 @@ def match_fill_intent(text: str) -> dict[str, str] | None:
             if value and field:
                 return {"field": field, "value": value}
         return None
+    return None
+
+
+# ── implicit fill (Tier A): "พิมพ์ X" with NO field named ───────────────
+#
+# The "he didn't even name the field" UX. When the caller just says "พิมพ์ X"
+# the target is inferred deterministically: the focused field (caret), else the
+# last field filled this call, else the only visible field. TYPE verbs only —
+# "เลือก" (select) is excluded because an implicit dropdown pick is too
+# ambiguous. Fires only when a target actually resolves (see
+# :func:`implicit_fill_field`); otherwise the pipeline falls through untouched.
+_IMPLICIT_FILL_VERBS = ("พิมพ์ว่า", "พิมพ์", "ใส่", "กรอก", "เขียนว่า", "เขียน", "type", "fill")
+
+
+def match_implicit_fill(text: str) -> str | None:
+    """The value for a bare "พิมพ์ X" (no field named), else ``None``.
+
+    Returns ``None`` when a field IS named (that's :func:`match_fill_intent`'s
+    job) or when the utterance isn't a bare type command.
+    """
+    t_orig = (text or "").strip()
+    t = t_orig.lower()
+    if not t or len(t) > _MAX_FILL_CHARS:
+        return None
+    if any(q in t for q in _QUESTION_WORDS):
+        return None
+    if any(m in t for m in _FIELD_MARKERS):
+        return None  # names a field → explicit path owns it
+    for verb in _IMPLICIT_FILL_VERBS:
+        if not t.startswith(verb):
+            continue
+        value = t_orig[len(verb) :].strip()
+        value = value.removeprefix("ว่า").strip().removeprefix("คำว่า").strip()
+        while True:  # peel trailing politeness
+            trimmed = value
+            for tail in _CLICK_TRAILING:
+                trimmed = trimmed.removesuffix(tail).strip()
+            if trimmed == value:
+                break
+            value = trimmed
+        return value or None
+    return None
+
+
+def implicit_fill_field(
+    ui_context: dict[str, Any] | None, nav_state: dict[str, Any] | None
+) -> str | None:
+    """The field a bare "พิมพ์ X" targets, or ``None`` when it can't be inferred.
+
+    Priority: the focused field (``activeField``, streamed by the client) →
+    the last field filled this call (``last_field``, only if still on screen) →
+    the single visible field. Ambiguous (2+ fields, none focused/remembered) →
+    ``None`` so the caller isn't silently guessed at.
+    """
+    labels = [
+        field_label(entry)
+        for entry in (ui_context or {}).get("fields") or []
+        if isinstance(entry, str)
+    ]
+    active = str((ui_context or {}).get("activeField") or "").strip()
+    if active:
+        return active
+    last = str((nav_state or {}).get("last_field") or "").strip()
+    if last and last in labels:
+        return last
+    if len(labels) == 1:
+        return labels[0]
     return None
 
 
@@ -1535,6 +1606,7 @@ __all__ = [
     "field_label",
     "field_options",
     "field_options_for",
+    "implicit_fill_field",
     "install_ui_control",
     "is_affirmative",
     "is_dangerous_button",
@@ -1543,6 +1615,7 @@ __all__ = [
     "match_click_intent",
     "match_edit_intent",
     "match_fill_intent",
+    "match_implicit_fill",
     "match_mode_command",
     "match_navigation_guess",
     "match_navigation_intent",

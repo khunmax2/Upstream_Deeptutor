@@ -230,7 +230,53 @@ substrate.
 5. **Defer:** runtime graph learner, ref/index & AX-deepening for foreign DOM,
    spatial, vision/OCR, cross-tab, full autonomous loop.
 
-## 11. Non-goals (for now)
+## 11. Cost & tradeoffs
+
+The gated pipeline (§2) is what keeps this affordable: **the fast path pays for
+none of the fallback machinery.** Clear commands stay a local dict-lookup +
+resolver. The costs below are mostly *not* end-user latency — they are build,
+tuning, and complexity costs.
+
+**What is genuinely slower (but inherently so):**
+
+- **Cross-page commands** ("เปลี่ยนธีมจากหน้าอื่น") — `navigate → wait for load
+  → act` costs real wall-clock. This is the same wait a human pays (the page
+  must load before its control exists); it is not overhead we add. The real
+  engineering risk is *how long to wait*: too short → act before the control
+  mounts → miss; too long → sluggish. Handle with **poll + post-action verify**,
+  never a fixed `sleep`, or it becomes a flaky-test source.
+
+**What you trade (not latency):**
+
+| Piece | Real cost | Latency impact |
+|---|---|---|
+| Website Graph | generator + parity test + CI time + upkeep when routes change | lookup ~0 |
+| Scoring | weight tuning + **risk of regressing commands that work today** | µs over ≤40 candidates |
+| Post-action Verify | extra code paths + a "verified" definition per action kind | one cheap DOM read (retry only on failure) |
+| Implicit Tier A | small | ~0, and *faster for the user* (fewer words) |
+| Tier B (LLM value→field) | an LLM call | only on the ambiguous fallback |
+| Extra `ui_context` metadata (type/required/activeField) | slightly larger frame — **this one touches the fast path** (streamed every turn) | +a few chars/field, stays under the 8K budget |
+
+**Three ways it gets *worse* if done badly (with the guardrail):**
+
+1. Scoring weights tuned wrong → regress currently-accurate commands.
+   *Guard:* the 200+ regression tests must stay green through any scorer change.
+2. Post-navigation wait mis-timed → cross-page misses or sluggishness.
+   *Guard:* verify + poll, not `sleep`.
+3. Over-abstracting for portability before the connector is real → complexity
+   with no payoff yet. *Guard:* keep the `lockTarget` interface thin; do **not**
+   build the foreign-site learner during the in-app phase.
+
+**What the design deliberately does *not* pay:** a DOM dump into the LLM every
+step (browser-use's expensive path — we read a downsampled DOM ourselves),
+vision/OCR, and any LLM call on the fast path.
+
+Bottom line: as long as the gated fast-path stands and the regression suite
+guards the scorer, perceived speed is equal-or-better (Tier A shortens
+utterances); only cross-page commands are slower, and only because a real page
+must load.
+
+## 12. Non-goals (for now)
 
 Vision/OCR grounding, black-box crawl/exploration, OS-level control, cross-tab
 orchestration, and the full autonomous planner. These belong to the standalone
