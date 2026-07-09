@@ -127,6 +127,54 @@ def _screen_turn_note(ui_context: dict[str, str] | None) -> str:
 # soft-breaks near this, this is just the synthesis budget.
 _CHUNK_MAX_CHARS = 120
 
+# A sentence chunk that fails TTS is a WHOLE sentence of the reply going
+# silent ("เสียงหาย"). The active provider may be a flaky/slow endpoint hit
+# 4+ times in a burst per reply, so one transient failure shouldn't drop the
+# sentence — retry once after a short beat. "Nothing to speak" (markdown-only
+# chunk) is expected and never retried or surfaced.
+_TTS_RETRIES = 1
+_TTS_RETRY_DELAY_S = 0.25
+
+
+async def _synthesize_with_retry(
+    emitter: VoiceEmitter, chunk: str
+) -> tuple[bytes, str] | tuple[None, None]:
+    """Synthesize one chunk, retrying transient failures once.
+
+    Returns ``(audio, content_type)`` or ``(None, None)`` when nothing should
+    be spoken. Logs every failure so silent drops become visible in the log;
+    a persistent failure is also surfaced to the client as one error frame.
+    """
+    last_exc: VoiceProviderError | None = None
+    for attempt in range(_TTS_RETRIES + 1):
+        try:
+            audio_bytes, content_type = await synthesize_speech(chunk)
+        except VoiceProviderError as exc:
+            if "Nothing to speak" in str(exc):
+                return (None, None)  # markdown-only chunk — expected, silent
+            last_exc = exc
+            logger.warning(
+                "voice TTS failed (attempt %d/%d) for %r: %s",
+                attempt + 1,
+                _TTS_RETRIES + 1,
+                chunk[:40],
+                exc,
+            )
+            if attempt < _TTS_RETRIES:
+                await asyncio.sleep(_TTS_RETRY_DELAY_S)
+            continue
+        if not audio_bytes:
+            logger.warning("voice TTS returned empty audio for %r", chunk[:40])
+            if attempt < _TTS_RETRIES:
+                await asyncio.sleep(_TTS_RETRY_DELAY_S)
+                continue
+            return (None, None)
+        return (audio_bytes, content_type)
+    if last_exc is not None:
+        await emitter.send_json({"type": "error", "message": f"TTS: {last_exc}"})
+    return (None, None)
+
+
 # CONTENT rounds that are user-visible speech. The agentic chat loop streams
 # its rounds as ``agent_loop_round`` (including narration while tools run —
 # speaking those suits a call: the tutor says what it's doing) and tags
@@ -893,14 +941,7 @@ async def _run_text_turn(
     async def speak(chunk: str) -> None:
         nonlocal seq, first_audio_at
         tts_t0 = time.perf_counter()
-        try:
-            audio_bytes, content_type = await synthesize_speech(chunk)
-        except VoiceProviderError as exc:
-            # Empty-after-cleaning chunks are expected (markdown-only); skip
-            # them quietly and surface anything else as a soft error.
-            if "Nothing to speak" not in str(exc):
-                await emitter.send_json({"type": "error", "message": f"TTS: {exc}"})
-            return
+        audio_bytes, content_type = await _synthesize_with_retry(emitter, chunk)
         if not audio_bytes:
             return
         # Browsers can't play bare PCM — container it as WAV.

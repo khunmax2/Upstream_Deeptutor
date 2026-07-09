@@ -182,6 +182,24 @@ code is additive and isolated for mergeability.
   Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
   `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
 
+- **2026-07-09 — Cursor snappiness, field visibility robustness, TTS retry.**
+  Three live-feedback fixes: (1) the simulator cursor felt like it lagged the
+  actual click on first use — it was dashing across the whole screen from its
+  hidden corner; now a hidden cursor snaps to a short offset from the target
+  and glides only that hop, so every appearance is a brief consistent motion
+  the click waits on. (2) `isVisible` (pageContext) fell back to
+  `getClientRects()` when `offsetParent` is null — `offsetParent` is null for
+  `position:fixed`/sticky elements too, which intermittently dropped a visible
+  field/button from the streamed context ("บางครั้งไม่เจอช่อง"). (3) A
+  per-sentence TTS failure dropped a WHOLE sentence silently ("เสียงหาย"):
+  the active provider is a flaky/slow test endpoint hit 4+ times per reply, so
+  `_synthesize_with_retry` now retries a transient failure once and LOGS every
+  failure/empty result (previously silent) — a persistent failure still
+  surfaces one error frame. Not a rate-limit in our code (none exists; a 429
+  already surfaces as an error frame). Files:
+  `web/components/voice/simulatorCursor.ts`, `pageContext.ts`,
+  `services/voice_realtime/pipeline.py` (pytest 239, node 183 green).
+
 - **2026-07-09 — Field glow: the locked-on field blooms so the caller sees
   the pick.** Companion to focus/fill/edit — once the target field is
   resolved, a halo shimmers around it: one quick flash on focus-lock, a few

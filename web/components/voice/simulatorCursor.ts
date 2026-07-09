@@ -15,6 +15,9 @@ const MOVE_MS = 200
 const SETTLE_MS = 40
 const SCROLL_WAIT_MS = 250
 const IDLE_HIDE_MS = 1600
+// How far from the target the cursor snaps in before its short glide, so a
+// first (hidden) appearance never dashes across the whole screen.
+const APPROACH_OFFSET = 46
 
 let cursor: HTMLDivElement | null = null
 let hideTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,10 +85,29 @@ export async function pointAt(el: Element): Promise<void> {
   }
   const p = targetPoint(rect)
   const jump = reducedMotion()
-  if (jump) c.style.transitionProperty = 'opacity'
+  const at = (x: number, y: number) =>
+    `translate(${x - CURSOR_SIZE / 2}px, ${y - CURSOR_SIZE / 2}px)`
+  if (jump) {
+    c.style.transitionProperty = 'opacity'
+    c.style.opacity = '1'
+    c.style.transform = at(p.x, p.y)
+    scheduleHide()
+    return
+  }
+  // If the cursor is hidden (first action, or after an idle fade), snap it to
+  // a short offset from the target with NO transition, so every glide is a
+  // brief consistent hop instead of a full cross-screen dash that the click
+  // outruns. A visible cursor keeps its position and glides from there.
+  const hidden = c.style.opacity !== '1'
+  if (hidden) {
+    c.style.transition = 'none'
+    c.style.transform = at(p.x - APPROACH_OFFSET, p.y - APPROACH_OFFSET)
+    void c.offsetWidth // flush the snap before re-enabling the transition
+    c.style.transition = `transform ${MOVE_MS}ms cubic-bezier(.22,1,.36,1),opacity 200ms ease`
+  }
   c.style.opacity = '1'
-  c.style.transform = `translate(${p.x - CURSOR_SIZE / 2}px, ${p.y - CURSOR_SIZE / 2}px)`
-  if (!jump) await sleep(MOVE_MS + SETTLE_MS)
+  c.style.transform = at(p.x, p.y)
+  await sleep(MOVE_MS + SETTLE_MS)
   scheduleHide()
 }
 

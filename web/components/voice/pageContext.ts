@@ -66,7 +66,13 @@ export function formatPageContext(o: PageOutline): string {
 }
 
 function isVisible(el: Element): boolean {
-  return (el as HTMLElement).offsetParent !== null
+  // offsetParent is null for display:none (correct to exclude) BUT ALSO for
+  // position:fixed and sticky elements that are perfectly visible — those
+  // dropped out of the streamed context, so a fixed toolbar's field / button
+  // intermittently read as "not on screen". Fall back to real layout boxes.
+  if ((el as HTMLElement).offsetParent !== null) return true
+  const rects = el.getClientRects()
+  return rects.length > 0 && rects[0].width > 0 && rects[0].height > 0
 }
 
 function grabTexts(selector: string, exclude: Element | null): string[] {
