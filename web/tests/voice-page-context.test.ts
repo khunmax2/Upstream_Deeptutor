@@ -9,11 +9,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  capButtonLabels,
   capFieldEntries,
   formatFieldEntry,
   formatPageContext,
   MAX_SUMMARY_CHARS,
   removeLastWord,
+  suffixDuplicateLabels,
 } from '../components/voice/pageContext'
 import { glowBox, targetPoint } from '../components/voice/simulatorCursor'
 
@@ -92,6 +94,30 @@ test("field entries declare a semantic input type behind the server's marker", (
   // Plain text stays bare; options win over type (mutually exclusive anyway).
   assert.equal(formatFieldEntry('ค้นหา', [], ''), 'ค้นหา')
   assert.equal(formatFieldEntry('ภาษา', ['ไทย'], 'email'), 'ภาษา (เลือกได้: ไทย)')
+})
+
+test('duplicate labels get ordinal suffixes instead of being dropped', () => {
+  const entries = [{ label: 'LlamaIndex' }, { label: 'GraphRAG' }, { label: 'LlamaIndex' }]
+  assert.deepEqual(
+    suffixDuplicateLabels(entries).map(e => e.label),
+    ['LlamaIndex', 'GraphRAG', 'LlamaIndex (2)']
+  )
+  // No duplicates → untouched.
+  assert.deepEqual(
+    suffixDuplicateLabels([{ label: 'ก' }, { label: 'ข' }]).map(e => e.label),
+    ['ก', 'ข']
+  )
+})
+
+test('buttons list is budgeted by characters, not amputated at a count', () => {
+  // 30 short labels fit comfortably — the old 25-item cap would cut five.
+  const thirty = Array.from({ length: 30 }, (_, i) => `ปุ่ม${i}`)
+  assert.equal(capButtonLabels(thirty).length, 30)
+  // The char budget still bounds the frame: long labels stop at the budget.
+  const long = Array.from({ length: 100 }, (_, i) => `ปุ่มยาวมากๆ หมายเลขที่ ${i} ของหน้านี้`)
+  const capped = capButtonLabels(long)
+  assert.ok(capped.length < 100)
+  assert.ok(capped.reduce((n, s) => n + s.length, 0) <= 2600)
 })
 
 test('field list obeys per-entry and total char budgets (frame stays under 8K)', () => {

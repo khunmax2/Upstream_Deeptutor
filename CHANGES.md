@@ -314,6 +314,31 @@ code is additive and isolated for mergeability.
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
 
+- **2026-07-09 — Collector "eyes" upgrade: vendored browser-use dom_tree
+  engine; char-budgeted buttons; duplicate suffixes; mutation-aware
+  refresh (Phase A of the hybrid plan).** Live testing showed "หาปุ่มไม่เจอ"
+  on nearly every busy page. Root causes and fixes: (1) the collector's
+  fixed CSS selector missed div-based clickables and icon buttons →
+  interactive elements are now discovered by the vendored page-agent/
+  browser-use dom_tree walker (behavioral signals: cursor:pointer, event
+  handlers, tabindex, contenteditable, ARIA; new
+  `web/components/voice/dom_tree/engine.ts` — MIT, attribution added to
+  `NOTICE`; wrapped by new `pageInventory.ts`, with the legacy selector as
+  an automatic fallback if the engine ever throws); (2) the 25-item cap
+  amputated busy pages → the buttons channel is now budgeted by characters
+  (~2600, roughly 60–80 labels; server backstop `_MAX_BUTTONS` 40→100 —
+  the 8K frame cap is the real bound); (3) duplicate labels were dropped,
+  making same-named cards unaddressable → ordinal suffixes ("LlamaIndex
+  (2)"), shared by the streamed context and the click executor via the
+  single collector; (4) snapshot staleness → a debounced, rate-limited
+  MutationObserver re-streams `ui_context` when the page mutates under a
+  live call (own-panel mutations ignored). Files:
+  `web/components/voice/dom_tree/{engine.ts,type.ts}` (vendored),
+  `pageInventory.ts` (new), `pageContext.ts`, `VoiceCallWidget.tsx`,
+  `deeptutor/services/voice_realtime/ui_control.py`, `NOTICE`; tests
+  (node 189 green incl. suffix/budget units, pytest 305 green, Next build
+  green).
+
 - **2026-07-09 — Graph goal matcher: generic "เปลี่ยน/สลับ … เป็น X" form.**
   Live gap: "เปลี่ยนภาษาอินเตอร์เฟสเป็นภาษาอังกฤษ" matched no fixed verb (the
   padding vocabulary between the verb and "เป็น" is unbounded), so the

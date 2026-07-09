@@ -12,6 +12,8 @@
 // Split in two so the formatting/capping logic is testable under node:test
 // (no DOM): `collectPageOutline` reads the DOM, `formatPageContext` is pure.
 
+import { collectInteractiveElements } from './pageInventory'
+
 export interface PageOutline {
   path: string
   /** Human page name from the UI_PAGES manifest (when the path matches). */
@@ -123,7 +125,7 @@ export function collectPageContext(
     path: outline.path,
     page: pageName,
     summary: formatPageContext(outline),
-    buttons: cleanItems(visibleClickables(exclude).map(c => c.label)),
+    buttons: capButtonLabels(visibleClickables(exclude).map(c => c.label)),
     fields: capFieldEntries(
       visibleFields(exclude).map(f => formatFieldEntry(f.label, f.options, f.valueType))
     ),
@@ -163,6 +165,29 @@ function activeFieldLabel(exclude: Element | null): string {
 // per-entry cap (mirrors the server's _MAX_FIELD_CHARS) + a total budget.
 const MAX_FIELD_ENTRY_CHARS = 120
 const MAX_FIELDS_TOTAL_CHARS = 1500
+
+// Buttons-channel budget: the REAL constraint is the 8K WS frame, not a
+// count. Alongside the ~2400-char summary and ~1500-char fields list there
+// is comfortable room for ~2600 chars of button labels (roughly 60–80) —
+// the old 25-item cap silently amputated busy pages, and an amputated list
+// reads as "ไม่เห็นปุ่มชื่อนั้นบนจอ" for a button plainly on screen.
+const MAX_BUTTONS_TOTAL_CHARS = 2600
+
+export function capButtonLabels(
+  labels: string[],
+  budget: number = MAX_BUTTONS_TOTAL_CHARS
+): string[] {
+  const out: string[] = []
+  let total = 0
+  for (const raw of labels) {
+    const text = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_ITEM_CHARS)
+    if (!text) continue
+    if (total + text.length > budget) break
+    out.push(text)
+    total += text.length
+  }
+  return out
+}
 
 export function capFieldEntries(entries: string[]): string[] {
   const out: string[] = []
@@ -217,17 +242,42 @@ function clickableLabel(el: HTMLElement): string {
  * single source of truth for BOTH the streamed `buttons` context and the
  * click executor, so reporting and acting can never disagree.
  */
+// Form controls belong to the `fields` channel, not `buttons` — the engine
+// reports them as interactive, so filter them out of the clickables list.
+const FILLABLE_TAGS = new Set(['input', 'textarea', 'select', 'option'])
+
 function visibleClickables(exclude: Element | null): { el: HTMLElement; label: string }[] {
+  // Engine path first: behavioral interactive detection (cursor:pointer,
+  // event handlers, tabindex, ARIA — the vendored browser-use walker) sees
+  // div-based clickables and icon buttons the CSS list below never did.
+  // Any engine failure falls back to the legacy selector — a broken
+  // snapshot must never break the call.
+  const els =
+    collectInteractiveElements(exclude) ??
+    Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR)).filter(
+      el => !(exclude && exclude.contains(el)) && isVisible(el)
+    )
   const main: { el: HTMLElement; label: string }[] = []
   const nav: { el: HTMLElement; label: string }[] = []
-  for (const el of Array.from(document.querySelectorAll<HTMLElement>(CLICKABLE_SELECTOR))) {
-    if (exclude && exclude.contains(el)) continue
-    if (!isVisible(el)) continue
+  for (const el of els) {
+    if (FILLABLE_TAGS.has(el.tagName.toLowerCase())) continue
     const label = clickableLabel(el)
     if (!label) continue
     ;(el.closest("nav, aside, [role='navigation']") ? nav : main).push({ el, label })
   }
-  return [...main, ...nav]
+  return suffixDuplicateLabels([...main, ...nav])
+}
+
+/** "LlamaIndex", "LlamaIndex (2)", … — same-named elements stay individually
+ * addressable instead of being dropped by dedupe. The streamed context and
+ * the click executor share one collector, so the suffixes always agree. */
+export function suffixDuplicateLabels<T extends { label: string }>(entries: T[]): T[] {
+  const seen = new Map<string, number>()
+  return entries.map(entry => {
+    const n = (seen.get(entry.label) ?? 0) + 1
+    seen.set(entry.label, n)
+    return n === 1 ? entry : { ...entry, label: `${entry.label} (${n})` }
+  })
 }
 
 // ── fill-by-voice: visible form fields ─────────────────────────────────

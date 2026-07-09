@@ -916,6 +916,37 @@ export default function VoiceCallWidget() {
     }
   }, [])
 
+  // Staleness guard: pages mutate under a live call (async cards mounting,
+  // menus opening). Re-stream the screen context once the DOM settles so the
+  // server resolves the NEXT command against reality instead of the last
+  // utterance's snapshot. One pending send at a time (no rescheduling — a
+  // constantly-animating page must not starve it), ≥1.5s between sends, and
+  // mutations inside our own panel don't count (the call log updates
+  // constantly while speaking).
+  useEffect(() => {
+    if (!mounted) return
+    let pending: number | null = null
+    let lastSent = 0
+    const observer = new MutationObserver(mutations => {
+      const panel = panelRef.current
+      if (panel && mutations.every(m => panel.contains(m.target))) return
+      if (pending !== null) return
+      pending = window.setTimeout(
+        () => {
+          pending = null
+          lastSent = Date.now()
+          sendUiContext()
+        },
+        Math.max(400, 1500 - (Date.now() - lastSent))
+      )
+    })
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+    return () => {
+      observer.disconnect()
+      if (pending !== null) window.clearTimeout(pending)
+    }
+  }, [mounted, sendUiContext])
+
   const sendText = useCallback(
     (raw: string) => {
       const text = raw.trim()

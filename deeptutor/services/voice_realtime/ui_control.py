@@ -70,7 +70,10 @@ _MAX_TARGETS = 64
 # re-inject into every turn's prompt) well under that.
 _MAX_CONTEXT_SUMMARY_CHARS = 3_000
 _MAX_CONTEXT_PATH_CHARS = 200
-_MAX_BUTTONS = 40
+# The client budgets its buttons list by characters (~2600 chars ≈ 60–80
+# labels); this count cap is a backstop, not the working limit — the 8K
+# frame cap is what really bounds the payload.
+_MAX_BUTTONS = 100
 _MAX_BUTTON_CHARS = 60
 # Visible form fields (labels, with a dropdown's options folded into the
 # string client-side) — fewer than buttons but each entry can be longer.
