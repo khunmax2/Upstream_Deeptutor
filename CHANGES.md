@@ -222,6 +222,27 @@ code is additive and isolated for mergeability.
   (`SEMANTIC_INPUT_TYPES`, `formatFieldEntry` type param); tests
   (pytest 258 green, node 184 green).
 
+- **2026-07-09 — Weighted resolver: focus/recency break ties; Tier B dispatch
+  parity fix.** The fixed 4-tier resolver ladder (exact → substring → phonetic
+  → cross-script) is now one weighted score per candidate. Label-match quality
+  still dominates — tier scores are spaced (100) wider than the sum of all
+  situational boosts (focus +30, recency +20 = 50), so the boosts can only
+  break a tie WITHIN a tier, never promote a weaker label match or resurrect
+  a miss; the full regression suite passed unchanged before any new behaviour
+  was added. New behaviour: a tie between equally-matching field labels
+  ("ค้นหา" vs two ค้นหา-fields) now resolves to the focused field
+  (`activeField`) or the last field filled this call instead of asking back.
+  `last_field` rides only on the deterministic rungs — the LLM tool + its
+  dispatch must resolve identically, so they use `activeField` alone. Also
+  fixes a Tier B parity bug from the previous entry: with `field` omitted and
+  one visible field, the tool result said "Typed" but the pipeline dispatch
+  resolved `""` → missing → nothing typed; both now share
+  `effective_fill_field()`. Files: `services/voice_realtime/ui_control.py`
+  (`_label_score`, `_resolve_spoken_name` boosts, `resolve_field_target`
+  `last_field` kwarg, `effective_fill_field`), `pipeline.py` (rungs pass
+  `last_field`; fill dispatch uses the shared fallback); tests
+  (pytest 267 green, node 184 green).
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action

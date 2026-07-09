@@ -754,6 +754,110 @@ async def test_fill_tool_omitted_field_no_fields_fails_honestly() -> None:
     assert not got.success and "Nothing was typed" in got.content
 
 
+# ── weighted resolver: focus/recency break ties, never cross tiers ──────
+
+# Two fields that substring-match the same spoken "ค้นหา" — the shape the old
+# 4-tier ladder could only answer with "ช่องไหนครับ".
+TIE_SCREEN = {"path": "/x", "summary": "x", "fields": ["ค้นหาเอกสาร", "ค้นหาหนังสือ"]}
+
+
+def test_score_tie_stays_ambiguous_without_signals() -> None:
+    assert ui_control.resolve_field_target("ค้นหา", TIE_SCREEN) == ("ambiguous", None)
+
+
+def test_score_focus_breaks_a_label_tie() -> None:
+    focused = {**TIE_SCREEN, "activeField": "ค้นหาหนังสือ"}
+    assert ui_control.resolve_field_target("ค้นหา", focused) == ("hit", "ค้นหาหนังสือ")
+
+
+def test_score_recency_breaks_a_label_tie() -> None:
+    got = ui_control.resolve_field_target("ค้นหา", TIE_SCREEN, last_field="ค้นหาเอกสาร")
+    assert got == ("hit", "ค้นหาเอกสาร")
+
+
+def test_score_focus_outweighs_recency() -> None:
+    focused = {**TIE_SCREEN, "activeField": "ค้นหาหนังสือ"}
+    got = ui_control.resolve_field_target("ค้นหา", focused, last_field="ค้นหาเอกสาร")
+    assert got == ("hit", "ค้นหาหนังสือ")
+
+
+def test_score_boosts_never_promote_across_tiers() -> None:
+    # "ค้นหา" matches "ค้นหา" exactly (top tier); the focused sibling only by
+    # substring — every boost combined must not lift it past the exact match.
+    screen = {
+        "path": "/x",
+        "summary": "x",
+        "fields": ["ค้นหา", "ค้นหาเอกสาร"],
+        "activeField": "ค้นหาเอกสาร",
+    }
+    got = ui_control.resolve_field_target("ค้นหา", screen, last_field="ค้นหาเอกสาร")
+    assert got == ("hit", "ค้นหา")
+
+
+def test_score_boosts_never_resurrect_a_miss() -> None:
+    focused = {**TIE_SCREEN, "activeField": "ค้นหาหนังสือ"}
+    assert ui_control.resolve_field_target("ปฏิทิน", focused) == ("missing", None)
+
+
+def test_score_boost_ignores_a_field_not_on_screen() -> None:
+    # A remembered field that scrolled away must not shadow the live screen.
+    got = ui_control.resolve_field_target("ค้นหา", TIE_SCREEN, last_field="ช่องเก่าที่หายไป")
+    assert got == ("ambiguous", None)
+
+
+# ── Tier B dispatch parity: effective_fill_field ────────────────────────
+
+
+def test_effective_fill_field_fallbacks() -> None:
+    one = {"fields": ["ค้นหา"]}
+    many = {"fields": ["ก", "ข"]}
+    assert ui_control.effective_fill_field("ชื่อ", many) == "ชื่อ"  # named → verbatim
+    assert ui_control.effective_fill_field("", one) == "ค้นหา"  # single field
+    assert ui_control.effective_fill_field("", {"fields": ["อีเมล (ชนิด: email)"]}) == "อีเมล"
+    assert ui_control.effective_fill_field("", many) == ""  # ambiguous
+    assert ui_control.effective_fill_field("", None) == ""
+
+
+@pytest.mark.asyncio
+async def test_llm_fill_omitted_field_dispatches_to_the_only_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tier B parity: the tool's single-field fallback and the pipeline's
+    dispatch resolve identically — an omitted `field` with one visible field
+    actually types (the live bug this guards: tool said 'Typed', dispatch
+    resolved '' → missing → nothing happened)."""
+    events = [
+        StreamEvent(
+            type=StreamEventType.TOOL_CALL,
+            source="chat",
+            content=ui_control.UI_FILL_TOOL,
+            metadata={"args": {"value": "กฎหมาย"}},  # no field
+        ),
+        _content("ได้เลยครับ", call_kind="llm_final_response"),
+    ]
+    _patch_common(monkeypatch, events=events)
+    emitter = FakeEmitter()
+
+    await pipe.run_text_turn(
+        emitter,
+        "ช่วยหาคำว่ากฎหมายให้หน่อย",
+        [],
+        session_id="voice:test",
+        ui_context={"path": "/x", "summary": "x", "fields": ["ค้นหา"]},
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert actions == [
+        {
+            "type": "ui_action",
+            "action": "navigate",
+            "target": "fill_field",
+            "argument": "กฎหมาย",
+            "field": "ค้นหา",
+        }
+    ]
+
+
 def test_system_block_carries_the_field_choice_rule() -> None:
     """The prompt must both allow the semantic pick and forbid guessing."""
     cap = ui_control.VoiceUICapability()

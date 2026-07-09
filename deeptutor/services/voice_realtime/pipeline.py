@@ -781,7 +781,9 @@ async def run_text_turn(
         # explicit "ช่อง" never falls back to the button tiers (live gap:
         # "กดตรงช่องค้นหา" skeleton-matched the sidebar's "เอเจนต์ของฉัน").
         if click_name.startswith("ช่อง"):
-            f_outcome, focus_field = ui_control.resolve_field_target(click_name, ui_context)
+            f_outcome, focus_field = ui_control.resolve_field_target(
+                click_name, ui_context, last_field=(nav_state or {}).get("last_field")
+            )
             if f_outcome == "hit" and focus_field:
                 if nav_state is not None:
                     nav_state["last_field"] = focus_field
@@ -830,7 +832,9 @@ async def run_text_turn(
     # silent non-select. Typing never submits — no danger rung needed.
     fill = ui_control.match_fill_intent(transcript)
     if fill is not None and ui_context is not None:
-        outcome, field = ui_control.resolve_field_target(fill["field"], ui_context)
+        outcome, field = ui_control.resolve_field_target(
+            fill["field"], ui_context, last_field=(nav_state or {}).get("last_field")
+        )
         if outcome == "hit" and field:
             value_status, value = ui_control.resolve_fill_value(fill["value"], field, ui_context)
             if value_status != "ok" or value is None:
@@ -869,7 +873,9 @@ async def run_text_turn(
     edit = ui_control.match_edit_intent(transcript)
     if edit is not None and ui_context is not None:
         if edit["field"]:
-            outcome, field = ui_control.resolve_field_target(edit["field"], ui_context)
+            outcome, field = ui_control.resolve_field_target(
+                edit["field"], ui_context, last_field=(nav_state or {}).get("last_field")
+            )
         else:
             field = (nav_state or {}).get("last_field")
             outcome = "hit" if field else "missing"
@@ -1070,8 +1076,13 @@ async def _run_text_turn(
                 # result already tells the LLM to be honest).
                 args = meta.get("args") or {}
                 value = str(args.get("value") or "")
+                # Tier B: an omitted field falls back exactly the way the
+                # tool's execute() did (shared helper) — the tool result the
+                # LLM narrates and this dispatch must not disagree. No
+                # last_field here for the same reason: the tool can't see it.
                 outcome, field = ui_control.resolve_field_target(
-                    str(args.get("field") or ""), ui_context
+                    ui_control.effective_fill_field(str(args.get("field") or ""), ui_context),
+                    ui_context,
                 )
                 if outcome == "hit" and field and value:
                     # Same value correction as the shortcut (and as the tool

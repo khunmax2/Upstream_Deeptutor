@@ -889,53 +889,72 @@ def _consonant_skeleton(s: str) -> str:
     return "".join(ch for ch in folded if ch not in _SKELETON_NOISE)
 
 
-def _resolve_spoken_name(name: str, candidates: list[str]) -> tuple[str, str | None]:
+# ── weighted resolver ───────────────────────────────────────────────────
+#
+# One score per candidate instead of the old fixed 4-tier ladder. Label-match
+# quality still dominates: the tier scores are spaced (100 apart) wider than
+# the sum of every situational boost (30 + 20 = 50), so focus/recency can only
+# break a tie WITHIN a label tier — never promote a weaker label match over a
+# stronger one, never resurrect a non-match (label score 0 = excluded). That
+# invariant is what keeps the regression suite the authority on matching.
+_SCORE_EXACT = 400  # normalised text equal
+_SCORE_CONTAINS = 300  # substring either way
+_SCORE_FUZZY = 200  # phonetic fold within edit budget (STT garbles)
+_SCORE_CROSS = 100  # cross-script consonant skeleton (loanwords)
+_BOOST_FOCUS = 30  # candidate is the focused field (caret, streamed)
+_BOOST_RECENT = 20  # candidate is the last field filled this call
+
+
+def _label_score(spoken: str, spoken_skeleton: str, candidate: str) -> int:
+    """How well *candidate*'s text matches the spoken name (0 = no match)."""
+    c = candidate.replace(" ", "").lower()
+    if c == spoken:
+        return _SCORE_EXACT
+    if (len(spoken) >= 3 and spoken in c) or (len(c) >= 3 and c in spoken):
+        return _SCORE_CONTAINS
+    if _edit_distance(_phonetic(spoken), _phonetic(c)) <= max(1, len(c) // 4):
+        return _SCORE_FUZZY
+    cs = _consonant_skeleton(c)
+    # Budget len//4 (was //3): the looser budget let "ช่องค้นหา" (kkkn) reach
+    # "เอเจนต์ของฉัน" (jnkkkn, ed 2) — a live mis-click. All intended
+    # cross-script hits sit at ed ≤ 1.
+    if (
+        len(spoken_skeleton) >= 3
+        and len(cs) >= 3
+        and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 4)
+    ):
+        return _SCORE_CROSS
+    return 0
+
+
+def _resolve_spoken_name(
+    name: str, candidates: list[str], boosts: dict[str, int] | None = None
+) -> tuple[str, str | None]:
     """Resolve a spoken *name* against visible candidate texts.
 
-    Returns ``("hit", text)`` for exactly one match, ``("ambiguous", None)``
-    for several, ``("missing", None)`` for none. Match order: exact
-    (normalised) → substring either way → phonetic fuzzy (STT garbles names
-    too) → cross-script consonant skeleton (loanwords: spoken "persona" vs
-    on-screen "เพอร์โซนา") — each tier only consulted when the previous found
-    nothing. Shared by click-by-name (buttons) and fill-by-voice (fields).
+    Returns ``("hit", text)`` for exactly one top-scored match,
+    ``("ambiguous", None)`` for a tie, ``("missing", None)`` for none.
+    Each candidate gets a label-match score (exact → substring → phonetic →
+    cross-script, see :func:`_label_score`) plus any situational *boosts*
+    (focus/recency, capped below the tier spacing — tie-breakers only).
+    Shared by click-by-name (buttons) and fill-by-voice (fields).
     """
     spoken = (name or "").replace(" ", "").lower()
     if not spoken or not candidates:
         return ("missing", None)
     spoken_skeleton = _consonant_skeleton(spoken)
-
-    def tiers() -> list[list[str]]:
-        exact: list[str] = []
-        contains: list[str] = []
-        fuzzy: list[str] = []
-        cross: list[str] = []
-        for candidate in candidates:
-            c = candidate.replace(" ", "").lower()
-            if c == spoken:
-                exact.append(candidate)
-            elif (len(spoken) >= 3 and spoken in c) or (len(c) >= 3 and c in spoken):
-                contains.append(candidate)
-            elif _edit_distance(_phonetic(spoken), _phonetic(c)) <= max(1, len(c) // 4):
-                fuzzy.append(candidate)
-            else:
-                cs = _consonant_skeleton(c)
-                # Budget len//4 (was //3): the looser budget let "ช่องค้นหา"
-                # (kkkn) reach "เอเจนต์ของฉัน" (jnkkkn, ed 2) — a live
-                # mis-click. All intended cross-script hits sit at ed ≤ 1.
-                if (
-                    len(spoken_skeleton) >= 3
-                    and len(cs) >= 3
-                    and _edit_distance(spoken_skeleton, cs) <= max(1, len(cs) // 4)
-                ):
-                    cross.append(candidate)
-        return [exact, contains, fuzzy, cross]
-
-    for hits in tiers():
-        if len(hits) == 1:
-            return ("hit", hits[0])
-        if len(hits) > 1:
-            return ("ambiguous", None)
-    return ("missing", None)
+    scored: list[tuple[int, str]] = []
+    for candidate in candidates:
+        label = _label_score(spoken, spoken_skeleton, candidate)
+        if label:
+            scored.append((label + (boosts or {}).get(candidate, 0), candidate))
+    if not scored:
+        return ("missing", None)
+    top = max(score for score, _ in scored)
+    winners = [candidate for score, candidate in scored if score == top]
+    if len(winners) == 1:
+        return ("hit", winners[0])
+    return ("ambiguous", None)
 
 
 def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
@@ -1044,12 +1063,21 @@ def exact_field_hit(name: str, ui_context: dict[str, Any] | None) -> str | None:
     return None
 
 
-def resolve_field_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
+def resolve_field_target(
+    name: str, ui_context: dict[str, Any] | None, *, last_field: str | None = None
+) -> tuple[str, str | None]:
     """Resolve a spoken form-field *name* against the visible fields.
 
-    Same outcome contract and tiers as :func:`resolve_click_target`; matching
-    runs on the label part only, and the returned text is that label (what
-    the client looks the element up by).
+    Same outcome contract and scoring as :func:`resolve_click_target`;
+    matching runs on the label part only, and the returned text is that
+    label (what the client looks the element up by). Fields carry two extra
+    tie-breaking signals: the focused field (``activeField`` in the streamed
+    context) and, when the caller passes it, the last field filled this call
+    — a tie between equally-matching labels resolves to the one the caller
+    is plausibly *in* instead of asking back. Pass ``last_field`` only where
+    every resolve of the same utterance sees it (the deterministic rungs);
+    the LLM tool + dispatch pair must resolve identically, so they rely on
+    ``activeField`` alone.
     """
     labels: list[str] = []
     for entry in (ui_context or {}).get("fields") or []:
@@ -1057,7 +1085,30 @@ def resolve_field_target(name: str, ui_context: dict[str, Any] | None) -> tuple[
             label = field_label(entry)
             if label and label not in labels:
                 labels.append(label)
-    return _resolve_spoken_name(name, labels)
+    boosts: dict[str, int] = {}
+    active = str((ui_context or {}).get("activeField") or "").strip()
+    if active and active in labels:
+        boosts[active] = _BOOST_FOCUS
+    if last_field and last_field in labels:
+        boosts[last_field] = boosts.get(last_field, 0) + _BOOST_RECENT
+    return _resolve_spoken_name(name, labels, boosts)
+
+
+def effective_fill_field(field: str, ui_context: dict[str, Any] | None) -> str:
+    """The field a fill targets when the model may omit it (Tier B).
+
+    The given name when present; else the SINGLE visible field (unambiguous);
+    else ``""``. Shared by ``UIFillTool.execute`` and the pipeline's fill
+    dispatch so the tool result the LLM sees and the action the client runs
+    are computed from the same fallback — speech and action can't disagree.
+    """
+    field = (field or "").strip()
+    if field:
+        return field
+    entries = [e for e in (ui_context or {}).get("fields") or [] if isinstance(e, str)]
+    if len(entries) == 1:
+        return field_label(entries[0])
+    return ""
 
 
 def is_dangerous_button(text: str) -> bool:
@@ -1396,11 +1447,12 @@ class UIFillTool(BaseTool):
             # Tier B safety net: the model omitted the field. One visible
             # field is unambiguous; several → hand the schema back and make
             # the model choose explicitly (or ask the caller). The server
-            # never picks a field on the model's behalf.
-            entries = [e for e in (ctx or {}).get("fields") or [] if isinstance(e, str)]
-            if len(entries) == 1:
-                field = field_label(entries[0])
-            else:
+            # never picks a field on the model's behalf. Shared with the
+            # pipeline's dispatch (effective_fill_field) so the tool result
+            # and the executed action can't disagree.
+            field = effective_fill_field(field, ctx)
+            if not field:
+                entries = [e for e in (ctx or {}).get("fields") or [] if isinstance(e, str)]
                 listing = " | ".join(entries) if entries else "(none)"
                 return ToolResult(
                     content=(
@@ -1642,6 +1694,7 @@ __all__ = [
     "field_label",
     "field_options",
     "field_options_for",
+    "effective_fill_field",
     "implicit_fill_field",
     "install_ui_control",
     "is_affirmative",
