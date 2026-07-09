@@ -87,16 +87,28 @@ def match_graph_intent(text: str) -> str | None:
     for verb in _GRAPH_VERBS:
         if not low.startswith(verb):
             continue
-        name = low[len(verb) :].strip()
-        while True:  # peel trailing politeness
-            trimmed = name
-            for tail in _CLICK_TRAILING:
-                trimmed = trimmed.removesuffix(tail).strip()
-            if trimmed == name:
-                break
-            name = trimmed
-        return name or None
+        return _peel_politeness(low[len(verb) :].strip()) or None
+    # Generic "เปลี่ยน/สลับ …อะไรก็ตาม… เป็น X" — callers pad the middle
+    # freely ("เปลี่ยนภาษาอินเตอร์เฟสเป็น…", "เปลี่ยนภาษา interface เป็น…")
+    # and the padding vocabulary is unbounded. Taking what follows the first
+    # "เป็น" is safe: the name still has to HIT the curated graph, and a miss
+    # falls through untouched.
+    for head in ("เปลี่ยน", "สลับ"):
+        if low.startswith(head) and "เป็น" in low:
+            name = low.split("เป็น", 1)[1].strip()
+            return _peel_politeness(name) or None
     return None
+
+
+def _peel_politeness(name: str) -> str:
+    """Strip trailing politeness particles ("…ให้หน่อยครับ") off a target."""
+    while True:
+        trimmed = name
+        for tail in _CLICK_TRAILING:
+            trimmed = trimmed.removesuffix(tail).strip()
+        if trimmed == name:
+            return name
+        name = trimmed
 
 
 def find_graph_control(
