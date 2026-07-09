@@ -243,6 +243,29 @@ code is additive and isolated for mergeability.
   `last_field`; fill dispatch uses the shared fallback); tests
   (pytest 267 green, node 184 green).
 
+- **2026-07-09 — Post-action Verify: the client confirms every UI action
+  actually landed.** The grounding design's "Verify (after)" stage — the
+  agentic-loop prerequisite. After executing a `ui_action` the client POLLS
+  the live DOM until the postcondition holds or a deadline passes (never a
+  fixed sleep): fill/edit → the field holds the expected value across two
+  consecutive samples (catches React controlled inputs reverting a
+  native-setter write; fill retries the write once on failure), navigate /
+  open_kb → `location.pathname` reached the target (the poll IS the
+  page-load wait), focus → the caret is in the named field. The verdict
+  rides to the server as a new client→server WS frame
+  `ui_action_result {target, field, ok, detail}`; the server sanitizes it,
+  remembers it on `nav_state["last_action_result"]`, and logs failures —
+  the honest record of a spoken "ได้เลยครับ" whose action did not stick.
+  Executors now return what they wrote (`fillFieldByVoice`/`editFieldByVoice`
+  → `string | null`) so verify has an exact expected value (a `<select>`'s
+  option value differs from the spoken text). Files:
+  `web/components/voice/pageContext.ts` (`verifyFieldValue`,
+  `verifyFieldFocused`, `verifyPath`, `readFieldValue`, executor return
+  types), `VoiceCallWidget.tsx` (verify + retry + `reportActionResult`),
+  `services/voice_realtime/ui_control.py` (`sanitize_action_result`),
+  `api/routers/voice_realtime.py` (frame dispatch + protocol doc); tests
+  (pytest 276 green, node 184 green).
+
 - **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
   Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
   target-locking (Website Graph / Navigation Reasoning / Scoring / post-action

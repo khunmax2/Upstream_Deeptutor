@@ -664,6 +664,22 @@ def test_fill_value_text_field_takes_on_screen_spelling() -> None:
     assert ui_control.resolve_fill_value("อะไรก็ได้", "ค้นหา", None) == ("ok", "อะไรก็ได้")
 
 
+def test_sanitize_action_result_trims_and_validates() -> None:
+    got = ui_control.sanitize_action_result(
+        {"target": "fill_field", "field": "ค้นหา", "ok": True, "detail": "value_set"}
+    )
+    assert got == {"target": "fill_field", "field": "ค้นหา", "ok": True, "detail": "value_set"}
+    # ok coerces to a real bool; missing detail/field are tolerated.
+    got = ui_control.sanitize_action_result({"target": "chat", "ok": ""})
+    assert got == {"target": "chat", "ok": False, "detail": ""}
+    # No target (or not a dict) → unusable, dropped silently.
+    assert ui_control.sanitize_action_result({"ok": True}) is None
+    assert ui_control.sanitize_action_result("junk") is None
+    # Control chars stripped, lengths capped.
+    got = ui_control.sanitize_action_result({"target": "x\x00y", "ok": True, "detail": "d" * 500})
+    assert got is not None and got["target"] == "xy" and len(got["detail"]) == 80
+
+
 def test_sanitize_ui_context_keeps_fields_capped() -> None:
     cleaned = ui_control.sanitize_ui_context({**SCREEN, "fields": [f"ช่อง{i}" for i in range(50)]})
     assert cleaned is not None

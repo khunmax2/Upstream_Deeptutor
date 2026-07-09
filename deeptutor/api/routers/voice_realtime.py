@@ -17,6 +17,10 @@ Client → server:
     current-screen snapshot (what the page shows *now*); refreshed by the
     client per turn so "หน้านี้มีอะไรบ้าง" is answered from the real screen and
     "ตอนนี้อยู่หน้าไหน" is answered deterministically from ``page``
+  * ``{"type": "ui_action_result", "result": {"target", "field", "ok",
+    "detail"}}`` → post-action verify verdict: after executing a
+    ``ui_action`` the client polls the DOM and reports whether the action
+    actually landed (value stuck / route changed / caret placed)
 
 Server → client (all JSON except the audio payload frames):
   * ``{"type": "transcript", "text": …}``                 recognised user speech
@@ -44,6 +48,7 @@ from deeptutor.services.voice_realtime.session import VoiceSession
 from deeptutor.services.voice_realtime.ui_control import (
     MAX_MANIFEST_BYTES,
     install_ui_control,
+    sanitize_action_result,
     sanitize_manifest,
     sanitize_ui_context,
 )
@@ -128,6 +133,17 @@ async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> No
     elif kind == "ui_context":
         # Silent refresh (no ack): the client streams this before every turn.
         session.ui_context = sanitize_ui_context(msg.get("context"))
+    elif kind == "ui_action_result":
+        # Post-action verify verdict (silent, client-initiated after each
+        # executed ui_action). Remembered on nav_state so the next rung /
+        # the future agentic loop can check the previous step landed;
+        # failures are logged — that's the honest record of a spoken
+        # "ได้เลยครับ" whose action did NOT stick.
+        result = sanitize_action_result(msg.get("result"))
+        if result is not None:
+            session.nav_state["last_action_result"] = result
+            if not result.get("ok"):
+                logger.warning("voice ui_action verify FAILED: %s", result)
 
 
 __all__ = ["router"]

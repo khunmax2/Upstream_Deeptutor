@@ -172,6 +172,34 @@ def sanitize_ui_context(raw: Any) -> dict[str, Any] | None:
     return out or None
 
 
+_MAX_RESULT_CHARS = 80
+
+
+def sanitize_action_result(raw: Any) -> dict[str, Any] | None:
+    """Validate + trim a client ``ui_action_result`` frame; ``None`` when unusable.
+
+    The post-action verify verdict the client reports after executing a
+    ``ui_action`` (the grounding design's "Verify (after)" stage). Kept as
+    data on the session (``nav_state``) so the turn ladder / future agentic
+    loop can confirm a step landed before taking the next. Same discipline
+    as the other client frames: malformed input drops silently.
+    """
+    if not isinstance(raw, dict):
+        return None
+    target = _CONTROL_CHARS.sub("", str(raw.get("target") or "").strip())
+    if not target:
+        return None
+    out: dict[str, Any] = {
+        "target": target[:_MAX_RESULT_CHARS],
+        "ok": bool(raw.get("ok")),
+        "detail": _CONTROL_CHARS.sub("", str(raw.get("detail") or "").strip())[:_MAX_RESULT_CHARS],
+    }
+    field = _CONTROL_CHARS.sub("", str(raw.get("field") or "").strip())
+    if field:
+        out["field"] = field[:_MAX_FIELD_CHARS]
+    return out
+
+
 # ── deterministic "which page am I on" answer ─────────────────────────
 #
 # "ตอนนี้อยู่หน้าไหน" is a fixed-shape question with a known-true answer the
@@ -1712,6 +1740,7 @@ __all__ = [
     "resolve_click_target",
     "resolve_field_target",
     "resolve_fill_value",
+    "sanitize_action_result",
     "sanitize_manifest",
     "sanitize_ui_context",
     "spoken_page_name",

@@ -23,6 +23,10 @@ import {
   findClickableByText,
   findFieldElement,
   scrollByVoice,
+  verifyFieldFocused,
+  verifyFieldValue,
+  verifyPath,
+  type UiActionVerdict,
 } from './pageContext'
 import { clickPulse, disposeCursor, glowField, pointAt } from './simulatorCursor'
 import { pickUtterance } from './speechAlternatives'
@@ -587,6 +591,28 @@ export default function VoiceCallWidget() {
     mascotRef.current?.setState(s)
   }, [])
 
+  // Post-action verify (the grounding design's "Verify (after)"): every
+  // outcome — landed or not — is reported to the server as a
+  // `ui_action_result` frame, so the turn ladder / future agentic loop can
+  // trust that a step finished before taking the next. Failures also surface
+  // in the widget log.
+  const reportActionResult = useCallback(
+    (target: string, field: string, verdict: UiActionVerdict) => {
+      if (!verdict.ok) {
+        addMsg('sys', `⚠ ตรวจผลแล้วยังไม่สำเร็จ: ${target}${field ? ` (${field})` : ''}`)
+      }
+      if (wsRef.current?.readyState === 1) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'ui_action_result',
+            result: { target, field, ok: verdict.ok, detail: verdict.detail },
+          })
+        )
+      }
+    },
+    [addMsg]
+  )
+
   // Execute a voice-driven UI action — only targets we declared in the
   // manifest are honoured, everything else is reported and ignored.
   const executeUiAction = useCallback(
@@ -597,6 +623,8 @@ export default function VoiceCallWidget() {
       if (page) {
         addMsg('sys', `🖱 ไปหน้า ${page.label}`)
         router.push(page.path)
+        // The poll IS the page-load wait (never a fixed sleep).
+        void verifyPath(page.path).then(v => reportActionResult(target, '', v))
         return
       }
       switch (target) {
@@ -630,21 +658,40 @@ export default function VoiceCallWidget() {
         case 'fill_field': {
           // Fill-by-voice: type the caller's value into the visible field the
           // server resolved (against the streamed context). Nothing submits.
+          // After typing, VERIFY the value actually stuck (a controlled input
+          // can revert a native-setter write on re-render) — retry the write
+          // once on failure, then report the verdict either way.
           const field = String(m.field || '')
           const fieldEl = field && argument ? findFieldElement(field, panelRef.current) : null
           if (fieldEl) {
             void (async () => {
               await pointAt(fieldEl)
               clickPulse()
-              const ok = fillFieldByVoice(field, argument, panelRef.current)
-              if (ok) glowField(fieldEl, 'pulse') // soft shimmer while it fills
+              let written = fillFieldByVoice(field, argument, panelRef.current)
+              if (written !== null) glowField(fieldEl, 'pulse') // soft shimmer while it fills
               addMsg(
                 'sys',
-                ok ? `⌨️ พิมพ์ "${argument}" ในช่อง ${field}` : `⚠ พิมพ์ลงช่อง "${field}" ไม่ได้`
+                written !== null
+                  ? `⌨️ พิมพ์ "${argument}" ในช่อง ${field}`
+                  : `⚠ พิมพ์ลงช่อง "${field}" ไม่ได้`
               )
+              if (written === null) {
+                reportActionResult(target, field, { ok: false, detail: 'set_failed' })
+                return
+              }
+              let verdict = await verifyFieldValue(field, written, panelRef.current)
+              if (!verdict.ok) {
+                written = fillFieldByVoice(field, argument, panelRef.current) // retry once
+                verdict =
+                  written === null
+                    ? { ok: false, detail: 'set_failed_on_retry' }
+                    : await verifyFieldValue(field, written, panelRef.current)
+              }
+              reportActionResult(target, field, verdict)
             })()
           } else {
             addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+            reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
           }
           return
         }
@@ -660,9 +707,11 @@ export default function VoiceCallWidget() {
               focusEl.focus?.()
               focusEl.click?.()
               addMsg('sys', `🎯 โฟกัสช่อง ${field}`)
+              reportActionResult(target, field, await verifyFieldFocused(field, panelRef.current))
             })()
           } else {
             addMsg('sys', `⚠ หาช่อง "${field}" บนจอไม่เจอแล้ว`)
+            reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
           }
           return
         }
@@ -674,19 +723,29 @@ export default function VoiceCallWidget() {
             void (async () => {
               await pointAt(editEl)
               clickPulse()
-              const ok = editFieldByVoice(field, argument, panelRef.current)
-              if (ok) glowField(editEl, 'pulse')
+              // expected = the value the field should now hold ('' is valid
+              // for clear — test against null, not truthiness).
+              const expected = editFieldByVoice(field, argument, panelRef.current)
+              if (expected !== null) glowField(editEl, 'pulse')
               addMsg(
                 'sys',
-                !ok
+                expected === null
                   ? `⚠ แก้ข้อความในช่อง "${field}" ไม่ได้`
                   : argument === 'clear'
                     ? `🧹 ล้างช่อง ${field}`
                     : `⌫ ลบคำสุดท้ายในช่อง ${field}`
               )
+              reportActionResult(
+                target,
+                field,
+                expected === null
+                  ? { ok: false, detail: 'edit_failed' }
+                  : await verifyFieldValue(field, expected, panelRef.current)
+              )
             })()
           } else {
             addMsg('sys', `⚠ แก้ข้อความในช่อง "${field}" ไม่ได้`)
+            reportActionResult(target, field, { ok: false, detail: 'field_not_found' })
           }
           return
         }
@@ -697,6 +756,7 @@ export default function VoiceCallWidget() {
         case 'open_kb':
           addMsg('sys', `🖱 เปิดคลังความรู้${argument ? ` ${argument}` : ''}`)
           router.push(argument ? `/knowledge?kb=${encodeURIComponent(argument)}` : '/knowledge')
+          void verifyPath('/knowledge').then(v => reportActionResult(target, '', v))
           return
         case 'type_in_chat': {
           // Secretary mode: hand the utterance to the workspace bridge, which
@@ -740,7 +800,7 @@ export default function VoiceCallWidget() {
           addMsg('sys', `⚠ ไม่รู้จักปลายทาง: ${target}`)
       }
     },
-    [addMsg, router]
+    [addMsg, router, reportActionResult]
   )
 
   const stopPlayback = useCallback(() => {

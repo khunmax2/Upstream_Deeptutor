@@ -377,11 +377,15 @@ export function fillFieldByVoice(
   fieldLabel: string,
   value: string,
   exclude: Element | null
-): boolean {
+): string | null {
+  // Returns the exact string written into the element (a <select>'s option
+  // value may differ from the spoken text) — the caller verifies against it
+  // after the framework settles. null = nothing was set.
   const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
   const chosen = findFieldByLabel(fieldLabel, exclude)
-  if (!chosen || !value) return false
+  if (!chosen || !value) return null
   const el = chosen.el
+  let written = value
   if (el instanceof HTMLSelectElement) {
     const wanted = norm(value)
     const options = Array.from(el.options)
@@ -391,13 +395,14 @@ export function fillFieldByVoice(
         const t = norm(o.textContent || o.value)
         return t.includes(wanted) || wanted.includes(t)
       })
-    if (!option) return false
+    if (!option) return null
+    written = option.value
     setNativeValue(el, option.value)
   } else {
     setNativeValue(el, value)
   }
   el.focus?.()
-  return true
+  return written
 }
 
 /** *text* without its last word. Thai has no spaces between words —
@@ -427,15 +432,107 @@ export function removeLastWord(text: string): string {
  * (empty the field) or "delete_word" (drop the last word — Thai-aware).
  * Selects are not editable this way. Returns whether anything changed.
  */
-export function editFieldByVoice(fieldLabel: string, op: string, exclude: Element | null): boolean {
+export function editFieldByVoice(
+  fieldLabel: string,
+  op: string,
+  exclude: Element | null
+): string | null {
+  // Returns the value the field should now hold (post-verify contract, same
+  // as fillFieldByVoice) — note '' is a VALID result for clear, so callers
+  // must test against null, not truthiness. null = nothing was edited.
   const chosen = findFieldByLabel(fieldLabel, exclude)
-  if (!chosen || chosen.el instanceof HTMLSelectElement) return false
+  if (!chosen || chosen.el instanceof HTMLSelectElement) return null
   const el = chosen.el
-  if (op === 'clear') setNativeValue(el, '')
-  else if (op === 'delete_word') setNativeValue(el, removeLastWord(el.value))
-  else return false
+  let expected: string
+  if (op === 'clear') expected = ''
+  else if (op === 'delete_word') expected = removeLastWord(el.value)
+  else return null
+  setNativeValue(el, expected)
   el.focus?.()
-  return true
+  return expected
+}
+
+// ── post-action verify: did the action actually LAND? ──────────────────
+//
+// The grounding design's "Verify (after)" stage: acting is not enough — a
+// React controlled input can revert a native-setter write on re-render, a
+// route push can be blocked, focus can be stolen. Each verifier POLLS the
+// live DOM until the postcondition holds or the deadline passes (never a
+// fixed sleep — the design's flaky-test guardrail), and value checks demand
+// two consecutive matching samples so a value that is about to be reverted
+// by a re-render doesn't pass on the first read. Pure DOM, app-ignorant —
+// part of the portable core.
+
+export interface UiActionVerdict {
+  ok: boolean
+  detail: string
+}
+
+const VERIFY_INTERVAL_MS = 100
+const VERIFY_FIELD_TIMEOUT_MS = 700
+const VERIFY_NAV_TIMEOUT_MS = 2500
+
+const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+/** Poll until *check* passes `stableHits` times in a row or time runs out. */
+async function pollUntil(
+  check: () => boolean,
+  timeoutMs: number,
+  stableHits = 1
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  let hits = 0
+  for (;;) {
+    hits = check() ? hits + 1 : 0
+    if (hits >= stableHits) return true
+    if (Date.now() >= deadline) return false
+    await wait(VERIFY_INTERVAL_MS)
+  }
+}
+
+/** Current value of the field matching *fieldLabel* (null = not found). */
+export function readFieldValue(fieldLabel: string, exclude: Element | null): string | null {
+  const chosen = findFieldByLabel(fieldLabel, exclude)
+  return chosen ? chosen.el.value : null
+}
+
+/** Verify a fill/edit landed: the field holds *expected* and keeps holding
+ * it (two consecutive samples — catches the controlled-component revert). */
+export async function verifyFieldValue(
+  fieldLabel: string,
+  expected: string,
+  exclude: Element | null
+): Promise<UiActionVerdict> {
+  const ok = await pollUntil(
+    () => readFieldValue(fieldLabel, exclude) === expected,
+    VERIFY_FIELD_TIMEOUT_MS,
+    2
+  )
+  if (ok) return { ok: true, detail: 'value_set' }
+  const current = readFieldValue(fieldLabel, exclude)
+  return { ok: false, detail: current === null ? 'field_gone' : `value_is:${current.slice(0, 60)}` }
+}
+
+/** Verify a focus landed: the caret is in the named field. */
+export async function verifyFieldFocused(
+  fieldLabel: string,
+  exclude: Element | null
+): Promise<UiActionVerdict> {
+  const ok = await pollUntil(() => {
+    const chosen = findFieldByLabel(fieldLabel, exclude)
+    return !!chosen && document.activeElement === chosen.el
+  }, VERIFY_FIELD_TIMEOUT_MS)
+  return ok ? { ok: true, detail: 'focused' } : { ok: false, detail: 'not_focused' }
+}
+
+/** Verify a navigation landed: the location reached *expectedPath* (query
+ * string ignored). Router pushes are async — the poll IS the page-load wait. */
+export async function verifyPath(expectedPath: string): Promise<UiActionVerdict> {
+  const target = expectedPath.split('?')[0]
+  const ok = await pollUntil(() => window.location.pathname === target, VERIFY_NAV_TIMEOUT_MS)
+  return ok
+    ? { ok: true, detail: 'route_changed' }
+    : { ok: false, detail: `path_is:${window.location.pathname}` }
 }
 
 /**

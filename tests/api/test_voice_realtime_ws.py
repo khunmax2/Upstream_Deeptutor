@@ -45,6 +45,7 @@ class FakeSession:
         self.closed = False
         self.ui_manifest: Any = None
         self.ui_context: Any = None
+        self.nav_state: dict[str, Any] = {}
         FakeSession.last = self
 
     async def greet(self) -> None:
@@ -134,6 +135,49 @@ async def test_ui_frames_land_on_the_session() -> None:
     assert sess.ui_manifest == {"pages": [{"id": "settings", "label": "หน้าตั้งค่า"}]}
     assert sess.ui_context == {"path": "/settings", "summary": "ปุ่ม: บันทึก"}
     assert any("ui_manifest_ok" in t for t in ws.sent_text)
+
+
+@pytest.mark.asyncio
+async def test_ui_action_result_lands_on_nav_state() -> None:
+    """Post-action verify verdicts are remembered (silently) on nav_state."""
+    ws = FakeWebSocket(
+        [
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_action_result", "result": '
+                '{"target": "fill_field", "field": "ค้นหา", "ok": false, '
+                '"detail": "value_is:กดหมาย"}}',
+            },
+        ]
+    )
+    await vr.voice_websocket(ws)
+
+    sess = FakeSession.last
+    assert sess is not None
+    assert sess.nav_state["last_action_result"] == {
+        "target": "fill_field",
+        "field": "ค้นหา",
+        "ok": False,
+        "detail": "value_is:กดหมาย",
+    }
+    # Silent frame: no ack goes back.
+    assert not any("ui_action_result" in t for t in ws.sent_text)
+
+
+@pytest.mark.asyncio
+async def test_ui_action_result_malformed_is_dropped() -> None:
+    ws = FakeWebSocket(
+        [
+            {
+                "type": "websocket.receive",
+                "text": '{"type": "ui_action_result", "result": {"ok": true}}',  # no target
+            },
+        ]
+    )
+    await vr.voice_websocket(ws)
+
+    assert FakeSession.last is not None
+    assert "last_action_result" not in FakeSession.last.nav_state
 
 
 @pytest.mark.asyncio
