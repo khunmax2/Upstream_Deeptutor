@@ -20,6 +20,7 @@ decide on retries (429 / 5xx). Fork-additive: a new router file, registered in
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -35,6 +36,13 @@ router = APIRouter()
 # page-agent's steps are single non-streaming completions, but a big DOM
 # inventory + a slow model can still run long.
 _UPSTREAM_TIMEOUT_S = 120.0
+
+# The in-page agent's loop is far heavier than a chat turn: it feeds an indexed
+# DOM tree into the prompt and tool-calls for up to 40 steps. The chat model the
+# app is configured with may be a "lite" tier that cannot hold that up, so allow
+# an operator-set override — still server-side, so the browser can never pick a
+# model to spend our key on. Unset ⇒ use the app's configured model.
+_MODEL_OVERRIDE_ENV = "LLM_PROXY_MODEL"
 
 
 @router.post("/chat/completions")
@@ -53,8 +61,10 @@ async def chat_completions(request: Request) -> JSONResponse:
             status_code=503,
         )
 
-    # Pin the model to the configured one — the browser must not choose it.
-    payload = {**body, "model": config.model}
+    # Pin the model server-side — the browser must not choose it. An operator
+    # may override which one via LLM_PROXY_MODEL (see the note above).
+    model = (os.getenv(_MODEL_OVERRIDE_ENV) or "").strip() or config.model
+    payload = {**body, "model": model}
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {config.api_key}",

@@ -87,6 +87,31 @@ def test_key_stays_server_side_and_model_is_pinned(
     assert seen["headers"]["Authorization"] == "Bearer server-side-secret"
 
 
+def test_operator_can_override_the_pinned_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LLM_PROXY_MODEL wins over the app's chat model — the browser still cannot."""
+    _patch_config(monkeypatch, _Config())
+    monkeypatch.setenv("LLM_PROXY_MODEL", "a-stronger-model")
+    seen = _patch_upstream(monkeypatch)
+
+    client.post("/api/v1/llm-proxy/chat/completions", json={"model": "browser-choice"})
+
+    assert seen["json"]["model"] == "a-stronger-model"
+
+
+def test_blank_override_falls_back_to_the_configured_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_config(monkeypatch, _Config())
+    monkeypatch.setenv("LLM_PROXY_MODEL", "   ")
+    seen = _patch_upstream(monkeypatch)
+
+    client.post("/api/v1/llm-proxy/chat/completions", json={})
+
+    assert seen["json"]["model"] == "gemini-3.1-flash-lite"
+
+
 def test_upstream_status_passes_through(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
