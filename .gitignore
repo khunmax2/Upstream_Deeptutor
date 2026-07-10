@@ -312,3 +312,7 @@ celerybeat.pid
 *.ogg
 !demo/*.mp4
 graphify-out/
+
+# Local secret env files (e.g. .env.llm-proxy) — never commit keys
+.env.*
+!.env.*.example
