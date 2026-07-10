@@ -157,6 +157,28 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — In-page agent loop, Phase B (the brain) landed.** New package
+  `deeptutor/services/voice_realtime/agent/` implementing our own
+  observe→think→act loop per `PLAN_inpage_agent_parity.md`: `loop.py`
+  (InPageAgentLoop; voice-tuned maxSteps 15 / stepDelay 0.8s; abort;
+  `pre_act` danger-gate seam for Phase C; narration + ask_user hooks with a
+  `waiting_on_user` flag for speech routing), `macro_tool.py` (action catalog +
+  validation, ask_user offered only when answerable), `fixer.py` (all six
+  autoFixer heuristics ported for JSON-contract transport), `prompt.py` (our
+  own voice-first system prompt + page-agent-shaped assembler: reflections-only
+  history, fresh DOM per step), `observations.py` (navigation / wait /
+  step-budget `<sys>` notes), `llm.py` (agent model via `DEEPTUTOR_AGENT_MODEL`
+  (+ optional `_BASE_URL`/`_API_KEY` standalone upstream) — loud failure, never
+  a silent chat-model fallback; per-call kwargs on `services.llm.complete`).
+  Transport decision recorded in code: JSON-contract + fixer as the primary
+  path (provider-universal; `complete()` returns text only), native forced
+  tool_choice can layer on later. Tests:
+  `tests/services/voice_realtime/agent/` — 28 cases incl. the Phase-B
+  acceptance run (3-step navigate→fill→confirm on a fixture actuator), budget
+  exhaustion + warnings, fixer recovery/give-up, mid-run abort, pre_act
+  blocking, ask_user round-trip, narration failure tolerance. Not wired into
+  the pipeline yet (that is Phase D, behind a default-off flag).
+
 - **2026-07-10 — Deep rung removed; superseded by the in-page agent plan.**
   The 2026-07-10 page-agent evaluation (branch `page-agent-clean-eval`, kept as
   the page-agent test bed) proved a looped observe→think→act agent covers
