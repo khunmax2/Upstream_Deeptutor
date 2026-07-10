@@ -26,6 +26,9 @@ from deeptutor.services.voice_realtime.agent.types import AgentLLMNotConfigured
 MODEL_ENV = "DEEPTUTOR_AGENT_MODEL"
 BASE_URL_ENV = "DEEPTUTOR_AGENT_BASE_URL"
 API_KEY_ENV = "DEEPTUTOR_AGENT_API_KEY"
+# D0 feature flag — default OFF. Environment-based like the rest of the agent
+# config (the model already requires an env var, so one switchboard, not two).
+LOOP_ENV = "DEEPTUTOR_AGENT_LOOP"
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,12 @@ def _env(name: str) -> str:
 
 def is_configured() -> bool:
     return bool(_env(MODEL_ENV))
+
+
+def agent_loop_enabled() -> bool:
+    """D0 gate: the loop takes turns only when explicitly switched on AND a
+    model is configured. Off ⇒ the voice pipeline behaves exactly as today."""
+    return _env(LOOP_ENV).lower() in {"1", "true", "yes"} and is_configured()
 
 
 def resolve_agent_llm() -> AgentLLMSettings:

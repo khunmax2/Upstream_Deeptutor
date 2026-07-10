@@ -19,10 +19,12 @@ import logging
 from typing import Any
 import uuid
 
+from deeptutor.services.voice_realtime.agent import AgentVoiceBridge, agent_loop_enabled
 from deeptutor.services.voice_realtime.pipeline import (
     VoiceEmitter,
     run_text_turn,
     run_turn,
+    speak_agent_line,
     speak_greeting,
 )
 
@@ -57,6 +59,35 @@ class VoiceSession:
         # was superseded; kept as the observe transport for the in-page agent
         # loop (PLAN_inpage_agent_parity Phase B).
         self._inventory_future: asyncio.Future[Any] | None = None
+        # In-page agent bridge (loop + WS actuator + spoken Q&A) — created
+        # lazily on first use, only when the D0 flag + agent model are set.
+        self._agent: AgentVoiceBridge | None = None
+
+    # ── in-page agent (Phase D wiring) ──
+
+    def _ensure_agent(self) -> AgentVoiceBridge | None:
+        """The session's agent bridge, or ``None`` while the flag is off."""
+        if not agent_loop_enabled():
+            return None
+        if self._agent is None:
+            self._agent = AgentVoiceBridge(
+                self._emitter.send_json,
+                lambda text: speak_agent_line(self._emitter, text),
+                language=self._language,
+            )
+        return self._agent
+
+    def _agent_runner(self) -> Any:
+        """The pipeline-facing runner (``task → spoken reply``), or ``None``."""
+        bridge = self._ensure_agent()
+        if bridge is None:
+            return None
+        return bridge.run_task
+
+    def handle_agent_frame(self, msg: dict[str, Any]) -> bool:
+        """Route client ``agent_*`` frames (state chunks, act results, takeover)."""
+        bridge = self._agent
+        return bridge is not None and bridge.handle_frame(msg)
 
     async def request_ui_inventory(self) -> Any:
         """Ask the client for its indexed element inventory; ``None`` on timeout.
@@ -98,6 +129,8 @@ class VoiceSession:
 
     async def handle_utterance(self, audio: bytes) -> None:
         """Start a new turn for *audio*, cancelling any turn still in flight."""
+        if self._agent is not None and self._agent.running:
+            self._agent.abort()  # audio arriving mid-run is a barge-in
         await self.cancel_current_turn()
         self._current = asyncio.create_task(self._run(audio), name="voice:turn")
 
@@ -106,6 +139,15 @@ class VoiceSession:
         text = (text or "").strip()
         if not text:
             return
+        # C3 speech routing: while the agent loop has a question pending
+        # (ask_user / danger confirm), the utterance IS THE ANSWER — feed it to
+        # the waiting future instead of cancelling the run it belongs to.
+        # Any other mid-run speech is a barge-in.
+        if self._agent is not None and self._agent.running:
+            if self._agent.deliver_speech(text):
+                logger.info("voice: speech consumed as agent answer %r", text)
+                return
+            self._agent.abort()
         await self.cancel_current_turn()
         self._current = asyncio.create_task(self._run_text(text), name="voice:text-turn")
 
@@ -125,6 +167,8 @@ class VoiceSession:
 
     async def aclose(self) -> None:
         """Tear the session down (connection closed)."""
+        if self._agent is not None:
+            self._agent.abort()
         await self.cancel_current_turn()
 
     async def _run(self, audio: bytes) -> None:
@@ -138,6 +182,7 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
+                agent_runner=self._agent_runner(),
             )
         except asyncio.CancelledError:
             raise
@@ -157,6 +202,7 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
+                agent_runner=self._agent_runner(),
             )
         except asyncio.CancelledError:
             raise

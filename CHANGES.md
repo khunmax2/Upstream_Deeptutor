@@ -157,6 +157,32 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — In-page agent, Phase D (wired end-to-end, behind a
+  default-off flag) landed.** The loop now answers the phone. New in
+  `services/voice_realtime/agent/`: `ws_actuator.py` (server end of the A4
+  frame protocol — observe/act as correlated request/response, chunked
+  `agent_state` reassembly, honest timeouts), `voice_bridge.py`
+  (`AgentVoiceBridge`: loop + actuator + the C3 speech-routing state machine —
+  pending question ⇒ incoming speech is the ANSWER; otherwise ⇒ barge-in
+  abort; mask always comes down, even on abort), `intent.py`
+  (`match_agent_task`: deterministic multi-step detector — action verb +
+  sequence connector + second verb; conservative by design). Pipeline gains
+  `agent_runner` threading and three entries into the loop: multi-step task
+  (checked BEFORE single-step rungs so "ไปตั้งค่าแล้วเปลี่ยนธีมมืด" cannot
+  half-match navigation), click-ambiguous, click-miss-after-graph; plus
+  `speak_agent_line` (mid-run narration audio) and `_run_agent_turn` (turn
+  framing; a crashed loop speaks the miss line, never a dead line). Session
+  owns the bridge lifecycle + routes `agent_*` frames (router passes them
+  through); loop terminal lines are now spoken Thai. **D0 flag:**
+  `DEEPTUTOR_AGENT_LOOP=1` + `DEEPTUTOR_AGENT_MODEL` both required
+  (env-based rather than the planned settings key — one switchboard with the
+  rest of the agent config); flag off ⇒ byte-identical behavior, proven by
+  the untouched pre-existing suite. Loop robustness: observe() failure now
+  ends the run honestly instead of crashing the call. Tests: +27
+  (`test_ws_actuator`, `test_intent`, `test_voice_bridge`, `test_wiring` —
+  incl. answer-vs-barge-in live routing and mask-always-down). Voice suite:
+  376 green. `ui_graph` fate (D4) deliberately deferred to Phase E data.
+
 - **2026-07-10 — In-page agent, Phase C (trust model) landed.** New
   `deeptutor/services/voice_realtime/agent/danger.py`: `DangerGate`, the
   `pre_act` implementation — before ANY loop click fires, the target's real

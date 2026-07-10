@@ -161,6 +161,10 @@ async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> No
         # Inventory reply (client answers a server ui_scan with its indexed
         # element inventory). Silent; delivered to the turn awaiting it.
         session.resolve_ui_inventory(msg.get("inventory"))
+    elif kind in ("agent_state_chunk", "agent_acted", "agent_takeover"):
+        # In-page agent frames (web/lib/page-actuator bridge ⇄ agent loop):
+        # observe payload chunks, action results, and mask-click takeover.
+        session.handle_agent_frame(msg)
 
 
 __all__ = ["router"]

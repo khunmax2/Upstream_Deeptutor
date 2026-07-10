@@ -45,6 +45,14 @@ DEFAULT_STEP_DELAY_S = 0.8
 # runs where the model clearly cannot hold the contract at all.
 MAX_FIXER_FAILURES = 3
 
+# Terminal lines are SPOKEN to the caller (and shown as assistant text) —
+# they must be phone-Thai, not log-English. Details stay in the log.
+_ABORTED_LINE = "หยุดให้แล้วครับ"
+_BUDGET_LINE = "ยังทำไม่เสร็จครับ ครบจำนวนขั้นที่จำกัดไว้ก่อน เดี๋ยวลองสั่งแบบเจาะจงขึ้นได้ครับ"
+_OBSERVE_FAILED_LINE = "ผมมองหน้าจอไม่เห็นครับ ลองใหม่อีกครั้งนะครับ"
+_THINK_FAILED_LINE = "สมองของผู้ช่วยขัดข้องครับ ลองใหม่อีกครั้งนะครับ"
+_INVALID_OUTPUT_LINE = "โมเดลตอบผิดรูปแบบซ้ำหลายครั้งครับ ลองเปลี่ยนโมเดลของ agent ดูนะครับ"
+
 AskUser = Callable[[str], Awaitable[str]]
 Narrate = Callable[[str], Awaitable[None]]
 # Phase C danger gate: return None to allow, or a spoken-refusal/observation
@@ -113,12 +121,18 @@ class InPageAgentLoop:
         try:
             for step in range(self._max_steps):
                 if self._abort.is_set():
-                    return self._finish("aborted", False, "Task aborted by user.", steps, t0)
+                    return self._finish("aborted", False, _ABORTED_LINE, steps, t0)
                 if step > 0:
                     await asyncio.sleep(self._step_delay_s)
 
                 # ── observe ──
-                state = await self._actuator.observe()
+                try:
+                    state = await self._actuator.observe()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 — a blind agent must stop, not crash the call
+                    logger.exception("agent observe failed")
+                    return self._finish("error", False, _OBSERVE_FAILED_LINE, steps, t0)
                 for note in tracker.collect(state.url, step):
                     history.append(("sys", note))
                     logger.info("agent obs: %s", note)
@@ -131,12 +145,12 @@ class InPageAgentLoop:
                     raw = await self._think(system_prompt, user_prompt)
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:  # noqa: BLE001 — LLM failure ends the run honestly
+                except Exception:  # noqa: BLE001 — LLM failure ends the run honestly
                     logger.exception("agent think failed")
-                    return self._finish("error", False, f"LLM call failed: {exc}", steps, t0)
+                    return self._finish("error", False, _THINK_FAILED_LINE, steps, t0)
 
                 if self._abort.is_set():
-                    return self._finish("aborted", False, "Task aborted by user.", steps, t0)
+                    return self._finish("aborted", False, _ABORTED_LINE, steps, t0)
 
                 try:
                     output = normalize_output(raw, self._actions)
@@ -144,13 +158,7 @@ class InPageAgentLoop:
                     fixer_failures += 1
                     logger.warning("agent fixer gave up on step %d: %s", step, exc)
                     if fixer_failures >= MAX_FIXER_FAILURES:
-                        return self._finish(
-                            "error",
-                            False,
-                            "The model repeatedly produced invalid output.",
-                            steps,
-                            t0,
-                        )
+                        return self._finish("error", False, _INVALID_OUTPUT_LINE, steps, t0)
                     history.append(("sys", f"Your previous reply was invalid: {exc}"))
                     continue
 
@@ -188,9 +196,7 @@ class InPageAgentLoop:
                 steps.append(record)
                 history.append(("step", record))
 
-            return self._finish(
-                "budget", False, "Step budget exhausted before the task finished.", steps, t0
-            )
+            return self._finish("budget", False, _BUDGET_LINE, steps, t0)
         finally:
             self.running = False
 
