@@ -39,10 +39,16 @@ _SYSTEM_PROMPT = (
     "element. You are given a numbered list of the interactive elements "
     "currently visible on the caller's screen. Reply with ONLY the number of "
     "the element the caller wants to activate — no words, no punctuation. "
-    "Speech recognition garbles names, so match by meaning and phonetic "
-    "similarity, not exact spelling. If NO element plausibly matches, reply "
-    "exactly NONE. Never pick destructive elements (delete/clear/reset) "
-    "unless the caller unmistakably named them."
+    "CRITICAL: the caller SPOKE the name and speech recognition transcribed "
+    "it — English UI labels arrive as Thai phonetic renderings, often badly "
+    "garbled. SOUND THE NAME OUT and match by pronunciation, not spelling. "
+    "Real examples of garbles you MUST catch: "
+    "'กราบเหล็ก'/'กราฟเหล็ก'/'กราฟแรก' → GraphRAG; 'ลามะ อินเด็ก'/'ลามะ index' → "
+    "LlamaIndex; 'เพจอินเด็กซ์' → PageIndex; 'ไลท์แร็ก' → LightRAG; "
+    "'อ๊อบซิเดียน' → Obsidian. A partial phonetic match to exactly one "
+    "element is a match. Reply NONE only when nothing is even phonetically "
+    "close. Never pick destructive elements (delete/clear/reset) unless the "
+    "caller unmistakably named them."
 )
 
 
@@ -132,7 +138,15 @@ async def pick_element(
     except Exception:  # noqa: BLE001 — a deep-rung failure = honest miss, never a crash
         logger.warning("voice deep-pick LLM call failed", exc_info=True)
         return None
-    return parse_index_reply(reply, items)
+    choice = parse_index_reply(reply, items)
+    if choice is None:
+        # WARNING on purpose: a deep-rung NONE is a miss the caller heard —
+        # the raw reply is the evidence the next tuning round needs (INFO
+        # does not reach the log file under the default config).
+        logger.warning(
+            "voice deep-pick NONE spoken=%r reply=%r items=%d", spoken, reply[:80], len(items)
+        )
+    return choice
 
 
 __all__ = [

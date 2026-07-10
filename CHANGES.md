@@ -314,6 +314,24 @@ code is additive and isolated for mergeability.
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
 
+- **2026-07-10 — Ambiguous ties reach the deep rung; ask-backs name the
+  tie; transliteration-hardened deep prompt.** Live round 2 findings:
+  (1) a fuzzy tie ("กดที่ลามะ Index" matching several labels) dead-ended
+  at "พูดชื่อเต็มอีกครั้ง" because only the *missing* outcome fell through
+  to the deep rung — the *ambiguous* outcome now consults it first (the
+  LLM with the full indexed screen is exactly the right adjudicator for a
+  tie), and when even that declines, the ask-back NAMES the tied
+  candidates ("หมายถึง X หรือ Y ครับ", `narration.ambiguous_click_line` +
+  `ui_control.resolve_click_candidates`) — answerable for the caller,
+  live telemetry for the maintainer. (2) The deep-pick model answered
+  NONE for "กราฟเหล็ก" → GraphRAG; the system prompt now teaches Thai
+  phonetic renderings of English UI labels with real garble examples and
+  instructs sounding names out; a deep-pick NONE is logged at WARNING
+  with the raw reply (INFO never reaches the log file), so the next
+  tuning round has evidence. Files:
+  `services/voice_realtime/pipeline.py`, `ui_control.py`, `ui_deep.py`,
+  `narration.py`; tests (pytest 318 green, node 189 green).
+
 - **2026-07-10 — Live-test trio: oversized inventory frame; suffix-twin
   false ambiguity; the LLM's amputated screen view.** Three defects found
   in one live session on the knowledge center (109 buttons on screen):

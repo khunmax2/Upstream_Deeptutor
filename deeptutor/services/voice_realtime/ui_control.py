@@ -980,19 +980,9 @@ def _resolve_spoken_name(
     (focus/recency, capped below the tier spacing — tie-breakers only).
     Shared by click-by-name (buttons) and fill-by-voice (fields).
     """
-    spoken = (name or "").replace(" ", "").lower()
-    if not spoken or not candidates:
+    winners = _score_winners(name, candidates, boosts)
+    if not winners:
         return ("missing", None)
-    spoken_skeleton = _consonant_skeleton(spoken)
-    scored: list[tuple[int, str]] = []
-    for candidate in candidates:
-        label = _label_score(spoken, spoken_skeleton, candidate)
-        if label:
-            scored.append((label + (boosts or {}).get(candidate, 0), candidate))
-    if not scored:
-        return ("missing", None)
-    top = max(score for score, _ in scored)
-    winners = [candidate for score, candidate in scored if score == top]
     if len(winners) == 1:
         return ("hit", winners[0])
     # A tie between ordinal-suffixed twins ("LlamaIndex", "LlamaIndex (2)")
@@ -1004,10 +994,40 @@ def _resolve_spoken_name(
     return ("ambiguous", None)
 
 
+def _score_winners(
+    name: str, candidates: list[str], boosts: dict[str, int] | None = None
+) -> list[str]:
+    """All top-scoring candidates for a spoken *name* (candidate order kept)."""
+    spoken = (name or "").replace(" ", "").lower()
+    if not spoken or not candidates:
+        return []
+    spoken_skeleton = _consonant_skeleton(spoken)
+    scored: list[tuple[int, str]] = []
+    for candidate in candidates:
+        label = _label_score(spoken, spoken_skeleton, candidate)
+        if label:
+            scored.append((label + (boosts or {}).get(candidate, 0), candidate))
+    if not scored:
+        return []
+    top = max(score for score, _ in scored)
+    return [candidate for score, candidate in scored if score == top]
+
+
 def resolve_click_target(name: str, ui_context: dict[str, Any] | None) -> tuple[str, str | None]:
     """Resolve a spoken button *name* against the visible buttons."""
     buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
     return _resolve_spoken_name(name, buttons)
+
+
+def resolve_click_candidates(name: str, ui_context: dict[str, Any] | None) -> list[str]:
+    """The tied top candidates for a spoken button name (ambiguity members).
+
+    What the ask-back line names — "หมายถึง X หรือ Y ครับ" beats a dead-end
+    "พูดชื่อเต็มอีกครั้ง", and the spoken tie doubles as live telemetry for
+    why the resolver could not decide.
+    """
+    buttons = [b for b in (ui_context or {}).get("buttons") or [] if isinstance(b, str)]
+    return _score_winners(name, buttons)
 
 
 # A dropdown field entry folds its options into the streamed string
@@ -1765,6 +1785,7 @@ __all__ = [
     "match_navigation_intent",
     "match_where_am_i",
     "resolve_click_target",
+    "resolve_click_candidates",
     "resolve_field_target",
     "resolve_fill_value",
     "sanitize_action_result",

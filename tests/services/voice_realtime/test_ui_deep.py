@@ -150,6 +150,64 @@ async def test_deep_rung_miss_still_ends_honestly(monkeypatch: pytest.MonkeyPatc
     assert not [m for m in emitter.json if m.get("type") == "ui_action"]
 
 
+@pytest.mark.asyncio
+async def test_click_ambiguous_falls_to_deep_rung(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live regression: a fuzzy tie used to dead-end at "พูดชื่อเต็ม" — the
+    deep rung's LLM (full screen in hand) now adjudicates it first."""
+    _patch_tts(monkeypatch)
+
+    async def fake_pick(spoken: str, transcript: str, items: list[dict]) -> dict | None:
+        return items[1]  # LlamaIndex
+
+    monkeypatch.setattr(pipe.ui_deep, "pick_element", fake_pick)
+
+    async def getter() -> list[dict]:
+        return RAW_INVENTORY
+
+    emitter = FakeEmitter()
+    await pipe.run_text_turn(
+        emitter,
+        "กดที่ index",
+        [],
+        session_id="voice:test",
+        # Two distinct labels that both substring-match "index" → a real tie.
+        ui_context={"path": "/x", "summary": "x", "buttons": ["PageIndex", "LlamaIndex"]},
+        nav_state={},
+        inventory_getter=getter,
+    )
+
+    actions = [m for m in emitter.json if m.get("type") == "ui_action"]
+    assert [a["target"] for a in actions] == ["click_index"]
+
+
+@pytest.mark.asyncio
+async def test_click_ambiguous_ask_back_names_the_tie(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No deep rung available (or it declined) → the ask-back NAMES the tied
+    candidates instead of the dead-end 'พูดชื่อเต็ม'."""
+    _patch_tts(monkeypatch)
+
+    async def fake_pick(*a: Any, **k: Any) -> None:
+        return None
+
+    monkeypatch.setattr(pipe.ui_deep, "pick_element", fake_pick)
+
+    async def getter() -> list[dict]:
+        return RAW_INVENTORY
+
+    emitter = FakeEmitter()
+    reply = await pipe.run_text_turn(
+        emitter,
+        "กดที่ index",
+        [],
+        session_id="voice:test",
+        ui_context={"path": "/x", "summary": "x", "buttons": ["PageIndex", "LlamaIndex"]},
+        nav_state={},
+        inventory_getter=getter,
+    )
+
+    assert "PageIndex" in reply and "LlamaIndex" in reply and "หรือ" in reply
+
+
 # ── session round trip ──────────────────────────────────────────────────
 
 

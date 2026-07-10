@@ -888,8 +888,22 @@ async def run_text_turn(
                 logger.info("voice rung=click button=%r %r", button, transcript)
                 return await _run_click_shortcut(emitter, button, turn_t0=t0)
         elif outcome == "ambiguous":
-            logger.info("voice rung=click-ambiguous %r", transcript)
-            return await _speak_short_turn(emitter, narration.CLICK_AMBIGUOUS_LINE, turn_t0=t0)
+            # A tie among fuzzy matches is exactly what the deep rung's LLM
+            # can adjudicate with the full screen in hand — try that before
+            # asking back. When it also can't decide, ask back NAMING the
+            # tied candidates ("หมายถึง X หรือ Y ครับ"): answerable, and
+            # live telemetry for why the resolver tied.
+            if inventory_getter is not None:
+                deep = await _run_deep_click(
+                    emitter, click_name, transcript, inventory_getter, turn_t0=t0
+                )
+                if deep is not None:
+                    return deep
+            tied = ui_control.resolve_click_candidates(click_name, ui_context)
+            logger.info("voice rung=click-ambiguous tied=%r %r", tied, transcript)
+            return await _speak_short_turn(
+                emitter, narration.ambiguous_click_line(tied), turn_t0=t0
+            )
         elif outcome == "missing":
             # Not on THIS screen — before the honest dead-end, ask the
             # Website Graph whether another page owns the named control
