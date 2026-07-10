@@ -2,8 +2,9 @@
 
 The proxy's whole reason to exist is that the browser must never hold the
 provider key, and must never be able to spend it on a model of its choosing.
-Both of those are pinned here, plus honest upstream status pass-through
-(page-agent retries on 429/5xx).
+Both of those are pinned here — in *both* upstream modes (standalone env vars,
+catalog fallback) — plus honest upstream status pass-through (page-agent
+retries on 429/5xx).
 """
 
 from __future__ import annotations
@@ -16,6 +17,13 @@ import httpx
 import pytest
 
 from deeptutor.api.routers import llm_proxy
+
+
+@pytest.fixture(autouse=True)
+def _no_proxy_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catalog fallback is the default; standalone tests opt in explicitly."""
+    for name in ("LLM_PROXY_BASE_URL", "LLM_PROXY_API_KEY", "LLM_PROXY_MODEL"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -87,10 +95,56 @@ def test_key_stays_server_side_and_model_is_pinned(
     assert seen["headers"]["Authorization"] == "Bearer server-side-secret"
 
 
-def test_operator_can_override_the_pinned_model(
+def test_standalone_env_bypasses_the_catalog_entirely(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """LLM_PROXY_MODEL wins over the app's chat model — the browser still cannot."""
+    """With the three LLM_PROXY_* vars set, DeepTutor's LLM config is never consulted."""
+
+    def _boom() -> None:
+        raise AssertionError("catalog must not be consulted in standalone mode")
+
+    monkeypatch.setattr(llm_proxy, "get_llm_config", _boom)
+    monkeypatch.setenv("LLM_PROXY_BASE_URL", "https://eval.example/v1/")
+    monkeypatch.setenv("LLM_PROXY_API_KEY", "eval-key")
+    monkeypatch.setenv("LLM_PROXY_MODEL", "gemini-2.5-flash")
+    seen = _patch_upstream(monkeypatch)
+
+    res = client.post(
+        "/api/v1/llm-proxy/chat/completions", json={"model": "browser-choice", "messages": []}
+    )
+
+    assert res.status_code == 200
+    assert seen["url"] == "https://eval.example/v1/chat/completions"  # trailing slash trimmed
+    assert seen["json"]["model"] == "gemini-2.5-flash"  # browser's choice still ignored
+    assert seen["headers"]["Authorization"] == "Bearer eval-key"
+
+
+@pytest.mark.parametrize(
+    ("present", "missing_name"),
+    [
+        ({"LLM_PROXY_BASE_URL": "https://x/v1"}, "LLM_PROXY_API_KEY"),
+        ({"LLM_PROXY_BASE_URL": "https://x/v1", "LLM_PROXY_API_KEY": "k"}, "LLM_PROXY_MODEL"),
+        ({"LLM_PROXY_API_KEY": "k"}, "LLM_PROXY_BASE_URL"),
+    ],
+)
+def test_half_configured_standalone_fails_loudly(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    present: dict[str, str],
+    missing_name: str,
+) -> None:
+    """Never silently fall back to the chat model when the operator meant to override."""
+    for name, value in present.items():
+        monkeypatch.setenv(name, value)
+    res = client.post("/api/v1/llm-proxy/chat/completions", json={})
+    assert res.status_code == 503
+    assert missing_name in res.json()["error"]["message"]
+
+
+def test_model_env_alone_overrides_the_catalog_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LLM_PROXY_MODEL without the connection vars still re-pins the catalog upstream."""
     _patch_config(monkeypatch, _Config())
     monkeypatch.setenv("LLM_PROXY_MODEL", "a-stronger-model")
     seen = _patch_upstream(monkeypatch)
@@ -98,18 +152,6 @@ def test_operator_can_override_the_pinned_model(
     client.post("/api/v1/llm-proxy/chat/completions", json={"model": "browser-choice"})
 
     assert seen["json"]["model"] == "a-stronger-model"
-
-
-def test_blank_override_falls_back_to_the_configured_model(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_config(monkeypatch, _Config())
-    monkeypatch.setenv("LLM_PROXY_MODEL", "   ")
-    seen = _patch_upstream(monkeypatch)
-
-    client.post("/api/v1/llm-proxy/chat/completions", json={})
-
-    assert seen["json"]["model"] == "gemini-3.1-flash-lite"
 
 
 def test_upstream_status_passes_through(
