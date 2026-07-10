@@ -63,6 +63,17 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 ## Documentation
 
+- **2026-07-10 — Plan: build our own in-page agent (page-agent reverse-engineering).**
+  New `PLAN_inpage_agent_parity.md` (branch `page-agent-clean-eval`): a full
+  source-level anatomy of Alibaba's page-agent (MIT; loop, DOM serialization,
+  W3C-event actions, MacroTool + forced tool_choice, autoFixer, observations),
+  a gap analysis against this fork's voice-grounding work, and a phased build
+  plan (A: browser-side actuator, B: server-side Python agent loop, C: trust
+  model / voice-confirm inside the loop, D: gated pipeline wiring, E: head-to-head
+  eval vs page-agent). Also corrects an earlier record: page-agent clicks resolve
+  from the selector-map element reference; `elementFromPoint` is only an inner
+  hit-test refinement. Files: `PLAN_inpage_agent_parity.md`.
+
 - **2026-06-25 — Added production deployment guide + deploy templates.** New
   `DEPLOY.md`: step-by-step Docker Compose (production) deploy on a fresh server,
   including LINE webhook setup behind Caddy reverse proxy + auto-TLS, the
