@@ -247,12 +247,20 @@ Browser (web/)                          Server (deeptutor/)
       (จำเป็น: หน้าเราเป็น React — ถ้าไม่ทำ ทั้งหน้าเป็นปุ่มเดียว)
 - [ ] A4 ต่อ WS frames `agent_observe`/`agent_act`/`agent_state`/`agent_acted`
       เข้ากับ socket voice ที่มีอยู่ (ไฟล์ hook ใหม่ ไม่แตะของเดิม)
-- [ ] A5 run-mask: ชั้นบล็อก input คนจริง **เฉพาะช่วง loop รัน** (แนว SimulatorMask
-      ของเขา — click/wheel/keydown กันหมด, pass-through ชั่วคราวตอน hit-test)
-      โดย reuse `simulatorCursor` + `glowField` ของเดิมเป็น "มือที่มองเห็น" ทับบน
-      mask; คลิกบน mask หรือพูดแทรก (barge-in) = user takeover → abort loop
-      พร้อม push observation; mascot ตัวโทรของเดิมไม่เกี่ยวและไม่แตะ
-      (single-action ของ fast path เดิมไม่ต้องมี mask — เร็วเกินกว่าจะชนมือคน)
+- [ ] A5 run-mask + vision layer (แสดง "เห็นอะไร / กดอะไร" ระหว่าง loop รัน):
+      - **บล็อก input คนจริง** เฉพาะช่วง loop รัน (แนว SimulatorMask — click/wheel/
+        keydown กันหมด, pass-through ชั่วคราวตอน hit-test); คลิกบน mask หรือ
+        พูดแทรก (barge-in) = user takeover → abort loop พร้อม push observation
+      - **โชว์สิ่งที่ agent เห็น**: ตอน observe เปิด highlight ของ dom_tree engine
+        ที่ vendor ไว้ (`doHighlightElements: true` + opacity ที่มองเห็น) — กรอบ +
+        ป้าย [index] ทุก element ที่ถูก index ให้ผู้ใช้เห็นภาพเดียวกับ LLM;
+        เคลียร์ด้วย cleanup ของ engine ทุกครั้งก่อน step ถัดไป
+        (ทุกวันนี้เราเรียกแบบปิดไว้ใน `pageInventory.ts` — โหมด loop แค่เปิดสวิตช์)
+      - **โชว์สิ่งที่กำลังจะกด**: `simulatorCursor` ไถลไปเป้าหมาย + `glowBox` เน้น
+        element ที่ถูกเลือก ก่อนลงมือทุก action (มือที่มองเห็น — ของเดิมทั้งคู่)
+      - mascot ตัวโทรของเดิมไม่เกี่ยวและไม่แตะ; single-action ของ fast path เดิม
+        คงพฤติกรรมเดิม (ไม่มี mask ไม่มี highlight — เร็วเกินกว่าจะชนมือคน และ
+        จอไม่ควรกระพริบกับคำสั่งง่าย)
 - [ ] เทสต์: node test serialize (DOM จำลอง), เทสต์ actions บนหน้า fixture
 - **เกณฑ์ผ่าน**: เปิดหน้า knowledge แล้วสั่ง observe ผ่าน WS ได้ browser_state
   ที่มี index ครบ; สั่ง click ตาม index แล้วปุ่มจริงทำงาน
