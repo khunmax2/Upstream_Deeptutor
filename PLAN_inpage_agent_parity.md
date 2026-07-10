@@ -247,6 +247,12 @@ Browser (web/)                          Server (deeptutor/)
       (จำเป็น: หน้าเราเป็น React — ถ้าไม่ทำ ทั้งหน้าเป็นปุ่มเดียว)
 - [ ] A4 ต่อ WS frames `agent_observe`/`agent_act`/`agent_state`/`agent_acted`
       เข้ากับ socket voice ที่มีอยู่ (ไฟล์ hook ใหม่ ไม่แตะของเดิม)
+- [ ] A5 run-mask: ชั้นบล็อก input คนจริง **เฉพาะช่วง loop รัน** (แนว SimulatorMask
+      ของเขา — click/wheel/keydown กันหมด, pass-through ชั่วคราวตอน hit-test)
+      โดย reuse `simulatorCursor` + `glowField` ของเดิมเป็น "มือที่มองเห็น" ทับบน
+      mask; คลิกบน mask หรือพูดแทรก (barge-in) = user takeover → abort loop
+      พร้อม push observation; mascot ตัวโทรของเดิมไม่เกี่ยวและไม่แตะ
+      (single-action ของ fast path เดิมไม่ต้องมี mask — เร็วเกินกว่าจะชนมือคน)
 - [ ] เทสต์: node test serialize (DOM จำลอง), เทสต์ actions บนหน้า fixture
 - **เกณฑ์ผ่าน**: เปิดหน้า knowledge แล้วสั่ง observe ผ่าน WS ได้ browser_state
   ที่มี index ครบ; สั่ง click ตาม index แล้วปุ่มจริงทำงาน
