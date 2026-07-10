@@ -136,6 +136,26 @@ async def test_fixer_failure_costs_a_step_then_recovers():
 
 
 @pytest.mark.asyncio
+async def test_fixer_failure_logs_the_raw_completion(caplog):
+    """A FixerError message alone doesn't say what the model wrote — the raw
+    text must land in the log, or a run like this is undiagnosable from logs
+    alone (the exact state this was found in during live testing)."""
+    actuator = FixtureActuator(PAGES)
+    think = canned_think(
+        [
+            "I am thinking about this quite a bit before I answer.",  # no JSON
+            step("retry", "", {"done": {"text": "ok", "success": True}}),
+        ]
+    )
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
+    with caplog.at_level("WARNING"):
+        await loop.execute("t")
+    assert any(
+        "I am thinking about this quite a bit" in record.message for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
 async def test_repeated_invalid_output_ends_the_run():
     actuator = FixtureActuator(PAGES)
     loop = InPageAgentLoop(actuator, think=canned_think(["junk"] * 3), step_delay_s=0)

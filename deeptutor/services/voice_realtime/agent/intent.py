@@ -15,7 +15,13 @@ half-match a single-step fast-path rung and do half the job.
 from __future__ import annotations
 
 # Verbs that open a page command (mirrors the fast path's verb families).
+# Longest-first within a family (e.g. "กลับไปที่" before "กลับ") so the
+# opener consumed is the most specific match, not just any short prefix.
 _ACTION_VERBS = (
+    "กลับไปที่",
+    "กลับไปหน้า",
+    "กลับไป",
+    "กลับ",
     "ไปที่",
     "ไปหน้า",
     "ไป",
@@ -62,7 +68,9 @@ def match_agent_task(text: str) -> str | None:
     rest = lowered[len(opener) :]
     for marker in _SEQUENCE_MARKERS:
         pos = rest.find(marker)
-        if pos <= 0:
+        # -1 = not found. 0 IS valid: an object-less opener ("กลับไป") can
+        # butt straight up against the connector ("กลับไปแล้วเปิด...").
+        if pos < 0:
             continue
         after = rest[pos + len(marker) :]
         # "…แล้วกัน" / "…แล้วนะ" are sentence particles, not second steps —

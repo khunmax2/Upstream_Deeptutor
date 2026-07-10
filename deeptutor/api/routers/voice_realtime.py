@@ -49,6 +49,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from deeptutor.services.voice_realtime.agent import agent_loop_enabled
 from deeptutor.services.voice_realtime.session import VoiceSession
 from deeptutor.services.voice_realtime.ui_control import (
     MAX_MANIFEST_BYTES,
@@ -80,6 +81,16 @@ async def voice_websocket(ws: WebSocket) -> None:
 
     await ws.accept()
     session = VoiceSession(ws)
+    # Loud, per-call visibility into the D0 flag: silent-off is exactly the
+    # failure mode that reads as "the agent tried and failed" when it never
+    # ran at all (DEEPTUTOR_AGENT_LOOP / DEEPTUTOR_AGENT_MODEL missing).
+    if agent_loop_enabled():
+        logger.info("voice: in-page agent loop ENABLED for this call")
+    else:
+        logger.info(
+            "voice: in-page agent loop disabled (set DEEPTUTOR_AGENT_LOOP=1 and "
+            "DEEPTUTOR_AGENT_MODEL to enable) — multi-step commands fall back to chat"
+        )
     await session.greet()  # answer the phone: "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
     async def safe_send(data: dict[str, Any]) -> None:

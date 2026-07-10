@@ -157,6 +157,44 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — In-page agent: live-test fixes (JSON mode, verb gap, visible
+  narration).** First live run against a real page surfaced two real failures
+  and one UX gap, all traced to source before fixing:
+  1. **Malformed LLM output ("โมเดลตอบผิดรูปแบบซ้ำหลายครั้งครับ")** — the loop
+     was asking the model to reply in JSON via prompt instructions alone;
+     page-agent's real edge is a provider-level forced `tool_choice`, which
+     `services.llm.complete()` has no seam for. Closest equivalent:
+     `agent/llm.py::think()` now passes `response_format={"type":
+     "json_object"}` (an existing house pattern — see
+     `tools/question/question_extractor.py`; self-gating, silently dropped
+     for unsupported providers), `reasoning_effort="minimal"` (a hybrid
+     model's reasoning preamble can smuggle in a stray brace that breaks the
+     fixer's extraction — same value the voice chat turn already scopes to),
+     and `temperature=0.2` (near-deterministic action selection).
+  2. **"กลับไปหน้าหลักแล้วค้นหาราคาทอง" fell through to the old navigate-only
+     chat path** instead of the agent loop (diagnosed from the log signature:
+     `🖱 ไปหน้า` + generic "ได้เลยครับ" are the OLD `executeUiAction`
+     navigation handler and the existing chat's own `ui_navigate` tool — not
+     anything the agent loop emits). Root cause: `agent/intent.py`'s opener
+     list had no "กลับ" (back-to) family. Added `กลับไปที่ / กลับไปหน้า /
+     กลับไป / กลับ`; writing tests for it also caught a second bug — the
+     sequence-connector check used `pos <= 0` when it should have been
+     `pos < 0` (rejecting the legitimate case where an object-less opener
+     butts straight against the connector, e.g. "กลับไปแล้วเปิด...").
+  3. **The loop was audio-only in the widget** — narration/questions were
+     spoken via a bare `{"type": "audio"}` frame the client never logs, so a
+     TTS hiccup (or just not listening closely) left zero visibility into
+     what the agent was doing, unlike page-agent's step-by-step log.
+     `AgentVoiceBridge` now also emits `{"type": "agent_note", "text": …}`
+     alongside every spoken line; `VoiceCallWidget.tsx` renders it as a `sys`
+     log line. Failure-tolerant (`contextlib.suppress`) — a dying socket
+     during narration must not take the run down with it.
+  Also: fixer-failure logs now include the raw completion text (truncated) —
+  previously only the parsed-away `FixerError` message was logged, making a
+  run like this undiagnosable from logs alone. Tests: +16
+  (`test_llm_scope`, `test_intent`, `test_voice_bridge`, `test_loop`). Voice
+  suite: 384 green.
+
 - **2026-07-10 — In-page agent, Phase D (wired end-to-end, behind a
   default-off flag) landed.** The loop now answers the phone. New in
   `services/voice_realtime/agent/`: `ws_actuator.py` (server end of the A4

@@ -48,6 +48,7 @@ class AgentVoiceBridge:
         actuator: Actuator | None = None,
         think: Think | None = None,
     ) -> None:
+        self._send_json = send_json
         self._speak = speak
         self._language = language
         self._ws_actuator = None if actuator is not None else WsPageActuator(send_json)
@@ -120,10 +121,19 @@ class AgentVoiceBridge:
 
     # ── loop hooks (spoken side) ──
 
+    async def _notify(self, text: str) -> None:
+        """Mirror one line into the visible chat log (page-agent's step
+        transparency — the loop was previously audio-only: silent if TTS
+        failed, and invisible in the widget's log either way)."""
+        with contextlib.suppress(Exception):
+            await self._send_json({"type": "agent_note", "text": text})
+
     async def _narrate(self, text: str) -> None:
+        await self._notify(text)
         await self._speak(text)
 
     async def _ask_user(self, question: str) -> str:
+        await self._notify(question)
         await self._speak(question)
         try:
             return await asyncio.wait_for(self._new_answer(), timeout=ANSWER_TIMEOUT_S)
@@ -134,6 +144,7 @@ class AgentVoiceBridge:
 
     async def _confirm(self, question: str) -> bool:
         """Danger-gate confirm: strict — only a clear yes releases the click."""
+        await self._notify(question)
         await self._speak(question)
         try:
             answer = await self._new_answer()

@@ -1105,6 +1105,10 @@ export default function VoiceCallWidget() {
           setStatus('ฟังอยู่…')
           setMascot('listening')
         }
+      } else if (m.type === 'agent_note') {
+        // In-page agent step transparency: narration/questions, spoken AND
+        // visible — audio-only left the widget blank while the loop ran.
+        addMsg('sys', `🤖 ${m.text}`)
       } else if (m.type === 'ui_action') executeUiAction(m)
       else if (m.type === 'ui_scan') sendInventory()
       else if (agentBridgeRef.current?.handleFrame(m)) {

@@ -156,7 +156,16 @@ class InPageAgentLoop:
                     output = normalize_output(raw, self._actions)
                 except FixerError as exc:
                     fixer_failures += 1
-                    logger.warning("agent fixer gave up on step %d: %s", step, exc)
+                    # The FixerError message alone doesn't say what the model
+                    # actually wrote — without the raw text this is undiagnosable
+                    # from logs alone (which is exactly the state this was found
+                    # in). Truncated: raw can carry a whole reasoning preamble.
+                    logger.warning(
+                        "agent fixer gave up on step %d: %s | raw=%r",
+                        step,
+                        exc,
+                        raw[:500],
+                    )
                     if fixer_failures >= MAX_FIXER_FAILURES:
                         return self._finish("error", False, _INVALID_OUTPUT_LINE, steps, t0)
                     history.append(("sys", f"Your previous reply was invalid: {exc}"))

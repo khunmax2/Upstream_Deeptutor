@@ -40,13 +40,17 @@ async def test_run_task_narrates_progress_and_the_ending():
             step("arrived", "", {"done": {"text": "เปิดให้แล้วครับ", "success": True}}),
         ]
     )
-    bridge, actuator, _sent, spoken = make_bridge(think)
+    bridge, actuator, sent, spoken = make_bridge(think)
 
     reply = await bridge.run_task("เปิดศูนย์ความรู้")
 
     assert reply == "เปิดให้แล้วครับ"
     assert spoken == ["กำลังไปศูนย์ความรู้", "เปิดให้แล้วครับ"]
     assert [name for name, _ in actuator.acts] == ["click_element_by_index"]
+    # Narration must be VISIBLE too, not just spoken — audio-only was the
+    # live-test gap: TTS-unavailable or missed-audio left the log blank.
+    notes = [f["text"] for f in sent if f.get("type") == "agent_note"]
+    assert notes == ["กำลังไปศูนย์ความรู้", "เปิดให้แล้วครับ"]
 
 
 @pytest.mark.asyncio
@@ -57,7 +61,7 @@ async def test_ask_user_speaks_and_consumes_delivered_speech():
             step("answered", "", {"done": {"text": "ok", "success": True}}),
         ]
     )
-    bridge, _actuator, _sent, spoken = make_bridge(think)
+    bridge, _actuator, sent, spoken = make_bridge(think)
 
     async def user_answers():
         while not bridge.waiting_on_user:
@@ -71,6 +75,8 @@ async def test_ask_user_speaks_and_consumes_delivered_speech():
     assert reply == "ok"
     assert "หมายถึง KB ไหนครับ" in spoken
     assert not bridge.waiting_on_user
+    notes = [f["text"] for f in sent if f.get("type") == "agent_note"]
+    assert "หมายถึง KB ไหนครับ" in notes  # the question is visible, not just spoken
 
 
 @pytest.mark.asyncio
@@ -88,7 +94,7 @@ async def test_danger_confirm_yes_releases_the_click():
             step("deleted", "", {"done": {"text": "ลบแล้วครับ", "success": True}}),
         ]
     )
-    bridge, actuator, _sent, spoken = make_bridge(
+    bridge, actuator, sent, spoken = make_bridge(
         think, states=[BrowserState(url="http://x/kb", content=KB_SETTINGS_PAGE)]
     )
 
@@ -103,6 +109,7 @@ async def test_danger_confirm_yes_releases_the_click():
 
     assert reply == "ลบแล้วครับ"
     assert any("ผลถาวร" in line for line in spoken)  # the question was spoken
+    assert any("ผลถาวร" in f["text"] for f in sent if f.get("type") == "agent_note")
     assert [name for name, _ in actuator.acts] == ["click_element_by_index"]
 
 
@@ -129,6 +136,30 @@ async def test_danger_confirm_no_blocks_the_click():
 
     assert reply == "ไม่ได้ลบครับ"
     assert actuator.acts == []  # the delete never fired
+
+
+@pytest.mark.asyncio
+async def test_notify_failure_never_breaks_the_run():
+    """A dying socket during agent_note must not take the run down with it."""
+    think = canned_think(
+        [
+            step("s", "กำลังไป", {"click_element_by_index": {"index": 0}}),
+            step("done", "", {"done": {"text": "ok", "success": True}}),
+        ]
+    )
+
+    async def dying_send(payload: dict[str, Any]) -> None:
+        raise RuntimeError("socket closed")
+
+    async def speak(text: str) -> None:
+        return None
+
+    actuator = FixtureActuator([BrowserState(url="http://x/home", content="[0]<a >ศูนย์ความรู้ />")])
+    bridge = AgentVoiceBridge(dying_send, speak, actuator=actuator, think=think)
+    bridge._loop._step_delay_s = 0  # noqa: SLF001
+
+    reply = await bridge.run_task("t")
+    assert reply == "ok"  # narration failed silently; the task still finished
 
 
 @pytest.mark.asyncio

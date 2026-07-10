@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from typing import Any
 
 from deeptutor.services.voice_realtime.agent.types import AgentLLMNotConfigured
 
@@ -77,10 +78,29 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
 
     ``services.llm.complete()`` accepts per-call model/base_url/api_key and
     carries its own retry policy, so this stays a thin seam — tests replace it.
+
+    Three calls the evaluation didn't need but our text-transport does:
+
+    * ``response_format={"type": "json_object"}`` — page-agent's real edge is a
+      forced ``tool_choice`` that makes malformed output structurally
+      impossible; ``complete()`` has no tool-calling seam (it returns text
+      only), so this is the closest equivalent. Already a house pattern (see
+      ``tools/question/question_extractor.py``) and self-gating: unsupported
+      providers get it silently dropped by ``_sanitize_call_kwargs``.
+    * ``reasoning_effort="minimal"`` — a hybrid-thinking model can preface the
+      JSON with a long reasoning block; a stray brace in that prose is enough
+      to break the fixer's bracket-matching extraction. Same value voice chat
+      turns already use (``pipeline._VOICE_REASONING_EFFORT``).
+    * ``temperature=0.2`` — action selection should be closer to deterministic
+      than prose, same reasoning as ``pipeline._VOICE_TEMPERATURE``.
     """
     from deeptutor.services.llm import complete
 
-    kwargs: dict[str, str] = {}
+    kwargs: dict[str, Any] = {
+        "response_format": {"type": "json_object"},
+        "reasoning_effort": "minimal",
+        "temperature": 0.2,
+    }
     if settings.base_url:
         kwargs["base_url"] = settings.base_url
     if settings.api_key:

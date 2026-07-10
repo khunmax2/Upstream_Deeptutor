@@ -45,3 +45,22 @@ def test_non_action_openers_do_not_match():
 def test_rambling_beyond_the_cap_is_left_to_the_llm():
     long_text = "ไปตั้งค่าแล้วเปลี่ยนธีมมืด " + "และช่วยดูเรื่องอื่นให้หน่อย " * 10
     assert match_agent_task(long_text) is None
+
+
+# ── "กลับ" (back-to) family — the live-test gap: this utterance fell through
+# to the old navigate-only chat path instead of the loop, because none of the
+# original openers matched a sentence starting with "กลับ". ──
+
+
+def test_back_to_home_then_search_matches():
+    assert match_agent_task("กลับไปหน้าหลักแล้วค้นหาราคาทอง")
+
+
+def test_back_to_settings_variants_match():
+    assert match_agent_task("กลับไปที่ตั้งค่าแล้วเปลี่ยนธีมมืด")
+    assert match_agent_task("กลับไปแล้วเปิดศูนย์ความรู้")
+    assert match_agent_task("กลับแล้วค้นหา pdpa")
+
+
+def test_bare_back_without_a_second_step_stays_on_the_fast_path():
+    assert match_agent_task("กลับไปหน้าหลัก") is None
