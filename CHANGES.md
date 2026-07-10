@@ -157,6 +157,24 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — In-page agent, Phase C (trust model) landed.** New
+  `deeptutor/services/voice_realtime/agent/danger.py`: `DangerGate`, the
+  `pre_act` implementation — before ANY loop click fires, the target's real
+  serialized `[index]` line is extracted from the page snapshot
+  (`extract_element_line`, exact-index match) and checked against the same
+  danger lexicon the fast path uses (`ui_control.is_dangerous_button`);
+  dangerous or unverifiable targets pause the run for a SPOKEN confirmation
+  (timeout ⇒ no). A refusal goes back to the LLM as an explicit
+  "User REJECTED …" observation so it re-plans instead of retrying. Typing is
+  not gated (codebase philosophy: typing never submits; the submit press is
+  its own gated click). Loop additions: `waiting_on_user` now also covers the
+  gate's confirmation window (C3 speech routing: answer vs barge-in), and the
+  ending (`done.text`) is always narrated — success or honest failure (C4).
+  Tests: `tests/.../agent/test_danger.py` — 13 cases, anchored by the replay
+  of the real evaluation trace (page-agent pressed "ลบ Knowledge Base" [169]
+  unconfirmed; with the gate that click can never fire, even when the task
+  says "ไม่ต้องถาม"). Voice suite: 349 green.
+
 - **2026-07-10 — In-page agent, Phase A (eyes + hands) landed.** New package
   `web/lib/page-actuator/`: `serialize.ts` (pure, node-tested port of
   page-agent's LLM-facing DOM format — `[index]` lines, indent hierarchy,

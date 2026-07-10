@@ -177,6 +177,10 @@ class InPageAgentLoop:
                     text = str(args.get("text") or "").strip() or "งานจบแล้วครับ"
                     record.action_output = "Task completed"
                     steps.append(record)
+                    # C4: the ending is ALWAYS spoken — success summary or an
+                    # honest failure; a silent finish reads as a dead line.
+                    if self._narrate:
+                        await self._call_quietly(self._narrate, text)
                     return self._finish("done", success, text, steps, t0)
 
                 # ── act (with the Phase C gate in front) ──
@@ -195,7 +199,13 @@ class InPageAgentLoop:
     ) -> str:
         """Execute one action; ALWAYS returns a sentence for the history."""
         if self._pre_act:
-            verdict = await self._pre_act(name, args, page_content)
+            # The gate may pause for a spoken confirmation — while it does,
+            # incoming speech is the ANSWER, not a barge-in (C3 state machine).
+            self._waiting_on_user = True
+            try:
+                verdict = await self._pre_act(name, args, page_content)
+            finally:
+                self._waiting_on_user = False
             if verdict is not None:
                 logger.info("agent pre_act blocked %s: %s", name, verdict)
                 return f"⛔ Action blocked: {verdict}"

@@ -2,6 +2,7 @@
 own observe→think→act brain. Server-side, actuator-agnostic, danger-gateable.
 """
 
+from deeptutor.services.voice_realtime.agent.danger import DangerGate
 from deeptutor.services.voice_realtime.agent.llm import (
     AgentLLMSettings,
     is_configured,
@@ -24,6 +25,7 @@ __all__ = [
     "AgentLLMSettings",
     "AgentResult",
     "BrowserState",
+    "DangerGate",
     "InPageAgentLoop",
     "StepRecord",
     "is_configured",

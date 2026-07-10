@@ -240,7 +240,9 @@ async def test_narration_speaks_next_goal_but_never_breaks_the_run():
     loop = InPageAgentLoop(actuator, think=think, narrate=narrate, step_delay_s=0)
     result = await loop.execute("t")
     assert result.success
-    assert spoken == ["กำลังไปศูนย์ความรู้"]  # done's goal is not narrated (done.text is spoken by C4)
+    # Progress goals are narrated; the ending is ALWAYS spoken too (C4) —
+    # done's own next_goal is not (done.text replaces it).
+    assert spoken == ["กำลังไปศูนย์ความรู้", "ok"]
 
 
 @pytest.mark.asyncio
