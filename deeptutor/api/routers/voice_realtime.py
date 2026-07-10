@@ -23,8 +23,8 @@ Client → server:
     actually landed (value stuck / route changed / caret placed)
   * ``{"type": "ui_inventory", "inventory": [{"i", "tag", "label",
     "hint"}]}`` → reply to a server ``ui_scan``: the full indexed list of
-    interactive elements (deep rung — an LLM picks the index on a
-    fast-path miss)
+    interactive elements (observe transport for the in-page agent loop,
+    PLAN_inpage_agent_parity Phase B; currently unrequested)
 
 Server → client (all JSON except the audio payload frames):
   * ``{"type": "transcript", "text": …}``                 recognised user speech
@@ -33,7 +33,7 @@ Server → client (all JSON except the audio payload frames):
   * ``{"type": "assistant_text", "text": …}``             full reply text
   * ``{"type": "done", "total_ms": …, "first_audio_ms": …}``
   * ``{"type": "ui_action", "action": "navigate", "target": …}``  execute on page
-  * ``{"type": "ui_scan"}``  request the indexed element inventory (deep rung)
+  * ``{"type": "ui_scan"}``  request the indexed element inventory (agent observe)
   * ``{"type": "error", "message": …}``
 
 Like ``unified_ws`` this endpoint does its own ``ws_require_auth`` (so it is
@@ -158,7 +158,7 @@ async def _handle_control(raw: str, session: VoiceSession, safe_send: Any) -> No
                 logger.info("voice graph step dispatched: %s", step.get("argument"))
                 await safe_send(step)
     elif kind == "ui_inventory":
-        # Deep-rung reply (client answers a server ui_scan with its indexed
+        # Inventory reply (client answers a server ui_scan with its indexed
         # element inventory). Silent; delivered to the turn awaiting it.
         session.resolve_ui_inventory(msg.get("inventory"))
 

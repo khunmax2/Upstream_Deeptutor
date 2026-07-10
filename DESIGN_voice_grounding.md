@@ -1,11 +1,22 @@
 # DESIGN — Voice UI Grounding & Target-Locking Architecture
 
-> Status: **draft / blueprint** (2026-07-09). Captures the target-design agreed
-> in the voice-web-integration phase. Nothing here is a committed schedule —
-> it is the reference map so that Graph / Scoring / Verify work does not
-> accidentally couple to DeepTutor internals and stays portable to the future
-> standalone connector. See `REPORT_voice_web_integration.md` for what is
-> already built, and `AGENTS.md` for the surrounding architecture.
+> Status: **partially superseded** (2026-07-10) by `PLAN_inpage_agent_parity.md`.
+> The 2026-07-10 page-agent evaluation (branch `page-agent-clean-eval`) proved a
+> looped observe→think→act agent covers everything the deep-LLM rung and the
+> navigation-reasoning phases here were designed for — so those parts are
+> replaced by the in-page agent loop plan. **Still authoritative:** the gated
+> pipeline rule (§2), the core/knowledge split (§3), the trust model (§8), the
+> fast deterministic rungs, and the Website Graph *as a fast path* (§4 — its
+> long-term fate is decided by data in the plan's Phase E). The deep rung
+> (`ui_deep.py`) was removed on 2026-07-10; its pipeline call sites are marked
+> `[agent-loop seam — Phase D2]`.
+>
+> Original preamble: draft / blueprint (2026-07-09). Captures the target-design
+> agreed in the voice-web-integration phase. Nothing here is a committed
+> schedule — it is the reference map so that Graph / Scoring / Verify work does
+> not accidentally couple to DeepTutor internals and stays portable to the
+> future standalone connector. See `REPORT_voice_web_integration.md` for what
+> is already built, and `AGENTS.md` for the surrounding architecture.
 
 ## 1. Purpose & the two goals in tension
 

@@ -28,8 +28,8 @@ from deeptutor.services.voice_realtime.pipeline import (
 
 logger = logging.getLogger(__name__)
 
-# How long the deep rung waits for the client's ui_inventory reply. A silent
-# client costs the turn this much at worst and degrades to the honest miss.
+# How long an inventory request waits for the client's ui_inventory reply. A
+# silent client costs the caller this much at worst and degrades gracefully.
 INVENTORY_TIMEOUT_SECONDS = 2.5
 
 
@@ -51,18 +51,20 @@ class VoiceSession:
         # confirmation); owned here, mutated by the pipeline each turn.
         self.nav_state: dict[str, Any] = {}
         self._current: asyncio.Task[None] | None = None
-        # In-flight deep-rung inventory request (ui_scan → ui_inventory):
-        # the pipeline awaits this future; the router resolves it when the
-        # client's reply frame arrives.
+        # In-flight inventory request (ui_scan → ui_inventory): the caller
+        # awaits this future; the router resolves it when the client's reply
+        # frame arrives. No caller right now — the deep rung that consumed it
+        # was superseded; kept as the observe transport for the in-page agent
+        # loop (PLAN_inpage_agent_parity Phase B).
         self._inventory_future: asyncio.Future[Any] | None = None
 
     async def request_ui_inventory(self) -> Any:
         """Ask the client for its indexed element inventory; ``None`` on timeout.
 
-        The deep rung's eyes: sends a ``ui_scan`` frame and awaits the
-        client's ``ui_inventory`` reply (resolved by the router via
+        The agent's eyes: sends a ``ui_scan`` frame and awaits the client's
+        ``ui_inventory`` reply (resolved by the router via
         :meth:`resolve_ui_inventory`). Bounded — a silent client costs the
-        turn 2.5s at worst and degrades to the honest miss line.
+        caller 2.5s at worst and degrades gracefully.
         """
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         self._inventory_future = future
@@ -136,7 +138,6 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
-                inventory_getter=self.request_ui_inventory,
             )
         except asyncio.CancelledError:
             raise
@@ -156,7 +157,6 @@ class VoiceSession:
                 ui_manifest=self.ui_manifest,
                 ui_context=self.ui_context,
                 nav_state=self.nav_state,
-                inventory_getter=self.request_ui_inventory,
             )
         except asyncio.CancelledError:
             raise

@@ -33,7 +33,7 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
-from deeptutor.services.voice_realtime import narration, ui_control, ui_deep, ui_graph
+from deeptutor.services.voice_realtime import narration, ui_control, ui_graph
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
 
@@ -401,46 +401,6 @@ async def _run_focus_shortcut(emitter: VoiceEmitter, field: str, *, turn_t0: flo
     return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
 
 
-async def _run_deep_click(
-    emitter: VoiceEmitter,
-    spoken: str,
-    transcript: str,
-    inventory_getter: Any,
-    *,
-    turn_t0: float,
-) -> str | None:
-    """Deep rung (Phase B): indexed inventory + one LLM pick → click by index.
-
-    Returns the spoken reply when an element was chosen and dispatched, or
-    ``None`` so the caller falls through to the honest miss line. Never
-    raises — every failure mode is a fall-through.
-    """
-    try:
-        raw = await inventory_getter()
-    except Exception:  # noqa: BLE001 — a scan failure = honest miss
-        logger.warning("voice deep-click inventory request failed", exc_info=True)
-        return None
-    items = ui_deep.sanitize_inventory(raw)
-    if not items:
-        return None
-    choice = await ui_deep.pick_element(spoken, transcript, items)
-    if choice is None:
-        return None
-    logger.info(
-        "voice rung=deep-click index=%s label=%r %r", choice["i"], choice["label"], transcript
-    )
-    await emitter.send_json(
-        {
-            "type": "ui_action",
-            "action": "navigate",
-            "target": "click_index",
-            "argument": str(choice["i"]),
-            "label": choice["label"],
-        }
-    )
-    return await _speak_short_turn(emitter, narration.NAV_ACK_LINE, turn_t0=turn_t0)
-
-
 async def _run_graph_plan(
     emitter: VoiceEmitter,
     node: dict[str, Any],
@@ -656,7 +616,6 @@ async def run_turn(
     ui_manifest: dict[str, Any] | None = None,
     ui_context: dict[str, str] | None = None,
     nav_state: dict[str, Any] | None = None,
-    inventory_getter: Any = None,
 ) -> tuple[str, str]:
     """Run one voice turn (audio in) and stream events/audio to *emitter*.
 
@@ -692,7 +651,6 @@ async def run_turn(
         ui_manifest=ui_manifest,
         ui_context=ui_context,
         nav_state=nav_state,
-        inventory_getter=inventory_getter,
     )
     return transcript, reply
 
@@ -747,7 +705,6 @@ async def run_text_turn(
     ui_manifest: dict[str, Any] | None = None,
     ui_context: dict[str, str] | None = None,
     nav_state: dict[str, Any] | None = None,
-    inventory_getter: Any = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
@@ -888,17 +845,12 @@ async def run_text_turn(
                 logger.info("voice rung=click button=%r %r", button, transcript)
                 return await _run_click_shortcut(emitter, button, turn_t0=t0)
         elif outcome == "ambiguous":
-            # A tie among fuzzy matches is exactly what the deep rung's LLM
-            # can adjudicate with the full screen in hand — try that before
-            # asking back. When it also can't decide, ask back NAMING the
-            # tied candidates ("หมายถึง X หรือ Y ครับ"): answerable, and
+            # [agent-loop seam — PLAN_inpage_agent_parity Phase D2] A tie among
+            # fuzzy matches is what the in-page agent loop will adjudicate with
+            # the full screen in hand (the deep rung that used to sit here was
+            # superseded by that plan). Until the loop lands: ask back NAMING
+            # the tied candidates ("หมายถึง X หรือ Y ครับ") — answerable, and
             # live telemetry for why the resolver tied.
-            if inventory_getter is not None:
-                deep = await _run_deep_click(
-                    emitter, click_name, transcript, inventory_getter, turn_t0=t0
-                )
-                if deep is not None:
-                    return deep
             tied = ui_control.resolve_click_candidates(click_name, ui_context)
             logger.info("voice rung=click-ambiguous tied=%r %r", tied, transcript)
             return await _speak_short_turn(
@@ -919,15 +871,10 @@ async def run_text_turn(
                 return await _run_graph_plan(
                     emitter, g_node, g_control, ui_context, nav_state, turn_t0=t0
                 )
-            # Deep rung (Phase B): the screen is the authority — pull the
-            # full indexed inventory and let one scoped LLM call pick the
-            # element by meaning. Only misses pay for this.
-            if inventory_getter is not None:
-                deep = await _run_deep_click(
-                    emitter, click_name, transcript, inventory_getter, turn_t0=t0
-                )
-                if deep is not None:
-                    return deep
+            # [agent-loop seam — PLAN_inpage_agent_parity Phase D2] A miss on
+            # both this screen and the Website Graph is where the in-page
+            # agent loop will take the turn (observe → think → act, multi-step).
+            # Until it lands, the honest miss line below is the floor.
             logger.info("voice rung=click-miss %r", transcript)
             return await _speak_short_turn(emitter, narration.CLICK_MISS_LINE, turn_t0=t0)
 

@@ -157,6 +157,23 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — Deep rung removed; superseded by the in-page agent plan.**
+  The 2026-07-10 page-agent evaluation (branch `page-agent-clean-eval`, kept as
+  the page-agent test bed) proved a looped observe→think→act agent covers
+  everything the deep rung was for — so the plan (`PLAN_inpage_agent_parity.md`,
+  now on this branch too) replaces it with our own agent loop. Removed:
+  `services/voice_realtime/ui_deep.py` (LLM picks an index from a flat
+  inventory), its pipeline caller `_run_deep_click` + both call sites (now
+  marked `[agent-loop seam — Phase D2]`, falling through to ask-back /
+  honest-miss), the `inventory_getter` threading, and
+  `tests/services/voice_realtime/test_ui_deep.py`. **Kept deliberately:** the
+  `ui_scan`→`ui_inventory` transport (session future + router handler + web
+  responder — becomes the loop's observe channel, Phase B), the vendored
+  `dom_tree` engine + `pageInventory.ts` + `click_index` executor (seed of the
+  Phase A actuator), and `ui_graph.py` (deterministic fast path; fate decided
+  by data in Phase E). `DESIGN_voice_grounding.md` preamble now records what is
+  superseded vs still authoritative. Voice suite: 308 tests green.
+
 - **2026-06-30 — Standalone prototype landed** under `voice_prototype/` (outside the
   `deeptutor/` package; no upstream files touched). FastAPI WebSocket server +
   browser mic client (energy-VAD endpointing + barge-in), pipeline = Groq Whisper STT
