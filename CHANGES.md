@@ -157,6 +157,27 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-10 — In-page agent, Phase A (eyes + hands) landed.** New package
+  `web/lib/page-actuator/`: `serialize.ts` (pure, node-tested port of
+  page-agent's LLM-facing DOM format — `[index]` lines, indent hierarchy,
+  `*[new]` markers via caller-owned WeakSet, attribute hygiene incl. 20-char
+  caps, `data-scrollable` distances, header/footer scroll hints, plus our
+  hard 30K-char cap that cuts on a line boundary with an explicit truncation
+  notice), `actions.ts` (MIT-attributed port: full W3C pointer+mouse click
+  sequence, inner hit-test refinement, native value setter, contenteditable
+  Plan A→verify→Plan B; visible hand = our simulatorCursor), `runMask.ts`
+  (A5: input shield shown only while the loop runs; click-on-mask = takeover;
+  pass-through wrapper for hit-tests), `actuator.ts` (PageActuator: observe →
+  vendored dom_tree engine with the highlight/vision layer switched ON +
+  react-root blacklist; act by index; devtools handle `window.pageActuator`),
+  `wsBridge.ts` (A4 frames `agent_run/agent_observe/agent_state_chunk/`
+  `agent_act/agent_acted/agent_takeover`; agent_state is JSON-then-chunked at
+  6000 chars because control frames are ~8K-capped server-side). Wired into
+  `VoiceCallWidget.tsx` with a bridge ref + one routing line (inert until the
+  server loop sends agent frames). Tests:
+  `web/tests/page-actuator-serialize.test.ts` — 8 cases pinning the exact
+  serialization format on fabricated trees. Node suite: 197 green.
+
 - **2026-07-10 — In-page agent loop, Phase B (the brain) landed.** New package
   `deeptutor/services/voice_realtime/agent/` implementing our own
   observe→think→act loop per `PLAN_inpage_agent_parity.md`: `loop.py`

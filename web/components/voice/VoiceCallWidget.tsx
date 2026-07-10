@@ -35,6 +35,7 @@ import {
 import { clickPulse, disposeCursor, glowField, pointAt } from './simulatorCursor'
 import { pickUtterance } from './speechAlternatives'
 import { VOICE_ACTION_EVENT, type VoiceActionDetail } from './VoiceActionBridge'
+import { attachPageAgentBridge, type PageAgentBridge } from '@/lib/page-actuator/wsBridge'
 
 // Steerable-UI whitelist sent to the voice layer as the `ui_manifest` control
 // frame: the model may call `ui_navigate` only with these ids, and this
@@ -562,6 +563,7 @@ export default function VoiceCallWidget() {
   const mascotRef = useRef<MascotHandle | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const agentBridgeRef = useRef<PageAgentBridge | null>(null)
   const recogRef = useRef<any>(null)
   const playingRef = useRef(false)
   const muteUntilRef = useRef(0)
@@ -1016,6 +1018,8 @@ export default function VoiceCallWidget() {
     }
     stopPlayback()
     disposeCursor() // the simulator cursor must not outlive its call
+    agentBridgeRef.current?.dispose() // nor the agent mask/actuator
+    agentBridgeRef.current = null
     wsRef.current?.close()
     wsRef.current = null
     setMascot('idle')
@@ -1049,6 +1053,12 @@ export default function VoiceCallWidget() {
     const ws = new WebSocket(wsUrl('/api/v1/voice/ws'))
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
+    // In-page agent eyes/hands (lib/page-actuator): inert until the server's
+    // agent loop sends agent_* frames on this same socket.
+    agentBridgeRef.current?.dispose()
+    agentBridgeRef.current = attachPageAgentBridge(payload => {
+      if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify(payload))
+    })
     ws.onopen = () => {
       setStatus('ฟังอยู่…')
       setMascot('listening')
@@ -1097,7 +1107,9 @@ export default function VoiceCallWidget() {
         }
       } else if (m.type === 'ui_action') executeUiAction(m)
       else if (m.type === 'ui_scan') sendInventory()
-      else if (m.type === 'voice_mode') {
+      else if (agentBridgeRef.current?.handleFrame(m)) {
+        /* agent_* frames handled by the page-actuator bridge */
+      } else if (m.type === 'voice_mode') {
         const on = m.mode === 'secretary'
         setSecretary(on)
         // Dictation lands in the chat — make sure the caller is looking at it.
