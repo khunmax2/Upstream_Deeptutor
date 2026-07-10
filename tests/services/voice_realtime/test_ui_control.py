@@ -1357,6 +1357,35 @@ async def test_llm_fill_tool_call_dispatches_fill(monkeypatch: pytest.MonkeyPatc
     ]
 
 
+def test_suffixed_duplicate_twins_resolve_to_the_first() -> None:
+    """Live regression: the engine collector reports a card twice ("LlamaIndex",
+    "LlamaIndex (2)") — a tie between ordinal twins must NOT ask back (the
+    visible names are identical; "พูดชื่อเต็ม" is a dead end)."""
+    ctx = {"buttons": ["LlamaIndex", "LlamaIndex (2)", "GraphRAG"]}
+    assert ui_control.resolve_click_target("ลามะ index", ctx) == ("hit", "LlamaIndex")
+    assert ui_control.resolve_click_target("LlamaIndex", ctx) == ("hit", "LlamaIndex")
+    # Distinct labels that merely tie are still a real ambiguity.
+    two = {"buttons": ["โน้ตเก่า", "โน้ตใหม่"]}
+    assert ui_control.resolve_click_target("โน้ต", two) == ("ambiguous", None)
+
+
+def test_system_block_carries_the_full_buttons_channel() -> None:
+    """Live regression: the LLM only saw the summary's capped prose and told
+    callers a plainly-visible button didn't exist — the full clickables
+    channel must reach the prompt."""
+    cap = ui_control.VoiceUICapability()
+    ctx = pipe.build_voice_context(
+        transcript="q",
+        history=[],
+        session_id="s",
+        knowledge_bases=[],
+        ui_context={"path": "/knowledge", "summary": "x", "buttons": ["PageIndex", "LAWs_thai"]},
+    )
+    block = cap.system_block(ctx, language="th", prompts={})
+    assert block is not None
+    assert "PageIndex | LAWs_thai" in block.content
+
+
 def test_click_matches_mixed_script_garbles_knowledge_center() -> None:
     """เคสจริงหน้าศูนย์ความรู้: STT ถอดครึ่งไทยครึ่งอังกฤษ / ทับศัพท์เพี้ยน."""
     ctx = {

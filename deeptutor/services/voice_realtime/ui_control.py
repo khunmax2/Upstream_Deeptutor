@@ -70,10 +70,11 @@ _MAX_TARGETS = 64
 # re-inject into every turn's prompt) well under that.
 _MAX_CONTEXT_SUMMARY_CHARS = 3_000
 _MAX_CONTEXT_PATH_CHARS = 200
-# The client budgets its buttons list by characters (~2600 chars ≈ 60–80
-# labels); this count cap is a backstop, not the working limit — the 8K
-# frame cap is what really bounds the payload.
-_MAX_BUTTONS = 100
+# The client budgets its buttons list by characters (~2600 chars); this
+# count cap is a backstop, not the working limit — the 8K frame cap is what
+# really bounds the payload. Live pages showed 109 short Thai labels within
+# the char budget, so keep the backstop comfortably above it.
+_MAX_BUTTONS = 200
 _MAX_BUTTON_CHARS = 60
 # Visible form fields (labels, with a dropdown's options folded into the
 # string client-side) — fewer than buttons but each entry can be longer.
@@ -933,6 +934,10 @@ def _consonant_skeleton(s: str) -> str:
 # break a tie WITHIN a label tier — never promote a weaker label match over a
 # stronger one, never resurrect a non-match (label score 0 = excluded). That
 # invariant is what keeps the regression suite the authority on matching.
+# The client suffixes duplicate labels ("X (2)") to keep them addressable;
+# strip that ordinal when judging whether tied winners are really distinct.
+_ORDINAL_SUFFIX_RE = re.compile(r"\s*\(\d+\)$")
+
 _SCORE_EXACT = 400  # normalised text equal
 _SCORE_CONTAINS = 300  # substring either way
 _SCORE_FUZZY = 200  # phonetic fold within edit budget (STT garbles)
@@ -989,6 +994,12 @@ def _resolve_spoken_name(
     top = max(score for score, _ in scored)
     winners = [candidate for score, candidate in scored if score == top]
     if len(winners) == 1:
+        return ("hit", winners[0])
+    # A tie between ordinal-suffixed twins ("LlamaIndex", "LlamaIndex (2)")
+    # is not a real ambiguity: the visible texts ARE identical, so asking
+    # the caller to "พูดชื่อเต็ม" is a dead end. Take the first in document
+    # order — what a human assistant pointing at the screen would do.
+    if len({_ORDINAL_SUFFIX_RE.sub("", w) for w in winners}) == 1:
         return ("hit", winners[0])
     return ("ambiguous", None)
 
@@ -1621,6 +1632,14 @@ class VoiceUICapability:
             if screen.get("path"):
                 lines.append(f"Path: {screen['path']}")
             lines.append(str(screen["summary"]))
+            # The FULL clickables channel — the summary's prose sections are
+            # tightly capped, and a model that only sees those falsely tells
+            # callers a plainly-visible button doesn't exist.
+            buttons = [b for b in screen.get("buttons") or [] if isinstance(b, str)]
+            if buttons:
+                lines.append(
+                    "ปุ่ม/การ์ด/ลิงก์ที่กดได้ทั้งหมดตอนนี้ (ครบทุกตัว ใช้รายการนี้เป็นหลัก): " + " | ".join(buttons)
+                )
             fields = [f for f in screen.get("fields") or [] if isinstance(f, str)]
             if fields:
                 lines.append("ช่องกรอกที่มองเห็น (form fields): " + " | ".join(fields))

@@ -314,6 +314,26 @@ code is additive and isolated for mergeability.
   `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
   green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
 
+- **2026-07-10 — Live-test trio: oversized inventory frame; suffix-twin
+  false ambiguity; the LLM's amputated screen view.** Three defects found
+  in one live session on the knowledge center (109 buttons on screen):
+  (1) the deep rung's ``ui_inventory`` frame budgeted only label lengths,
+  not JSON syntax — 150 items overflowed the 8K control-frame cap and the
+  server rejected the reply whole ("Control frame too large" → honest
+  miss); the scan now budgets the real serialized size (7.2K, envelope
+  included). (2) The engine collector reports some cards twice, so the
+  duplicate-suffix feature produced ordinal twins ("LlamaIndex",
+  "LlamaIndex (2)") that tied in the resolver and asked back "พูดชื่อเต็ม"
+  — a dead end for identical names; tied winners whose labels differ only
+  by the ordinal now resolve to the first in document order (previously-
+  working "ลามะ index" restored). (3) The LLM fallback only saw the
+  summary's tightly-capped prose and falsely told callers a visible button
+  didn't exist; the system prompt now carries the FULL buttons channel
+  (the same list the resolver uses). Server buttons backstop 100→200.
+  Files: `web/components/voice/pageContext.ts`,
+  `services/voice_realtime/ui_control.py`; tests (pytest 316 green,
+  node 189 green).
+
 - **2026-07-10 — Deep target-locking rung (Phase B): an LLM picks the
   element INDEX when every deterministic rung misses.** The page-agent
   accuracy inside our gated pipeline: on a click miss (after the graph

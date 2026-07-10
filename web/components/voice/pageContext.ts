@@ -578,8 +578,12 @@ export interface InventoryItem {
 }
 
 const MAX_INVENTORY_ITEMS = 150
-// ui_inventory rides the same 8K control-frame cap as everything else.
-const MAX_INVENTORY_CHARS = 6500
+// ui_inventory rides the same 8K control-frame cap as everything else —
+// budget the REAL serialized size (JSON syntax + keys included; a naive
+// label-length budget shipped a >8K frame the server rejected whole).
+const MAX_INVENTORY_JSON_CHARS = 7200
+// '{"type":"ui_inventory","inventory":[]}' and the commas between items.
+const INVENTORY_ENVELOPE_CHARS = 64
 
 let lastScan: HTMLElement[] = []
 
@@ -602,16 +606,17 @@ export function scanInventory(exclude: Element | null): InventoryItem[] {
   const els = collectInteractiveElements(exclude) ?? legacyClickables(exclude)
   const items: InventoryItem[] = []
   lastScan = []
-  let total = 0
+  let total = INVENTORY_ENVELOPE_CHARS
   for (const el of els) {
     if (items.length >= MAX_INVENTORY_ITEMS) break
     const label = clickableLabel(el)
     const hint = inventoryHint(el)
     if (!label && !hint) continue
-    const size = label.length + hint.length + 14
-    if (total + size > MAX_INVENTORY_CHARS) break
+    const item = { i: lastScan.length, tag: el.tagName.toLowerCase(), label, hint }
+    const size = JSON.stringify(item).length + 1 // +1 for the joining comma
+    if (total + size > MAX_INVENTORY_JSON_CHARS) break
     lastScan.push(el)
-    items.push({ i: lastScan.length - 1, tag: el.tagName.toLowerCase(), label, hint })
+    items.push(item)
     total += size
   }
   return items
