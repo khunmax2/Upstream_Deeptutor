@@ -247,6 +247,14 @@ Browser (web/)                          Server (deeptutor/)
       (จำเป็น: หน้าเราเป็น React — ถ้าไม่ทำ ทั้งหน้าเป็นปุ่มเดียว)
 - [ ] A4 ต่อ WS frames `agent_observe`/`agent_act`/`agent_state`/`agent_acted`
       เข้ากับ socket voice ที่มีอยู่ (ไฟล์ hook ใหม่ ไม่แตะของเดิม)
+      ⚠️ **งบขนาด frame (ตรวจแล้วชนจริง)**: control frame ฝั่ง server มี cap
+      (`MAX_MANIFEST_BYTES`, ~8K — `voice_realtime.py:121`) และ `pageInventory`
+      เคยโดน server ปัดทั้ง frame มาแล้ว; `agent_state` ของหน้าจริงใหญ่กว่านั้น
+      หลายเท่า → ต้องทำสองชั้น: (1) serializer มี hard cap ของตัวเอง
+      (attr ≤20 ตัวอักษร ตามเขา + เพดานรวม ~30K chars พร้อมบรรทัด
+      "…truncated, scroll for more") (2) ส่ง `agent_state` แบบ **chunked**
+      (`seq`/`total` ประกอบกลับฝั่ง server) หรือแยก cap เฉพาะ frame ชนิดนี้
+      — ตัดสินใจตอนทำ A4 แต่ห้ามเงียบ-ตัด-ทิ้งเหมือนเคสเก่า
 - [ ] A5 run-mask + vision layer (แสดง "เห็นอะไร / กดอะไร" ระหว่าง loop รัน):
       - **บล็อก input คนจริง** เฉพาะช่วง loop รัน (แนว SimulatorMask — click/wheel/
         keydown กันหมด, pass-through ชั่วคราวตอน hit-test); คลิกบน mask หรือ
@@ -268,11 +276,19 @@ Browser (web/)                          Server (deeptutor/)
 ### Phase B — สมอง ฝั่ง server (`deeptutor/services/voice_realtime/agent/`)  ~4-5 วันงาน
 
 - [ ] B1 `loop.py` — `InPageAgentLoop`: state machine observe→think→act,
-      history (reflection เท่านั้น), step budget 40, stepDelay, abort event
+      history (reflection เท่านั้น), step budget, stepDelay, abort event
+      — ค่า default จูนเพื่อ voice ไม่ใช่ลอกเขา: **maxSteps 15** (คนถือสายรอ
+      ไม่ได้ 40 สเต็ป; config ได้ถึง 40), **stepDelay 0.8s** (บทเรียน suanrao
+      บน DOM ที่ animation เยอะ — ของเขา default 0.4)
 - [ ] B2 `prompt.py` — system prompt ของเราเอง (โครงจาก §1.2 แต่เขียนใหม่
       สองภาษา + กติกา voice) + assembler `<instructions>/<agent_state>/<agent_history>/<browser_state>`
 - [ ] B3 `macro_tool.py` — JSON schema ของ AgentOutput (union ของ action ทั้งหมด),
-      forced tool_choice ผ่าน LLM stack ของ DeepTutor, `parallel_tool_calls: false`
+      forced tool_choice, `parallel_tool_calls: false`
+      — ตรวจแล้ว: stack เราส่ง kwargs ดิบถึง completion ได้ (precedent:
+      `agents/chat/agent_loop.py:465` ตั้ง `tool_choice="auto"` อยู่แล้ว) จึงตั้ง
+      named tool_choice ได้ตรงๆ; แต่ named choice ขึ้นกับ provider → ต้องมี
+      **fallback อัตโนมัติ**: JSON-object mode + fixer (autoFixer รองรับ
+      "JSON มาใน content" อยู่แล้ว — เส้นทางเดียวกัน)
 - [ ] B4 `fixer.py` — port autoFixer ครบทุก heuristic + เทสต์ยิงเคสเสียจริง
       (มีตัวอย่างใน autoFixer.ts ครบแล้ว)
 - [ ] B5 `observations.py` — URL change, wait accumulation, budget warnings
@@ -281,8 +297,13 @@ Browser (web/)                          Server (deeptutor/)
 - [ ] เทสต์: loop กับ browser ปลอม (fixture browser_state) — ไม่ต้องมี browser จริง
       ทดสอบ: จบงานเมื่อ done, budget หมด, autoFixer ซ่อม, abort กลางคัน
 - **เกณฑ์ผ่าน**: โจทย์จำลอง 3 สเต็ป (นำทาง→กรอก→ยืนยัน) วิ่งจบบน fixture
-- **โมเดล**: ใช้ profile แยกแบบ `LLM_PROXY_MODEL` (บทเรียนจากการทดลอง:
-  ห้ามใช้ tier lite กับ loop นี้)
+- [ ] B7 **agent LLM scope** — ⚠️ แก้ข้ออ้างอิงเดิม: `LLM_PROXY_MODEL` อยู่บน
+      branch ทดสอบเท่านั้น ไม่มีบน branch นี้ ต้องสร้างของตัวเอง: reuse pattern
+      `set_scoped_llm_config` ที่ pipeline เสียงใช้อยู่แล้ว
+      (`_enter_fast_voice_llm_scope`) + env/setting ใหม่ `DEEPTUTOR_AGENT_MODEL`
+      (และ optional `_BASE_URL`/`_API_KEY` แบบเดียวกับที่ standalone proxy พิสูจน์
+      แล้วว่าจำเป็น) — **บทเรียนที่จ่ายมาแล้ว: ห้าม tier lite กับ loop นี้เด็ดขาด**
+      และห้าม fallback เงียบไปโมเดลแชท (ตั้งครึ่งเดียว = 503 บอกตรงๆ)
 
 ### Phase C — Trust model ในตัว loop (ของเราแท้ๆ)  ~2-3 วันงาน
 
@@ -292,7 +313,14 @@ Browser (web/)                          Server (deeptutor/)
       (reuse pending_click flow เดิม) — "ใช่" = ปล่อยผ่าน, "ไม่" = push observation
       "User rejected …" แล้วให้ LLM หาทางอื่น/จบงาน
 - [ ] C3 `ask_user` = TTS คำถาม + เปิดรับ STT (ผ่าน stt_guard เดิม) + timeout
+      — **state machine เสียงระหว่าง loop ต้องชัด (จุดที่พลาดง่ายสุดของเฟสนี้)**:
+      เสียงผู้ใช้เข้ามาระหว่าง loop มีสองความหมาย แยกด้วยสถานะเดียว —
+      loop กำลังรอ `ask_user`/`pending_action` → transcript = **คำตอบ** ส่งเข้า
+      future ที่รออยู่; ไม่ได้รอ → transcript = **barge-in = abort** (แล้วค่อย
+      ประมวลเป็นคำสั่งใหม่ตามปกติ) ห้ามให้คำตอบยืนยันไปฆ่า loop เอง
 - [ ] C4 narration: อ่าน `next_goal` ออกเสียงระหว่างทำ (คุมความถี่ไม่ให้พูดรัว)
+      + จบงานอ่าน `done.text` เสมอ (สำเร็จ = สรุปสั้น, ล้มเหลว = บอกตรงๆ ว่า
+      ติดอะไร — ห้ามเงียบหาย)
 - [ ] เทสต์: สั่ง "กดลบ" → loop ต้องพักและถาม **ทุกครั้ง** ไม่ว่า prompt จะสั่งยังไง
       (replay trace "ลบ KB" ที่เราเก็บไว้เป็น regression case)
 - **เกณฑ์ผ่าน**: เคสเดิม "ไปศูนย์ความรู้→ตั้งค่า→กดลบ" ทำได้เท่าเขา **บวก**
@@ -300,12 +328,15 @@ Browser (web/)                          Server (deeptutor/)
 
 ### Phase D — Gated pipeline: ต่อเข้ากับทางเดินเสียงเดิม  ~2 วันงาน
 
+- [ ] D0 **feature flag**: `voice.agent_loop_enabled` (settings) — default **ปิด**
+      จนกว่า Phase E จะผ่าน; ปิดอยู่ = พฤติกรรมเสียงวันนี้ทุกประการ (มี seam
+      คอมเมนต์รอใน pipeline แล้ว) → ship ได้ตลอดเวลาโดยไม่แบกความเสี่ยง loop
 - [ ] D1 คำสั่งเสียง → fast path เดิมก่อน (deterministic) → hit = ทำเลย (ฟรี)
 - [ ] D2 miss หรือ intent หลายสเต็ป → `InPageAgentLoop.execute(transcript)`
 - [ ] D3 barge-in ระหว่าง loop = abort (ผูก abort event เข้า pipeline เดิม)
-- [ ] D4 ตัดสินชะตาโค้ดที่ถูก supersede: `ui_deep.py` (deep rung) → เลิกใช้,
-      `ui_graph.py` → เก็บเฉพาะถ้า fast path ยังได้ประโยชน์ — ตัดสินด้วยข้อมูล
-      หลังวัดผล ไม่ใช่ความเสียดาย; บันทึกใน DESIGN_voice_grounding.md
+- [ ] D4 ตัดสินชะตา `ui_graph.py` ด้วยข้อมูล Phase E — เก็บเฉพาะถ้า fast path
+      ยังได้ประโยชน์จริง; บันทึกผลใน DESIGN_voice_grounding.md
+      (`ui_deep.py` ถูกลบไปแล้ว 2026-07-10 — seam ใน pipeline คือจุดเสียบ D2)
 - **เกณฑ์ผ่าน**: พูดไทยครบ 3 ระดับ — "กดหน้าหลัก" (fast, ~ms) /
   "กดที่ลามะ Index" (fast+garble) / "ไปตั้งค่าแล้วเปลี่ยนธีมมืด" (loop หลายสเต็ป)
 
@@ -334,6 +365,9 @@ A กับ B ทำขนานกันได้ (B เทสต์บน fixt
 | WS round-trip ทำ loop ช้า | จิ๊บจ๊อยเทียบ LLM call; วัดใน E |
 | โมเดลอ่อนทำ loop เพี้ยน (บทเรียนตรงจากการทดลอง!) | autoFixer + config โมเดลแยกจากแชท + budget warnings |
 | DOM serialize ของเราต่างจากเขา → พฤติกรรม LLM ต่าง | Phase A มี golden test เทียบ output กับของเขาบนหน้าเดียวกัน |
+| `agent_state` ชน cap 8K ของ control frame (ชนจริงแน่ — inventory เคยโดนปัดทั้ง frame มาแล้ว) | A4: serializer hard cap + ส่งแบบ chunked/แยก cap; ห้ามเงียบ-ตัด-ทิ้ง |
+| named tool_choice ไม่เวิร์กกับบาง provider | B3: fallback JSON-object mode + fixer โดยอัตโนมัติ |
+| loop เสียระหว่างพัฒนา กระทบเสียงที่ใช้งานได้อยู่ | D0: flag ปิดเป็น default — เสียงวันนี้ไม่เปลี่ยนจนกว่า E ผ่าน |
 | ภาระดูแลโค้ด port | port เฉพาะชั้นบาง (actions/serialize ~1,100 บรรทัด) สมองเขียนเองหมด |
 | upstream sync ชนกัน | ไฟล์ใหม่ทั้งหมดใน dir ใหม่ 2 จุด (`web/lib/page-actuator/`, `services/voice_realtime/agent/`) |
 
