@@ -91,13 +91,21 @@ async def voice_websocket(ws: WebSocket) -> None:
             "voice: in-page agent loop disabled (set DEEPTUTOR_AGENT_LOOP=1 and "
             "DEEPTUTOR_AGENT_MODEL to enable) — multi-step commands fall back to chat"
         )
-    await session.greet()  # answer the phone: "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
     async def safe_send(data: dict[str, Any]) -> None:
         try:
             await ws.send_text(json.dumps(data, ensure_ascii=False, default=str))
         except Exception:  # noqa: BLE001 — a dead socket just ends the call
             logger.debug("Voice WS send failed", exc_info=True)
+
+    # The "eyes open" moment (page-agent UX): the instant the call connects,
+    # the client sweeps the DOM and flashes the neon boxes over the layout —
+    # visible proof the agent sees the screen. Announce-only; the client owns
+    # the visuals and NO input mask is raised (the caller may keep clicking).
+    if agent_loop_enabled():
+        await safe_send({"type": "agent_ready"})
+
+    await session.greet()  # answer the phone: "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ"
 
     try:
         while True:

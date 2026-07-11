@@ -3,6 +3,7 @@
 // server-side loop is the only caller; nothing here runs until it asks.
 //
 // Frame protocol (server ⇄ browser):
+//   → {type:'agent_ready'}                                call pickup: flash the vision sweep
 //   → {type:'agent_run',    running: true|false}          mask on/off, task reset
 //   → {type:'agent_observe', id}                          look at the page
 //   ← {type:'agent_state_chunk', id, seq, total, part}    JSON payload, chunked
@@ -38,6 +39,12 @@ export function attachPageAgentBridge(send: SendJson): PageAgentBridge {
 
   const handleFrame = (msg: Record<string, unknown>): boolean => {
     switch (msg.type) {
+      case 'agent_ready': {
+        // Call pickup with the loop enabled: flash the neon vision sweep so
+        // the caller SEES the agent seeing the page. No mask — show only.
+        actuator.flashVision()
+        return true
+      }
       case 'agent_run': {
         if (msg.running) {
           actuator.resetTask()

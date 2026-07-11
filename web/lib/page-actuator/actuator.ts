@@ -101,7 +101,33 @@ export class PageActuator {
   /** New task = every element is "old"; markers mean "new since MY last look". */
   resetTask(): void {
     this.seenRefs = new WeakSet<object>()
+    // A pickup-flash timer still pending must not wipe the run's own boxes.
+    if (this.visionFlashTimer !== null) {
+      window.clearTimeout(this.visionFlashTimer)
+      this.visionFlashTimer = null
+    }
     cleanupHighlights()
+  }
+
+  private visionFlashTimer: number | null = null
+
+  /**
+   * The "eyes open" flash (call pickup, page-agent UX): one highlighted sweep
+   * of the DOM so the neon boxes wash over the layout, then fade away. Pure
+   * show — no mask, the caller keeps full control of the page; a running
+   * task's own observe simply supersedes the timer's cleanup.
+   */
+  flashVision(durationMs = 2600): void {
+    if (this.visionFlashTimer !== null) window.clearTimeout(this.visionFlashTimer)
+    try {
+      this.observe({ highlight: true })
+    } catch {
+      return // a failed flash is a lost nicety, never a broken call
+    }
+    this.visionFlashTimer = window.setTimeout(() => {
+      this.visionFlashTimer = null
+      cleanupHighlights()
+    }, durationMs)
   }
 
   observe(options?: { highlight?: boolean }): ObservedState {

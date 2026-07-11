@@ -157,6 +157,19 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — "Eyes open" flash on call pickup (page-agent UX).** Owner
+  request: page-agent sweeps the DOM and washes the layout in neon the moment
+  it starts; ours only lit up once a task ran, so pickup felt blind. Now the
+  router sends one `agent_ready` frame on connect (only when the loop is
+  enabled), and the client bridge answers with `PageActuator.flashVision()` —
+  one highlighted observe so the neon boxes wash over the layout, fading
+  after ~2.6s. Show only: NO input mask is raised (the caller keeps clicking
+  freely during conversation; the mask stays run-only), and a pickup-flash
+  timer still pending when a real task starts is cancelled in `resetTask()`
+  so it cannot wipe the run's own boxes. Tests: +2 ws-router cases
+  (agent_ready sent when enabled / absent when disabled). Voice suite: 405
+  green; node suite: 197.
+
 - **2026-07-11 — Agent LLM: name the upstream on every step.** Live incident:
   the loop kept hitting a quota-dead Gemini key with a 9-attempt retry storm
   while the operator believed they had switched providers — `.env.agent`

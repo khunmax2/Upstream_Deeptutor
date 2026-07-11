@@ -273,3 +273,28 @@ async def test_auth_failure_returns_without_accepting(monkeypatch: pytest.Monkey
 
     assert not ws.accepted
     assert FakeSession.last is None  # no session created
+
+
+@pytest.mark.asyncio
+async def test_agent_ready_flash_sent_on_connect_when_loop_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Call pickup with the loop on → one agent_ready frame (the client's cue
+    to flash the neon vision sweep) BEFORE any turn happens."""
+    monkeypatch.setenv("DEEPTUTOR_AGENT_LOOP", "1")
+    monkeypatch.setenv("DEEPTUTOR_AGENT_MODEL", "gemini-2.5-flash")
+    ws = FakeWebSocket([])
+
+    await vr.voice_websocket(ws)
+
+    assert any('"agent_ready"' in t for t in ws.sent_text)
+
+
+@pytest.mark.asyncio
+async def test_no_agent_ready_when_loop_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DEEPTUTOR_AGENT_LOOP", raising=False)
+    ws = FakeWebSocket([])
+
+    await vr.voice_websocket(ws)
+
+    assert not any('"agent_ready"' in t for t in ws.sent_text)
