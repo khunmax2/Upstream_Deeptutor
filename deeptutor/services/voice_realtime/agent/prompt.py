@@ -57,9 +57,12 @@ Reply with ONLY one JSON object, no prose, no code fences:
 {{
   "evaluation_previous_goal": "one sentence judging your last action: success, failure, or uncertain",
   "memory": "1-2 sentences of progress you must not forget",
-  "next_goal": "one short spoken-aloud sentence: what you do next",
+  "next_goal": "one short sentence IN {language_hint} (shown to the user): what you do next",
   "action": {{"action_name": {{ ...parameters }}}}
 }}
+`next_goal` and done's `text` are USER-FACING and MUST be in {language_hint} — \
+never English when the user speaks Thai. `evaluation_previous_goal` and \
+`memory` are your private notes; any language.
 </output>"""
 
 

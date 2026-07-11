@@ -33,7 +33,10 @@ def make_bridge(think, states=None):
 
 
 @pytest.mark.asyncio
-async def test_run_task_narrates_progress_and_the_ending():
+async def test_progress_is_a_silent_note_and_only_the_ending_speaks():
+    """Live verdict: step-by-step speech was too chatty. Steps show in the
+    chat log (agent_note) without sound; the ONLY spoken line of a clean run
+    is the final summary — once, with no double display."""
     think = canned_think(
         [
             step("s", "กำลังไปศูนย์ความรู้", {"click_element_by_index": {"index": 0}}),
@@ -45,12 +48,23 @@ async def test_run_task_narrates_progress_and_the_ending():
     reply = await bridge.run_task("เปิดศูนย์ความรู้")
 
     assert reply == "เปิดให้แล้วครับ"
-    assert spoken == ["กำลังไปศูนย์ความรู้", "เปิดให้แล้วครับ"]
+    assert spoken == ["เปิดให้แล้วครับ"]  # ending only — no step chatter
     assert [name for name, _ in actuator.acts] == ["click_element_by_index"]
-    # Narration must be VISIBLE too, not just spoken — audio-only was the
-    # live-test gap: TTS-unavailable or missed-audio left the log blank.
     notes = [f["text"] for f in sent if f.get("type") == "agent_note"]
-    assert notes == ["กำลังไปศูนย์ความรู้", "เปิดให้แล้วครับ"]
+    assert notes == ["กำลังไปศูนย์ความรู้"]  # progress visible, ending not doubled
+
+
+@pytest.mark.asyncio
+async def test_aborted_run_stays_silent():
+    """The caller interrupted on purpose — no parting line over their speech."""
+
+    async def think(system_prompt: str, user_prompt: str) -> str:
+        bridge.abort()
+        return step("x", "y", {"click_element_by_index": {"index": 0}})
+
+    bridge, _actuator, _sent, spoken = make_bridge(think)
+    await bridge.run_task("t")
+    assert spoken == []
 
 
 @pytest.mark.asyncio

@@ -169,6 +169,21 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Agent voice: steps go quiet, only questions and the final
+  summary speak.** Live verdict on a real run ("ไปหน้าหลักแล้วค้นหาราคาทอง"):
+  per-step narration was too chatty — worse, the model emitted ENGLISH
+  next_goals ("Wait a moment for the home page to load…") for the Thai TTS to
+  read, and the ending displayed twice (narrate-note + assistant_text). Now:
+  step next_goals are SILENT chat notes (`agent_note`, still visible); spoken
+  audio is reserved for ask_user/danger-confirm questions and ONE final
+  summary, spoken by the bridge after the run (aborts stay silent — the
+  caller interrupted on purpose and is already talking). The loop no longer
+  narrates done.text (kills the double display). Language fix at the source:
+  the prompt's output schema now marks `next_goal` and done `text` as
+  USER-FACING, MUST be in the user's language — private fields
+  (`memory`/`evaluation`) stay free. Files: `agent/loop.py`,
+  `agent/voice_bridge.py`, `agent/prompt.py`. Voice suite: 406 green.
+
 - **2026-07-11 — Vision-layer performance: the pickup flash no longer janks.**
   Live report: pressing call stuttered the machine. Diagnosis, not the user's
   hardware — our neon styles were far heavier than page-agent's flat boxes:

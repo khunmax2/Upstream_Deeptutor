@@ -117,6 +117,12 @@ class AgentVoiceBridge:
         logger.info(
             "agent task finished reason=%s success=%s", result.stopped_reason, result.success
         )
+        # The ONE spoken moment of a run (besides questions): the final
+        # summary. Aborts stay silent — the caller interrupted on purpose and
+        # is already saying the next thing.
+        if result.stopped_reason != "aborted" and result.text:
+            with contextlib.suppress(Exception):
+                await self._speak(result.text)
         return result.text
 
     # ── loop hooks (spoken side) ──
@@ -129,8 +135,10 @@ class AgentVoiceBridge:
             await self._send_json({"type": "agent_note", "text": text})
 
     async def _narrate(self, text: str) -> None:
+        # Live verdict: speaking every step was too chatty. Progress is now a
+        # SILENT chat note; sound is reserved for questions (ask_user/confirm)
+        # and the final summary in run_task.
         await self._notify(text)
-        await self._speak(text)
 
     async def _ask_user(self, question: str) -> str:
         await self._notify(question)

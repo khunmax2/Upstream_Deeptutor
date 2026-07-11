@@ -184,7 +184,10 @@ class InPageAgentLoop:
                 )
                 logger.info("agent step=%d action=%s goal=%r", step, name, record.next_goal[:80])
 
-                # The caller HEARS progress — this is the voice-native part.
+                # Progress goes to the narrate hook; whether it makes SOUND is
+                # the bridge's call (live verdict: step-by-step speech was too
+                # chatty — steps are now silent chat notes, only the ending and
+                # questions are voiced; see AgentVoiceBridge).
                 if self._narrate and record.next_goal and name != "done":
                     await self._call_quietly(self._narrate, record.next_goal)
 
@@ -194,10 +197,9 @@ class InPageAgentLoop:
                     text = str(args.get("text") or "").strip() or "งานจบแล้วครับ"
                     record.action_output = "Task completed"
                     steps.append(record)
-                    # C4: the ending is ALWAYS spoken — success summary or an
-                    # honest failure; a silent finish reads as a dead line.
-                    if self._narrate:
-                        await self._call_quietly(self._narrate, text)
+                    # The ending is NOT narrated here: the bridge speaks the
+                    # final result exactly once (avoids the double display the
+                    # note+assistant_text pair produced live).
                     return self._finish("done", success, text, steps, t0)
 
                 # ── act (with the Phase C gate in front) ──
