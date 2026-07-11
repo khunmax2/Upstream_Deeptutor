@@ -104,3 +104,38 @@ def test_navigate_override_absent_when_disabled(monkeypatch):
     _flag_off(monkeypatch)
     content = _system_block(monkeypatch)
     assert "OVERRIDE — WHEN THE REQUEST IS MORE THAN NAVIGATION" not in content
+
+
+# ── the fallback CHAIN inside the LLM turn: click/fill miss → agent, not defeat ──
+#
+# page-agent never dead-ends because every step re-consults the LLM with the
+# whole screen. Our equivalent inside a chat turn: when a named button/field
+# is not on THIS screen and the loop is available, the tool result must point
+# the model at ui_agent_task — "not visible here" is findable, not impossible.
+
+SCREEN = {"path": "/home", "summary": "หน้าหลัก", "buttons": ["ส่งข้อความ"], "fields": []}
+
+
+@pytest.mark.asyncio
+async def test_click_miss_chains_to_the_agent_when_enabled(monkeypatch):
+    _flag_on(monkeypatch)
+    result = await ui_control.UIClickTool().execute(button="ธีมมืด", _ui_context=SCREEN)
+    assert not result.success
+    assert ui_control.UI_AGENT_TASK_TOOL in result.content
+
+
+@pytest.mark.asyncio
+async def test_click_miss_stays_honest_when_disabled(monkeypatch):
+    _flag_off(monkeypatch)
+    result = await ui_control.UIClickTool().execute(button="ธีมมืด", _ui_context=SCREEN)
+    assert not result.success
+    assert ui_control.UI_AGENT_TASK_TOOL not in result.content
+    assert "ไม่เห็นปุ่ม" in result.content
+
+
+@pytest.mark.asyncio
+async def test_fill_miss_chains_to_the_agent_when_enabled(monkeypatch):
+    _flag_on(monkeypatch)
+    result = await ui_control.UIFillTool().execute(field="ชื่อโปรเจค", value="x", _ui_context=SCREEN)
+    assert not result.success
+    assert ui_control.UI_AGENT_TASK_TOOL in result.content

@@ -157,6 +157,20 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Fallback chain inside the chat turn: click/fill miss →
+  `ui_agent_task`, not defeat.** Source-verified answer to the owner's
+  question (does page-agent call the LLM after every action? — yes:
+  `PageAgentCore.ts` has exactly one `#llm.invoke` inside `while(true)`, no
+  bypass; that per-step re-consultation is WHY it never dead-ends). Our chat
+  turn's equivalent gap: `UIClickTool`/`UIFillTool` miss results said "tell
+  the caller it's not visible" — a dead end for "เปลี่ยนธีมเป็นมืด" when the
+  toggle lives on another page. Now, when the loop is available, a miss
+  result tells the model the target is findable and to call
+  `{ui_agent_task}` with the full request (gated on
+  `_agent_loop_available()`; flag off keeps the honest-miss wording).
+  Ambiguous stays an ask-back on purpose — one clarifying word from the
+  caller beats an agent run. Tests: +3. Voice suite: 403 green.
+
 - **2026-07-11 — Routing fix: connectorless compound commands no longer end
   as half-done navigations.** Live bug: "ไปตั้งค่าเปลี่ยนธีมมืด" (no "แล้ว")
   slipped every rung — nav intent requires a หน้า/page word, click/guess

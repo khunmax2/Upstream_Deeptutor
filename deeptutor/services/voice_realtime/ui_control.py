@@ -1413,6 +1413,19 @@ class UIClickTool(BaseTool):
             button, ui_context if isinstance(ui_context, dict) else None
         )
         if outcome == "missing":
+            # Not on THIS screen ≠ impossible: with the agent available the
+            # right move is to go find it, not to declare defeat (mirrors the
+            # deterministic click-miss seam, which also hands off to the loop).
+            if _agent_loop_available():
+                return ToolResult(
+                    content=(
+                        f"No button named {button!r} is visible on the CURRENT screen, "
+                        "so nothing was pressed. The in-page agent can navigate and "
+                        f"find it: call `{UI_AGENT_TASK_TOOL}` with the caller's full "
+                        "request instead of giving up."
+                    ),
+                    success=False,
+                )
             return ToolResult(
                 content=(
                     f"No visible button named {button!r} on the caller's screen right "
@@ -1533,6 +1546,18 @@ class UIFillTool(BaseTool):
                 )
         outcome, resolved = resolve_field_target(field, ctx)
         if outcome == "missing":
+            # Same chain as the click tool: with the agent available, a field
+            # that is not on THIS screen is findable, not a dead end.
+            if _agent_loop_available():
+                return ToolResult(
+                    content=(
+                        f"No form field named {field!r} is visible on the CURRENT "
+                        "screen, so nothing was typed. The in-page agent can navigate "
+                        f"and find it: call `{UI_AGENT_TASK_TOOL}` with the caller's "
+                        "full request instead of giving up."
+                    ),
+                    success=False,
+                )
             return ToolResult(
                 content=(
                     f"No visible form field named {field!r} on the caller's screen "
