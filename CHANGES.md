@@ -169,6 +169,20 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Routing: clipped "ค้น" reaches the loop.** Live run #3:
+  "กลับไปhomeแล้วค้นราคาน้ำมัน" and "ไปhomeแล้วค้นราคาแตงกวา" died as
+  navigate-only turns ("ได้เลยครับ", search half dropped) — the loop never
+  ran, hence no neon (the vision layer draws only during agent runs; the 📸
+  lines are the ordinary ui_context stream). Verified cause: spoken Thai
+  clips "ค้นหา" to "ค้น", which was not in `agent/intent.py`'s verb list, so
+  the lexical door missed and the chat model (Groq) again chose ui_navigate
+  over the advertised override — the second documented case of the routing
+  model ignoring prompt-level instructions, reinforcing that deterministic
+  coverage is the reliable door and the semantic door's quality tracks the
+  catalog chat model. Added "ค้น" (+ เสิร์ช/เซิร์ช/search) with substring-
+  safety notes; +2 regression tests pinning the live utterances. Voice
+  suite: 408 green.
+
 - **2026-07-11 — Agent voice: steps go quiet, only questions and the final
   summary speak.** Live verdict on a real run ("ไปหน้าหลักแล้วค้นหาราคาทอง"):
   per-step narration was too chatty — worse, the model emitted ENGLISH

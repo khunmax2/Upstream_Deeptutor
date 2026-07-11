@@ -40,6 +40,13 @@ _ACTION_VERBS = (
     "กรอก",
     "เลือก",
     "ค้นหา",
+    # Spoken Thai clips "ค้นหา" to "ค้น" routinely (live: "ไปhomeแล้วค้นราคาน้ำมัน"
+    # slipped through and died as a navigate-only turn). Safe as a substring:
+    # unlike "หา" it does not appear inside common nouns.
+    "ค้น",
+    "เสิร์ช",
+    "เซิร์ช",
+    "search",
     "หา",
     "เปลี่ยน",
     "สร้าง",

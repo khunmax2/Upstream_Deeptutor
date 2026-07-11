@@ -92,3 +92,18 @@ def test_click_opener_with_verby_button_label_is_not_a_task():
 def test_verb_inside_a_noun_does_not_false_fire():
     # "ปัญหา" contains "หา" — excluded from the second-step scan.
     assert match_agent_task("ไปดูปัญหาหน่อย") is None
+
+
+# ── clipped verbs (live-test gap #3: "ไปhomeแล้วค้นราคาน้ำมัน" died as a
+# navigate-only turn — spoken Thai clips "ค้นหา" to "ค้น") ──
+
+
+def test_clipped_search_verb_matches():
+    assert match_agent_task("กลับไปhomeแล้วค้นราคาน้ำมัน")
+    assert match_agent_task("ไปhomeแล้วค้นราคาแตงกวา")
+    assert match_agent_task("ไปหน้าหลักค้นราคาทอง")  # connector elided too
+
+
+def test_clipped_verb_does_not_widen_the_fast_path_exits():
+    assert match_agent_task("ไปหน้าหลัก") is None
+    assert match_agent_task("กดปุ่มค้นหา") is None  # click rung owns this
