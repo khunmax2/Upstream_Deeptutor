@@ -30,7 +30,8 @@ function ensureMask(): HTMLDivElement {
   // stays readable — the highlights and cursor carry the real show.
   el.style.cssText =
     `position:fixed;inset:0;z-index:${MASK_Z};display:none;` +
-    'background:rgba(20,40,30,0.06);cursor:wait;'
+    'background:rgba(20,40,30,0.06);cursor:wait;' +
+    'opacity:0;transition:opacity 300ms ease;'
 
   el.addEventListener('mousedown', e => {
     block(e)
@@ -45,14 +46,36 @@ function ensureMask(): HTMLDivElement {
   return el
 }
 
+let maskHideTimer: number | null = null
+const MASK_FADE_MS = 300
+
 export function showRunMask(onTakeover?: () => void): void {
   takeoverHandler = onTakeover ?? null
-  ensureMask().style.display = 'block'
+  if (maskHideTimer !== null) {
+    window.clearTimeout(maskHideTimer)
+    maskHideTimer = null
+  }
+  const el = ensureMask()
+  el.style.display = 'block'
+  el.style.pointerEvents = 'auto' // shield up instantly; only the TINT eases
+  requestAnimationFrame(() => {
+    el.style.opacity = '1'
+  })
 }
 
 export function hideRunMask(): void {
   takeoverHandler = null
-  if (mask) mask.style.display = 'none'
+  if (!mask) return
+  const el = mask
+  // Hand the page back IMMEDIATELY (pointer-events off) — only the tint
+  // lingers while it eases out, then the node leaves the layout.
+  el.style.pointerEvents = 'none'
+  el.style.opacity = '0'
+  if (maskHideTimer !== null) window.clearTimeout(maskHideTimer)
+  maskHideTimer = window.setTimeout(() => {
+    maskHideTimer = null
+    el.style.display = 'none'
+  }, MASK_FADE_MS)
 }
 
 /**

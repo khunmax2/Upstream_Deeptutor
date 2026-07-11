@@ -24,7 +24,7 @@ const domTree = domTreeEngine as (args: {
 }) => FlatDomTree
 
 import { clickElement, inputTextElement, scrollVertically, selectOptionElement } from './actions'
-import { neonizeHighlights } from './neonHighlights'
+import { fadeOutHighlights, neonizeHighlights } from './neonHighlights'
 import {
   buildHeaderFooter,
   markNewElements,
@@ -126,7 +126,7 @@ export class PageActuator {
     }
     this.visionFlashTimer = window.setTimeout(() => {
       this.visionFlashTimer = null
-      cleanupHighlights()
+      fadeOutHighlights(cleanupHighlights) // soft exit, not a hard pop-out
     }, durationMs)
   }
 
@@ -210,7 +210,8 @@ export class PageActuator {
   }
 
   dispose(): void {
-    cleanupHighlights()
+    // End of a run: let the boxes ease away instead of vanishing mid-frame.
+    fadeOutHighlights(cleanupHighlights)
     this.last = null
   }
 

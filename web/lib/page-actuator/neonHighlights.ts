@@ -14,6 +14,14 @@
 const CONTAINER_ID = 'playwright-highlight-container' // engine.ts:152
 const LABEL_CLASS = 'playwright-highlight-label'
 
+// Soft entrances and exits (live feedback: the hard pop-in/pop-out felt
+// abrupt). The engine adds/removes nodes instantly; we animate the CONTAINER
+// opacity — one transition for hundreds of boxes.
+const FADE_IN_MS = 420
+const FADE_OUT_MS = 650
+
+let pendingFadeOut: number | null = null
+
 /** Blend an 0-255 channel toward white — pure #F00-style hues read harsh;
  * pastel-neon is what actually glows nicely on both themes. */
 function soften(channel: number): number {
@@ -37,6 +45,28 @@ function rgba(rgb: [number, number, number], alpha: number): string {
 export function neonizeHighlights(): void {
   const container = document.getElementById(CONTAINER_ID)
   if (!container) return
+
+  // A fade-out still in flight belongs to boxes that no longer exist — let
+  // it never wipe the fresh ones we are about to show.
+  if (pendingFadeOut !== null) {
+    window.clearTimeout(pendingFadeOut)
+    pendingFadeOut = null
+  }
+
+  // Soft entrance: start transparent, ease in on the next frame. Respect
+  // reduced-motion (the boxes still appear, just without the animation).
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  if (!reduced) {
+    container.style.transition = 'none'
+    container.style.opacity = '0'
+    requestAnimationFrame(() => {
+      container.style.transition = `opacity ${FADE_IN_MS}ms ease-out`
+      container.style.opacity = '1'
+    })
+  } else {
+    container.style.transition = 'none'
+    container.style.opacity = '1'
+  }
 
   for (const el of Array.from(container.querySelectorAll<HTMLElement>('div'))) {
     const isLabel = el.classList.contains(LABEL_CLASS)
@@ -66,4 +96,29 @@ export function neonizeHighlights(): void {
       el.style.boxShadow = `0 0 10px 1px ${rgba(rgb, 0.4)}, inset 0 0 8px ${rgba(rgb, 0.1)}`
     }
   }
+}
+
+/**
+ * Soft exit: ease the whole layer to transparent, THEN run *cleanup* (the
+ * engine's node removal). A fresh draw (`neonizeHighlights`) cancels a
+ * pending exit so it can never wipe boxes that just re-bloomed.
+ */
+export function fadeOutHighlights(cleanup: () => void): void {
+  const container = document.getElementById(CONTAINER_ID)
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  if (!container || reduced) {
+    cleanup()
+    return
+  }
+  if (pendingFadeOut !== null) window.clearTimeout(pendingFadeOut)
+  container.style.transition = `opacity ${FADE_OUT_MS}ms ease-in`
+  container.style.opacity = '0'
+  pendingFadeOut = window.setTimeout(() => {
+    pendingFadeOut = null
+    cleanup()
+    // The engine reuses the container across draws — never leave it stuck
+    // transparent for the next sweep.
+    container.style.transition = 'none'
+    container.style.opacity = '1'
+  }, FADE_OUT_MS)
 }

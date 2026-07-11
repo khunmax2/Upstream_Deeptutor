@@ -157,6 +157,26 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Soft enter/exit for the vision layer + run-mask.** Live
+  feedback: the boxes popped in and vanished mid-frame ("กระทันหันไป") — the
+  vendored engine adds/removes highlight nodes instantly because its
+  highlights were built as a robot-eye debug view (correctness-first: boxes
+  must exactly match the snapshot; instant wipe+redraw guarantees zero
+  drift), not as a human-facing show. Ours IS a show, so the restyle layer
+  now animates the CONTAINER: fade-in 420ms ease-out on every draw (each
+  loop step re-blooms softly), fade-out 650ms ease-in before node removal on
+  flash-timeout and end-of-run (`fadeOutHighlights(cleanup)`); a fresh draw
+  cancels a pending fade-out so it can never wipe re-bloomed boxes, the
+  container's opacity is restored after removal (engine reuses it), and
+  `prefers-reduced-motion` gets instant, animation-free behavior. Run-mask:
+  tint eases in/out over 300ms, the input shield still raises INSTANTLY on
+  show, and on hide the page is handed back immediately (`pointer-events:
+  none`) while only the tint lingers. Mid-run rescans keep instant
+  old-box removal on purpose — new boxes appear the same frame with their
+  own fade-in, and a crossfade would leave stale boxes lying about the
+  screen. Files: `web/lib/page-actuator/neonHighlights.ts`, `actuator.ts`,
+  `runMask.ts`.
+
 - **2026-07-11 — "Eyes open" flash on call pickup (page-agent UX).** Owner
   request: page-agent sweeps the DOM and washes the layout in neon the moment
   it starts; ours only lit up once a task ran, so pickup felt blind. Now the
