@@ -157,6 +157,15 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Agent LLM: name the upstream on every step.** Live incident:
+  the loop kept hitting a quota-dead Gemini key with a 9-attempt retry storm
+  while the operator believed they had switched providers — `.env.agent`
+  edits only land on re-`source` + restart (the activate hook loads the file
+  once per shell), unlike catalog Settings which apply per call. Nothing in
+  the log named the upstream, so the stale env was invisible. `agent/llm.py
+  think()` now logs `model=… upstream=…` (base_url or "app-catalog") per
+  step. Files: `deeptutor/services/voice_realtime/agent/llm.py`.
+
 - **2026-07-11 — Fallback chain inside the chat turn: click/fill miss →
   `ui_agent_task`, not defeat.** Source-verified answer to the owner's
   question (does page-agent call the LLM after every action? — yes:

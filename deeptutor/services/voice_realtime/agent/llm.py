@@ -19,10 +19,13 @@ that branch's proxy is not part of this one).
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 from typing import Any
 
 from deeptutor.services.voice_realtime.agent.types import AgentLLMNotConfigured
+
+logger = logging.getLogger(__name__)
 
 MODEL_ENV = "DEEPTUTOR_AGENT_MODEL"
 BASE_URL_ENV = "DEEPTUTOR_AGENT_BASE_URL"
@@ -105,6 +108,16 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
         kwargs["base_url"] = settings.base_url
     if settings.api_key:
         kwargs["api_key"] = settings.api_key
+
+    # Name the upstream on every step. Paid-for lesson: a stale shell env kept
+    # the loop on a quota-dead provider while the operator believed they had
+    # switched (.env.agent edits only land on re-source + restart) — this line
+    # is what makes that visible in the log instead of a silent 429 storm.
+    logger.info(
+        "agent think: model=%s upstream=%s",
+        settings.model,
+        settings.base_url or "app-catalog",
+    )
 
     return await complete(
         user_prompt,
