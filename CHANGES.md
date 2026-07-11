@@ -157,6 +157,22 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Vision-layer performance: the pickup flash no longer janks.**
+  Live report: pressing call stuttered the machine. Diagnosis, not the user's
+  hardware — our neon styles were far heavier than page-agent's flat boxes:
+  `backdrop-filter: blur(2px)` on EVERY label (a background-blur pass per
+  label — the main jank source), inset+outer box-shadows on every box, a
+  full-page scan for a viewport-only show (each offscreen box still costs a
+  DOM node + its own capture-phase scroll listener in the engine), plus
+  serialize/selector-map work nothing consumes. Fixes in
+  `neonHighlights.ts`/`actuator.ts`: backdrop-filter banned, inset shadows
+  banned, one small outer glow (6px) kept; `will-change: opacity` on the
+  container so fades composite instead of re-rastering hundreds of children;
+  `flashVision()` now scans viewport-only (`viewportExpansion: 0`) and calls
+  the engine directly, skipping serialization entirely. Real observes (the
+  loop's eyes) keep the full-page scan — the LLM needs it; the flash never
+  did. Node suite: 197 green.
+
 - **2026-07-11 — Soft enter/exit for the vision layer + run-mask.** Live
   feedback: the boxes popped in and vanished mid-frame ("กระทันหันไป") — the
   vendored engine adds/removes highlight nodes instantly because its

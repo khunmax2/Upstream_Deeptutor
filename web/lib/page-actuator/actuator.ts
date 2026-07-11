@@ -113,14 +113,30 @@ export class PageActuator {
 
   /**
    * The "eyes open" flash (call pickup, page-agent UX): one highlighted sweep
-   * of the DOM so the neon boxes wash over the layout, then fade away. Pure
-   * show — no mask, the caller keeps full control of the page; a running
-   * task's own observe simply supersedes the timer's cleanup.
+   * so the neon boxes wash over the layout, then fade away. Pure show — no
+   * mask, the caller keeps full control; a running task's own observe simply
+   * supersedes the timer's cleanup.
+   *
+   * Deliberately LIGHTER than a real observe (pickup lag was felt on a real
+   * machine): viewport-only scan (offscreen boxes cost DOM + a scroll
+   * listener each and nobody sees them), and no serialization/selector-map
+   * work — nothing consumes them here.
    */
   flashVision(durationMs = 2600): void {
     if (this.visionFlashTimer !== null) window.clearTimeout(this.visionFlashTimer)
     try {
-      this.observe({ highlight: true })
+      cleanupHighlights()
+      domTree({
+        doHighlightElements: true,
+        focusHighlightIndex: -1,
+        viewportExpansion: 0, // what the eye can see — the flash is show, not sight
+        debugMode: false,
+        interactiveBlacklist: interactiveBlacklist(),
+        interactiveWhitelist: [],
+        highlightOpacity: HIGHLIGHT_OPACITY,
+        highlightLabelOpacity: HIGHLIGHT_LABEL_OPACITY,
+      })
+      neonizeHighlights()
     } catch {
       return // a failed flash is a lost nicety, never a broken call
     }

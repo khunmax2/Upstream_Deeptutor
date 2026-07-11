@@ -57,6 +57,9 @@ export function neonizeHighlights(): void {
   // reduced-motion (the boxes still appear, just without the animation).
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   if (!reduced) {
+    // will-change promotes the layer ONCE so the fade composites instead of
+    // re-rastering hundreds of glowing children every frame.
+    container.style.willChange = 'opacity'
     container.style.transition = 'none'
     container.style.opacity = '0'
     requestAnimationFrame(() => {
@@ -77,23 +80,26 @@ export function neonizeHighlights(): void {
     const rgb = parseRgb(source)
     if (!rgb) continue
 
+    // PERF BUDGET (live feedback: pickup felt laggy): these styles paint on
+    // 100-200 nodes at once. backdrop-filter is banned (per-label background
+    // blur was the main jank source), inset shadows are banned (second blur
+    // pass per box), and the one allowed glow is small. page-agent stays
+    // smooth by drawing FLAT boxes — we keep the neon but keep it cheap.
     if (isLabel) {
       // Translucent dark pill, hue carried by the glowing text + hairline ring.
-      el.style.background = 'rgba(15, 20, 28, 0.55)'
+      el.style.background = 'rgba(15, 20, 28, 0.6)'
       el.style.color = rgba(rgb, 1)
       el.style.border = `1px solid ${rgba(rgb, 0.65)}`
       el.style.borderRadius = '999px'
       el.style.padding = '0px 5px'
       el.style.fontWeight = '600'
-      el.style.textShadow = `0 0 6px ${rgba(rgb, 0.9)}`
-      el.style.boxShadow = `0 0 8px ${rgba(rgb, 0.35)}`
-      el.style.backdropFilter = 'blur(2px)'
+      el.style.textShadow = `0 0 5px ${rgba(rgb, 0.9)}` // tiny glyph area — cheap
     } else {
-      // Hairline border + soft outer/inner glow, barely-there fill.
+      // Hairline border + ONE small outer glow, barely-there fill.
       el.style.border = `1px solid ${rgba(rgb, 0.8)}`
       el.style.borderRadius = '6px'
       el.style.backgroundColor = rgba(rgb, 0.04)
-      el.style.boxShadow = `0 0 10px 1px ${rgba(rgb, 0.4)}, inset 0 0 8px ${rgba(rgb, 0.1)}`
+      el.style.boxShadow = `0 0 6px ${rgba(rgb, 0.45)}`
     }
   }
 }
