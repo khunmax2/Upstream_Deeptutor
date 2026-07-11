@@ -169,6 +169,17 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Agent LLM: fail fast on 429 — stop burning RPM to wait out
+  RPM.** Live: free-tier Gemini's binding limit is 5 REQUESTS/min (TPM was at
+  10%), and `complete()`'s default policy retried a 429 up to 9 times with
+  exponential backoff — every retry is another request pinning the very limit
+  it waits out (observed: attempt 5/9, 80s backoff, RPM solid red in AI
+  Studio). page-agent's own retry policy is 2 attempts (`llms/index.ts
+  maxRetries ?? 2`) — we were ~4.5× hungrier on failure. Agent `think()` now
+  passes `max_retries=1`; the loop is its own recovery mechanism and ends
+  with an honest spoken line instead of a silent multi-minute stall. Files:
+  `deeptutor/services/voice_realtime/agent/llm.py`. Voice suite: 408 green.
+
 - **2026-07-11 — Routing: clipped "ค้น" reaches the loop.** Live run #3:
   "กลับไปhomeแล้วค้นราคาน้ำมัน" and "ไปhomeแล้วค้นราคาแตงกวา" died as
   navigate-only turns ("ได้เลยครับ", search half dropped) — the loop never

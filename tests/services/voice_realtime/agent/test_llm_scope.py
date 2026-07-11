@@ -85,6 +85,9 @@ async def test_think_forces_json_mode_and_scopes_reasoning_and_temperature(monke
     assert calls["kwargs"]["response_format"] == {"type": "json_object"}
     assert calls["kwargs"]["reasoning_effort"] == "minimal"
     assert calls["kwargs"]["temperature"] == 0.2
+    # Fail-fast: the default 9-attempt backoff storm burned RPM against the
+    # very limit it was waiting out (observed live on the free tier).
+    assert calls["kwargs"]["max_retries"] == 1
 
 
 @pytest.mark.asyncio

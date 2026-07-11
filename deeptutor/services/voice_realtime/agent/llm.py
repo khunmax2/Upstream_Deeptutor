@@ -103,6 +103,13 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
         "response_format": {"type": "json_object"},
         "reasoning_effort": "minimal",
         "temperature": 0.2,
+        # Fail FAST: complete()'s default policy retries a 429 up to 9 times
+        # with exponential backoff — on a free tier whose binding limit is
+        # REQUESTS per minute, that storm re-pins the very limit it is waiting
+        # out (observed live: attempt 5/9, 80s backoff, RPM 5/5 solid red).
+        # The loop is its own retry mechanism: one quick retry, then end the
+        # run with an honest spoken line.
+        "max_retries": 1,
     }
     if settings.base_url:
         kwargs["base_url"] = settings.base_url
