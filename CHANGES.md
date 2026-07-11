@@ -157,6 +157,27 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Routing fix: connectorless compound commands no longer end
+  as half-done navigations.** Live bug: "ไปตั้งค่าเปลี่ยนธีมมืด" (no "แล้ว")
+  slipped every rung — nav intent requires a หน้า/page word, click/guess
+  didn't apply, the lexical matcher requires a connector — and landed on the
+  chat LLM, whose aggressive ui_navigate imperatives ("MUST call … reply
+  EXACTLY 'ได้เลยครับ'") beat the far-away MULTI-STEP paragraph: it navigated
+  and dropped the theme half. Two-layer fix: (1) `agent/intent.py` Rule 2 —
+  a NAVIGATION opener + a second action verb later in the sentence is a task
+  even with the connector elided (spoken Thai drops "แล้ว" routinely);
+  restricted to nav openers so click phrasings with verby button labels
+  ("กดปุ่มเปลี่ยนธีม") stay on the free click rung, and "หา" excluded from the
+  second-verb scan (false-fires inside nouns like "ปัญหา"). (2)
+  `ui_control.py` — the override is carved INTO the ui_navigate rule block
+  ("call ui_navigate ONLY when opening the page is the ENTIRE request …
+  otherwise call ui_agent_task with the FULL request"), advertised only while
+  the loop is available; instruction-competition was the failure mode, so the
+  counter-rule now lives where the competing rule lives. Tests: +7 (intent
+  rule-2 matrix incl. noun-substring guard; prompt carve-out on/off; full-path
+  regression pinning the exact live utterance to the loop). Voice suite: 400
+  green.
+
 - **2026-07-11 — Vision layer: neon restyle of the highlight boxes.** Live
   feedback: the engine's default look (2px solid borders in a 12-color loud
   palette + opaque label chips) reads as visual chaos on a busy page. New

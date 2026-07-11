@@ -64,3 +64,31 @@ def test_back_to_settings_variants_match():
 
 def test_bare_back_without_a_second_step_stays_on_the_fast_path():
     assert match_agent_task("กลับไปหน้าหลัก") is None
+
+
+# ── Rule 2: connector elided (live-test bug: "ไปตั้งค่าเปลี่ยนธีมมืด" reached
+# the chat LLM, which called ui_navigate and dropped the theme half) ──
+
+
+def test_nav_opener_plus_second_verb_without_connector_matches():
+    assert match_agent_task("ไปตั้งค่าเปลี่ยนธีมมืด")
+    assert match_agent_task("ไปหน้าหลักค้นหาราคาทอง")
+    assert match_agent_task("กลับไปหน้าหลักค้นหาราคาทอง")
+    assert match_agent_task("เปิดตั้งค่าเปลี่ยนภาษา")
+
+
+def test_plain_navigation_still_stays_on_the_fast_path():
+    assert match_agent_task("ไปตั้งค่า") is None
+    assert match_agent_task("ไปหน้าหลัก") is None
+    assert match_agent_task("เปิดศูนย์ความรู้") is None
+
+
+def test_click_opener_with_verby_button_label_is_not_a_task():
+    # "เปลี่ยนธีม" here is ONE button whose label contains a verb — the click
+    # rung owns it (and its own miss seam already routes to the agent).
+    assert match_agent_task("กดปุ่มเปลี่ยนธีม") is None
+
+
+def test_verb_inside_a_noun_does_not_false_fire():
+    # "ปัญหา" contains "หา" — excluded from the second-step scan.
+    assert match_agent_task("ไปดูปัญหาหน่อย") is None

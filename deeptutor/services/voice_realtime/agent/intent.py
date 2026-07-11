@@ -56,6 +56,16 @@ _QUESTION_WORDS = ("ไหม", "มั้ย", "อะไร", "ทำไม", 
 
 _MAX_TASK_CHARS = 120
 
+# Rule 2 (spoken Thai drops connectors — live-tested: "ไปตั้งค่าเปลี่ยนธีมมืด"):
+# a NAVIGATION opener followed by a second action verb is a task even with no
+# "แล้ว" between the steps. Restricted to nav openers on purpose — a click
+# opener + second verb ("กดปุ่มเปลี่ยนธีม") is usually ONE button whose label
+# contains a verb, and the click rung (with its own agent seams) owns those.
+_NAV_OPENERS = ("กลับไปที่", "กลับไปหน้า", "กลับไป", "กลับ", "ไปที่", "ไปหน้า", "ไป", "เปิด")
+# Verbs scanned for in the remainder. "หา" is excluded: as a substring it
+# false-fires inside ordinary nouns ("ปัญหา", "เลขหา…"); "ค้นหา" covers search.
+_SECOND_STEP_VERBS = tuple(v for v in _ACTION_VERBS if v not in ("หา", "ไป", "กลับ"))
+
 
 def match_agent_task(text: str) -> str | None:
     """The task string when *text* reads as a multi-step page task, else None."""
@@ -71,6 +81,8 @@ def match_agent_task(text: str) -> str | None:
         return None
 
     rest = lowered[len(opener) :]
+
+    # Rule 1: explicit connector + a real second step after it.
     for marker in _SEQUENCE_MARKERS:
         pos = rest.find(marker)
         # -1 = not found. 0 IS valid: an object-less opener ("กลับไป") can
@@ -82,4 +94,12 @@ def match_agent_task(text: str) -> str | None:
         # require a real action verb after the connector.
         if any(v in after for v in _ACTION_VERBS):
             return t
+
+    # Rule 2: nav opener + a second action verb later in the sentence,
+    # connector elided ("ไปตั้งค่า เปลี่ยนธีมมืด"). The verb must not sit at
+    # position 0 of the remainder — that is a compound opener, not a step
+    # ("เปิด เปลี่ยนธีม"? no: position 0 means the opener itself continues).
+    if opener in _NAV_OPENERS and any(rest.find(v) > 0 for v in _SECOND_STEP_VERBS):
+        return t
+
     return None

@@ -1712,6 +1712,22 @@ class VoiceUICapability:
                 "rudeness: the caller is watching the screen, not waiting for "
                 "narration."
             )
+            # Carved into the ui_navigate rules themselves, not just the far-away
+            # MULTI-STEP paragraph: live-tested, the model pattern-matched
+            # "ไปตั้งค่าเปลี่ยนธีมมืด" → ui_navigate(settings) → "ได้เลยครับ" and
+            # dropped the theme half, because THIS section's imperatives won.
+            if _agent_loop_available():
+                lines.append(
+                    f"OVERRIDE — WHEN THE REQUEST IS MORE THAN NAVIGATION: call "
+                    f"`{UI_NAVIGATE_TOOL}` ONLY when opening the page is the caller's "
+                    "ENTIRE request. If the utterance contains anything beyond "
+                    "arriving — something to change, press, search, find, or type "
+                    "after getting there (e.g. 'ไปตั้งค่าเปลี่ยนธีมมืด') — do NOT "
+                    f"call `{UI_NAVIGATE_TOOL}` and do NOT split the request: call "
+                    f"`{UI_AGENT_TASK_TOOL}` with the FULL request instead. "
+                    "Navigating and ignoring the rest is a failed task, not a "
+                    "partial success."
+                )
         if isinstance(screen, dict) and screen.get("summary"):
             if lines:
                 lines.append("")

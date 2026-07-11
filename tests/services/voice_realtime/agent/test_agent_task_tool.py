@@ -89,3 +89,18 @@ def test_tool_is_registered_and_owned():
 
     assert get_tool_registry().get(ui_control.UI_AGENT_TASK_TOOL) is not None
     assert ui_control.UI_AGENT_TASK_TOOL in ui_control.VoiceUICapability.owned_tools
+
+
+def test_prompt_carves_the_override_into_the_navigate_rules(monkeypatch):
+    """The live bug: ui_navigate's imperatives won over the far-away MULTI-STEP
+    paragraph. The override must live inside the navigate section itself."""
+    _flag_on(monkeypatch)
+    content = _system_block(monkeypatch)
+    assert "OVERRIDE — WHEN THE REQUEST IS MORE THAN NAVIGATION" in content
+    assert "ไปตั้งค่าเปลี่ยนธีมมืด" in content  # the exact failure, taught back
+
+
+def test_navigate_override_absent_when_disabled(monkeypatch):
+    _flag_off(monkeypatch)
+    content = _system_block(monkeypatch)
+    assert "OVERRIDE — WHEN THE REQUEST IS MORE THAN NAVIGATION" not in content

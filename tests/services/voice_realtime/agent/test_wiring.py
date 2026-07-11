@@ -282,3 +282,22 @@ async def test_handoff_without_runner_is_ignored_and_chat_continues(monkeypatch)
 
     assert "ผมช่วยแบบอื่นได้ครับ" in reply
     assert any("ผมช่วยแบบอื่น" in s for s in spoken)
+
+
+@pytest.mark.asyncio
+async def test_connectorless_compound_reaches_the_agent_before_any_llm():
+    """Regression for the live bug: 'ไปตั้งค่าเปลี่ยนธีมมืด' (no แล้ว) must be
+    taken by the loop deterministically — no chat LLM, no half-done navigate."""
+    emitter = FakeEmitter()
+    runner = runner_recorder("เปลี่ยนธีมมืดให้แล้วครับ")
+
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ไปตั้งค่าเปลี่ยนธีมมืด",
+        [],
+        session_id="s1",
+        agent_runner=runner,
+    )
+
+    assert runner.tasks == ["ไปตั้งค่าเปลี่ยนธีมมืด"]
+    assert reply == "เปลี่ยนธีมมืดให้แล้วครับ"
