@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 UI_NAVIGATE_TOOL = "ui_navigate"
 UI_CLICK_TOOL = "ui_click"
 UI_FILL_TOOL = "ui_fill"
+UI_AGENT_TASK_TOOL = "ui_agent_task"
 
 # Guard rails on the client-supplied manifest (it rides a WS control frame).
 MAX_MANIFEST_BYTES = 8_192
@@ -1567,6 +1568,75 @@ class UIFillTool(BaseTool):
         )
 
 
+def _agent_loop_available() -> bool:
+    """Lazy-imported flag check — ``agent.danger`` imports THIS module, so a
+    top-level import here would be circular. Same truth the pipeline reads."""
+    from deeptutor.services.voice_realtime.agent import agent_loop_enabled
+
+    return agent_loop_enabled()
+
+
+class UIAgentTaskTool(BaseTool):
+    """Hand a multi-step page task to the in-page agent loop.
+
+    The SEMANTIC door into the loop (PLAN_inpage_agent_parity D2): the
+    deterministic matcher in ``agent/intent.py`` catches obvious "X แล้ว Y"
+    phrasings for free, but people phrase tasks in unbounded ways — chasing
+    them with more verbs is whack-a-mole (live-tested: "กลับไป..." fell
+    through). Anything that reaches the chat LLM is understood by the chat
+    LLM, so IT makes the routing call by invoking this tool; the pipeline
+    then abandons the chat turn and hands the task to the loop, which drives
+    the screen step by step and speaks its own progress.
+
+    Trust model unchanged: the loop's own DangerGate confirms destructive
+    clicks by voice regardless of how the task was phrased or routed.
+    """
+
+    def get_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=UI_AGENT_TASK_TOOL,
+            description=(
+                "Hand a MULTI-STEP page task to the in-page agent, which will "
+                "operate the caller's screen step by step (navigate, click, type, "
+                "search) while they watch. Call this when the request chains page "
+                "actions ('go to X then do Y'), needs finding/clicking something "
+                f"beyond the `{UI_NAVIGATE_TOOL}` targets, or asks to operate the "
+                "app rather than converse. Do NOT call it for questions or chat."
+            ),
+            parameters=[
+                ToolParameter(
+                    name="task",
+                    type="string",
+                    description=(
+                        "The caller's full request, restated faithfully in their "
+                        "language — keep every named page, button, and search term."
+                    ),
+                ),
+            ],
+        )
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        # Availability is checked HERE (not at registration) because tools are
+        # registered once per process while the flag/env can differ per run.
+        if not _agent_loop_available():
+            return ToolResult(
+                content=(
+                    "The in-page agent is not available. Help with what you have: "
+                    f"`{UI_NAVIGATE_TOOL}` for declared targets, or tell the caller "
+                    "which part you cannot do."
+                ),
+                success=False,
+            )
+        task = str(kwargs.get("task") or "").strip()
+        if not task:
+            return ToolResult(content="No task given; nothing handed off.", success=False)
+        # The pipeline intercepts this TOOL_CALL and abandons the chat turn —
+        # this result is for the (rare) case the model still gets to speak.
+        return ToolResult(
+            content="Task handed to the in-page agent. Say NOTHING further — it speaks for itself."
+        )
+
+
 class VoiceUICapability:
     """LoopCapability that mounts ``ui_navigate`` when a UI manifest is present.
 
@@ -1576,7 +1646,7 @@ class VoiceUICapability:
     """
 
     name = "voice_ui"
-    owned_tools = (UI_NAVIGATE_TOOL, UI_CLICK_TOOL, UI_FILL_TOOL)
+    owned_tools = (UI_NAVIGATE_TOOL, UI_CLICK_TOOL, UI_FILL_TOOL, UI_AGENT_TASK_TOOL)
 
     def is_active(self, context: UnifiedContext) -> bool:
         return bool(context.metadata.get("ui_manifest")) or bool(context.metadata.get("ui_context"))
@@ -1704,6 +1774,21 @@ class VoiceUICapability:
                 "the system did not catch it: never claim text was deleted — "
                 "tell the caller those commands instead."
             )
+        # Advertised only while the in-page agent loop is actually available —
+        # same env-based truth the pipeline's handoff guard reads, so the model
+        # is never sold a tool whose TOOL_CALL would go nowhere.
+        if lines and _agent_loop_available():
+            lines.append(
+                f"MULTI-STEP TASKS: with `{UI_AGENT_TASK_TOOL}` you can hand the "
+                "whole request to an in-page agent that operates the screen step "
+                "by step while the caller watches. Use it when the caller chains "
+                "actions ('ไป X แล้วทำ Y'), asks to find/press/search something "
+                "beyond the targets and buttons listed above, or asks you to "
+                "operate the app rather than talk. Pass their full request as "
+                "`task`, faithfully, in their language. After calling it, say "
+                "NOTHING — the agent speaks its own progress. Never use it for "
+                "questions or conversation."
+            )
         if not lines:
             return None
         return PromptBlock(self.name, "\n".join(lines))
@@ -1748,6 +1833,9 @@ def install_ui_control() -> None:
     if tool_registry.get(UI_FILL_TOOL) is None:
         tool_registry.register(UIFillTool())
         logger.info("voice_ui: registered %s tool", UI_FILL_TOOL)
+    if tool_registry.get(UI_AGENT_TASK_TOOL) is None:
+        tool_registry.register(UIAgentTaskTool())
+        logger.info("voice_ui: registered %s tool", UI_AGENT_TASK_TOOL)
 
     caps = capability_registry.LOOP_CAPABILITIES
     if not any(getattr(cap, "name", "") == VoiceUICapability.name for cap in caps):
@@ -1757,9 +1845,11 @@ def install_ui_control() -> None:
 
 __all__ = [
     "MAX_MANIFEST_BYTES",
+    "UI_AGENT_TASK_TOOL",
     "UI_CLICK_TOOL",
     "UI_FILL_TOOL",
     "UI_NAVIGATE_TOOL",
+    "UIAgentTaskTool",
     "UIClickTool",
     "UIFillTool",
     "UINavigateTool",

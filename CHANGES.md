@@ -157,6 +157,30 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — In-page agent: the SEMANTIC door — chat LLM routes tasks via
+  a tool (`ui_agent_task`).** The owner's routing critique, accepted: lexical
+  verb-matching (`agent/intent.py`) is whack-a-mole — every caller phrases
+  tasks differently, and each miss dead-ends in the navigate-only chat path
+  doing half the job ("ได้เลยครับ" and nothing more). The model that already
+  understood the sentence should make the routing call. New
+  `UIAgentTaskTool` in `ui_control.py` (registered alongside
+  ui_navigate/click/fill; `owned_tools` +1): the chat LLM calls it with the
+  caller's restated `task`; the pipeline intercepts that TOOL_CALL, abandons
+  the chat turn (`events.aclose()`, same pattern as the watchdog — one voice
+  on the call, never two), and hands the task to the loop via the existing
+  `agent_runner`. Gating: `execute()` checks `agent_loop_enabled()` per call
+  and refuses with a corrective result when off; the system-block advertises
+  the tool ONLY while the loop is available (lazy-imported flag check —
+  `agent.danger` imports ui_control, so top-level would cycle). Also fixed en
+  route: `run_text_turn` never passed `agent_runner` down to the inner LLM
+  turn (`_run_text_turn`) — the parameter existed but arrived as None.
+  `intent.py`'s docstring demoted to what it now is: a free short-circuit
+  that skips one chat completion on obvious phrasings, not the loop's only
+  door. Tests: +9 (`test_agent_task_tool.py` — flag gating both sides,
+  prompt advertisement on/off, registration; `test_wiring.py` — handoff with
+  the model's restated task, transcript fallback, abandoned-turn-never-
+  speaks, flag-off chat continues). Voice suite: 393 green.
+
 - **2026-07-10 — In-page agent: live-test fixes (JSON mode, verb gap, visible
   narration).** First live run against a real page surfaced two real failures
   and one UX gap, all traced to source before fixing:

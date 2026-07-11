@@ -166,3 +166,119 @@ async def test_flag_and_model_enable_the_runner(monkeypatch):
     monkeypatch.setenv("DEEPTUTOR_AGENT_MODEL", "gemini-2.5-flash")
     session = VoiceSession(FakeEmitter())
     assert session._agent_runner() is not None  # noqa: SLF001
+
+
+# ── the SEMANTIC door: chat LLM hands off via the ui_agent_task tool ──
+#
+# Lexical verb-matching (intent.py) can't cover how differently people
+# phrase tasks — the catch-all is the chat model itself calling the tool.
+# These tests drive run_text_turn with a fake orchestrator emitting the
+# TOOL_CALL, exactly the frame the real turn produces.
+
+
+class _AudioEmitter(FakeEmitter):
+    async def send_bytes(self, data: bytes) -> None:
+        return None
+
+
+def _fake_orchestrator(events: list[Any]):
+    class _Orch:
+        async def handle(self, context: Any):  # noqa: ANN401
+            for ev in events:
+                yield ev
+
+    return _Orch
+
+
+def _tool_call(name: str, args: dict[str, Any]):
+    from deeptutor.core.stream import StreamEvent, StreamEventType
+
+    return StreamEvent(
+        type=StreamEventType.TOOL_CALL, source="chat", content=name, metadata={"args": args}
+    )
+
+
+def _content(text: str):
+    from deeptutor.core.stream import StreamEvent, StreamEventType
+
+    return StreamEvent(
+        type=StreamEventType.CONTENT,
+        source="chat",
+        content=text,
+        metadata={"call_kind": "llm_final_response", "call_id": "c1"},
+    )
+
+
+def _patch_llm_turn(monkeypatch: pytest.MonkeyPatch, events: list[Any]) -> list[str]:
+    spoken: list[str] = []
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        spoken.append(text)
+        return (f"AUDIO:{text}".encode(), "audio/mpeg")
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    monkeypatch.setattr(
+        "deeptutor.runtime.orchestrator.ChatOrchestrator", _fake_orchestrator(events)
+    )
+    return spoken
+
+
+@pytest.mark.asyncio
+async def test_chat_llm_hands_off_to_the_agent_via_tool(monkeypatch):
+    """TOOL_CALL(ui_agent_task) → chat turn abandoned, loop takes the task."""
+    task = "ไปหน้าหลักแล้วค้นหาราคาทอง"
+    spoken = _patch_llm_turn(
+        monkeypatch,
+        [
+            _tool_call("ui_agent_task", {"task": task}),
+            _content("ได้เลยครับ"),  # the chat model's own reply — must NOT be spoken
+        ],
+    )
+    runner = runner_recorder("ค้นหาราคาทองให้แล้วครับ")
+    emitter = _AudioEmitter()
+
+    # "ช่วย..." opener: no fast-path rung and no lexical match — the exact
+    # phrasing class that used to dead-end in navigate-only chat.
+    reply = await pipe.run_text_turn(
+        emitter,
+        "ช่วยไปดูราคาทองที่หน้าหลักหน่อย",
+        [],
+        session_id="s1",
+        agent_runner=runner,
+    )
+
+    assert runner.tasks == [task]  # the model's restated task, not the transcript
+    assert reply == "ค้นหาราคาทองให้แล้วครับ"
+    assert "ได้เลยครับ" not in spoken  # abandoned turn never spoke
+    types = [f["type"] for f in emitter.json]
+    assert "assistant_text" in types and "done" in types
+
+
+@pytest.mark.asyncio
+async def test_handoff_tool_call_without_task_falls_back_to_transcript(monkeypatch):
+    _patch_llm_turn(monkeypatch, [_tool_call("ui_agent_task", {})])
+    runner = runner_recorder("ok")
+    transcript = "ช่วยจัดการหน้าจอให้หน่อย"
+
+    await pipe.run_text_turn(_AudioEmitter(), transcript, [], session_id="s1", agent_runner=runner)
+
+    assert runner.tasks == [transcript]
+
+
+@pytest.mark.asyncio
+async def test_handoff_without_runner_is_ignored_and_chat_continues(monkeypatch):
+    """Flag off: the TOOL_CALL is a no-op; the chat turn finishes normally."""
+    spoken = _patch_llm_turn(
+        monkeypatch,
+        [
+            _tool_call("ui_agent_task", {"task": "x"}),
+            _content("ผมช่วยแบบอื่นได้ครับ"),
+        ],
+    )
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(), "ช่วยจัดการหน้าจอให้หน่อย", [], session_id="s1", agent_runner=None
+    )
+
+    assert "ผมช่วยแบบอื่นได้ครับ" in reply
+    assert any("ผมช่วยแบบอื่น" in s for s in spoken)

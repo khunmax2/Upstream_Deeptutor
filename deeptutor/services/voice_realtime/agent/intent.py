@@ -1,15 +1,20 @@
 """When does a spoken command belong to the agent loop? (Phase D2 routing)
 
-The gated-pipeline rule: simple commands stay on the deterministic fast path
-(free, ~ms); the loop takes over only when the utterance is a *task* — several
-actions chained in one breath ("ไปตั้งค่าแล้วเปลี่ยนธีมมืด"). Detection is
-deterministic on purpose: an action verb opening the sentence, a sequencing
-connector, and a second action verb after it. No LLM is spent deciding whether
-to spend an LLM.
+This matcher is a FREE SHORT-CIRCUIT, not the loop's only door. Lexical
+verb-matching can never cover how differently people phrase tasks (live-
+tested: "กลับไป..." fell through until the verb was added — and the next
+phrasing would fall through too). The catch-all is semantic: any utterance
+that reaches the chat LLM can be routed by the model itself via the
+``ui_agent_task`` tool (see ``ui_control.UIAgentTaskTool``), because the
+model that already understood the sentence is the right router.
 
-The click-miss/ambiguous seams in the pipeline are the OTHER doors into the
-loop — this matcher only catches the multi-step phrasings that would otherwise
-half-match a single-step fast-path rung and do half the job.
+What this file still buys: when a phrasing DOES match, the turn skips the
+chat LLM call entirely — ~ms and zero tokens instead of one completion.
+So keep the list honest (obvious, common phrasings), and let the tool
+route the long tail; a miss here costs one chat call, not a failed task.
+
+The click-miss/ambiguous seams in the pipeline are the remaining doors —
+they catch single-step phrasings whose target isn't on the current screen.
 """
 
 from __future__ import annotations

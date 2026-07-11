@@ -1034,6 +1034,7 @@ async def run_text_turn(
             ui_manifest=ui_manifest,
             ui_context=ui_context,
             nav_state=nav_state,
+            agent_runner=agent_runner,
         )
     finally:
         if token is not None:
@@ -1143,6 +1144,28 @@ async def _run_text_turn(
             pending = asyncio.ensure_future(events.__anext__())  # queue the next
             idle = 0.0
             meta = event.metadata or {}
+            if (
+                event.type == StreamEventType.TOOL_CALL
+                and event.content == ui_control.UI_AGENT_TASK_TOOL
+            ):
+                # The chat model routed this turn to the in-page agent — the
+                # SEMANTIC door into the loop (see UIAgentTaskTool: lexical
+                # verb-matching can't cover how differently people phrase
+                # tasks; the model that already understood the utterance makes
+                # the call). Abandon the chat turn entirely: the loop narrates
+                # its own progress, and two voices on one call is worse than
+                # none.
+                if agent_runner is None:
+                    # Flag off / model over-eager: the tool's own result text
+                    # already steers the model back — nothing to do here.
+                    logger.info("voice rung=agent-handoff-unavailable")
+                    continue
+                args = meta.get("args") or {}
+                task = str(args.get("task") or "").strip() or transcript
+                logger.info("voice rung=agent-handoff %r", task)
+                pending.cancel()
+                await events.aclose()  # unwind the orchestrator turn cleanly
+                return await _run_agent_turn(emitter, agent_runner, task, turn_t0=turn_t0)
             if (
                 event.type == StreamEventType.TOOL_CALL
                 and event.content == ui_control.UI_NAVIGATE_TOOL
