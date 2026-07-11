@@ -11,7 +11,7 @@ data/
 run_code_workspace/
 deeptutor/agents/question/reference_papers/
 deeptutor/services/rag/eg_only_for_analysis/
-/docs/
+# /docs/ was ignored upstream (generated docs); this fork tracks docs/ (reports, plans)
 /site/
 .claude
 .agents/

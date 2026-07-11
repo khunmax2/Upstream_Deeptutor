@@ -10,10 +10,10 @@ upstream.
 - **Upstream:** https://github.com/HKUDS/DeepTutor
 - **Upstream baseline:** v1.4.6 (commit `7ac3a3ba`)
 
-> Detailed, per-round records are in the committed `REPORT_*.md` files and the
-> git commit history. This file is the high-level, human-readable summary.
-> See also `ARCHITECTURE_overview.md` — how the three workstreams (Thai i18n,
-> v1.4.8 sync, LINE) attach to the upstream core.
+> Detailed, per-round records are in the committed `docs/reports/REPORT_*.md`
+> files and the git commit history. This file is the high-level, human-readable
+> summary. See also `docs/ARCHITECTURE_overview.md` — how the three workstreams
+> (Thai i18n, v1.4.8 sync, LINE) attach to the upstream core.
 
 ---
 
@@ -74,6 +74,18 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 ## Documentation
 
+- **2026-07-11 — Reorganized fork working docs out of the repo root into `docs/`.**
+  All 21 `REPORT_*.md` files moved to `docs/reports/`; `PLAN_inpage_agent_parity.md`,
+  `DESIGN_voice_grounding.md`, `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`,
+  and `th_i18n_delta_v1.4.15.json` moved to `docs/planning/`;
+  `ARCHITECTURE_overview.md` and `RUNBOOK_line_local.md` moved to `docs/`. Added
+  `docs/README.md` index. `FORK_TOUCHPOINTS.txt` stays at the root because
+  `scripts/thai_impact.sh` references it by path; upstream docs and compliance
+  files (`CHANGES.md`, `NOTICE`, `LICENSE`) also stay at the root. Updated path
+  references in `CLAUDE.md`, `CHANGES.md` (header note), and
+  `docs/ARCHITECTURE_overview.md`. Removed the upstream `/docs/` entry from
+  `.gitignore` (nothing generates into `docs/`; the fork now tracks it).
+  Pure `git mv` — file history preserved.
 - **2026-06-25 — Added production deployment guide + deploy templates.** New
   `DEPLOY.md`: step-by-step Docker Compose (production) deploy on a fresh server,
   including LINE webhook setup behind Caddy reverse proxy + auto-TLS, the

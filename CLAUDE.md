@@ -79,8 +79,10 @@ files were changed. **Every change to this fork MUST be recorded** in all of:
    This is the prominent "we changed these files" notice. **Never skip this.**
 2. **Commit message** — Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`,
    `chore:` …). Group related changes.
-3. **`REPORT_*.md`** — for multi-step work, close each round/phase with a report and
-   **commit it**. (Template lives in the maintainer's planning docs.)
+3. **`docs/reports/REPORT_*.md`** — for multi-step work, close each round/phase with a
+   report and **commit it**. Reports live in `docs/reports/` (not the repo root);
+   planning/design docs live in `docs/planning/`. (Template lives in the maintainer's
+   planning docs.)
 4. **`NOTICE`** — keep the modification statement current; never remove upstream
    attribution.
 
@@ -94,7 +96,7 @@ Before merging any upstream release: never sync onto a **red-CI** upstream relea
 run the impact analysis first (diagnose), then the sync procedure (execute) — both
 maintained in the project's planning docs (`*_UPSTREAM_IMPACT_ANALYSIS.md`,
 `*_UPSTREAM_SYNC_STRATEGY.md`). After a successful sync, add an entry to `CHANGES.md`
-under **"Upstream syncs"** and a `REPORT_sync_*.md`.
+under **"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`.
 
 > Note: `main` currently carries fork customizations (Thai i18n was merged in), so an
 > upstream sync is a real **merge-with-conflicts**, not a fast-forward.
