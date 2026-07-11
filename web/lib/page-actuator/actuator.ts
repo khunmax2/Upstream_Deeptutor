@@ -24,6 +24,7 @@ const domTree = domTreeEngine as (args: {
 }) => FlatDomTree
 
 import { clickElement, inputTextElement, scrollVertically, selectOptionElement } from './actions'
+import { neonizeHighlights } from './neonHighlights'
 import {
   buildHeaderFooter,
   markNewElements,
@@ -117,6 +118,10 @@ export class PageActuator {
       highlightOpacity: highlight ? HIGHLIGHT_OPACITY : 0,
       highlightLabelOpacity: highlight ? HIGHLIGHT_LABEL_OPACITY : 0,
     }) as FlatDomTree
+
+    // Soften the engine's default loud boxes into the neon vision-layer look
+    // (vendor file stays byte-identical; we restyle what it just drew).
+    if (highlight) neonizeHighlights()
 
     markNewElements(tree, this.seenRefs)
     this.last = serializeTree(tree)

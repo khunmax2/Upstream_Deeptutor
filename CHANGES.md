@@ -157,6 +157,20 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-11 — Vision layer: neon restyle of the highlight boxes.** Live
+  feedback: the engine's default look (2px solid borders in a 12-color loud
+  palette + opaque label chips) reads as visual chaos on a busy page. New
+  `web/lib/page-actuator/neonHighlights.ts`: called right after a highlighted
+  dom_tree pass, it restyles the overlays the engine just drew — hues softened
+  35% toward white, hairline 1px borders with outer/inner glow (box-shadow),
+  near-zero fill, labels as translucent dark pills with glowing text. The
+  vendored `dom_tree/engine.ts` stays byte-identical (vendor contract); box↔
+  label color correlation survives for free because both derive from the same
+  per-index base color, which we read back from the inline styles (computed
+  style would return currentcolor-white for the borderless labels). Hooked in
+  `actuator.ts` observe(). Files: `web/lib/page-actuator/neonHighlights.ts`,
+  `web/lib/page-actuator/actuator.ts`.
+
 - **2026-07-11 — In-page agent: the SEMANTIC door — chat LLM routes tasks via
   a tool (`ui_agent_task`).** The owner's routing critique, accepted: lexical
   verb-matching (`agent/intent.py`) is whack-a-mole — every caller phrases
