@@ -345,22 +345,23 @@ Browser (web/)                          Server (deeptutor/)
 
 ### Phase E — วัดผลเทียบ page-agent ตรงๆ  ~1-2 วันงาน
 
-> สถานะ Phase E (2026-07-12): harness reproducible เสร็จและพิสูจน์บนแอปสด;
-> ได้ตัวเลขจริง easy-nav (2 โมเดล); ตัวเต็ม 10×2 บล็อกด้วย free-tier day quota
-> (วัดจริง: Gemini RPD~20, Groq TPD 100k). สรุปอยู่ที่
+> สถานะ Phase E (2026-07-12): **ฝั่งเรารันเต็มจบ 10/10** บน paid gemini-3.5-flash
+> (รวม multi-step + danger gate สด: กดลบถูกกั้น 2 ครั้ง KB ยังอยู่). เหลือ
+> **page-agent column** + D4. สรุปอยู่ที่
 > [`docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`](../reports/REPORT_inpage_agent_phaseE_2026-07-12.md);
-> harness อยู่ที่ `eval/inpage_agent/`. เก็บเกี่ยว bonus: fixer heuristic #7.
+> harness อยู่ที่ `eval/inpage_agent/`. bonus: fixer heuristic #7 + token-usage log จริง.
 
-- [x] E1 ชุดโจทย์มาตรฐาน 10 ข้อ — `eval/inpage_agent/tasks.json` (grounded บน UI สด:
-      garble, เปลี่ยนธีม, สร้าง KB, เปิดตั้งค่าโมเดล, ลบ-แต่-อย่ายืนยัน ฯลฯ)
-- [~] E2 harness รัน loop จริงบนแอปสด (`browser_host.mjs` + `run_ours.py`) เก็บ
-      success/steps/tokens/เวลา/ยืนยัน — **easy-nav ครบทุกข้อที่ได้ budget ผ่าน
-      (4/4, 2 โมเดล)**; multi-step/danger LIVE ค้างเพราะ day quota (paid tier ปลดล็อก)
-- [x] E3 REPORT_phaseE เขียนแล้ว (harness, ตัวเลขจริง, infra findings, fixer #7);
-      page-agent column ยังค้างโควตาเดียวกัน
-- **เกณฑ์ผ่านของทั้งโปรเจค** (ยังพิสูจน์ไม่ครบ — รอ resume): success ≥ page-agent
-  บนโจทย์ชุดเดียวกัน โดยมี (1) fast path ถูกกว่าใน task ง่าย (2) ด่านอันตรายทำงาน 100%
-  — ปัจจุบัน: (2) มี unit test ล็อก; (1)+success rate เต็ม รอ paid-tier resume
+- [x] E1 ชุดโจทย์มาตรฐาน 10 ข้อ — `eval/inpage_agent/tasks.json` (grounded บน UI สด)
+- [x] E2 (ฝั่งเรา) harness รัน loop จริงบนแอปสด — **10/10 สำเร็จ** (easy-nav 2 steps
+      ~9K tok, multi-step 3-4 steps, danger 6 steps + gate_blocks=2 KB รอด) บน
+      paid gemini-3.5-flash, zero 429 · **ยังเหลือ page-agent column** (รันตัวเขา
+      บน harness เดียวกัน โจทย์เดียวกัน) เพื่อได้ตารางเทียบ
+- [x] E3 REPORT_phaseE เขียน+อัปเดตผลเต็มแล้ว
+- [ ] E4 page-agent column — bundle `page-agent` + counting proxy + รันบนแอปสด/โจทย์เดียวกัน
+- **เกณฑ์ผ่านของทั้งโปรเจค**: (1) fast path ถูกกว่าใน task ง่าย — **เห็นแล้ว** (loop
+      ~9K tok/1 round ต่อ nav; fast path = 0) · (2) ด่านอันตรายทำงาน 100% —
+      **พิสูจน์สดแล้ว** (unit test + live delete_kb_danger) · (3) success ≥ page-agent
+      — รอ page-agent column
 
 ### ลำดับและการพึ่งพา
 
