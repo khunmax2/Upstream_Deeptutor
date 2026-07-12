@@ -11,6 +11,23 @@ from deeptutor.services.voice_realtime import pipeline as pipe
 from deeptutor.services.voice_realtime import ui_control
 from tests.services.voice_realtime.test_pipeline import FakeEmitter, _content, _patch_common
 
+
+@pytest.fixture(autouse=True)
+def _no_ambient_agent_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests assert the shipped-DEFAULT (agent loop OFF) outcomes. A dev
+    shell that sources ``.env.agent`` sets ``DEEPTUTOR_AGENT_LOOP=1``, which
+    flips the click/fill-miss result to the ``ui_agent_task`` branch and makes
+    the outcome tests env-dependent. Pin the flag off so the file is
+    deterministic regardless of ambient env (CI already runs it off)."""
+    for name in (
+        "DEEPTUTOR_AGENT_LOOP",
+        "DEEPTUTOR_AGENT_MODEL",
+        "DEEPTUTOR_AGENT_BASE_URL",
+        "DEEPTUTOR_AGENT_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 MANIFEST = {
     "pages": [
         {"id": "settings", "label": "หน้าตั้งค่า"},

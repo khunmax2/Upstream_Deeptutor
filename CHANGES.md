@@ -85,6 +85,16 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-12 — Test robustness: `test_ui_control.py` no longer depends on
+  ambient `DEEPTUTOR_AGENT_LOOP`.** The click/fill-miss outcome tests assert the
+  shipped-default (agent loop OFF) message, but a dev shell that sources
+  `.env.agent` sets `DEEPTUTOR_AGENT_LOOP=1`, flipping the result to the
+  `ui_agent_task` branch → 3 spurious failures locally (green in CI, which runs
+  the flag off). Added an autouse fixture that pins the agent-loop env off for
+  the file, so it is deterministic regardless of ambient env. Test-only; no
+  product behaviour changed. File:
+  `tests/services/voice_realtime/test_ui_control.py`.
+
 - **2026-07-12 — Voice agent: exact per-call token usage in the log.** The
   in-page agent's `think()` (`deeptutor/services/voice_realtime/agent/llm.py`)
   now calls a new **additive** `complete_with_usage()`
