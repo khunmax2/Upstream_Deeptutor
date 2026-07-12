@@ -48,44 +48,47 @@ class Emitter:
         return None
 
 
-async def main() -> None:
-    transcript = sys.argv[1] if len(sys.argv) > 1 else "สร้างหนังสือใหม่ให้หน่อย"
+async def _run_one(client: httpx.AsyncClient, transcript: str) -> None:
+    await client.post(f"{HOST}/settheme", json={"theme": "snow"}, timeout=40)
+    await client.post(f"{HOST}/goto", json={"url": "/home"}, timeout=40)
+    await client.post(f"{HOST}/reset", timeout=20)
+    before = (await client.get(f"{HOST}/probe", timeout=20)).json()
 
-    # No real TTS in a headless run.
+    seen: dict[str, Any] = {"task": None}
+
+    async def agent_runner(task: str) -> str:
+        seen["task"] = task  # records that the classifier routed to the loop
+        loop = InPageAgentLoop(HttpActuator(client), step_delay_s=0.4, max_steps=12)
+        return (await loop.execute(task)).text
+
+    print(f"\n=== {transcript!r}", flush=True)
+    reply = await pipe.run_text_turn(
+        Emitter(), transcript, [], session_id="live",
+        ui_context={"path": "/home", "summary": "หน้าหลัก"}, agent_runner=agent_runner,
+    )
+    after = (await client.get(f"{HOST}/probe", timeout=20)).json()
+    routed = "loop" if seen["task"] is not None else "chat (loop not used)"
+    print(f"  routed -> {routed}", flush=True)
+    print(f"  url {before.get('url','?').split('3000')[-1]} -> {after.get('url','?').split('3000')[-1]}", flush=True)
+    if after.get("htmlClass") != before.get("htmlClass"):
+        print(f"  htmlClass changed (theme?): ...{after.get('htmlClass','')[-24:]}", flush=True)
+    print(f"  reply: {reply[:110]!r}", flush=True)
+
+
+async def main() -> None:
+    commands = sys.argv[1:] or ["สร้างหนังสือใหม่ให้หน่อย"]
+
     async def fake_tts(text: str) -> tuple[bytes, str]:
         return (b"AUDIO", "audio/mpeg")
 
     pipe.synthesize_speech = fake_tts  # type: ignore[assignment]
 
     async with httpx.AsyncClient() as client:
-        await client.post(f"{HOST}/goto", json={"url": "/home"}, timeout=40)
-        await client.post(f"{HOST}/reset", timeout=20)
-
-        async def agent_runner(task: str) -> str:
-            # The REAL loop (think() reads DEEPTUTOR_AGENT_* from env) on the live page.
-            loop = InPageAgentLoop(HttpActuator(client), step_delay_s=0.4, max_steps=12)
-            result = await loop.execute(task)
-            return result.text
-
-        print(f"\n>>> transcript: {transcript!r}", flush=True)
-        reply = await pipe.run_text_turn(
-            Emitter(),
-            transcript,
-            [],
-            session_id="live",
-            ui_context={"path": "/home", "summary": "หน้าหลัก"},
-            agent_runner=agent_runner,
-        )
-        print(f">>> reply: {reply!r}", flush=True)
-
-        info = (await client.get(f"{HOST}/probe", timeout=20)).json()
-        print(f">>> final url: {info.get('url')}", flush=True)
-        print(f">>> dialog open: {info.get('hasDialog')}", flush=True)
-        body = info.get("bodyText", "")
-        for kw in ("หนังสือ", "book", "New book", "สร้าง", "Create"):
-            if kw in body:
-                print(f">>> page mentions: {kw!r}")
-                break
+        for cmd in commands:
+            try:
+                await _run_one(client, cmd)
+            except Exception as exc:  # noqa: BLE001 — keep the batch going
+                print(f"  ERROR: {type(exc).__name__}: {str(exc)[:150]}", flush=True)
 
 
 if __name__ == "__main__":
