@@ -97,7 +97,7 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
     * ``temperature=0.2`` — action selection should be closer to deterministic
       than prose, same reasoning as ``pipeline._VOICE_TEMPERATURE``.
     """
-    from deeptutor.services.llm import complete
+    from deeptutor.services.llm import complete_with_usage
 
     kwargs: dict[str, Any] = {
         "response_format": {"type": "json_object"},
@@ -126,9 +126,23 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
         settings.base_url or "app-catalog",
     )
 
-    return await complete(
+    response = await complete_with_usage(
         user_prompt,
         system_prompt=system_prompt,
         model=settings.model,
         **kwargs,
     )
+    # Exact per-call token cost — the provider returns it; plain complete()
+    # drops it. One line per LLM round; paired with the loop's "steps=N" this
+    # gives tokens-per-call AND rounds-per-turn for the voice agent from the log
+    # alone (the offline eval had to estimate with tiktoken; this is the real
+    # provider count).
+    usage = response.usage or {}
+    logger.info(
+        "agent llm usage: model=%s prompt=%s completion=%s total=%s",
+        settings.model,
+        usage.get("prompt_tokens", 0),
+        usage.get("completion_tokens", 0),
+        usage.get("total_tokens", 0),
+    )
+    return response.content or ""

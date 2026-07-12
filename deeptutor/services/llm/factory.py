@@ -22,6 +22,7 @@ from .config import LLMConfig, get_llm_config
 from .error_mapping import map_error
 from .multimodal import prepare_multimodal_messages
 from .provider_factory import get_runtime_provider
+from .types import TutorResponse
 from .utils import is_local_llm_server
 
 DEFAULT_MAX_RETRIES = settings.retry.max_retries
@@ -396,6 +397,79 @@ async def complete(
             RuntimeError(response.content or "LLM request failed"), provider=config.provider_name
         )
     return response.content or ""
+
+
+async def complete_with_usage(
+    prompt: str,
+    system_prompt: str = "You are a helpful assistant.",
+    model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    api_version: str | None = None,
+    binding: str | None = None,
+    messages: list[dict[str, Any]] | None = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    retry_delay: float = DEFAULT_RETRY_DELAY,
+    exponential_backoff: bool = DEFAULT_EXPONENTIAL_BACKOFF,
+    **kwargs: Any,
+) -> TutorResponse:
+    """Same call as :func:`complete`, but returns the full response so the
+    caller can read ``.usage`` (prompt/completion/total tokens + cost) — which
+    ``complete()`` drops when it returns only ``.content``.
+
+    Deliberately a SIBLING, not a refactor: ``complete()`` is left byte-for-byte
+    untouched so no existing caller's behaviour can change. Keep the call
+    sequence below in sync with ``complete()`` (both are thin orchestration over
+    the same shared helpers, so a drift in one is visible against the other).
+    """
+    caller_extra_headers = kwargs.pop("extra_headers", None)
+    reasoning_effort = kwargs.pop("reasoning_effort", None)
+    image_data = kwargs.pop("image_data", None)
+    image_mime_type = kwargs.pop("image_mime_type", "image/png")
+    image_filename = kwargs.pop("image_filename", "image.png")
+
+    config, provider_spec = _resolve_call_config(
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        api_version=api_version,
+        binding=binding,
+        extra_headers=caller_extra_headers,
+        reasoning_effort=reasoning_effort,
+    )
+    provider = get_runtime_provider(config)
+    capability_binding = _capability_binding(config, provider_spec)
+    request_messages = _build_messages(prompt, system_prompt, messages)
+    request_messages = _apply_inline_image_data(
+        request_messages,
+        binding=capability_binding,
+        model=config.model,
+        image_data=image_data,
+        image_mime_type=str(image_mime_type or "image/png"),
+        image_filename=str(image_filename or "image.png"),
+    )
+    retry_delays = _build_retry_delays(max_retries, retry_delay, exponential_backoff)
+    extra_kwargs = _sanitize_call_kwargs(
+        binding=capability_binding, model=config.model, kwargs=kwargs
+    )
+
+    try:
+        response = await provider.chat_with_retry(
+            messages=request_messages,
+            model=config.model,
+            reasoning_effort=config.reasoning_effort,
+            retry_delays=retry_delays,
+            allow_image_fallback=not supports_vision(capability_binding, config.model),
+            **extra_kwargs,
+        )
+    except Exception as exc:
+        raise map_error(exc, provider=config.provider_name) from exc
+
+    if response.finish_reason == "error":
+        raise map_error(
+            RuntimeError(response.content or "LLM request failed"), provider=config.provider_name
+        )
+    return response
 
 
 async def stream(

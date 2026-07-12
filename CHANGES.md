@@ -85,6 +85,22 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-12 — Voice agent: exact per-call token usage in the log.** The
+  in-page agent's `think()` (`deeptutor/services/voice_realtime/agent/llm.py`)
+  now calls a new **additive** `complete_with_usage()`
+  (`deeptutor/services/llm/factory.py`) that returns the full `TutorResponse`
+  (so `.usage` — the provider's real prompt/completion/total tokens — survives)
+  and logs one `agent llm usage: … prompt=… completion=… total=…` line per LLM
+  round. Paired with the loop's existing `steps=N`, this gives tokens-per-call
+  AND rounds-per-turn for voice from the log alone (the offline eval had to
+  estimate with tiktoken; this is the real count). `complete()` is left
+  byte-for-byte untouched — `complete_with_usage()` is a sibling, not a refactor
+  — so no existing caller (chat/tools/voice-chat) changes; verified by the llm
+  suite (121) + agent suite (102, +1 usage test) staying green. Files:
+  `deeptutor/services/llm/factory.py`, `deeptutor/services/llm/__init__.py`,
+  `deeptutor/services/voice_realtime/agent/llm.py`,
+  `tests/services/voice_realtime/agent/test_llm_scope.py`.
+
 - **2026-07-12 — Phase E: reproducible in-page-agent eval harness + first live
   numbers + a fixer hardening.** New `eval/inpage_agent/` (all isolated, no
   `web/`/`deeptutor/` source touched): a Playwright browser host that drives our

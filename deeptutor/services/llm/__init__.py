@@ -88,6 +88,7 @@ from .factory import (
     DEFAULT_RETRY_DELAY,
     LOCAL_PROVIDER_PRESETS,
     complete,
+    complete_with_usage,
     fetch_models,
     get_provider_presets,
     stream,
@@ -140,6 +141,7 @@ __all__ = [
     "LLMModelNotFoundError",
     # Factory (main API)
     "complete",
+    "complete_with_usage",
     "stream",
     "fetch_models",
     "get_provider_presets",

@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from deeptutor.services.llm.types import TutorResponse
 from deeptutor.services.voice_realtime.agent import (
     AgentLLMNotConfigured,
     AgentLLMSettings,
@@ -61,14 +62,19 @@ def test_half_configured_upstream_fails_loudly(monkeypatch, present):
 def _capture_complete(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     calls: dict[str, Any] = {}
 
-    async def fake_complete(prompt: str, **kwargs: Any) -> str:
+    async def fake_complete(prompt: str, **kwargs: Any):
         calls["prompt"] = prompt
         calls["kwargs"] = kwargs
-        return '{"action": {"wait": {"seconds": 1}}}'
+        # think() now calls complete_with_usage() → a TutorResponse, so it can
+        # log exact per-call token usage (plain complete() drops it).
+        return TutorResponse(
+            content='{"action": {"wait": {"seconds": 1}}}',
+            usage={"prompt_tokens": 123, "completion_tokens": 7, "total_tokens": 130},
+        )
 
     import deeptutor.services.llm as llm_module
 
-    monkeypatch.setattr(llm_module, "complete", fake_complete)
+    monkeypatch.setattr(llm_module, "complete_with_usage", fake_complete)
     return calls
 
 
@@ -110,3 +116,20 @@ async def test_think_omits_base_url_and_api_key_in_model_alone_mode(monkeypatch)
 
     assert "base_url" not in calls["kwargs"]
     assert "api_key" not in calls["kwargs"]
+
+
+@pytest.mark.asyncio
+async def test_think_returns_content_and_logs_exact_usage(monkeypatch, caplog):
+    """think() surfaces the provider's real token counts (not a tiktoken guess)
+    and still returns just the text, so the loop's `think` contract is unchanged."""
+    _capture_complete(monkeypatch)
+    settings = AgentLLMSettings(model="gemini-2.5-flash")
+
+    with caplog.at_level("INFO"):
+        out = await think("system prompt", "user prompt", settings)
+
+    assert out == '{"action": {"wait": {"seconds": 1}}}'  # still text only
+    assert any(
+        "agent llm usage" in r.message and "total=130" in r.message and "prompt=123" in r.message
+        for r in caplog.records
+    )
