@@ -301,3 +301,67 @@ async def test_connectorless_compound_reaches_the_agent_before_any_llm():
 
     assert runner.tasks == ["ไปตั้งค่าเปลี่ยนธีมมืด"]
     assert reply == "เปลี่ยนธีมมืดให้แล้วครับ"
+
+
+# ── intent classifier seam (A1): primary router before the chat fallback ──
+
+
+def _patch_classifier(monkeypatch: pytest.MonkeyPatch, intent: str) -> None:
+    monkeypatch.setattr(pipe.intent_classifier, "classifier_enabled", lambda: True)
+
+    async def fake_classify(transcript: str, ui_context: Any = None) -> str:
+        return intent
+
+    monkeypatch.setattr(pipe.intent_classifier, "classify", fake_classify)
+
+
+@pytest.mark.asyncio
+async def test_classifier_ui_task_routes_to_the_agent(monkeypatch):
+    """A command with no keyword marker ('สร้างหนังสือใหม่') classified ui_task →
+    the loop gets the whole task (the live 'half-done navigate' bug)."""
+    _patch_classifier(monkeypatch, "ui_task")
+    runner = runner_recorder("สร้างหนังสือให้แล้วครับ")
+
+    reply = await pipe.run_text_turn(
+        FakeEmitter(), "สร้างหนังสือใหม่ให้หน่อย", [], session_id="s1", agent_runner=runner
+    )
+
+    assert runner.tasks == ["สร้างหนังสือใหม่ให้หน่อย"]
+    assert reply == "สร้างหนังสือให้แล้วครับ"
+
+
+@pytest.mark.asyncio
+async def test_classifier_chat_leaves_the_loop_untouched(monkeypatch):
+    """Classified chat → the loop is never called; the chat turn runs normally."""
+    _patch_classifier(monkeypatch, "chat")
+    _patch_llm_turn(monkeypatch, [_content("ราคาทองวันนี้บาทละเยอะครับ")])
+    runner = runner_recorder("ต้องไม่ถูกเรียก")
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(), "ราคาทองเท่าไหร่", [], session_id="s1", agent_runner=runner
+    )
+
+    assert runner.tasks == []
+    assert "ราคาทอง" in reply
+
+
+@pytest.mark.asyncio
+async def test_classifier_off_is_never_consulted(monkeypatch):
+    """Flag off (default): the seam is skipped — classify must not be called and
+    the turn behaves exactly as before."""
+    called = {"n": 0}
+
+    async def boom(transcript: str, ui_context: Any = None) -> str:
+        called["n"] += 1
+        return "ui_task"
+
+    monkeypatch.setattr(pipe.intent_classifier, "classifier_enabled", lambda: False)
+    monkeypatch.setattr(pipe.intent_classifier, "classify", boom)
+    _patch_llm_turn(monkeypatch, [_content("โอเคครับ")])
+    runner = runner_recorder()
+
+    await pipe.run_text_turn(
+        _AudioEmitter(), "สร้างหนังสือใหม่", [], session_id="s1", agent_runner=runner
+    )
+
+    assert called["n"] == 0 and runner.tasks == []

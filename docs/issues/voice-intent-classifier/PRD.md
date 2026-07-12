@@ -1,7 +1,20 @@
 # Voice routing: intent classifier as the primary router (A1 hybrid)
 
-Status: ready-for-agent
+Status: in-progress
 Owner: Attapon · Drafted: 2026-07-12 · Prereq: a working agent-loop model + the loop enabled
+
+## Progress
+
+- **2026-07-13 — built + wired + tested (behind a flag).**
+  `deeptutor/services/voice_realtime/intent_classifier.py` (chat vs ui_task, lite
+  model, JSON output, bias to ui_task, failure ⇒ None), seam added in
+  `pipeline.run_text_turn` right before `rung=llm` (gated on
+  `DEEPTUTOR_VOICE_CLASSIFIER` + a configured model + the loop being on).
+  `ui_task` → `_run_agent_turn(transcript)`; `chat`/None ⇒ today's `rung=llm`
+  path, unchanged. Tests: `test_intent_classifier.py` (7) +
+  `test_wiring.py` classifier seam (3); voice suite 410 green; flag off = byte-
+  identical. Env documented in `.env.agent.example`. **Remaining: live-verify**
+  with the flag on + a real classifier model (needs a working key).
 
 ## Problem
 

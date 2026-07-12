@@ -85,6 +85,24 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-13 — Voice intent classifier: a semantic router before the chat
+  fallback (behind a flag).** New
+  `deeptutor/services/voice_realtime/intent_classifier.py` decides `chat` vs
+  `ui_task` for an utterance; a seam in `pipeline.run_text_turn` (right before
+  `rung=llm`, gated on `DEEPTUTOR_VOICE_CLASSIFIER` + a configured model + the
+  loop) sends `ui_task` to the in-page agent loop instead of letting the chat LLM
+  do one shallow UI action. Fixes the class where a multi-step / paraphrased
+  command ("สร้างหนังสือใหม่") half-navigated and stopped — keyword rungs can't
+  scale, so meaning is interpreted first (A1 hybrid: the free deterministic
+  fast-path still runs before the classifier). Uses a cheap LITE model
+  (classification is easy); off ⇒ today's routing byte-identical; a classifier
+  failure defers to the chat path (never breaks a turn). Voice suite 410 green
+  (+10 tests). See `docs/issues/voice-intent-classifier/`. Files:
+  `deeptutor/services/voice_realtime/intent_classifier.py`,
+  `deeptutor/services/voice_realtime/pipeline.py`,
+  `tests/services/voice_realtime/test_intent_classifier.py`,
+  `tests/services/voice_realtime/agent/test_wiring.py`, `.env.agent.example`.
+
 - **2026-07-12 — Provider adaptation (part 1): reasoning params drop on hosts
   that reject them.** `reasoning_params.py::build_openai_compatible_reasoning_kwargs`
   now takes the request `base_url` and, for hosts in `_REASONING_UNSUPPORTED_HOSTS`

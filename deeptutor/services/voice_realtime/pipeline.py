@@ -33,7 +33,7 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
-from deeptutor.services.voice_realtime import narration, ui_control, ui_graph
+from deeptutor.services.voice_realtime import intent_classifier, narration, ui_control, ui_graph
 from deeptutor.services.voice_realtime.agent.intent import match_agent_task
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
@@ -1019,6 +1019,16 @@ async def run_text_turn(
     if guess is not None and nav_state is not None:
         logger.info("voice rung=confirm-ask target=%s %r", guess.get("target"), transcript)
         return await _run_confirm_shortcut(emitter, guess, nav_state, turn_t0=t0)
+
+    # Primary semantic router (A1, docs/issues/voice-intent-classifier): the free
+    # keyword fast-path above has missed, so instead of letting the chat LLM do
+    # one shallow UI action, ask a cheap classifier whether this is a screen
+    # command → hand the whole task to the loop. Off by default and self-limiting
+    # (None / no loop ⇒ fall through to rung=llm exactly as before).
+    if agent_runner is not None and intent_classifier.classifier_enabled():
+        if await intent_classifier.classify(transcript, ui_context) == "ui_task":
+            logger.info("voice rung=classify-ui-task %r", transcript)
+            return await _run_agent_turn(emitter, agent_runner, transcript, turn_t0=t0)
 
     logger.info("voice rung=llm %r", transcript)
 
