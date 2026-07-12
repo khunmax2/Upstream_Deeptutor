@@ -4,8 +4,7 @@
 //
 // Botnoi-WebAvatar-style presentation over DeepTutor's own realtime voice
 // layer: pressing the call button fades the mascot overlay in, hanging up
-// fades it out. The call itself is the same protocol as the prototype bench
-// (`voice_prototype/static/call.html`): WebSocket `/api/v1/voice/ws` →
+// fades it out. The call protocol is: WebSocket `/api/v1/voice/ws` →
 // ChatOrchestrator, browser Web-Speech STT with an echo mute-guard, per-
 // sentence TTS audio streamed back, lip-sync driven by the real audio
 // amplitude. Three.js is loaded from CDN on first open (no bundle dep).
