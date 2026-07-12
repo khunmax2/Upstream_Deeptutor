@@ -74,6 +74,17 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 ## Documentation
 
+- **2026-07-11 — Closed the in-page agent build rounds (Phases A–D) with a
+  report.** New `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`:
+  what each phase shipped (with commit SHAs), the three live-hardening rounds
+  (routing gaps, perf, narration, 429 fail-fast), and every deviation from the
+  plan with its reason. `docs/planning/PLAN_inpage_agent_parity.md` status
+  updated — A–D checkboxes ticked, Phase E (+ D4 `ui_graph` fate, which
+  depends on E data) left open; preamble links the report. Per fork policy
+  §1.3 (multi-step work closes each round with a committed report). Files:
+  `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
+  `docs/planning/PLAN_inpage_agent_parity.md`.
+
 - **2026-07-11 — Reorganized fork working docs out of the repo root into `docs/`.**
   All 21 `REPORT_*.md` files moved to `docs/reports/`; `PLAN_inpage_agent_parity.md`,
   `DESIGN_voice_grounding.md`, `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`,

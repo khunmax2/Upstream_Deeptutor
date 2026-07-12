@@ -1,6 +1,9 @@
 # แผน: สร้าง in-page agent ของเราเอง (reverse-engineering page-agent → ออกแบบใหม่เป็นงานของเรา)
 
-> สถานะ: ร่างแผน (2026-07-10) · เจ้าของ: Attapon · ผู้ช่วยวิเคราะห์: Claude
+> สถานะ (อัปเดต 2026-07-11): **Phase A–D เสร็จแล้ว + ผ่าน live hardening 3 รอบ**;
+> เหลือ **Phase E เท่านั้น** (วัดผลชน page-agent — รอ quota). สรุปปิดงานอยู่ที่
+> [`docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`](../reports/REPORT_inpage_agent_phases_AD_2026-07-11.md).
+> เจ้าของ: Attapon · ผู้ช่วยวิเคราะห์: Claude
 > ซอร์สอ้างอิง: `~/Project/antigravity/page-agent` (MIT, Alibaba) — อ่านครบทั้ง core ~3,600 บรรทัด
 > งานของเราที่จะยกระดับ: `feat/voice-web-integration` (`deeptutor/services/voice_realtime/`)
 
@@ -239,13 +242,13 @@ Browser (web/)                          Server (deeptutor/)
 
 สร้าง `PageActuator` (TS ใหม่, standalone เทสได้แบบเดียวกับ PageController):
 
-- [ ] A1 `serialize.ts` — flatTreeToString ของเราเอง ต่อยอด dom_tree ที่ vendor ไว้:
+- [x] A1 `serialize.ts` — flatTreeToString ของเราเอง ต่อยอด dom_tree ที่ vendor ไว้:
       index, indent, attribute filter, `*[new]` (WeakMap), data-scrollable, header/footer
-- [ ] A2 `actions.ts` — port click event-sequence / native value setter /
+- [x] A2 `actions.ts` — port click event-sequence / native value setter /
       select / scroll ตาม index (**คง copyright header MIT ของ Alibaba ในไฟล์ port**)
-- [ ] A3 react-root guard + `data-deeptutor-not-interactive` blacklist
+- [x] A3 react-root guard + `data-deeptutor-not-interactive` blacklist
       (จำเป็น: หน้าเราเป็น React — ถ้าไม่ทำ ทั้งหน้าเป็นปุ่มเดียว)
-- [ ] A4 ต่อ WS frames `agent_observe`/`agent_act`/`agent_state`/`agent_acted`
+- [x] A4 ต่อ WS frames `agent_observe`/`agent_act`/`agent_state`/`agent_acted`
       เข้ากับ socket voice ที่มีอยู่ (ไฟล์ hook ใหม่ ไม่แตะของเดิม)
       ⚠️ **งบขนาด frame (ตรวจแล้วชนจริง)**: control frame ฝั่ง server มี cap
       (`MAX_MANIFEST_BYTES`, ~8K — `voice_realtime.py:121`) และ `pageInventory`
@@ -255,7 +258,7 @@ Browser (web/)                          Server (deeptutor/)
       "…truncated, scroll for more") (2) ส่ง `agent_state` แบบ **chunked**
       (`seq`/`total` ประกอบกลับฝั่ง server) หรือแยก cap เฉพาะ frame ชนิดนี้
       — ตัดสินใจตอนทำ A4 แต่ห้ามเงียบ-ตัด-ทิ้งเหมือนเคสเก่า
-- [ ] A5 run-mask + vision layer (แสดง "เห็นอะไร / กดอะไร" ระหว่าง loop รัน):
+- [x] A5 run-mask + vision layer (แสดง "เห็นอะไร / กดอะไร" ระหว่าง loop รัน):
       - **บล็อก input คนจริง** เฉพาะช่วง loop รัน (แนว SimulatorMask — click/wheel/
         keydown กันหมด, pass-through ชั่วคราวตอน hit-test); คลิกบน mask หรือ
         พูดแทรก (barge-in) = user takeover → abort loop พร้อม push observation
@@ -269,35 +272,35 @@ Browser (web/)                          Server (deeptutor/)
       - mascot ตัวโทรของเดิมไม่เกี่ยวและไม่แตะ; single-action ของ fast path เดิม
         คงพฤติกรรมเดิม (ไม่มี mask ไม่มี highlight — เร็วเกินกว่าจะชนมือคน และ
         จอไม่ควรกระพริบกับคำสั่งง่าย)
-- [ ] เทสต์: node test serialize (DOM จำลอง), เทสต์ actions บนหน้า fixture
+- [x] เทสต์: node test serialize (DOM จำลอง), เทสต์ actions บนหน้า fixture
 - **เกณฑ์ผ่าน**: เปิดหน้า knowledge แล้วสั่ง observe ผ่าน WS ได้ browser_state
   ที่มี index ครบ; สั่ง click ตาม index แล้วปุ่มจริงทำงาน
 
 ### Phase B — สมอง ฝั่ง server (`deeptutor/services/voice_realtime/agent/`)  ~4-5 วันงาน
 
-- [ ] B1 `loop.py` — `InPageAgentLoop`: state machine observe→think→act,
+- [x] B1 `loop.py` — `InPageAgentLoop`: state machine observe→think→act,
       history (reflection เท่านั้น), step budget, stepDelay, abort event
       — ค่า default จูนเพื่อ voice ไม่ใช่ลอกเขา: **maxSteps 15** (คนถือสายรอ
       ไม่ได้ 40 สเต็ป; config ได้ถึง 40), **stepDelay 0.8s** (บทเรียน suanrao
       บน DOM ที่ animation เยอะ — ของเขา default 0.4)
-- [ ] B2 `prompt.py` — system prompt ของเราเอง (โครงจาก §1.2 แต่เขียนใหม่
+- [x] B2 `prompt.py` — system prompt ของเราเอง (โครงจาก §1.2 แต่เขียนใหม่
       สองภาษา + กติกา voice) + assembler `<instructions>/<agent_state>/<agent_history>/<browser_state>`
-- [ ] B3 `macro_tool.py` — JSON schema ของ AgentOutput (union ของ action ทั้งหมด),
+- [x] B3 `macro_tool.py` — JSON schema ของ AgentOutput (union ของ action ทั้งหมด),
       forced tool_choice, `parallel_tool_calls: false`
       — ตรวจแล้ว: stack เราส่ง kwargs ดิบถึง completion ได้ (precedent:
       `agents/chat/agent_loop.py:465` ตั้ง `tool_choice="auto"` อยู่แล้ว) จึงตั้ง
       named tool_choice ได้ตรงๆ; แต่ named choice ขึ้นกับ provider → ต้องมี
       **fallback อัตโนมัติ**: JSON-object mode + fixer (autoFixer รองรับ
       "JSON มาใน content" อยู่แล้ว — เส้นทางเดียวกัน)
-- [ ] B4 `fixer.py` — port autoFixer ครบทุก heuristic + เทสต์ยิงเคสเสียจริง
+- [x] B4 `fixer.py` — port autoFixer ครบทุก heuristic + เทสต์ยิงเคสเสียจริง
       (มีตัวอย่างใน autoFixer.ts ครบแล้ว)
-- [ ] B5 `observations.py` — URL change, wait accumulation, budget warnings
-- [ ] B6 tools ฝั่ง server: `done/wait/ask_user/click/input/select/scroll`
+- [x] B5 `observations.py` — URL change, wait accumulation, budget warnings
+- [x] B6 tools ฝั่ง server: `done/wait/ask_user/click/input/select/scroll`
       (execute = ส่ง WS frame รอ `agent_acted`)
-- [ ] เทสต์: loop กับ browser ปลอม (fixture browser_state) — ไม่ต้องมี browser จริง
+- [x] เทสต์: loop กับ browser ปลอม (fixture browser_state) — ไม่ต้องมี browser จริง
       ทดสอบ: จบงานเมื่อ done, budget หมด, autoFixer ซ่อม, abort กลางคัน
 - **เกณฑ์ผ่าน**: โจทย์จำลอง 3 สเต็ป (นำทาง→กรอก→ยืนยัน) วิ่งจบบน fixture
-- [ ] B7 **agent LLM scope** — ⚠️ แก้ข้ออ้างอิงเดิม: `LLM_PROXY_MODEL` อยู่บน
+- [x] B7 **agent LLM scope** — ⚠️ แก้ข้ออ้างอิงเดิม: `LLM_PROXY_MODEL` อยู่บน
       branch ทดสอบเท่านั้น ไม่มีบน branch นี้ ต้องสร้างของตัวเอง: reuse pattern
       `set_scoped_llm_config` ที่ pipeline เสียงใช้อยู่แล้ว
       (`_enter_fast_voice_llm_scope`) + env/setting ใหม่ `DEEPTUTOR_AGENT_MODEL`
@@ -307,33 +310,33 @@ Browser (web/)                          Server (deeptutor/)
 
 ### Phase C — Trust model ในตัว loop (ของเราแท้ๆ)  ~2-3 วันงาน
 
-- [ ] C1 ก่อน execute `click/input`: ตรวจ danger lexicon (reuse ของเดิม) กับ
+- [x] C1 ก่อน execute `click/input`: ตรวจ danger lexicon (reuse ของเดิม) กับ
       **ข้อความจริงของ element เป้าหมาย** (มาจาก elementTextMap ฝั่ง browser)
-- [ ] C2 อันตราย → พัก loop, สร้าง `pending_action`, ถามยืนยันด้วยเสียง
+- [x] C2 อันตราย → พัก loop, สร้าง `pending_action`, ถามยืนยันด้วยเสียง
       (reuse pending_click flow เดิม) — "ใช่" = ปล่อยผ่าน, "ไม่" = push observation
       "User rejected …" แล้วให้ LLM หาทางอื่น/จบงาน
-- [ ] C3 `ask_user` = TTS คำถาม + เปิดรับ STT (ผ่าน stt_guard เดิม) + timeout
+- [x] C3 `ask_user` = TTS คำถาม + เปิดรับ STT (ผ่าน stt_guard เดิม) + timeout
       — **state machine เสียงระหว่าง loop ต้องชัด (จุดที่พลาดง่ายสุดของเฟสนี้)**:
       เสียงผู้ใช้เข้ามาระหว่าง loop มีสองความหมาย แยกด้วยสถานะเดียว —
       loop กำลังรอ `ask_user`/`pending_action` → transcript = **คำตอบ** ส่งเข้า
       future ที่รออยู่; ไม่ได้รอ → transcript = **barge-in = abort** (แล้วค่อย
       ประมวลเป็นคำสั่งใหม่ตามปกติ) ห้ามให้คำตอบยืนยันไปฆ่า loop เอง
-- [ ] C4 narration: อ่าน `next_goal` ออกเสียงระหว่างทำ (คุมความถี่ไม่ให้พูดรัว)
+- [x] C4 narration: อ่าน `next_goal` ออกเสียงระหว่างทำ (คุมความถี่ไม่ให้พูดรัว)
       + จบงานอ่าน `done.text` เสมอ (สำเร็จ = สรุปสั้น, ล้มเหลว = บอกตรงๆ ว่า
       ติดอะไร — ห้ามเงียบหาย)
-- [ ] เทสต์: สั่ง "กดลบ" → loop ต้องพักและถาม **ทุกครั้ง** ไม่ว่า prompt จะสั่งยังไง
+- [x] เทสต์: สั่ง "กดลบ" → loop ต้องพักและถาม **ทุกครั้ง** ไม่ว่า prompt จะสั่งยังไง
       (replay trace "ลบ KB" ที่เราเก็บไว้เป็น regression case)
 - **เกณฑ์ผ่าน**: เคสเดิม "ไปศูนย์ความรู้→ตั้งค่า→กดลบ" ทำได้เท่าเขา **บวก**
   ด่านเสียงก่อนแตะปุ่มลบ ซึ่งเขาไม่มี
 
 ### Phase D — Gated pipeline: ต่อเข้ากับทางเดินเสียงเดิม  ~2 วันงาน
 
-- [ ] D0 **feature flag**: `voice.agent_loop_enabled` (settings) — default **ปิด**
+- [x] D0 **feature flag**: `voice.agent_loop_enabled` (settings) — default **ปิด**
       จนกว่า Phase E จะผ่าน; ปิดอยู่ = พฤติกรรมเสียงวันนี้ทุกประการ (มี seam
       คอมเมนต์รอใน pipeline แล้ว) → ship ได้ตลอดเวลาโดยไม่แบกความเสี่ยง loop
-- [ ] D1 คำสั่งเสียง → fast path เดิมก่อน (deterministic) → hit = ทำเลย (ฟรี)
-- [ ] D2 miss หรือ intent หลายสเต็ป → `InPageAgentLoop.execute(transcript)`
-- [ ] D3 barge-in ระหว่าง loop = abort (ผูก abort event เข้า pipeline เดิม)
+- [x] D1 คำสั่งเสียง → fast path เดิมก่อน (deterministic) → hit = ทำเลย (ฟรี)
+- [x] D2 miss หรือ intent หลายสเต็ป → `InPageAgentLoop.execute(transcript)`
+- [x] D3 barge-in ระหว่าง loop = abort (ผูก abort event เข้า pipeline เดิม)
 - [ ] D4 ตัดสินชะตา `ui_graph.py` ด้วยข้อมูล Phase E — เก็บเฉพาะถ้า fast path
       ยังได้ประโยชน์จริง; บันทึกผลใน DESIGN_voice_grounding.md
       (`ui_deep.py` ถูกลบไปแล้ว 2026-07-10 — seam ใน pipeline คือจุดเสียบ D2)
