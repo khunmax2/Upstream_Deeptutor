@@ -279,6 +279,27 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-13 — Added `VOICE.md` at the repo root — a single map of the whole
+  voice feature.** Data-flow diagram + per-file tables covering the backend
+  pipeline (`services/voice_realtime/`), the agent loop (`agent/`), API routers,
+  frontend (`web/components/voice/`, `web/lib/page-actuator/`), eval, tests, and
+  config/docs, plus the current backlog — so any agent can locate a voice part
+  fast. Replaces the orientation role of the deleted `voice_prototype/README.md`.
+  Docs-only. File: `VOICE.md`.
+
+- **2026-07-13 — Removed the `voice_prototype/` standalone call bench (legacy).**
+  The static host serving `call.html` (a self-contained mic→STT→WS→TTS test page
+  with mascot/VAD/barge-in) has been superseded: its reusable browser-side pieces
+  (VAD calibration, barge-in mute, mascot lip-sync) were already ported into the
+  in-app `web/components/voice/VoiceCallWidget.tsx`, and the entire in-page agent
+  line of work (loop, page-actuator, intent classifier — all post-2026-07-10)
+  runs only in the real Next.js app, which `call.html` structurally cannot
+  exercise. Nothing outside the folder referenced it. Deleted `voice_prototype/`
+  in full (`server.py`, `config.py`, `static/call.html`, `static/mock-app.html`,
+  README, requirements); history remains in git + the entries below. The live
+  voice UI is `VoiceCallWidget.tsx` (mounted in `web/app/layout.tsx`); the raw
+  voice-loop bench role is now covered by `eval/inpage_agent/run_voice_live.py`.
+
 - **2026-07-11 — Agent LLM: fail fast on 429 — stop burning RPM to wait out
   RPM.** Live: free-tier Gemini's binding limit is 5 REQUESTS/min (TPM was at
   10%), and `complete()`'s default policy retried a 429 up to 9 times with
