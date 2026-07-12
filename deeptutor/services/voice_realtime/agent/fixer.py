@@ -13,6 +13,10 @@ JSON-contract transport where the raw input is the completion *text*:
 5. Primitive action input → coerced in ``validate_action``
 6. No action at all → fallback ``wait 1s`` (keeps the loop alive; the next
    observation tells the model what happened)
+7. Action named by a FIELD, not the key
+   (``{"action_name": "click_element_by_index", "index": 2}``) → reshape to
+   ``{"click_element_by_index": {"index": 2}}``. Ours, not page-agent's — the
+   shape llama-3.x emits live on Groq's OpenAI-compat endpoint (Phase E).
 
 This layer is WHY the loop tolerates mid-tier models; treat every removed
 heuristic as a regression.
@@ -26,6 +30,7 @@ import re
 from typing import Any
 
 from deeptutor.services.voice_realtime.agent.macro_tool import (
+    ACTIONS,
     ActionSpec,
     InvalidAction,
     validate_action,
@@ -34,6 +39,8 @@ from deeptutor.services.voice_realtime.agent.macro_tool import (
 logger = logging.getLogger(__name__)
 
 _REFLECTION_KEYS = ("evaluation_previous_goal", "memory", "next_goal", "thinking")
+# Fields a model may use to NAME the action instead of making it the object key.
+_ACTION_NAME_FIELDS = ("action_name", "action_type", "tool_name", "tool", "name", "action")
 
 
 class FixerError(ValueError):
@@ -48,6 +55,27 @@ def _safe_parse(value: Any) -> Any:
         except (json.JSONDecodeError, ValueError):
             return value
     return value
+
+
+def _unwrap_named_action(action: Any, actions: dict[str, ActionSpec]) -> Any:
+    """Heuristic #7: the action named by a FIELD, not the object key.
+
+    Some models (llama-3.x observed live on Groq) emit a flat action —
+    ``{"action_name": "click_element_by_index", "index": 2}`` — instead of the
+    keyed ``{"click_element_by_index": {"index": 2}}`` the contract asks for.
+    Reshape it when the object isn't already keyed by a known action but one of
+    its name fields points at one. Left unchanged otherwise (validate_action
+    still owns the real verdict)."""
+    if not isinstance(action, dict) or not action:
+        return action
+    if next(iter(action)) in actions:
+        return action  # already {verb: args}
+    for field in _ACTION_NAME_FIELDS:
+        verb = action.get(field)
+        if isinstance(verb, str) and verb in actions:
+            args = {k: v for k, v in action.items() if k not in _ACTION_NAME_FIELDS}
+            return {verb: args}
+    return action
 
 
 def _extract_json(text: str) -> Any | None:
@@ -98,6 +126,11 @@ def normalize_output(raw_text: str, actions: dict[str, ActionSpec] | None = None
     if not parsed.get("action"):
         logger.debug("agent fixer #6: missing action → wait 1s")
         parsed["action"] = {"wait": {"seconds": 1}}
+
+    # Heuristic #7: action named by a field rather than the object key.
+    parsed["action"] = _unwrap_named_action(
+        parsed["action"], actions if actions is not None else ACTIONS
+    )
 
     try:
         name, args = validate_action(parsed["action"], actions)  # includes heuristic #5

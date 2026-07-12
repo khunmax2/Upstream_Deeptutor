@@ -65,6 +65,29 @@ def test_h6_missing_action_falls_back_to_wait():
     assert normalize_output(raw)["action"] == {"wait": {"seconds": 1}}
 
 
+def test_h7_action_named_by_field_is_reshaped():
+    """llama-3.x (live on Groq) names the action in a field instead of the key."""
+    raw = json.dumps(
+        dict(GOOD, action={"action_name": "click_element_by_index", "index": 2})
+    )
+    assert normalize_output(raw)["action"] == {"click_element_by_index": {"index": 2}}
+
+
+def test_h7_named_field_with_text_args():
+    raw = json.dumps(
+        dict(GOOD, action={"tool": "input_text", "index": 3, "text": "pdpa"})
+    )
+    assert normalize_output(raw)["action"] == {
+        "input_text": {"index": 3, "text": "pdpa"}
+    }
+
+
+def test_h7_leaves_a_real_keyed_action_untouched():
+    """A field called 'name' inside proper args must not hijack the reshape."""
+    raw = json.dumps(dict(GOOD, action={"done": {"text": "ok", "success": True}}))
+    assert normalize_output(raw)["action"] == {"done": {"text": "ok", "success": True}}
+
+
 def test_unknown_action_names_the_available_ones():
     raw = json.dumps(dict(GOOD, action={"teleport": {}}))
     with pytest.raises(FixerError, match="click_element_by_index"):

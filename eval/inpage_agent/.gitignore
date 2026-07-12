@@ -1,0 +1,4 @@
+# Generated / local-only eval artifacts
+actuator.bundle.js
+node_modules
+run_*.log

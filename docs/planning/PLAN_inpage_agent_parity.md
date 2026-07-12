@@ -345,13 +345,22 @@ Browser (web/)                          Server (deeptutor/)
 
 ### Phase E — วัดผลเทียบ page-agent ตรงๆ  ~1-2 วันงาน
 
-- [ ] E1 ชุดโจทย์มาตรฐาน ~10 ข้อ (เก็บจากการทดลองรอบนี้): click ชื่อ garble,
-      เปลี่ยนธีม, ค้นหา+เปิด RAG, ลบ-แต่-อย่ายืนยัน, งานที่ต้อง scroll, ฯลฯ
-- [ ] E2 รันทั้งคู่บน branch นี้ (page-agent ยังอยู่ครบ) เก็บ: success rate,
-      จำนวน steps, tokens, เวลา, จำนวนครั้งที่ต้องยืนยัน
-- [ ] E3 REPORT สรุป → ถ้าของเราแพ้ข้อไหน กลับไปดูซอร์สเขาว่าเพราะกลไกใด
-- **เกณฑ์ผ่านของทั้งโปรเจค**: success ≥ page-agent บนโจทย์ชุดเดียวกัน
-  โดยมี (1) fast path ถูกกว่าใน task ง่าย (2) ด่านอันตรายทำงาน 100%
+> สถานะ Phase E (2026-07-12): harness reproducible เสร็จและพิสูจน์บนแอปสด;
+> ได้ตัวเลขจริง easy-nav (2 โมเดล); ตัวเต็ม 10×2 บล็อกด้วย free-tier day quota
+> (วัดจริง: Gemini RPD~20, Groq TPD 100k). สรุปอยู่ที่
+> [`docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`](../reports/REPORT_inpage_agent_phaseE_2026-07-12.md);
+> harness อยู่ที่ `eval/inpage_agent/`. เก็บเกี่ยว bonus: fixer heuristic #7.
+
+- [x] E1 ชุดโจทย์มาตรฐาน 10 ข้อ — `eval/inpage_agent/tasks.json` (grounded บน UI สด:
+      garble, เปลี่ยนธีม, สร้าง KB, เปิดตั้งค่าโมเดล, ลบ-แต่-อย่ายืนยัน ฯลฯ)
+- [~] E2 harness รัน loop จริงบนแอปสด (`browser_host.mjs` + `run_ours.py`) เก็บ
+      success/steps/tokens/เวลา/ยืนยัน — **easy-nav ครบทุกข้อที่ได้ budget ผ่าน
+      (4/4, 2 โมเดล)**; multi-step/danger LIVE ค้างเพราะ day quota (paid tier ปลดล็อก)
+- [x] E3 REPORT_phaseE เขียนแล้ว (harness, ตัวเลขจริง, infra findings, fixer #7);
+      page-agent column ยังค้างโควตาเดียวกัน
+- **เกณฑ์ผ่านของทั้งโปรเจค** (ยังพิสูจน์ไม่ครบ — รอ resume): success ≥ page-agent
+  บนโจทย์ชุดเดียวกัน โดยมี (1) fast path ถูกกว่าใน task ง่าย (2) ด่านอันตรายทำงาน 100%
+  — ปัจจุบัน: (2) มี unit test ล็อก; (1)+success rate เต็ม รอ paid-tier resume
 
 ### ลำดับและการพึ่งพา
 

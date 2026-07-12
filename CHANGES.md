@@ -85,6 +85,23 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-12 — Phase E: reproducible in-page-agent eval harness + first live
+  numbers + a fixer hardening.** New `eval/inpage_agent/` (all isolated, no
+  `web/`/`deeptutor/` source touched): a Playwright browser host that drives our
+  REAL page-actuator on a REAL live DeepTutor page over an HTTP bridge, a
+  10-task standard set grounded in the live UI, and a runner that exercises the
+  UNCHANGED `InPageAgentLoop` (real prompt/fixer/danger gate) with tiktoken
+  accounting and objective page-state success checks. Running it live surfaced a
+  real robustness bug: llama-3.x (Groq) emits the action *named by a field*
+  (`{"action_name":"…","index":2}`) instead of keyed — added fixer **heuristic
+  #7** (`deeptutor/services/voice_realtime/agent/fixer.py`) + tests
+  (`tests/services/voice_realtime/agent/test_fixer.py`, 14 green). The full
+  10×2 quantitative head-to-head is gated on a paid LLM tier (measured, not
+  guessed: free Gemini ~20 req/day; free Groq TPM below one ~8K-token call).
+  Files: `eval/inpage_agent/*`, `deeptutor/services/voice_realtime/agent/fixer.py`,
+  `tests/services/voice_realtime/agent/test_fixer.py`,
+  `docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`.
+
 - **2026-07-11 — Reorganized fork working docs out of the repo root into `docs/`.**
   All 21 `REPORT_*.md` files moved to `docs/reports/`; `PLAN_inpage_agent_parity.md`,
   `DESIGN_voice_grounding.md`, `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`,
