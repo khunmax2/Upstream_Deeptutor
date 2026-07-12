@@ -13,8 +13,13 @@ Owner: Attapon · Drafted: 2026-07-12 · Prereq: a working agent-loop model + th
   `ui_task` → `_run_agent_turn(transcript)`; `chat`/None ⇒ today's `rung=llm`
   path, unchanged. Tests: `test_intent_classifier.py` (7) +
   `test_wiring.py` classifier seam (3); voice suite 410 green; flag off = byte-
-  identical. Env documented in `.env.agent.example`. **Remaining: live-verify**
-  with the flag on + a real classifier model (needs a working key).
+  identical. Env documented in `.env.agent.example`.
+- **2026-07-13 — live-verified.** With the flag on and a free lite model
+  (`gemini-3.1-flash-lite`), `classify()` scored 10/10 on a Thai batch (6
+  commands → `ui_task` incl. "สร้างหนังสือใหม่" and the paraphrase "ขอสมุดเล่มใหม่";
+  4 questions → `chat`), and end-to-end `run_text_turn("สร้างหนังสือใหม่ให้หน่อย")`
+  routed the task to the loop — confirming the design that a cheap lite tier is
+  enough for the (easy) two-bucket decision. **Done.**
 
 ## Problem
 
