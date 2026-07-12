@@ -147,9 +147,23 @@ one via shell env for the run (the user's key file was never edited).
 
 ## What remains
 
-- **page-agent column** — build its runner (bundle `page-agent`, a
-  token-counting proxy, drive its loop on the same live app + task set) and run
-  it on the same paid model → the head-to-head table. Ours: 10/10.
+- **page-agent column (E4) — harness built, blocked on a page-agent-internal
+  hang; deferred.** `eval/inpage_agent/run_pageagent.mjs` + `_pageagent_entry.ts`
+  bundle page-agent's core (`PageAgentCore` + `PageController`, Panel off /
+  `enableMask:false`) into a headless Chromium and drive it on the SAME live app,
+  task set, and model, reading per-step usage from its own `history`
+  (`AgentStepEvent.usage`) — no proxy. **Proven working through step 0**:
+  page-agent observed /home, correctly picked "Knowledge Center [179]", clicked,
+  navigated to /knowledge, made its ~11 s Gemini call, tokens captured. It then
+  **hangs on the observe of the step after a navigation** (no LLM request, no
+  error) — reproduced with and without the Panel/mask. Root cause is
+  page-agent's own `getBrowserState` waiting on the always-active DeepTutor SPA
+  after a client nav; it worked in the prior eval because it was **bundled into
+  the app** (dev mount, `page-agent-clean-eval`) in a real browser, not injected
+  headless. To finish this column, run page-agent via that dev mount (heavier,
+  semi-manual) — the harness already extracts the metrics. (Aside: our
+  server-side brain + short stateless browser touches are immune to this nav
+  hang by construction — a robustness point, not just a workaround.)
 - **D4 (`ui_graph` fate)** — the fast-path-vs-loop cost gap is now visible
   (loop = ~9K tokens + one round-trip per easy nav; fast path = 0), which argues
   for keeping the deterministic fast path; finalise the call alongside the

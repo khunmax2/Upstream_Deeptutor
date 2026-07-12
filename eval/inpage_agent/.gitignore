@@ -2,3 +2,6 @@
 actuator.bundle.js
 node_modules
 run_*.log
+
+# page-agent eval bundle (generated)
+pageagent.bundle.js

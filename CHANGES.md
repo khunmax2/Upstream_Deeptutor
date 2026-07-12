@@ -85,6 +85,17 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-12 — Phase E4: page-agent comparison harness (deferred).** New
+  `eval/inpage_agent/run_pageagent.mjs` + `_pageagent_entry.ts` bundle Alibaba
+  page-agent's core into a headless Chromium and drive it on the same live app /
+  task set / model, reading per-step token usage from its own history. Proven
+  through step 0 (observe → correct pick → click → navigate → tokens captured);
+  it then hangs on the observe of the step after a navigation (page-agent's own
+  `getBrowserState` waiting on the always-active DeepTutor SPA — it worked in the
+  prior eval bundled into the app, not injected headless). Deferred; the finding
+  and the "run via dev mount" path are recorded in the Phase E report. The
+  generated bundle is gitignored.
+
 - **2026-07-12 — Phase E: OUR full run is done — 10/10 on the live app, danger
   gate proven live.** On a paid Gemini account (`gemini-3.5-flash`; the 2.5
   family 404s "no longer available to new users" there) the harness ran all 10
