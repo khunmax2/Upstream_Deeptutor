@@ -299,6 +299,7 @@ class OpenAICompatProvider(LLMProvider):
                 binding=getattr(spec, "name", None),
                 model=model_name,
                 reasoning_effort=reasoning_effort,
+                base_url=getattr(self, "api_base", None),
             )
         )
 

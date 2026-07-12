@@ -85,6 +85,21 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
   `docs/planning/PLAN_inpage_agent_parity.md`.
 
+- **2026-07-12 — Provider adaptation (part 1): reasoning params drop on hosts
+  that reject them.** `reasoning_params.py::build_openai_compatible_reasoning_kwargs`
+  now takes the request `base_url` and, for hosts in `_REASONING_UNSUPPORTED_HOSTS`
+  (Groq is the first), emits NO `reasoning_effort` / thinking `extra_body` — the
+  model falls back to its own default and the call succeeds. This fixes BOTH
+  Groq failures at once (the dashscope-style `enable_thinking` 400 and the
+  `reasoning_effort=minimal` 400) regardless of which provider the model name
+  routed to, so switching the agent onto Groq needs no code change. Host-matched
+  on `self.api_base` from `openai_compat_provider`; only the listed hosts change
+  behaviour (Gemini/OpenAI/etc. untouched — live-verified). llm suite 125 green
+  (+4 tests). Part of `docs/issues/llm-provider-adaptation/`. Files:
+  `deeptutor/services/llm/reasoning_params.py`,
+  `deeptutor/services/llm/provider_core/openai_compat_provider.py`,
+  `tests/services/llm/test_reasoning_params.py`.
+
 - **2026-07-12 — Phase E4: page-agent comparison harness (deferred).** New
   `eval/inpage_agent/run_pageagent.mjs` + `_pageagent_entry.ts` bundle Alibaba
   page-agent's core into a headless Chromium and drive it on the same live app /

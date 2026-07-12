@@ -1,7 +1,23 @@
 # Provider-aware LLM call adaptation (env-only, UI-ready)
 
-Status: ready-for-agent
-Owner: Attapon · Drafted: 2026-07-12 · Deferred until: LLM quota returns (needs live calls to verify)
+Status: in-progress
+Owner: Attapon · Drafted: 2026-07-12
+
+## Progress
+
+- **2026-07-12 — Part 1 (reasoning params) DONE.** `reasoning_params.py` now
+  drops `reasoning_effort` + thinking `extra_body` for endpoints that reject them
+  (host-matched on the request `base_url`; Groq is the first entry). One change
+  fixes BOTH symptoms — the dashscope-style `enable_thinking` 400 and the
+  `reasoning_effort` 400 — regardless of which provider the model name routed to,
+  and touches only those hosts (everyone else unchanged; Gemini live-verified).
+  So switching the agent onto Groq needs no code edit. This also made the
+  "force openai binding" routing fix (below) unnecessary for the reasoning case.
+  Files: `deeptutor/services/llm/reasoning_params.py`,
+  `deeptutor/services/llm/provider_core/openai_compat_provider.py`,
+  `tests/services/llm/test_reasoning_params.py` (llm suite 125 green).
+- **Remaining:** config-source = settings+env (UI-readiness) — deferred; and, if
+  a non-reasoning provider mismatch surfaces, the endpoint-based binding.
 
 ## Problem
 

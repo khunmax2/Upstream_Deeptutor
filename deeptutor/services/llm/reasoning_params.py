@@ -35,6 +35,24 @@ _CUSTOM_MODEL_THINKING_STYLES: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 _THINKING_DISABLED_BY_DEFAULT: tuple[tuple[str, str], ...] = (("deepseek", "deepseek-v4-flash"),)
 
+# Endpoints whose OpenAI-compatible surface REJECTS the reasoning/thinking params
+# we would otherwise emit — so switching a model onto them must not need a code
+# change. Groq is the proven case: its endpoint 400s on `reasoning_effort` for
+# most models (llama rejects it entirely, qwen3 allows only none/default) and on
+# the dashscope-style `enable_thinking` for all. For such hosts we send NO
+# reasoning params and let the model use its own default (correctness over the
+# token-saving optimisation). Matched on the request base_url, so it holds
+# regardless of which provider the model name routed to. Extend as new
+# OpenAI-compat endpoints surface. See docs/issues/llm-provider-adaptation/.
+_REASONING_UNSUPPORTED_HOSTS: tuple[str, ...] = ("groq.com",)
+
+
+def _host_rejects_reasoning(base_url: str | None) -> bool:
+    if not base_url:
+        return False
+    lowered = base_url.lower()
+    return any(host in lowered for host in _REASONING_UNSUPPORTED_HOSTS)
+
 
 def _spec_name(spec: Any, binding: str | None) -> str:
     return str(getattr(spec, "name", None) or binding or "").strip().lower()
@@ -84,6 +102,7 @@ def build_openai_compatible_reasoning_kwargs(
     binding: str | None,
     model: str | None,
     reasoning_effort: str | None,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
     """Return reasoning kwargs for OpenAI-compatible Chat Completions calls.
 
@@ -91,7 +110,13 @@ def build_openai_compatible_reasoning_kwargs(
     ``extra_body`` instead of the top-level ``reasoning_effort`` field.  Direct
     ``custom`` bindings need model-family inference because their endpoint is
     user supplied and therefore cannot be identified by provider name alone.
+
+    ``base_url`` is the request endpoint: when it belongs to a host that rejects
+    these params (see ``_REASONING_UNSUPPORTED_HOSTS``), emit none — the model
+    falls back to its own default and the call succeeds without a code change.
     """
+    if _host_rejects_reasoning(base_url):
+        return {}
     provider_name = _spec_name(spec, binding)
     model_name = model or ""
     thinking_style = str(getattr(spec, "thinking_style", "") or "")
