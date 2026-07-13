@@ -17,6 +17,21 @@ Owner: Attapon · Drafted: 2026-07-13
   `tests/services/rag/test_content_manifest.py` (9, LLM mocked; rag suite 176 green);
   read-only checked against the real `LAWs_thai` docstore (found version-1,
   grouped pdpa.pdf=195 + law_info2540.pdf=62 chunks). Next: Phase 2 (`unclear`).
+- **2026-07-13 — Phase 1 real build verified.** Ran the generator once against the
+  live `LAWs_thai` KB (app model): it produced accurate Thai per-document titles +
+  5 topics each (PDPA พ.ศ. ๒๕๖๒; ข้อมูลข่าวสารของราชการ พ.ศ. 2540) and a coherent
+  KB summary, cached to `metadata.json`. ~3 LLM calls, no rate limit.
+- **2026-07-13 — Phase 2 (`unclear` bucket) built + tested + live-verified.**
+  `intent_classifier.py` now routes `chat | ui_task | unclear` (narrower `chat`
+  definition + `unclear` examples + a "short-but-clear is NOT unclear" guard);
+  `_parse_intent` honours explicit `chat`/`unclear` and biases the unparseable to
+  `ui_task`. Pipeline seam: `unclear` → `_speak_short_turn(_UNCLEAR_LINE)` — a
+  spoken "please repeat", NO RAG, NO loop. Tests: `test_intent_classifier.py`
+  (+1), `test_wiring.py` (+1, asserts no RAG/loop on unclear); voice suite 433
+  green. Live on `gemini-3.1-flash-lite`: 6/6 — both garbled phrases (incl. the
+  live bug "แล้วมาวิเคราะห์หรืออะไรสักอย่") → `unclear`, and SHORT clear utterances
+  ("หน้าหลัก"→ui_task, "ราคาทอง"→chat) did NOT over-trigger. Next: Phase 3 (KB
+  relevance routing that consumes the manifest).
 
 ## Problem
 

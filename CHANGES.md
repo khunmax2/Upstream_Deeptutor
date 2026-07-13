@@ -296,6 +296,21 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — Voice router: `unclear` bucket (Phase 2 of KB-aware routing).**
+  The intent classifier now routes `chat | ui_task | unclear` instead of two
+  buckets: `intent_classifier.py` gained an `unclear` intent (garbled / cut-off /
+  incoherent utterances) with a narrower `chat` definition and a "short-but-clear
+  is NOT unclear" guard; `_parse_intent` honours explicit `chat`/`unclear` and
+  still biases an unparseable reply to `ui_task`. In `pipeline.run_text_turn`,
+  `unclear` → a spoken "ขอโทษครับ ผมไม่ค่อยเข้าใจ ช่วยพูดอีกครั้งได้ไหมครับ"
+  (`_speak_short_turn`, cached TTS) that ends the turn with **no** RAG search and
+  **no** loop — fixing the live case where a garbled fragment
+  ("แล้วมาวิเคราะห์หรืออะไรสักอย่") triggered a full `Searching KB 'LAWs_thai'`.
+  Gated by the existing classifier flag; off ⇒ unchanged. Tests:
+  `test_intent_classifier.py` (+1), `test_wiring.py` (+1); voice suite 433 green.
+  Live on `gemini-3.1-flash-lite`: 6/6 (both garbled → unclear; short clear
+  utterances not over-triggered). See `docs/issues/kb-content-routing/PRD.md`.
+
 - **2026-07-13 — KB content manifest (Phase 1 of KB-aware routing).** New
   `deeptutor/services/rag/content_manifest.py` builds a cheap per-KB "what's in
   here" manifest — `{documents:[{file,title,topics,summary}], summary}` — LAZILY

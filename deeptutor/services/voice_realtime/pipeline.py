@@ -309,6 +309,9 @@ def build_voice_context(
 _POLITE_BITS = ("ครับ", "ค่ะ", "คะ", "นะ", "หน่อย", "ก่อน", "เลย", "โอเค", "ที", "จ้า", " ")
 _STOP_COMMANDS = {"หยุด", "หยุดพูด", "เงียบ", "พอ", "พอแล้ว", "stop", "shutup", "quiet"}
 _MAX_STOP_CHARS = 24
+# Spoken when the classifier judges an utterance garbled/incoherent — ask to
+# repeat instead of chat-answering noise. A constant line so its TTS is cached.
+_UNCLEAR_LINE = "ขอโทษครับ ผมไม่ค่อยเข้าใจ ช่วยพูดอีกครั้งได้ไหมครับ"
 
 
 def is_stop_command(text: str) -> bool:
@@ -1022,11 +1025,16 @@ async def run_text_turn(
 
     # Primary semantic router (A1, docs/issues/voice-intent-classifier): the free
     # keyword fast-path above has missed, so instead of letting the chat LLM do
-    # one shallow UI action, ask a cheap classifier whether this is a screen
-    # command → hand the whole task to the loop. Off by default and self-limiting
-    # (None / no loop ⇒ fall through to rung=llm exactly as before).
+    # one shallow UI action, ask a cheap classifier what this utterance is. Off by
+    # default and self-limiting (None ⇒ fall through to rung=llm exactly as before).
     if agent_runner is not None and intent_classifier.classifier_enabled():
-        if await intent_classifier.classify(transcript, ui_context) == "ui_task":
+        intent = await intent_classifier.classify(transcript, ui_context)
+        if intent == "unclear":
+            # Garbled / cut-off / incoherent: ask the caller to repeat instead of
+            # running a full chat+RAG turn on noise (docs/issues/kb-content-routing).
+            logger.info("voice rung=classify-unclear %r", transcript)
+            return await _speak_short_turn(emitter, _UNCLEAR_LINE, turn_t0=t0)
+        if intent == "ui_task":
             logger.info("voice rung=classify-ui-task %r", transcript)
             return await _run_agent_turn(emitter, agent_runner, transcript, turn_t0=t0)
 

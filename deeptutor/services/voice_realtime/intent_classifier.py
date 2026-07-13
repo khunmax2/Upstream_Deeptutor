@@ -38,20 +38,25 @@ API_KEY_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_API_KEY"
 # loop's DEEPTUTOR_AGENT_BINDING. Unset ⇒ inference (Gemini unaffected).
 BINDING_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_BINDING"
 
-Intent = Literal["chat", "ui_task"]
+Intent = Literal["chat", "ui_task", "unclear"]
 
 _SYSTEM_PROMPT = """You route one utterance in DeepTutor, a Thai-first learning app.
-Output ONLY a JSON object: {"intent": "chat"} or {"intent": "ui_task"}.
+Output ONLY a JSON object: {"intent":"chat"}, {"intent":"ui_task"}, or {"intent":"unclear"}.
 
 - "ui_task" = the user wants to OPERATE the screen: navigate, open / create /
   add / delete / edit something, click a control, fill a field, change a setting.
   Examples: "สร้างหนังสือใหม่", "ขอสมุดเล่มใหม่", "ไปหน้าตั้งค่า", "เปลี่ยนเป็นธีมมืด",
   "ลบ KB นี้", "กดค้นหา", "open the knowledge center".
-- "chat" = the user is asking a question or conversing and wants an ANSWER, not a
-  screen action. Examples: "ราคาทองวันนี้เท่าไหร่", "อธิบาย PDPA ให้หน่อย",
-  "สวัสดีครับ", "PDPA คืออะไร".
+- "chat" = a CLEAR question or message the user wants an ANSWER to, not a screen
+  action. Examples: "ราคาทองวันนี้เท่าไหร่", "อธิบาย PDPA ให้หน่อย", "สวัสดีครับ",
+  "PDPA คืออะไร".
+- "unclear" = garbled, cut off, incomplete, or not a coherent request — you
+  cannot tell what the user wants, so asking them to repeat beats guessing.
+  Examples: "แล้วมาวิเคราะห์หรืออะไรสักอย่", "เอ่อ คือว่า", "อันนั้น" (พูดค้าง),
+  disconnected words or noise.
 
-When genuinely unsure, choose "ui_task". Reply with ONLY the JSON object."""
+Short but CLEAR utterances are NOT unclear: "หน้าหลัก" → ui_task, "ราคาทอง" → chat.
+Use "unclear" ONLY when you genuinely cannot tell. Reply with ONLY the JSON object."""
 
 
 def _env(name: str) -> str:
@@ -76,22 +81,29 @@ def _context_line(ui_context: dict[str, str] | None) -> str:
 
 
 def _parse_intent(raw: str) -> Intent:
-    """Extract the intent; anything that isn't a clear ``chat`` is ``ui_task``
-    (the bias: better to run the loop and have it bow out than to chat-answer a
-    command)."""
+    """Extract the intent. Explicit ``chat`` / ``unclear`` are honoured; anything
+    else — including an unparseable classifier reply — biases to ``ui_task``
+    (running the loop and letting it bow out beats mis-routing a real command;
+    an unparseable reply must NOT masquerade as ``unclear`` and block one)."""
     match = re.search(r"\{[\s\S]*\}", raw)
+    value = ""
     if match:
         try:
-            value = str(json.loads(match.group(0)).get("intent", "")).lower()
-            return "chat" if value == "chat" else "ui_task"
+            value = str(json.loads(match.group(0)).get("intent", "")).lower().strip()
         except (json.JSONDecodeError, ValueError, AttributeError):
-            pass
-    return "chat" if raw.strip().lower() == "chat" else "ui_task"
+            value = ""
+    if not value:
+        value = raw.strip().lower()
+    if value == "chat":
+        return "chat"
+    if value == "unclear":
+        return "unclear"
+    return "ui_task"
 
 
 async def classify(transcript: str, ui_context: dict[str, str] | None = None) -> Intent | None:
-    """Return ``"chat"`` / ``"ui_task"``, or ``None`` when unavailable/failed
-    (caller then keeps today's behaviour). Never raises."""
+    """Return ``"chat"`` / ``"ui_task"`` / ``"unclear"``, or ``None`` when
+    unavailable/failed (caller then keeps today's behaviour). Never raises."""
     if not classifier_enabled() or not transcript.strip():
         return None
     try:

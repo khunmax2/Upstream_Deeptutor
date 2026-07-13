@@ -358,6 +358,29 @@ async def test_classifier_chat_leaves_the_loop_untouched(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_classifier_unclear_asks_to_repeat_without_rag_or_loop(monkeypatch):
+    """Garbled input classified 'unclear' → a spoken 'please repeat', and NEITHER
+    the loop NOR the chat+RAG turn runs (the live 'garbled → Searching KB' waste)."""
+    _patch_classifier(monkeypatch, "unclear")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return b"AUDIO", "audio/mpeg"
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+    runner = runner_recorder("ต้องไม่ถูกเรียก")
+    emitter = _AudioEmitter()
+
+    reply = await pipe.run_text_turn(
+        emitter, "แล้วมาวิเคราะห์หรืออะไรสักอย่", [], session_id="s1", agent_runner=runner
+    )
+
+    assert reply == pipe._UNCLEAR_LINE  # short-circuited before rung=llm (no RAG)
+    assert runner.tasks == []  # loop never invoked
+    types = [f["type"] for f in emitter.json]
+    assert "assistant_text" in types and "done" in types
+
+
+@pytest.mark.asyncio
 async def test_classifier_off_is_never_consulted(monkeypatch):
     """Flag off (default): the seam is skipped — classify must not be called and
     the turn behaves exactly as before."""

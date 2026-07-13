@@ -66,6 +66,13 @@ async def test_ui_task_and_chat_parsed(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_unclear_intent_parsed(monkeypatch):
+    _enable(monkeypatch)
+    _mock_complete(monkeypatch, '{"intent": "unclear"}')
+    assert await ic.classify("แล้วมาวิเคราะห์หรืออะไรสักอย่") == "unclear"
+
+
+@pytest.mark.asyncio
 async def test_binding_forwarded_when_set(monkeypatch):
     _enable(monkeypatch)
     monkeypatch.setenv("DEEPTUTOR_VOICE_CLASSIFIER_BINDING", "openai")
