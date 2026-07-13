@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 MODEL_ENV = "DEEPTUTOR_AGENT_MODEL"
 BASE_URL_ENV = "DEEPTUTOR_AGENT_BASE_URL"
 API_KEY_ENV = "DEEPTUTOR_AGENT_API_KEY"
+# Force the provider spec by NAME instead of letting it be inferred from the
+# model name. An OpenAI-compatible host (e.g. Groq) otherwise misroutes: model
+# `qwen/*` resolves to the dashscope provider, which injects dashscope-only
+# params the host rejects. Set `openai` (the generic OpenAI-compat spec) so the
+# endpoint wins. Unset ⇒ today's model-name inference (Gemini unaffected).
+# Pairs with a standalone upstream (BASE_URL + API_KEY). See
+# docs/issues/llm-provider-adaptation/ and eval `_install_groq_shim`.
+BINDING_ENV = "DEEPTUTOR_AGENT_BINDING"
 # D0 feature flag — default OFF. Environment-based like the rest of the agent
 # config (the model already requires an env var, so one switchboard, not two).
 LOOP_ENV = "DEEPTUTOR_AGENT_LOOP"
@@ -45,6 +53,7 @@ class AgentLLMSettings:
     model: str
     base_url: str | None = None
     api_key: str | None = None
+    binding: str | None = None
 
 
 def _env(name: str) -> str:
@@ -96,6 +105,7 @@ def resolve_agent_llm() -> AgentLLMSettings:
     model = _env(MODEL_ENV)
     base_url = _env(BASE_URL_ENV)
     api_key = _env(API_KEY_ENV)
+    binding = _env(BINDING_ENV)
 
     if not model:
         raise AgentLLMNotConfigured(
@@ -108,7 +118,12 @@ def resolve_agent_llm() -> AgentLLMSettings:
         missing = API_KEY_ENV if base_url else BASE_URL_ENV
         raise AgentLLMNotConfigured(f"In-page agent upstream is half-configured: set {missing}.")
 
-    return AgentLLMSettings(model=model, base_url=base_url or None, api_key=api_key or None)
+    return AgentLLMSettings(
+        model=model,
+        base_url=base_url or None,
+        api_key=api_key or None,
+        binding=binding or None,
+    )
 
 
 async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings) -> str:
@@ -150,6 +165,10 @@ async def think(system_prompt: str, user_prompt: str, settings: AgentLLMSettings
         kwargs["base_url"] = settings.base_url
     if settings.api_key:
         kwargs["api_key"] = settings.api_key
+    if settings.binding:
+        # Force the provider spec by name so an OpenAI-compat endpoint isn't
+        # misrouted by model-name inference (see BINDING_ENV).
+        kwargs["binding"] = settings.binding
 
     # Name the upstream on every step. Paid-for lesson: a stale shell env kept
     # the loop on a quota-dead provider while the operator believed they had

@@ -296,6 +296,25 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — Provider-adaptation part 2: endpoint-based provider binding via
+  env.** Added `DEEPTUTOR_AGENT_BINDING` (agent loop) and
+  `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` (classifier) so an OpenAI-compatible
+  upstream's provider spec is forced by NAME instead of inferred from the model
+  name — the endpoint wins. Fixes the documented Groq misroute (`qwen/*` →
+  dashscope provider → injects `enable_thinking` the host 400s on): set
+  `binding=openai` and it routes as generic OpenAI-compat; combined with part 1's
+  host-based reasoning-param drop, the voice loop/classifier can switch to Groq
+  (or any OpenAI-compat host — a real latency lever) with a config change, no code
+  edit. Resolved in `agent/llm.py::resolve_agent_llm`/`think` and
+  `intent_classifier.py::classify`, forwarded to `services.llm.complete()`'s
+  first-class `binding` param. Unset ⇒ model-name inference, so Gemini is
+  byte-identical to today. Tests: `test_llm_scope.py` (+4), `test_intent_classifier.py`
+  (+2). Documented in `.env.agent.example`; progress logged in
+  `docs/issues/llm-provider-adaptation/PRD.md`. Note: reading `@page-agent`'s
+  `modelPatch` confirmed our `reasoning_params.py` already matches its coverage
+  for the models in use, so no reasoning-table change was needed. Files:
+  `agent/llm.py`, `intent_classifier.py`, `.env.agent.example`, PRD, tests.
+
 - **2026-07-13 — test: make `test_wiring.py` hermetic against a classifier-on
   shell.** `classifier_enabled()` reads live env, so a dev shell that sources
   `.env.agent` with `DEEPTUTOR_VOICE_CLASSIFIER=1` let the real classifier seam

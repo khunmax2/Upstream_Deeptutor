@@ -16,8 +16,26 @@ Owner: Attapon · Drafted: 2026-07-12
   Files: `deeptutor/services/llm/reasoning_params.py`,
   `deeptutor/services/llm/provider_core/openai_compat_provider.py`,
   `tests/services/llm/test_reasoning_params.py` (llm suite 125 green).
-- **Remaining:** config-source = settings+env (UI-readiness) — deferred; and, if
-  a non-reasoning provider mismatch surfaces, the endpoint-based binding.
+- **2026-07-13 — Part 2 (endpoint-based binding) DONE.** Added a per-call binding
+  override read from env so the ENDPOINT decides the provider spec, not the model
+  name — lifting the eval `_install_groq_shim`'s `binding="openai"` into config.
+  `DEEPTUTOR_AGENT_BINDING` (agent loop, via `resolve_agent_llm`/`think`) and
+  `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` (classifier) forward to `complete()`'s
+  first-class `binding` param when set. Unset ⇒ today's model-name inference
+  (Gemini byte-identical). This closes root-cause #2 (`qwen/*` → dashscope
+  misroute) generically: with binding=`openai`, no dashscope `enable_thinking`
+  is injected, and part 1 already drops reasoning params for the Groq host — so
+  the voice loop/classifier can move to Groq (or any OpenAI-compat host) with a
+  config change, no code edit. Files: `agent/llm.py`, `intent_classifier.py`,
+  `test_llm_scope.py` (+4), `test_intent_classifier.py` (+2), `.env.agent.example`.
+  Note (from reading `@page-agent`'s `modelPatch`): our `reasoning_params.py`
+  already matches its coverage for the models in use — Gemini 3.x flash settles on
+  `reasoning_effort=minimal` in BOTH; qwen already gets `enable_thinking=false` at
+  minimal — so expanding the reasoning table is future-proofing (Claude/GLM), not
+  a live fix. The latency lever is model/provider choice, which endpoint-binding
+  now unblocks.
+- **Remaining:** config-source = settings+env (UI-readiness) — deferred; expand
+  the thinking-disable table to Claude/GLM if/when those providers are adopted.
 
 ## Problem
 

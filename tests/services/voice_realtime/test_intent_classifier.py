@@ -13,8 +13,13 @@ from deeptutor.services.voice_realtime.intent_classifier import FLAG_ENV, MODEL_
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for name in (FLAG_ENV, MODEL_ENV, "DEEPTUTOR_VOICE_CLASSIFIER_BASE_URL",
-                 "DEEPTUTOR_VOICE_CLASSIFIER_API_KEY"):
+    for name in (
+        FLAG_ENV,
+        MODEL_ENV,
+        "DEEPTUTOR_VOICE_CLASSIFIER_BASE_URL",
+        "DEEPTUTOR_VOICE_CLASSIFIER_API_KEY",
+        "DEEPTUTOR_VOICE_CLASSIFIER_BINDING",
+    ):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -58,6 +63,23 @@ async def test_ui_task_and_chat_parsed(monkeypatch):
     assert await ic.classify("สร้างหนังสือใหม่ให้หน่อย") == "ui_task"
     _mock_complete(monkeypatch, 'sure: {"intent": "chat"}')
     assert await ic.classify("ราคาทองเท่าไหร่") == "chat"
+
+
+@pytest.mark.asyncio
+async def test_binding_forwarded_when_set(monkeypatch):
+    _enable(monkeypatch)
+    monkeypatch.setenv("DEEPTUTOR_VOICE_CLASSIFIER_BINDING", "openai")
+    calls = _mock_complete(monkeypatch, '{"intent": "ui_task"}')
+    await ic.classify("สร้างหนังสือใหม่")
+    assert calls["kwargs"]["binding"] == "openai"
+
+
+@pytest.mark.asyncio
+async def test_binding_omitted_when_unset(monkeypatch):
+    _enable(monkeypatch)
+    calls = _mock_complete(monkeypatch, '{"intent": "ui_task"}')
+    await ic.classify("สร้างหนังสือใหม่")
+    assert "binding" not in calls["kwargs"]
 
 
 @pytest.mark.asyncio

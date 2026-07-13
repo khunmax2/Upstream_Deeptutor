@@ -33,6 +33,10 @@ FLAG_ENV = "DEEPTUTOR_VOICE_CLASSIFIER"
 MODEL_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_MODEL"
 BASE_URL_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_BASE_URL"
 API_KEY_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_API_KEY"
+# Force the provider spec by name (e.g. `openai`) for OpenAI-compat upstreams so
+# the endpoint wins over model-name inference — same rationale as the agent
+# loop's DEEPTUTOR_AGENT_BINDING. Unset ⇒ inference (Gemini unaffected).
+BINDING_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_BINDING"
 
 Intent = Literal["chat", "ui_task"]
 
@@ -100,10 +104,13 @@ async def classify(transcript: str, ui_context: dict[str, str] | None = None) ->
         }
         base_url = _env(BASE_URL_ENV)
         api_key = _env(API_KEY_ENV)
+        binding = _env(BINDING_ENV)
         if base_url:
             kwargs["base_url"] = base_url
         if api_key:
             kwargs["api_key"] = api_key
+        if binding:
+            kwargs["binding"] = binding
 
         raw = await complete(
             f"{transcript}{_context_line(ui_context)}",

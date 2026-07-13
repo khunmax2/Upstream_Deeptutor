@@ -14,6 +14,7 @@ from deeptutor.services.voice_realtime.agent import (
 from deeptutor.services.voice_realtime.agent.llm import (
     API_KEY_ENV,
     BASE_URL_ENV,
+    BINDING_ENV,
     MAX_STEPS_ENV,
     MODEL_ENV,
     STEP_DELAY_ENV,
@@ -25,7 +26,7 @@ from deeptutor.services.voice_realtime.agent.llm import (
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for name in (MODEL_ENV, BASE_URL_ENV, API_KEY_ENV, STEP_DELAY_ENV, MAX_STEPS_ENV):
+    for name in (MODEL_ENV, BASE_URL_ENV, API_KEY_ENV, BINDING_ENV, STEP_DELAY_ENV, MAX_STEPS_ENV):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -160,6 +161,45 @@ async def test_think_omits_base_url_and_api_key_in_model_alone_mode(monkeypatch)
 
     assert "base_url" not in calls["kwargs"]
     assert "api_key" not in calls["kwargs"]
+
+
+def test_resolve_agent_llm_reads_binding(monkeypatch):
+    monkeypatch.setenv(MODEL_ENV, "qwen/qwen3-32b")
+    monkeypatch.setenv(BASE_URL_ENV, "https://api.groq.com/openai/v1")
+    monkeypatch.setenv(API_KEY_ENV, "k")
+    monkeypatch.setenv(BINDING_ENV, "openai")
+    settings = resolve_agent_llm()
+    assert settings.binding == "openai"
+
+
+def test_resolve_agent_llm_binding_defaults_to_none(monkeypatch):
+    monkeypatch.setenv(MODEL_ENV, "gemini-2.5-flash")
+    assert resolve_agent_llm().binding is None
+
+
+@pytest.mark.asyncio
+async def test_think_forwards_binding_to_pin_the_provider(monkeypatch):
+    calls = _capture_complete(monkeypatch)
+    settings = AgentLLMSettings(
+        model="qwen/qwen3-32b",
+        base_url="https://api.groq.com/openai/v1",
+        api_key="k",
+        binding="openai",
+    )
+
+    await think("s", "u", settings)
+
+    assert calls["kwargs"]["binding"] == "openai"
+
+
+@pytest.mark.asyncio
+async def test_think_omits_binding_when_unset(monkeypatch):
+    calls = _capture_complete(monkeypatch)
+    settings = AgentLLMSettings(model="gemini-2.5-flash")
+
+    await think("s", "u", settings)
+
+    assert "binding" not in calls["kwargs"]
 
 
 @pytest.mark.asyncio

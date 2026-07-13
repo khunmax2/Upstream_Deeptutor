@@ -118,6 +118,7 @@ head-to-head harness ของ loop บนแอปสด
 |---|---|
 | `.env.agent` (ตัวอย่าง: `.env.agent.example`) | env ของ loop + classifier (`DEEPTUTOR_VOICE_CLASSIFIER*`, `DEEPTUTOR_AGENT_*`) — **มี API key, gitignored** |
 | loop tuning (env) | `DEEPTUTOR_AGENT_STEP_DELAY` / `DEEPTUTOR_AGENT_MAX_STEPS` — ปรับ latency/step budget ได้ต่อ deployment (ว่าง = default 0.8s / 15 step) |
+| provider binding (env) | `DEEPTUTOR_AGENT_BINDING` / `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` — บังคับ provider spec ตาม endpoint (เช่น `openai` สำหรับ Groq) กัน model-name misroute; ว่าง = infer ตามชื่อโมเดล (Gemini ไม่กระทบ) |
 | Settings > Voice (ในแอป) | LLM/STT/TTS ของ "สายปกติ" — คนละที่กับ env ของ loop/classifier |
 | `docs/issues/voice-intent-classifier/PRD.md` | ดีไซน์ A1 (classifier เป็น router หลัก) |
 | `docs/issues/inpage-agent-grounding/` | ช่องโหว่ grounding ของ loop จากการทดสอบสด (issues 01/02) |
