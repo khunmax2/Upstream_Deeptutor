@@ -69,6 +69,85 @@ test('indentation marks children; free text renders as plain lines', () => {
   assert.equal(lines[2], 'คำอธิบายหน้า') // visible text, no index
 })
 
+test('blank icon link falls back to its href tail (settings sub-nav stays distinct)', () => {
+  const t = tree({
+    root: { tagName: 'body', children: ['a1', 'a2'], isVisible: true, isTopElement: true },
+    a1: {
+      tagName: 'a',
+      attributes: { href: '/settings/models' }, // href is not a rendered attr
+      children: [], // icon-only: no text
+      isVisible: true,
+      isInteractive: true,
+      highlightIndex: 0,
+      ref: ref(),
+    },
+    a2: {
+      tagName: 'a',
+      attributes: { href: '/settings/search?tab=1#top' },
+      children: [],
+      isVisible: true,
+      isInteractive: true,
+      highlightIndex: 1,
+      ref: ref(),
+    },
+  })
+  const lines = serializeTree(t).content.split('\n')
+  assert.equal(lines[0], '[0]<a >models />')
+  assert.equal(lines[1], '[1]<a >search />') // query/hash stripped
+})
+
+test('blank interactive element salvages nested text collectText skipped', () => {
+  const t = tree({
+    root: { tagName: 'body', children: ['a'], isVisible: true, isTopElement: true },
+    a: {
+      tagName: 'a',
+      attributes: { href: '/x' },
+      children: ['inner'],
+      isVisible: true,
+      isInteractive: true,
+      highlightIndex: 0,
+      ref: ref(),
+    },
+    inner: {
+      tagName: 'span',
+      children: ['t'],
+      isVisible: true,
+      isInteractive: true, // collectText stops here → the anchor would be blank
+      highlightIndex: 1,
+      ref: ref(),
+    },
+    t: { type: 'TEXT_NODE', text: 'Appearance', isVisible: true },
+  })
+  // nested text wins over the href tail; the anchor is no longer a blank [0]<a />
+  assert.equal(serializeTree(t).content.split('\n')[0], '[0]<a >Appearance />')
+})
+
+test('labelled and truly-empty lines are unchanged by the fallback', () => {
+  const t = tree({
+    root: { tagName: 'body', children: ['btn', 'empty'], isVisible: true, isTopElement: true },
+    btn: {
+      tagName: 'button',
+      attributes: { 'aria-label': 'บันทึก' }, // already labelled → untouched
+      children: [],
+      isVisible: true,
+      isInteractive: true,
+      highlightIndex: 0,
+      ref: ref(),
+    },
+    empty: {
+      tagName: 'div', // no text, no attrs, no href → stays blank
+      children: [],
+      isVisible: true,
+      isInteractive: true,
+      highlightIndex: 1,
+      ref: ref(),
+    },
+  })
+  const lines = serializeTree(t).content.split('\n')
+  assert.equal(lines[0], '[0]<button aria-label=บันทึก />')
+  assert.equal(lines[1], '[1]<div  />') // unchanged: nothing to fall back to
+})
+
 test('markNewElements: unseen refs get *[n], seen refs do not', () => {
   const sharedRef = ref()
   const make = () =>

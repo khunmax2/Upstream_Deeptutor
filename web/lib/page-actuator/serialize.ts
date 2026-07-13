@@ -117,6 +117,51 @@ function collectText(tree: FlatDomTree, node: ElementDomNode, self: boolean): st
   return parts.join('\n').trim()
 }
 
+/** Last meaningful path segment of an href — labels icon-only links so
+ *  `/settings/models` vs `/settings/search` stay distinguishable. */
+function hrefTail(href: string): string {
+  const cleaned = href.split(/[?#]/)[0].replace(/\/+$/, '')
+  const seg = cleaned.split('/').filter(Boolean).pop() ?? ''
+  try {
+    return decodeURIComponent(seg)
+  } catch {
+    return seg
+  }
+}
+
+/** All descendant text, ignoring the interactive-stop that {@link collectText}
+ *  applies — used ONLY to salvage a label for an element that serialized blank. */
+function deepText(tree: FlatDomTree, node: ElementDomNode): string {
+  const parts: string[] = []
+  const walk = (n: DomNode) => {
+    if (isText(n)) {
+      if (n.text) parts.push(n.text)
+      return
+    }
+    for (const childId of (n as ElementDomNode).children ?? []) {
+      const child = tree.map[childId]
+      if (child) walk(child)
+    }
+  }
+  for (const childId of node.children ?? []) {
+    const child = tree.map[childId]
+    if (child) walk(child)
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+/** A label for an interactive element that would otherwise serialize as a blank
+ *  `[N]<tag />` (no text, no shown attributes): its nested text, then the href
+ *  tail. Without this, icon-only nav (settings sub-pages, toolbars) is a wall of
+ *  indistinguishable blank links the model cannot choose between. */
+function blankFallbackLabel(tree: FlatDomTree, el: ElementDomNode): string {
+  const deep = deepText(tree, el)
+  if (deep) return deep
+  const href = (el.attributes ?? {})['href']?.trim()
+  if (href) return hrefTail(href)
+  return ''
+}
+
 function renderAttributes(node: ElementDomNode, include: string[], text: string): string {
   const attrs = node.attributes ?? {}
   const picked: Record<string, string> = {}
@@ -191,8 +236,14 @@ export function serializeTree(
     if (el.highlightIndex !== undefined) {
       selfIndexed = true
       nextDepth += 1
-      const text = collectText(tree, el, true)
+      let text = collectText(tree, el, true)
       const attrs = renderAttributes(el, include, text)
+      // A blank interactive line (`[N]<tag />`) is useless to the model — salvage
+      // a label from nested text or the href tail. Only when BOTH are empty, so
+      // every already-labelled line stays byte-identical.
+      if (!text && !attrs) {
+        text = capText(blankFallbackLabel(tree, el), ATTR_VALUE_MAX)
+      }
       const marker = el.isNew ? `*[${el.highlightIndex}]` : `[${el.highlightIndex}]`
 
       let line = `${'\t'.repeat(depth)}${marker}<${el.tagName ?? ''}`

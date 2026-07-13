@@ -2,6 +2,19 @@
 
 Status: ready-for-agent
 
+## Progress
+
+- **2026-07-13 — fixed in `serialize.ts` (node-tested).** When an interactive
+  element would render as a blank `[N]<tag />` (no text AND no shown attributes),
+  it now falls back to a label: nested descendant text (ignoring the
+  interactive-stop `collectText` applies), then the href's last path segment —
+  e.g. `[18]<a >models />` for `/settings/models`. Applied ONLY to the fully-blank
+  case, so every already-labelled line is byte-identical (guarded by a
+  regression test). Tests: `web/tests/page-actuator-serialize.test.ts` (+3, incl.
+  the settings-nav case and an unchanged-lines guard); node suite 200 green.
+  A live confirm that the loop now picks the right settings sub-page is nice-to-
+  have but the serializer behaviour is deterministically pinned.
+
 ## What happened (live, 2026-07-13)
 
 On `/settings` the sub-navigation links serialize as **empty, text-less lines**

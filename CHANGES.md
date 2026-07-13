@@ -296,6 +296,17 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — page-actuator serialize: label icon-only interactive elements
+  (issue 02).** An interactive element that would serialize as a blank
+  `[N]<tag />` (no text, no shown attributes) now falls back to a label — nested
+  descendant text (ignoring the interactive-stop), then the href's last path
+  segment (e.g. `[18]<a >models />` for `/settings/models`). This unblocks
+  icon-only navigation (settings sub-pages, toolbars) the loop previously saw as
+  a wall of indistinguishable blank links. Scoped to the fully-blank case only,
+  so every already-labelled line is byte-identical (regression-guarded). Files:
+  `web/lib/page-actuator/serialize.ts`, `web/tests/page-actuator-serialize.test.ts`
+  (+3); node suite 200 green.
+
 - **2026-07-13 — In-page agent loop prompt: grounding rules for honesty +
   form/commit flows (issues 01 & 03).** `agent/prompt.py` now instructs the loop
   to (01) CONFIRM it actually reached the asked-for destination — URL / header /
