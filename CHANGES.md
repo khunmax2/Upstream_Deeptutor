@@ -279,6 +279,33 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-13 — In-page agent loop: env-tunable step delay + max steps
+  (latency lever, default-safe).** Reading the reference implementation
+  (`@page-agent`) confirmed it has no hidden reasoning knob for the loop's per-
+  step latency — for gemini-3.x flash it also settles on `reasoning_effort=
+  minimal`, exactly what our `reasoning_params.py` already sends; the real lever
+  is model choice + the between-step settle delay (page-agent's default 0.4s vs
+  our conservative 0.8s, chosen for animation-heavy DOMs). Rather than flip the
+  documented default and risk a mis-observation regression, added two optional
+  env knobs, `DEEPTUTOR_AGENT_STEP_DELAY` and `DEEPTUTOR_AGENT_MAX_STEPS`
+  (`agent/llm.py::step_delay_override`/`max_steps_override`), resolved at loop
+  construction in `agent/voice_bridge.py`. Unset ⇒ byte-identical to today
+  (0.8s / 15 steps); a deployment on light pages can set `0.4` to trim latency.
+  Invalid/negative ⇒ ignored. Tests in `test_llm_scope.py`; documented in
+  `.env.agent.example` and `VOICE.md`. Files: `agent/llm.py`,
+  `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
+  `VOICE.md`.
+
+- **2026-07-13 — test: make `test_wiring.py` hermetic against a classifier-on
+  shell.** `classifier_enabled()` reads live env, so a dev shell that sources
+  `.env.agent` with `DEEPTUTOR_VOICE_CLASSIFIER=1` let the real classifier seam
+  intercept transcripts and fail `test_chat_llm_hands_off_to_the_agent_via_tool`
+  (the runner got the raw transcript, not the chat model's restated task). Added
+  an autouse fixture pinning `classifier_enabled` OFF by default; the
+  classifier-routing tests still opt in via `_patch_classifier`. Same class of
+  isolation fix as the earlier `test_ui_control` autouse guard. File:
+  `tests/services/voice_realtime/agent/test_wiring.py`.
+
 - **2026-07-13 — Added `VOICE.md` at the repo root — a single map of the whole
   voice feature.** Data-flow diagram + per-file tables covering the backend
   pipeline (`services/voice_realtime/`), the agent loop (`agent/`), API routers,

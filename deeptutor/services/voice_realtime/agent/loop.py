@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 # Voice-tuned defaults — NOT page-agent's. A caller on a phone line cannot sit
 # through 40 steps (their default); 15 covers every task in the evaluation set.
 # stepDelay 0.8s is the suanrao lesson for animation-heavy DOMs (theirs: 0.4).
+# Both are overridable per-deployment via env (DEEPTUTOR_AGENT_STEP_DELAY /
+# _MAX_STEPS, resolved in voice_bridge) without touching this conservative default.
 DEFAULT_MAX_STEPS = 15
 DEFAULT_STEP_DELAY_S = 0.8
 

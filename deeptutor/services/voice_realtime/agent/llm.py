@@ -33,6 +33,11 @@ API_KEY_ENV = "DEEPTUTOR_AGENT_API_KEY"
 # D0 feature flag — default OFF. Environment-based like the rest of the agent
 # config (the model already requires an env var, so one switchboard, not two).
 LOOP_ENV = "DEEPTUTOR_AGENT_LOOP"
+# Optional latency/capability tuning knobs — unset ⇒ loop defaults (byte-identical
+# to today). Env-driven like the rest of the agent config so a deployment can
+# trim per-step delay on light DOMs without a code change.
+STEP_DELAY_ENV = "DEEPTUTOR_AGENT_STEP_DELAY"
+MAX_STEPS_ENV = "DEEPTUTOR_AGENT_MAX_STEPS"
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,36 @@ def agent_loop_enabled() -> bool:
     """D0 gate: the loop takes turns only when explicitly switched on AND a
     model is configured. Off ⇒ the voice pipeline behaves exactly as today."""
     return _env(LOOP_ENV).lower() in {"1", "true", "yes"} and is_configured()
+
+
+def step_delay_override() -> float | None:
+    """Optional override for the loop's between-step settle delay (seconds).
+
+    Unset (or invalid/negative) ⇒ ``None`` so the loop keeps its conservative
+    default (``loop.DEFAULT_STEP_DELAY_S``), which suits animation-heavy DOMs. A
+    deployment on light pages can set e.g. ``0.4`` (page-agent's default) to trim
+    latency."""
+    raw = _env(STEP_DELAY_ENV)
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
+def max_steps_override() -> int | None:
+    """Optional override for the loop's max step budget. Unset (or invalid/<1)
+    ⇒ ``None`` so the loop keeps ``loop.DEFAULT_MAX_STEPS``."""
+    raw = _env(MAX_STEPS_ENV)
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value >= 1 else None
 
 
 def resolve_agent_llm() -> AgentLLMSettings:

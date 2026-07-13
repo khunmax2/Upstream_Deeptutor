@@ -11,12 +11,21 @@ from deeptutor.services.voice_realtime.agent import (
     is_configured,
     resolve_agent_llm,
 )
-from deeptutor.services.voice_realtime.agent.llm import API_KEY_ENV, BASE_URL_ENV, MODEL_ENV, think
+from deeptutor.services.voice_realtime.agent.llm import (
+    API_KEY_ENV,
+    BASE_URL_ENV,
+    MAX_STEPS_ENV,
+    MODEL_ENV,
+    STEP_DELAY_ENV,
+    max_steps_override,
+    step_delay_override,
+    think,
+)
 
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for name in (MODEL_ENV, BASE_URL_ENV, API_KEY_ENV):
+    for name in (MODEL_ENV, BASE_URL_ENV, API_KEY_ENV, STEP_DELAY_ENV, MAX_STEPS_ENV):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -47,6 +56,41 @@ def test_half_configured_upstream_fails_loudly(monkeypatch, present):
     monkeypatch.setenv(present, "value")
     with pytest.raises(AgentLLMNotConfigured, match="half-configured"):
         resolve_agent_llm()
+
+
+# ── optional loop tuning knobs (unset ⇒ None ⇒ loop keeps its defaults) ──
+
+
+def test_step_delay_override_unset_is_none():
+    assert step_delay_override() is None
+    assert max_steps_override() is None
+
+
+def test_step_delay_override_parses_float(monkeypatch):
+    monkeypatch.setenv(STEP_DELAY_ENV, "0.4")
+    assert step_delay_override() == 0.4
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "-1"])
+def test_step_delay_override_rejects_invalid_or_negative(monkeypatch, bad):
+    monkeypatch.setenv(STEP_DELAY_ENV, bad)
+    assert step_delay_override() is None
+
+
+def test_step_delay_override_allows_zero(monkeypatch):
+    monkeypatch.setenv(STEP_DELAY_ENV, "0")
+    assert step_delay_override() == 0.0
+
+
+def test_max_steps_override_parses_int(monkeypatch):
+    monkeypatch.setenv(MAX_STEPS_ENV, "40")
+    assert max_steps_override() == 40
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "0", "-3", "2.5"])
+def test_max_steps_override_rejects_invalid_or_below_one(monkeypatch, bad):
+    monkeypatch.setenv(MAX_STEPS_ENV, bad)
+    assert max_steps_override() is None
 
 
 # ── think(): the JSON-mode / reasoning / temperature scoping ──

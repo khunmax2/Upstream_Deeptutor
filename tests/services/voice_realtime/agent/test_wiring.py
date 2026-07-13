@@ -16,6 +16,18 @@ from deeptutor.services.voice_realtime import session as session_mod
 from deeptutor.services.voice_realtime.session import VoiceSession
 
 
+@pytest.fixture(autouse=True)
+def _classifier_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the intent classifier OFF for every test unless it opts in.
+
+    ``classifier_enabled()`` reads live env, so a developer shell that sources
+    ``.env.agent`` (with ``DEEPTUTOR_VOICE_CLASSIFIER=1``) would otherwise let the
+    real classifier seam intercept transcripts and break the tests that assert the
+    pre-classifier routing. The classifier-routing tests set their own value via
+    ``_patch_classifier``, which wins over this default."""
+    monkeypatch.setattr(pipe.intent_classifier, "classifier_enabled", lambda: False)
+
+
 class FakeEmitter:
     def __init__(self) -> None:
         self.json: list[dict[str, Any]] = []

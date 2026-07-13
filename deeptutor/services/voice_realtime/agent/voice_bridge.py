@@ -21,6 +21,7 @@ from collections.abc import Awaitable, Callable
 import contextlib
 import logging
 
+from deeptutor.services.voice_realtime.agent import llm as agent_llm
 from deeptutor.services.voice_realtime.agent.danger import DangerGate
 from deeptutor.services.voice_realtime.agent.loop import InPageAgentLoop, Think
 from deeptutor.services.voice_realtime.agent.types import Actuator
@@ -53,6 +54,12 @@ class AgentVoiceBridge:
         self._language = language
         self._ws_actuator = None if actuator is not None else WsPageActuator(send_json)
         self._actuator: Actuator = actuator if actuator is not None else self._ws_actuator
+        # Optional env tuning; unset ⇒ loop defaults (unchanged behaviour).
+        tuning: dict[str, object] = {}
+        if (delay := agent_llm.step_delay_override()) is not None:
+            tuning["step_delay_s"] = delay
+        if (steps := agent_llm.max_steps_override()) is not None:
+            tuning["max_steps"] = steps
         self._loop = InPageAgentLoop(
             self._actuator,
             ask_user=self._ask_user,
@@ -60,6 +67,7 @@ class AgentVoiceBridge:
             pre_act=DangerGate(self._confirm),
             think=think,
             language=language,
+            **tuning,
         )
         self._answer: asyncio.Future[str] | None = None
 
