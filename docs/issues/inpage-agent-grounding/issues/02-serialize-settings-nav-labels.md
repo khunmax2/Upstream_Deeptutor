@@ -14,6 +14,13 @@ Status: ready-for-agent
   the settings-nav case and an unchanged-lines guard); node suite 200 green.
   A live confirm that the loop now picks the right settings sub-page is nice-to-
   have but the serializer behaviour is deterministically pinned.
+- **2026-07-13 — live spot-check (eval bundle rebuilt with this fix).** The
+  labels are now in `actuator.bundle.js`, but a `gemini-3.1-flash-lite` loop still
+  did not reliably navigate to `/settings/search` even with the href-tail labels
+  present — i.e. the serializer now HANDS the model a usable label, but a lite
+  loop model doesn't consistently use it. The fix is correct and node-pinned;
+  end-to-end navigation reliability is gated by the loop model (see issue 01's
+  same conclusion).
 
 ## What happened (live, 2026-07-13)
 

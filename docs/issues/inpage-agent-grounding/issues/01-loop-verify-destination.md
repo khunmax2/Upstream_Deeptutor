@@ -11,6 +11,17 @@ Status: ready-for-agent
   Regression guard: `tests/.../agent/test_prompt.py`. Behavioural compliance
   (replay "…หน้าตั้งค่าการค้นหา" → must not claim success on the wrong page) still
   needs a live run.
+- **2026-07-13 — live-verified via `run_voice_live.py` (partial, model-gated).**
+  Two replays of "ไปที่ตั้งค่าแล้วเปิดหน้าตั้งค่าการค้นหา" on the CONFIGURED loop
+  model `gemini-3.1-flash-lite`: run A (stale bundle) mislanded on `/settings/tools`
+  and STILL rationalized a false success ("พบ…เรียบร้อยแล้ว"); run B (A02 bundle)
+  mislanded on `/settings/chat` but HONESTLY reported the miss ("ตรวจสอบหมดแล้วแต่
+  ไม่พบหน้าตั้งค่าการค้นหาแยกต่างหากครับ") — the exact A01-desired behaviour. So the
+  rule DOES fire, but not 100% reliably on a lite tier (matches this issue's own
+  "sometimes honest, sometimes falsely confident"). The loop is pinned to
+  `gemini-3.1-flash-lite`, which `agent/llm.py` warns "lite tiers cannot hold the
+  agent loop" — a clean verdict needs a full-tier loop model (now switchable via
+  the part-2 binding env). Prompt is correct; reliability is model-gated.
 
 ## What happened (live, 2026-07-13)
 
