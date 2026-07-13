@@ -599,6 +599,26 @@ _DANGER_WORDS = (
     "sign out",
 )
 
+# Expensive/hard-to-reverse FINAL commits — the "generate/compile something big"
+# button at the end of a review→confirm flow (e.g. create-a-book Stage 2,
+# "ยืนยันข้อเสนอและสร้างโครงร่าง / Confirm proposal & build spine", which kicks
+# off full book compilation — a large LLM spend). These trip the SAME confirm
+# gate as _DANGER_WORDS but are kept a SEPARATE, curated list on purpose: the
+# everyday create buttons that merely OPEN a form or produce a reviewable draft
+# ("สร้างหนังสือใหม่ / New book", "สร้างข้อเสนอ / Generate proposal",
+# "สร้างแชทใหม่") are cheap and reversible and must NOT be gated (that is the
+# "interrogate every step" failure mode). Conservative by design — better to
+# miss a new expensive button than to nag on a cheap one; add specific commit
+# phrases here as new flows appear. Matched as a substring, case-insensitively.
+_EXPENSIVE_COMMIT_PHRASES = (
+    "ยืนยันข้อเสนอ",  # th — book Stage-2 confirm
+    "สร้างโครงร่าง",  # th — "…build spine" (the compile trigger)
+    "confirm proposal",  # en
+    "build spine",  # en
+    "确认方案",  # zh — confirm proposal
+    "生成主线",  # zh — build spine
+)
+
 
 def match_click_intent(text: str) -> str | None:
     """The button name in a "กดปุ่ม X" command, else ``None``.
@@ -1183,6 +1203,15 @@ def is_dangerous_button(text: str) -> bool:
     """Whether a button press must be confirmed by voice before executing."""
     t = (text or "").lower()
     return any(w in t for w in _DANGER_WORDS)
+
+
+def is_expensive_commit(text: str) -> bool:
+    """Whether a button is the expensive/hard-to-reverse FINAL commit of a
+    review→confirm flow (e.g. book "ยืนยันข้อเสนอและสร้างโครงร่าง"), which must be
+    confirmed before firing. Distinct from :func:`is_dangerous_button`: it does
+    NOT match the cheap create/generate buttons earlier in the same flow."""
+    t = (text or "").lower()
+    return any(p in t for p in _EXPENSIVE_COMMIT_PHRASES)
 
 
 # ── secretary (dictation) mode commands ────────────────────────────────

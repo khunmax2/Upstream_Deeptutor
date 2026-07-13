@@ -1468,6 +1468,26 @@ def test_dangerous_button_words() -> None:
     assert not ui_control.is_dangerous_button("บันทึก")
 
 
+def test_expensive_commit_gates_the_book_build_button() -> None:
+    # The Stage-2 "Confirm proposal & build spine" commit, in all three locales.
+    assert ui_control.is_expensive_commit("ยืนยันข้อเสนอและสร้างโครงร่าง")
+    assert ui_control.is_expensive_commit("Confirm proposal & build spine")
+    assert ui_control.is_expensive_commit("确认方案并生成主线")
+
+
+def test_expensive_commit_leaves_cheap_create_buttons_alone() -> None:
+    # Opening the flow, generating a reviewable draft, or starting a chat are
+    # cheap/reversible — gating them is the "interrogate every step" failure.
+    assert not ui_control.is_expensive_commit("สร้างหนังสือใหม่")
+    assert not ui_control.is_expensive_commit("New book")
+    assert not ui_control.is_expensive_commit("สร้างข้อเสนอ")  # Generate proposal
+    assert not ui_control.is_expensive_commit("Generate proposal")
+    assert not ui_control.is_expensive_commit("สร้างแชทใหม่")
+    assert not ui_control.is_expensive_commit("บันทึก")
+    # And it is NOT in the destructive lexicon (distinct rung).
+    assert not ui_control.is_dangerous_button("ยืนยันข้อเสนอและสร้างโครงร่าง")
+
+
 @pytest.mark.asyncio
 async def test_click_by_name_presses_visible_button_without_llm(
     monkeypatch: pytest.MonkeyPatch,

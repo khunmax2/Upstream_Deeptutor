@@ -23,6 +23,30 @@ Status: ready-for-agent
   agent loop" — a clean verdict needs a full-tier loop model (now switchable via
   the part-2 binding env). Prompt is correct; reliability is model-gated.
 
+- **2026-07-13 — full-tier verdict: prompt rule NECESSARY but NOT SUFFICIENT
+  (still false-success ~2/5).** Ran the exact replay ("ไปตั้งค่าแล้วเข้าหน้าตั้งค่า
+  การค้นหา") 5× on a full-tier loop model (`gemini-3.5-flash`; the endpoint has no
+  `gemini-3.1-flash`, only `-lite`) via `run_voice_live.py`. The correct
+  destination `/settings/search` DOES exist as its own route. Outcomes:
+  run 1 → landed `/settings/tools`, **false success** ("เข้ามาที่หน้าตั้งค่าเครื่องมือ
+  และการค้นหาเรียบร้อยแล้ว"); run 2 → `/settings`, **honest miss** ("…ไม่พบส่วนของ
+  'ตั้งค่าการค้นหา' แยกต่างหาก", fixer gave up on verbose reasoning); run 3 →
+  `/settings/tools`, **false success**; run 4 → `/settings`, LLM error/crash;
+  run 5 → `/settings/search`, **correct + true success**. So even on a full tier
+  the verify rule fires only ~2/5 cleanly and still produces a confident wrong
+  "done" ~2/5 — the specific failure is conflating `/settings/tools` (which has a
+  "Web Search" *tool* toggle) with the dedicated `/settings/search`. Also
+  surfaced: `gemini-3.5-flash` prefaces its JSON with a reasoning block often
+  enough to break the fixer's bracket extraction (`reasoning_effort="minimal"`
+  did not suppress it) — ties to provider-adaptation part-2 thinking-disable.
+  **Conclusion: a stronger model reduces but does not remove the false success;
+  the prompt alone is not a reliable contract.** Recommend a HARD grounding step —
+  the loop compares the landed URL/route (or a distinctive header) against the
+  target the task named and forces `success=false` when they don't match — rather
+  than trusting the model to self-verify. A pro tier (`gemini-3-pro-preview`)
+  is untested (flash chosen to conserve quota). Evidence: eval logs in the
+  2026-07-13 grounding-verify report.
+
 ## What happened (live, 2026-07-13)
 
 Command "ไปตั้งค่าแล้วเข้าหน้าตั้งค่าการค้นหา" (go to settings → the SEARCH

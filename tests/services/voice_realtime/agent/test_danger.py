@@ -97,6 +97,43 @@ async def test_english_danger_words_gate_too():
     assert confirm.questions  # asked before refusing
 
 
+# ── expensive-commit rung: the book "build spine" button (issue 03) ──
+
+# The create-a-book Stage-2 review, as the loop would see it: the final button
+# kicks off full book compilation (large LLM spend, hard to reverse). "สร้าง
+# ข้อเสนอ" (Generate proposal) is the cheap, reviewable step BEFORE it.
+BOOK_PROPOSAL_PAGE = (
+    "[40]<div >ยืนยันข้อเสนอ />\n"
+    "\t[41]<button >สร้างข้อเสนอ />\n"
+    "\t[42]<button >ยืนยันข้อเสนอและสร้างโครงร่าง />\n"
+    "\t[43]<button >ยกเลิก />"
+)
+
+
+@pytest.mark.asyncio
+async def test_expensive_book_commit_is_gated_without_confirmation():
+    """The final "build spine" commit must pause for confirmation, though it
+    contains no destructive word — it is an expensive, hard-to-reverse action."""
+    confirm = confirm_recorder(False)
+    gate = DangerGate(confirm)
+
+    verdict = await gate("click_element_by_index", {"index": 42}, BOOK_PROPOSAL_PAGE)
+
+    assert verdict is not None and "REJECTED" in verdict
+    assert confirm.questions and "ทรัพยากร" in confirm.questions[0]  # cost framing, not "ผลถาวร"
+
+
+@pytest.mark.asyncio
+async def test_reviewable_generate_proposal_is_not_gated():
+    """The cheap step that produces the reviewable draft must NOT be gated —
+    gating it is the "interrogate every step" failure the policy warns against."""
+    confirm = confirm_recorder(True)
+    gate = DangerGate(confirm)
+    verdict = await gate("click_element_by_index", {"index": 41}, BOOK_PROPOSAL_PAGE)
+    assert verdict is None
+    assert confirm.questions == []
+
+
 @pytest.mark.asyncio
 async def test_typing_is_not_gated_by_standing_philosophy():
     confirm = confirm_recorder(False)

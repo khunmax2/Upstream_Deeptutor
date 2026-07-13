@@ -20,7 +20,10 @@ from collections.abc import Awaitable, Callable
 import logging
 import re
 
-from deeptutor.services.voice_realtime.ui_control import is_dangerous_button
+from deeptutor.services.voice_realtime.ui_control import (
+    is_dangerous_button,
+    is_expensive_commit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +76,21 @@ class DangerGate:
                 "Do not retry it; pick an element whose label is visible, or call done."
             )
 
-        if not is_dangerous_button(line):
+        dangerous = is_dangerous_button(line)
+        expensive = is_expensive_commit(line)
+        if not (dangerous or expensive):
             return None
 
         logger.info("agent danger-gate: pausing for confirmation on %s", line)
-        question = f"ปุ่มนี้อาจมีผลถาวรนะครับ ({_spoken_label(line)}) ให้กดเลยไหมครับ"
+        if expensive and not dangerous:
+            # A big generate/compile commit: frame it as cost + hard-to-reverse,
+            # not "permanent effect" (which reads like deletion).
+            question = (
+                f"ขั้นตอนนี้จะใช้ทรัพยากรมากและย้อนกลับยากนะครับ "
+                f"({_spoken_label(line)}) ยืนยันจะดำเนินการเลยไหมครับ"
+            )
+        else:
+            question = f"ปุ่มนี้อาจมีผลถาวรนะครับ ({_spoken_label(line)}) ให้กดเลยไหมครับ"
         if await self._ask(question):
             logger.info("agent danger-gate: user confirmed %s", line)
             return None

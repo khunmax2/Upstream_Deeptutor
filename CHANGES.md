@@ -386,6 +386,53 @@ code is additive and isolated for mergeability.
   Behavioural compliance is verified live; the prompt text is the deliverable
   here. Files: `agent/prompt.py`, `test_prompt.py`, issues 01/03 progress notes.
 
+- **2026-07-13 — In-page agent grounding: full-tier live verify of issues 01 &
+  03 (docs/eval only — no product code changed).** Ran both replays on a
+  full-tier loop model (`gemini-3.5-flash`; the endpoint has no `gemini-3.1-flash`,
+  only `-lite`) to settle the "pending live verify" left on the grounding-prompt
+  work. **Issue 01 (verify destination):** 5 runs of "ไปตั้งค่าแล้วเข้าหน้าตั้งค่า
+  การค้นหา" → false-success 2/5 (conflates `/settings/tools` with the dedicated
+  `/settings/search`), correct 1/5, honest-miss 1/5, crash 1/5 — the prompt rule
+  is necessary but NOT sufficient even on a full tier; recommend a hard grounding
+  step (compare landed route vs. named target, force `success=false` on mismatch).
+  Also surfaced a fixer fragility: `gemini-3.5-flash` prefaces JSON with a
+  reasoning block that breaks bracket extraction despite `reasoning_effort=
+  "minimal"` (ties to provider-adaptation part-2 thinking-disable). **Issue 03
+  (form/commit):** the prompt half is confirmed — the model correctly emits a
+  single batched `ask_user` for the un-inferable learning intent instead of
+  bulldozing — but two gaps block a full e2e verdict: (a) `run_voice_live.py`
+  builds the loop without `ask_user`/`pre_act`, so it can't exercise the
+  ask/confirm path (harness limitation; `voice_bridge.py` wires both), and (b) the
+  DangerGate backstop does NOT cover the expensive commit — `ui_control.
+  _DANGER_WORDS` omits the Stage-2 "ยืนยันข้อเสนอและสร้างโครงร่าง" button, so
+  fix-direction #1 (treat expensive create/generate/submit as a gated control)
+  remains unimplemented. Full write-up: `docs/reports/REPORT_grounding_verify_
+  2026-07-13.md`. Files: issues 01/03 progress notes, new report.
+
+- **2026-07-13 — In-page agent: expensive-commit confirm rung (issue 03 gap 2) +
+  wired eval harness (gap 1).** The verify pass above found the `DangerGate`
+  backstop did NOT cover the book "ยืนยันข้อเสนอและสร้างโครงร่าง / Confirm proposal
+  & build spine" commit (full book compilation — large LLM spend, hard to reverse),
+  because `ui_control._DANGER_WORDS` only lists destructive words. Added
+  `ui_control.is_expensive_commit()` — a SEPARATE, curated commit-phrase list
+  (ยืนยันข้อเสนอ / สร้างโครงร่าง / confirm proposal / build spine / 确认方案 /
+  生成主线) that trips the same `DangerGate` with a cost-framed question
+  ("ขั้นตอนนี้จะใช้ทรัพยากรมากและย้อนกลับยาก…") instead of the "ผลถาวร" (deletion)
+  wording. Kept deliberately narrow so the cheap create/generate buttons that
+  merely OPEN a form or produce a reviewable draft ("สร้างหนังสือใหม่",
+  "สร้างข้อเสนอ / Generate proposal", "สร้างแชทใหม่") are NOT gated — that is the
+  "interrogate every step" failure the policy warns against. Gate now fires on
+  `is_dangerous_button(line) OR is_expensive_commit(line)`. Also added
+  `eval/inpage_agent/run_voice_live_interactive.py`, a harness variant that wires
+  the loop like `voice_bridge.py` (`ask_user`=scripted answer, `pre_act`=
+  `DangerGate` whose confirm callback DENIES so a book-compile can never fire) — the
+  bare `run_voice_live.py` omits both, so it could not exercise the ask/confirm
+  path. Live full-path e2e is still open (Gemini `gemini-3.5-flash` was 503-throttled
+  the evening this landed; the run reached `/book` before the upstream outage killed
+  it) — the mechanism is unit-proven meanwhile. Tests: `test_ui_control.py` (+2),
+  `test_danger.py` (+2); 243 pass, ruff clean. Files: `ui_control.py`,
+  `agent/danger.py`, both test files, new eval harness, issue 03 + report.
+
 - **2026-07-13 — Provider-adaptation part 2: endpoint-based provider binding via
   env.** Added `DEEPTUTOR_AGENT_BINDING` (agent loop) and
   `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` (classifier) so an OpenAI-compatible
