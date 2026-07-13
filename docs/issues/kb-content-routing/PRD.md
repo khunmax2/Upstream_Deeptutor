@@ -1,6 +1,7 @@
 # KB-aware routing via a cheap topic manifest
 
-Status: in-progress (Phases 1-3 landed; live-verify on the running app pending)
+Status: ready-for-human (Phases 1-3 done + live-verified end-to-end; optional
+upload-hook/filler remain)
 Owner: Attapon · Drafted: 2026-07-13
 
 ## Progress
@@ -47,6 +48,15 @@ Owner: Attapon · Drafted: 2026-07-13
   correctly from the manifest — **no RAG**. Env in `.env.agent.example`.
   Remaining: end-to-end live-verify on the running app (WS), and the optional
   eager upload-time hook + "reading the library…" filler for the first-build latency.
+- **2026-07-13 — end-to-end live-verified (A1).** Drove the REAL
+  `pipeline.run_text_turn` in-process with both flags on (classifier + KB routing)
+  against the live `LAWs_thai` KB — all three routes correct: "มีเอกสารอะไรบ้าง" →
+  `kb-route=meta` → `rung=kb-meta`, answered from the manifest ("มีเอกสาร 2 ฉบับ…"),
+  **no `Searching KB`**; "ราคาทองวันนี้เท่าไหร่" → `unrelated` → `rung=kb-unrelated`,
+  answered directly, **no RAG** (knowledge_bases=[] took); "PDPA มาตรา 26…" →
+  `content` → `rung=llm` → `Searching KB 'LAWs_thai'` fired. The original waste
+  (garbled/unrelated → RAG on LAWs_thai) is gone. Only the eager upload-hook +
+  first-build filler remain (optional).
 
 ## Problem
 
