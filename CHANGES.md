@@ -74,6 +74,17 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 ## Documentation
 
+- **2026-07-13 — Refreshed `VOICE.md` (voice feature map) to current state.**
+  The flow diagram now shows the `unclear` classifier bucket, the layer-2
+  `kb_router` (meta/unrelated/content), and the loop's hard-grounding step;
+  added a "two lines by surface/WebSocket" note (call-widget input — voice OR
+  typed-in-widget — rides the voice pipeline, while the home chat composer goes
+  straight to `ChatOrchestrator`, bypassing the rungs). Tables gained
+  `kb_router.py`, `route_grounding.py`, `route_manifest.json`, the feature-flag
+  envs (`DEEPTUTOR_VOICE_KB_ROUTING`, `DEEPTUTOR_AGENT_HARD_GROUNDING`), and the
+  new tests; the backlog was re-cut (grounding 01/02/03 + KB routing marked done,
+  live e2e + Gemini thinking-disable remain). Files: `VOICE.md`.
+
 - **2026-07-11 — Closed the in-page agent build rounds (Phases A–D) with a
   report.** New `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`:
   what each phase shipped (with commit SHAs), the three live-hardening rounds
