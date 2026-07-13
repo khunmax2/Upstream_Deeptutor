@@ -46,6 +46,9 @@ LOOP_ENV = "DEEPTUTOR_AGENT_LOOP"
 # trim per-step delay on light DOMs without a code change.
 STEP_DELAY_ENV = "DEEPTUTOR_AGENT_STEP_DELAY"
 MAX_STEPS_ENV = "DEEPTUTOR_AGENT_MAX_STEPS"
+# Issue-01 hard destination grounding — ON by default (the prompt-only verify
+# rule proved insufficient live). Rollback switch only; see hard_grounding_enabled.
+HARD_GROUNDING_ENV = "DEEPTUTOR_AGENT_HARD_GROUNDING"
 
 
 @dataclass(frozen=True)
@@ -85,6 +88,17 @@ def step_delay_override() -> float | None:
     except ValueError:
         return None
     return value if value >= 0 else None
+
+
+def hard_grounding_enabled() -> bool:
+    """Whether the loop hard-verifies a navigation task landed on the route it
+    named (issue 01). ON by default: the prompt-only "confirm the URL before a
+    confident done" rule proved necessary but NOT sufficient live (false success
+    ~2/5, conflating /settings/tools with /settings/search). Set the env to
+    0/false/no/off to fall back to prompt-only. Safe to leave on — the gate
+    enforces success=false only when a target route resolves unambiguously from
+    the task, so its false-FAILURE risk is near zero."""
+    return _env(HARD_GROUNDING_ENV).lower() not in {"0", "false", "no", "off"}
 
 
 def max_steps_override() -> int | None:

@@ -1,8 +1,34 @@
 # Loop can claim success on the WRONG destination
 
-Status: ready-for-agent
+Status: ready-for-human
 
 ## Progress
+
+- **2026-07-13 — HARD grounding step IMPLEMENTED (mechanism, the recommended
+  fix).** The loop no longer trusts the model to self-verify. New
+  `agent/route_grounding.py` + curated `agent/route_manifest.json` are the
+  INDEPENDENT source of truth: `resolve_target_route(task)` maps a navigation
+  task to the ONE canonical route it named (deterministic — exact/substring
+  alias match, contains-ties broken by matched-alias length; ambiguous /
+  non-navigation → `None` so the gate never fires and can't manufacture a false
+  failure), resolved ONCE before the loop. At `done` the loop compares the landed
+  URL (`landed_path`/`path_satisfies`) against that target and forces
+  `success=false` with `stopped_reason="grounding_miss"` on a mismatch — so a
+  sibling like `/settings/tools` can NEVER satisfy `/settings/search`. Scope:
+  nav-destination tasks only (action tasks resolve to `None`, stay on prompt +
+  DangerGate). Rollback switch `DEEPTUTOR_AGENT_HARD_GROUNDING` (default on), wired
+  through `voice_bridge`. The manifest is deliberately separate from
+  `ui_graph.json` (open_path whitelist) — a route may be grounded without being
+  voice-steerable — and its paths are parity-tested against the real Next.js
+  routes (`web/tests/voice-route-manifest-parity.test.ts`). Tests:
+  `test_route_grounding.py` (+21, incl. this issue's exact replay: the search
+  task landing `/settings/tools` is forced to `success=false`), `test_loop.py`
+  (+5). 484 py + 203 node green; ruff clean. **Remaining:** the live full-path
+  e2e (a real `run_voice_live.py` replay of "ไปตั้งค่าแล้วเข้าหน้าตั้งค่าการค้นหา"
+  landing off-target → hears an honest miss) is still gated on a non-503 full-tier
+  model — the deterministic path is pinned, so this is a confirmation, not a risk.
+  Status → `ready-for-human` (mechanism done, awaiting the live confirm).
+
 
 - **2026-07-13 — prompt rule added (pending live verify).** `agent/prompt.py`
   `<conduct>` now instructs: before `done` with success=true, CONFIRM the current

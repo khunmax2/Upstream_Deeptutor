@@ -24,6 +24,11 @@ from deeptutor.services.voice_realtime.agent.prompt import (
     assemble_user_prompt,
     build_system_prompt,
 )
+from deeptutor.services.voice_realtime.agent.route_grounding import (
+    landed_path,
+    path_satisfies,
+    resolve_target_route,
+)
 from deeptutor.services.voice_realtime.agent.types import (
     ActResult,
     Actuator,
@@ -54,6 +59,10 @@ _BUDGET_LINE = "ยังทำไม่เสร็จครับ ครบจ
 _OBSERVE_FAILED_LINE = "ผมมองหน้าจอไม่เห็นครับ ลองใหม่อีกครั้งนะครับ"
 _THINK_FAILED_LINE = "สมองของผู้ช่วยขัดข้องครับ ลองใหม่อีกครั้งนะครับ"
 _INVALID_OUTPUT_LINE = "โมเดลตอบผิดรูปแบบซ้ำหลายครั้งครับ ลองเปลี่ยนโมเดลของ agent ดูนะครับ"
+# Hard-grounding override (issue 01): the model said "done, success" but we did
+# not actually land on the route the task named. Spoken honestly — a wrong-page
+# success is worse than an owned miss.
+_GROUNDING_MISS_LINE = "ผมยังไปไม่ถึงหน้าที่คุณต้องการครับ ยังไม่สำเร็จ ลองสั่งให้เจาะจงขึ้นอีกครั้งนะครับ"
 
 AskUser = Callable[[str], Awaitable[str]]
 Narrate = Callable[[str], Awaitable[None]]
@@ -77,6 +86,7 @@ class InPageAgentLoop:
         max_steps: int = DEFAULT_MAX_STEPS,
         step_delay_s: float = DEFAULT_STEP_DELAY_S,
         language: str = "th",
+        verify_destination: bool = True,
     ) -> None:
         self._actuator = actuator
         self._ask_user = ask_user
@@ -86,6 +96,10 @@ class InPageAgentLoop:
         self._max_steps = max_steps
         self._step_delay_s = step_delay_s
         self._language = language
+        # Issue-01 hard grounding: verify a navigation task landed on the route
+        # it named before honouring a confident `done`. On by default; the gate
+        # only ever fires when a target route resolves unambiguously.
+        self._verify_destination = verify_destination
         self._abort = asyncio.Event()
         self.running = False
         # ask_user is only offered to the LLM when someone can actually answer.
@@ -119,6 +133,13 @@ class InPageAgentLoop:
         system_prompt = build_system_prompt(self._actions, language=self._language)
         fixer_failures = 0
         t0 = time.perf_counter()
+
+        # Hard-grounding target: the ONE route this task named, resolved once,
+        # deterministically, independent of the acting model. None ⇒ not a
+        # nav-destination task (or ambiguous) ⇒ no hard check, prompt owns it.
+        target_route = resolve_target_route(task) if self._verify_destination else None
+        if target_route:
+            logger.info("agent grounding target: %s", target_route)
 
         try:
             for step in range(self._max_steps):
@@ -199,6 +220,22 @@ class InPageAgentLoop:
                     text = str(args.get("text") or "").strip() or "งานจบแล้วครับ"
                     record.action_output = "Task completed"
                     steps.append(record)
+                    # Hard grounding (issue 01): a confident success is only
+                    # honoured if we actually reached the route the task named.
+                    # The model's self-verification proved unreliable (~2/5 false
+                    # success live); this deterministic check overrides it.
+                    if success and target_route:
+                        landed = landed_path(state.url)
+                        if not path_satisfies(target_route, landed):
+                            logger.warning(
+                                "agent grounding OVERRIDE: model claimed success but "
+                                "landed=%r target=%r → forcing success=false",
+                                landed,
+                                target_route,
+                            )
+                            return self._finish(
+                                "grounding_miss", False, _GROUNDING_MISS_LINE, steps, t0
+                            )
                     # The ending is NOT narrated here: the bridge speaks the
                     # final result exactly once (avoids the double display the
                     # note+assistant_text pair produced live).

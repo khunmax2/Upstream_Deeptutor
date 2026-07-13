@@ -118,7 +118,43 @@ Groq) to watch ask→fill→stop-at-commit end to end. The gate mechanism is alr
 unit-proven regardless.
 
 ### Remaining (not done this session)
-- Issue 01 hard grounding step (compare landed route vs. named target).
+- ~~Issue 01 hard grounding step (compare landed route vs. named target).~~
+  **DONE 2026-07-13** — see the follow-up section below.
 - Issue 03 live full-path confirmation (provider-blocked tonight).
+
+## Follow-up (same day) — issue 01 hard grounding IMPLEMENTED
+
+Acted on the report's own recommendation (a hard grounding step rather than
+trusting the model to self-verify).
+
+**Mechanism.** New `agent/route_grounding.py` + curated `agent/route_manifest.json`
+are the independent source of truth. `resolve_target_route(task)` maps a
+navigation task to the ONE canonical route it named — deterministically:
+exact/substring alias match, contains-ties broken by matched-alias length, and
+ambiguous OR non-navigation tasks resolve to `None`. That `None` is the hybrid
+gate — enforce only when a target resolves unambiguously, otherwise keep the
+prompt — which keeps the false-FAILURE risk (the real cost of a wrong hard gate)
+near zero. Resolved once before the loop; at `done` the loop compares the landed
+URL (`landed_path` + `path_satisfies`, sibling-safe) against the target and forces
+`success=false` (`stopped_reason="grounding_miss"`) on a mismatch. So the exact
+failure this report documented — the search task rationalizing a success on
+`/settings/tools` — is now structurally impossible: `/settings/tools` is not
+`/settings/search` nor under it, so the gate fires.
+
+**Design choices.** Scope is nav-destination only (action tasks name no route →
+skipped, stay on prompt + DangerGate — a URL gate there would only manufacture
+false failures). Aliases are DESTINATION phrasings, never imperative verbs
+("สร้างหนังสือ" is an action, must not resolve `/book`). The manifest is separate
+from `ui_graph.json` (open_path whitelist) so a route can be grounded without
+being voice-steerable, and is parity-tested against real routes. Rollback switch
+`DEEPTUTOR_AGENT_HARD_GROUNDING` (default on).
+
+**Verification.** Deterministic: `test_route_grounding.py` (+21, incl. the exact
+tools-vs-search conflation and the safe-skip of action/ambiguous tasks),
+`test_loop.py` (+5: override fires on wrong dest, passes on right, skips action
+tasks, honours the kill-switch, never resurrects an honest failure), node parity
+(+3). 484 py + 203 node green; ruff clean. **Live full-path e2e still open** —
+same non-503 full-tier gate as issue 03; the deterministic path is pinned, so the
+live run is a confirmation, not a risk.
 - Provider-adaptation part-2 thinking-disable (the flash verbose-reasoning →
   fixer-breakage seen here).

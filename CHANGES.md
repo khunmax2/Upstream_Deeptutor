@@ -279,6 +279,35 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-13 — In-page agent grounding: HARD destination check (issue 01).**
+  The prompt-only "confirm the URL before a confident `done`" rule proved
+  necessary but NOT sufficient live (false success ~2/5, the model conflating
+  `/settings/tools`'s "Web Search" *tool* toggle with the dedicated
+  `/settings/search`). The loop now hard-verifies the destination independently
+  of the acting model: `resolve_target_route(task)` maps a navigation task to the
+  ONE canonical route it named — deterministically (exact/substring alias match,
+  contains-ties broken by matched-alias length; ambiguous or non-navigation tasks
+  resolve to `None` → no gate, so false-FAILURE risk is near zero), and at `done`
+  the loop compares the landed URL against that target and forces
+  `success=false` (`stopped_reason="grounding_miss"`) on a mismatch. Scope is
+  nav-destination tasks only — action tasks ("create a book", "toggle dark mode")
+  name no route and stay on the prompt + DangerGate. The route data is a new
+  curated manifest (`agent/route_manifest.json`, aliases seeded from
+  `web/lib/settings-nav.ts` + UI_PAGES), deliberately SEPARATE from
+  `ui_graph.json`'s open_path whitelist (a route may be grounded without being
+  voice-steerable). Rollback switch `DEEPTUTOR_AGENT_HARD_GROUNDING` (default on).
+  Tests: `test_route_grounding.py` (+21, incl. the exact tools-vs-search case),
+  `test_loop.py` (+5, override fires on wrong dest / passes on right / skips
+  action tasks / kill-switch / never resurrects a failure), and a node parity
+  test (`web/tests/voice-route-manifest-parity.test.ts`, manifest path ↔ real
+  page.tsx). 484 py + 203 node green; ruff clean. Live full-path e2e still
+  pending a non-503 full-tier model (the mechanism is deterministically pinned).
+  Files: `deeptutor/services/voice_realtime/agent/{route_grounding.py,
+  route_manifest.json,loop.py,llm.py,voice_bridge.py,types.py}`,
+  `tests/services/voice_realtime/agent/{test_route_grounding.py,test_loop.py,
+  test_voice_bridge.py}`, `web/tests/voice-route-manifest-parity.test.ts`,
+  issue 01 progress note, `docs/reports/REPORT_grounding_verify_2026-07-13.md`.
+
 - **2026-07-13 — In-page agent loop: env-tunable step delay + max steps
   (latency lever, default-safe).** Reading the reference implementation
   (`@page-agent`) confirmed it has no hidden reasoning knob for the loop's per-

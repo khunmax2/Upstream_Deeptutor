@@ -43,7 +43,15 @@ async def test_progress_is_a_silent_note_and_only_the_ending_speaks():
             step("arrived", "", {"done": {"text": "เปิดให้แล้วครับ", "success": True}}),
         ]
     )
-    bridge, actuator, sent, spoken = make_bridge(think)
+    # The click must actually land on /knowledge — the destination the task
+    # named — or hard grounding (issue 01) rightly downgrades the success.
+    bridge, actuator, sent, spoken = make_bridge(
+        think,
+        states=[
+            BrowserState(url="http://x/home", content="[0]<a >ศูนย์ความรู้ />"),
+            BrowserState(url="http://x/knowledge", content="ศูนย์ความรู้"),
+        ],
+    )
 
     reply = await bridge.run_task("เปิดศูนย์ความรู้")
 

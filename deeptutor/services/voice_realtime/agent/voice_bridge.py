@@ -67,6 +67,7 @@ class AgentVoiceBridge:
             pre_act=DangerGate(self._confirm),
             think=think,
             language=language,
+            verify_destination=agent_llm.hard_grounding_enabled(),
             **tuning,
         )
         self._answer: asyncio.Future[str] | None = None

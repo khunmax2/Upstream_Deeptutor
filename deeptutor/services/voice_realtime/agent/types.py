@@ -68,7 +68,10 @@ class AgentResult:
 
     success: bool
     text: str
-    stopped_reason: str  # "done" | "budget" | "aborted" | "error"
+    # "done" | "budget" | "aborted" | "error" | "grounding_miss"
+    # (grounding_miss = the model said done+success but the loop hard-verified it
+    #  did NOT land on the route the task named — issue 01; success is False.)
+    stopped_reason: str
     steps: list[StepRecord] = field(default_factory=list)
 
 

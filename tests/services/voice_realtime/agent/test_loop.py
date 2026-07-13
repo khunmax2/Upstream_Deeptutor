@@ -284,6 +284,79 @@ async def test_act_failure_is_information_not_a_crash():
 
 
 @pytest.mark.asyncio
+async def test_grounding_overrides_false_success_on_wrong_destination():
+    """Issue 01: the model claims done+success but landed on a SIBLING route —
+    the loop hard-verifies the destination and forces success=false."""
+    actuator = FixtureActuator(
+        [BrowserState(url="http://x/settings/tools", content="[0]<button >x />")]
+    )
+    think = canned_think(
+        [step("landed", "", {"done": {"text": "เปิดหน้าตั้งค่าการค้นหาแล้วครับ", "success": True}})]
+    )
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
+    result = await loop.execute("ไปหน้าตั้งค่าการค้นหา")
+    assert not result.success and result.stopped_reason == "grounding_miss"
+    # The confident (wrong) model line is replaced with an honest one.
+    assert "เปิดหน้าตั้งค่าการค้นหาแล้ว" not in result.text
+
+
+@pytest.mark.asyncio
+async def test_grounding_allows_success_on_the_right_destination():
+    actuator = FixtureActuator(
+        [BrowserState(url="http://x/settings/search?tab=web", content="[0]<button >x />")]
+    )
+    think = canned_think(
+        [step("landed", "", {"done": {"text": "เปิดหน้าตั้งค่าการค้นหาแล้วครับ", "success": True}})]
+    )
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
+    result = await loop.execute("ไปหน้าตั้งค่าการค้นหา")
+    assert result.success and result.stopped_reason == "done"
+    assert result.text == "เปิดหน้าตั้งค่าการค้นหาแล้วครับ"
+
+
+@pytest.mark.asyncio
+async def test_grounding_leaves_action_tasks_untouched():
+    """A task that names no route (an action) resolves to no target — the hard
+    gate never fires, so the model's verdict stands even on an unrelated URL."""
+    actuator = FixtureActuator(
+        [BrowserState(url="http://x/home", content="[0]<button >x />")]
+    )
+    think = canned_think([step("done", "", {"done": {"text": "สร้างให้แล้วครับ", "success": True}})])
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
+    result = await loop.execute("สร้างหนังสือใหม่ให้หน่อย")
+    assert result.success and result.stopped_reason == "done"
+
+
+@pytest.mark.asyncio
+async def test_grounding_can_be_disabled():
+    """The rollback switch: with verify_destination off, a wrong-page success is
+    honoured (prompt-only behaviour)."""
+    actuator = FixtureActuator(
+        [BrowserState(url="http://x/settings/tools", content="[0]<button >x />")]
+    )
+    think = canned_think([step("landed", "", {"done": {"text": "ok", "success": True}})])
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0, verify_destination=False)
+    result = await loop.execute("ไปหน้าตั้งค่าการค้นหา")
+    assert result.success and result.stopped_reason == "done"
+
+
+@pytest.mark.asyncio
+async def test_grounding_does_not_touch_an_honest_model_miss():
+    """When the model already reports success=false, grounding is a no-op —
+    it only ever downgrades a (wrong) success, never resurrects a failure."""
+    actuator = FixtureActuator(
+        [BrowserState(url="http://x/settings/tools", content="[0]<button >x />")]
+    )
+    think = canned_think(
+        [step("landed", "", {"done": {"text": "ไม่พบหน้าค้นหาแยกครับ", "success": False}})]
+    )
+    loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
+    result = await loop.execute("ไปหน้าตั้งค่าการค้นหา")
+    assert not result.success and result.stopped_reason == "done"
+    assert result.text == "ไม่พบหน้าค้นหาแยกครับ"
+
+
+@pytest.mark.asyncio
 async def test_wait_accumulation_warning():
     actuator = FixtureActuator([PAGES[0]])
     w = step("s", "wait", {"wait": {"seconds": 2}})
