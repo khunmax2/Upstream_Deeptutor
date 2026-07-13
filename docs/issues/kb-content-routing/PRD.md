@@ -1,6 +1,6 @@
 # KB-aware routing via a cheap topic manifest
 
-Status: in-progress
+Status: in-progress (Phases 1-3 landed; live-verify on the running app pending)
 Owner: Attapon · Drafted: 2026-07-13
 
 ## Progress
@@ -32,6 +32,21 @@ Owner: Attapon · Drafted: 2026-07-13
   live bug "แล้วมาวิเคราะห์หรืออะไรสักอย่") → `unclear`, and SHORT clear utterances
   ("หน้าหลัก"→ui_task, "ราคาทอง"→chat) did NOT over-trigger. Next: Phase 3 (KB
   relevance routing that consumes the manifest).
+- **2026-07-13 — Phase 3 (layer-2 KB routing) built + tested + live-verified.**
+  New `deeptutor/services/voice_realtime/kb_router.py`: for a `chat` turn (from
+  layer 1) with `DEEPTUTOR_VOICE_KB_ROUTING` on, `route(transcript, manifests)`
+  → `meta | content | unrelated` (or `None` ⇒ keep RAG-on) from the KB manifest
+  catalogue; `compose_meta_answer` answers `meta` straight from the manifest;
+  `load_manifests` get-or-builds + tags each KB. Pipeline seam (`run_text_turn`):
+  `meta` → `_speak_short_turn(answer)` (no RAG); `unrelated` → `_run_text_turn(...,
+  knowledge_bases=[])` (RAG suppressed — new param threads to `build_voice_context`);
+  `content`/`None` → today's rung=llm (RAG on). Flag off ⇒ byte-identical. Tests:
+  `test_kb_router.py` (16) + `test_wiring.py` (+4: meta/unrelated/content/flag-off);
+  voice+rag suites 630 green. Live on the real `LAWs_thai` manifest: routing 6/6
+  (meta/content/unrelated all correct) and the meta answer named both acts
+  correctly from the manifest — **no RAG**. Env in `.env.agent.example`.
+  Remaining: end-to-end live-verify on the running app (WS), and the optional
+  eager upload-time hook + "reading the library…" filler for the first-build latency.
 
 ## Problem
 

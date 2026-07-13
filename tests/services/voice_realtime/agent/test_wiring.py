@@ -380,6 +380,118 @@ async def test_classifier_unclear_asks_to_repeat_without_rag_or_loop(monkeypatch
     assert "assistant_text" in types and "done" in types
 
 
+def _patch_kb_router(monkeypatch, *, route: str, manifests=None, meta_answer="สรุปคลังครับ"):
+    monkeypatch.setattr(pipe.kb_router, "kb_routing_enabled", lambda: True)
+
+    async def fake_load(kb_names, kb_base_dir=None):
+        return (
+            manifests
+            if manifests is not None
+            else [{"kb_name": "KB", "documents": [{"file": "a"}]}]
+        )
+
+    async def fake_route(transcript, ms):
+        return route
+
+    async def fake_compose(transcript, ms):
+        return meta_answer
+
+    monkeypatch.setattr(pipe.kb_router, "load_manifests", fake_load)
+    monkeypatch.setattr(pipe.kb_router, "route", fake_route)
+    monkeypatch.setattr(pipe.kb_router, "compose_meta_answer", fake_compose)
+
+
+@pytest.mark.asyncio
+async def test_kb_route_meta_answers_from_manifest_without_rag(monkeypatch):
+    """A 'meta' question ('มีเอกสารอะไรบ้าง') is answered from the manifest and the
+    chat+RAG turn never runs."""
+    _patch_classifier(monkeypatch, "chat")
+    _patch_kb_router(monkeypatch, route="meta", meta_answer="มี PDPA และข้อมูลข่าวสารครับ")
+
+    async def fake_synthesize(text: str) -> tuple[bytes, str]:
+        return b"AUDIO", "audio/mpeg"
+
+    monkeypatch.setattr(pipe, "synthesize_speech", fake_synthesize)
+
+    called = {"n": 0}
+
+    async def boom_turn(*a, **k):
+        called["n"] += 1
+        return "should-not-run"
+
+    monkeypatch.setattr(pipe, "_run_text_turn", boom_turn)
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(), "มีเอกสารอะไรบ้าง", [], session_id="s1", agent_runner=runner_recorder()
+    )
+    assert reply == "มี PDPA และข้อมูลข่าวสารครับ"
+    assert called["n"] == 0  # no chat/RAG turn
+
+
+@pytest.mark.asyncio
+async def test_kb_route_unrelated_suppresses_rag(monkeypatch):
+    """An 'unrelated' question runs the chat turn but with knowledge_bases=[] so
+    the chat capability has nothing to search."""
+    _patch_classifier(monkeypatch, "chat")
+    _patch_kb_router(monkeypatch, route="unrelated")
+    seen = {}
+
+    async def capture_turn(*a, **k):
+        seen["knowledge_bases"] = k.get("knowledge_bases")
+        return "ตอบทั่วไปครับ"
+
+    monkeypatch.setattr(pipe, "_run_text_turn", capture_turn)
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(), "ราคาทองเท่าไหร่", [], session_id="s1", agent_runner=runner_recorder()
+    )
+    assert reply == "ตอบทั่วไปครับ"
+    assert seen["knowledge_bases"] == []  # RAG suppressed
+
+
+@pytest.mark.asyncio
+async def test_kb_route_content_falls_through_to_rag(monkeypatch):
+    """A 'content' question falls through to the normal chat turn (RAG on:
+    knowledge_bases not overridden)."""
+    _patch_classifier(monkeypatch, "chat")
+    _patch_kb_router(monkeypatch, route="content")
+    seen = {"knowledge_bases": "UNSET"}
+
+    async def capture_turn(*a, **k):
+        seen["knowledge_bases"] = k.get("knowledge_bases")
+        return "คำตอบจาก RAG ครับ"
+
+    monkeypatch.setattr(pipe, "_run_text_turn", capture_turn)
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(),
+        "PDPA มาตรา 26 ว่าอย่างไร",
+        [],
+        session_id="s1",
+        agent_runner=runner_recorder(),
+    )
+    assert reply == "คำตอบจาก RAG ครับ"
+    assert seen["knowledge_bases"] is None  # default → RAG auto-mounts
+
+
+@pytest.mark.asyncio
+async def test_kb_routing_off_leaves_chat_untouched(monkeypatch):
+    """Flag off (default): no layer-2 call; the chat turn runs as before."""
+    _patch_classifier(monkeypatch, "chat")
+    monkeypatch.setattr(pipe.kb_router, "kb_routing_enabled", lambda: False)
+
+    async def boom_route(*a, **k):
+        raise AssertionError("router must not run when the flag is off")
+
+    monkeypatch.setattr(pipe.kb_router, "route", boom_route)
+    _patch_llm_turn(monkeypatch, [_content("ตอบปกติครับ")])
+
+    reply = await pipe.run_text_turn(
+        _AudioEmitter(), "ราคาทองเท่าไหร่", [], session_id="s1", agent_runner=runner_recorder()
+    )
+    assert "ปกติ" in reply
+
+
 @pytest.mark.asyncio
 async def test_classifier_off_is_never_consulted(monkeypatch):
     """Flag off (default): the seam is skipped — classify must not be called and

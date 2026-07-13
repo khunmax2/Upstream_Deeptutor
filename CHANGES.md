@@ -296,6 +296,21 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — Voice router: layer-2 KB routing (Phase 3 of KB-aware routing).**
+  New `deeptutor/services/voice_realtime/kb_router.py` runs after the classifier
+  says `chat` (when `DEEPTUTOR_VOICE_KB_ROUTING` is on): from the KB content
+  manifest it decides `meta` (answer straight from the manifest — no RAG),
+  `content` (needs RAG), or `unrelated` (answer with RAG suppressed), so RAG fires
+  only when the question is actually about the KB — and whole-corpus questions
+  ("มีเอกสารอะไรบ้าง", "สรุป KB") are answered from the manifest, which top-k RAG
+  handles worst. Pipeline seam in `run_text_turn`: `meta` → spoken manifest
+  answer; `unrelated` → `_run_text_turn(..., knowledge_bases=[])` (a new param that
+  threads to `build_voice_context` to suppress RAG); `content`/`None` → today's
+  chat turn unchanged. Flag off ⇒ byte-identical. Tests: `test_kb_router.py` (16),
+  `test_wiring.py` (+4); voice+rag suites 630 green. Live on the real `LAWs_thai`
+  manifest: routing 6/6 and the meta answer named both statutes correctly with no
+  RAG. Env in `.env.agent.example`. See `docs/issues/kb-content-routing/PRD.md`.
+
 - **2026-07-13 — Voice router: `unclear` bucket (Phase 2 of KB-aware routing).**
   The intent classifier now routes `chat | ui_task | unclear` instead of two
   buckets: `intent_classifier.py` gained an `unclear` intent (garbled / cut-off /

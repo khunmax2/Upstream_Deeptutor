@@ -33,7 +33,13 @@ import wave
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream import StreamEventType
 from deeptutor.services.voice import VoiceProviderError, synthesize_speech
-from deeptutor.services.voice_realtime import intent_classifier, narration, ui_control, ui_graph
+from deeptutor.services.voice_realtime import (
+    intent_classifier,
+    kb_router,
+    narration,
+    ui_control,
+    ui_graph,
+)
 from deeptutor.services.voice_realtime.agent.intent import match_agent_task
 from deeptutor.services.voice_realtime.chunker import SentenceChunker
 from deeptutor.services.voice_realtime.stt_guard import screen_transcript, transcribe_utterance
@@ -1037,6 +1043,33 @@ async def run_text_turn(
         if intent == "ui_task":
             logger.info("voice rung=classify-ui-task %r", transcript)
             return await _run_agent_turn(emitter, agent_runner, transcript, turn_t0=t0)
+        if intent == "chat" and kb_router.kb_routing_enabled():
+            # Layer 2 (docs/issues/kb-content-routing): a chat turn need not always
+            # hit RAG. Decide from the KB manifest whether this is a question ABOUT
+            # the collection (answer from the manifest), about its CONTENT (RAG),
+            # or UNRELATED (answer with RAG suppressed). None ⇒ keep RAG-on default.
+            manifests = await kb_router.load_manifests(_list_knowledge_bases())
+            kb_route = await kb_router.route(transcript, manifests)
+            if kb_route == "meta":
+                answer = await kb_router.compose_meta_answer(transcript, manifests)
+                if answer:
+                    logger.info("voice rung=kb-meta %r", transcript)
+                    return await _speak_short_turn(emitter, answer, turn_t0=t0)
+            elif kb_route == "unrelated":
+                logger.info("voice rung=kb-unrelated %r", transcript)
+                return await _run_text_turn(
+                    emitter,
+                    transcript,
+                    history,
+                    session_id=session_id,
+                    language=language,
+                    turn_t0=t0,
+                    ui_manifest=ui_manifest,
+                    ui_context=ui_context,
+                    nav_state=nav_state,
+                    knowledge_bases=[],  # suppress RAG — not about the KB
+                )
+            # "content" / None / meta-compose-failure → fall through to rung=llm.
 
     logger.info("voice rung=llm %r", transcript)
 
@@ -1071,12 +1104,17 @@ async def _run_text_turn(
     ui_context: dict[str, str] | None = None,
     nav_state: dict[str, Any] | None = None,
     agent_runner: Any = None,
+    knowledge_bases: list[str] | None = None,
 ) -> str:
     """LLM → per-sentence TTS for an already-recognised user utterance.
 
     Serves two callers: ``run_turn`` after server-side STT, and the ``user_text``
     control frame where the client did its own STT (e.g. browser Web Speech) —
     the turn is identical from the brain onward. Returns the reply text.
+
+    ``knowledge_bases`` overrides which KBs the chat capability may search:
+    ``None`` (default) discovers all (RAG auto-mounts); ``[]`` suppresses RAG for
+    this turn (the KB router's ``unrelated`` verdict — see ``kb_router``).
     """
     from deeptutor.runtime.orchestrator import ChatOrchestrator
 
@@ -1093,6 +1131,7 @@ async def _run_text_turn(
         history=history,
         session_id=session_id,
         language=language,
+        knowledge_bases=knowledge_bases,
         ui_manifest=ui_manifest,
         ui_context=ui_context,
     )
