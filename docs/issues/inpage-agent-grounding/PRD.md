@@ -14,5 +14,9 @@ saved" ✅, the deepest case with an action). The gaps:
   page.
 - `issues/02-serialize-settings-nav-labels.md` — the settings sub-nav serializes
   as icon-only links, so the loop can't tell them apart.
+- `issues/03-form-commit-interaction-policy.md` — the loop needs an ask/proceed/
+  confirm policy for form-filling + expensive-commit flows (e.g. create-a-book):
+  respect the app's proposal gate, ask once for un-inferable required input,
+  confirm before the expensive final button — neither bulldoze nor interrogate.
 
 ## Comments
