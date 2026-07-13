@@ -1,7 +1,22 @@
 # KB-aware routing via a cheap topic manifest
 
-Status: needs-triage
+Status: in-progress
 Owner: Attapon · Drafted: 2026-07-13
+
+## Progress
+
+- **2026-07-13 — Phase 1 (manifest) built + tested.** New
+  `deeptutor/services/rag/content_manifest.py`: `get_or_build_manifest(kb_name,
+  kb_base_dir)` reads the chunk text already in the active index's
+  `docstore.json`, groups it by document, and map-reduces one lite LLM call per
+  document (+ one KB-level summary) into `{documents:[{file,title,topics,summary}],
+  summary}`, cached in the KB's `metadata.json` under `content_manifest`. Freshness
+  keyed on `file_hashes` (a changed KB rebuilds); optional `DEEPTUTOR_KB_MANIFEST_*`
+  model env, else the app's chat model. Additive + INERT — nothing calls it yet, so
+  behaviour is unchanged (Phases 2–3 wire the routing). Tests:
+  `tests/services/rag/test_content_manifest.py` (9, LLM mocked; rag suite 176 green);
+  read-only checked against the real `LAWs_thai` docstore (found version-1,
+  grouped pdpa.pdf=195 + law_info2540.pdf=62 chunks). Next: Phase 2 (`unclear`).
 
 ## Problem
 

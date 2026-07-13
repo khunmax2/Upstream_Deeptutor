@@ -296,6 +296,19 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — KB content manifest (Phase 1 of KB-aware routing).** New
+  `deeptutor/services/rag/content_manifest.py` builds a cheap per-KB "what's in
+  here" manifest — `{documents:[{file,title,topics,summary}], summary}` — LAZILY
+  from the chunk text already in the active index's `docstore.json` (no re-upload,
+  no ingest-pipeline change), cached in the KB's `metadata.json` under
+  `content_manifest` and invalidated when `file_hashes` changes. It will let the
+  voice router (later phases) answer "what documents / summarise the KB" without a
+  RAG search and skip RAG on unrelated turns. Additive and INERT — nothing calls
+  it yet, so behaviour is unchanged. Optional `DEEPTUTOR_KB_MANIFEST_*` model env
+  (else the app's chat model). Tests: `tests/services/rag/test_content_manifest.py`
+  (9; rag suite 176 green); read-only verified against the real `LAWs_thai`
+  docstore. See `docs/issues/kb-content-routing/PRD.md`.
+
 - **2026-07-13 — Voice call: stop the infinite `not-allowed` restart loop when
   the mic is blocked/denied.** `SpeechRecognition` re-arms itself in `onend`, so a
   denied/blocked mic (permission refused, or an embedded browser pane that blocks
