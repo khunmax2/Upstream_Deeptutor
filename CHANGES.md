@@ -296,6 +296,20 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — In-page agent loop prompt: grounding rules for honesty +
+  form/commit flows (issues 01 & 03).** `agent/prompt.py` now instructs the loop
+  to (01) CONFIRM it actually reached the asked-for destination — URL / header /
+  a distinctive label must match the goal — before `done` with success=true, and
+  otherwise report an honest miss (`success=false`) rather than a confident wrong
+  "done"; and (03, new `<forms_and_commits>` section) to infer form fields from
+  the request, keep stated defaults, `ask_user` ONCE (batched) for un-inferable
+  required input, and STOP at a review/proposal step to confirm before an
+  expensive/hard-to-reverse final commit (treated like a destructive control) —
+  neither bulldozing a confirm screen nor interrogating cheap reversible steps.
+  Regression guard: `tests/services/voice_realtime/agent/test_prompt.py` (new).
+  Behavioural compliance is verified live; the prompt text is the deliverable
+  here. Files: `agent/prompt.py`, `test_prompt.py`, issues 01/03 progress notes.
+
 - **2026-07-13 — Provider-adaptation part 2: endpoint-based provider binding via
   env.** Added `DEEPTUTOR_AGENT_BINDING` (agent loop) and
   `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` (classifier) so an OpenAI-compatible

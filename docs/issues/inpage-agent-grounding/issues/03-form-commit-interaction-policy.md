@@ -2,6 +2,18 @@
 
 Status: ready-for-agent
 
+## Progress
+
+- **2026-07-13 — policy added to the loop prompt (pending live verify).**
+  `agent/prompt.py` gained a `<forms_and_commits>` section: infer from the
+  request + keep sensible defaults; ask_user ONCE (batched) for un-inferable
+  required fields, never field-by-field; STOP at a review/proposal step and
+  confirm before an expensive/hard-to-reverse final commit (treat it like a
+  destructive control); don't tunnel a confirm screen nor ask about cheap
+  reversible steps. Regression guard: `tests/.../agent/test_prompt.py`.
+  Behavioural verification (a "create a book about X" run stops at the proposal
+  and confirms before the final button) still needs a live run.
+
 ## What prompted this (live, 2026-07-13)
 
 The "create a new book" flow (`หนังสือ → สร้างหนังสือใหม่`) is a two-stage form

@@ -2,6 +2,16 @@
 
 Status: ready-for-agent
 
+## Progress
+
+- **2026-07-13 — prompt rule added (pending live verify).** `agent/prompt.py`
+  `<conduct>` now instructs: before `done` with success=true, CONFIRM the current
+  URL / header / a distinctive on-page label matches the goal (not just that
+  clicks executed); if unconfirmable, use success=false and say so honestly.
+  Regression guard: `tests/.../agent/test_prompt.py`. Behavioural compliance
+  (replay "…หน้าตั้งค่าการค้นหา" → must not claim success on the wrong page) still
+  needs a live run.
+
 ## What happened (live, 2026-07-13)
 
 Command "ไปตั้งค่าแล้วเข้าหน้าตั้งค่าการค้นหา" (go to settings → the SEARCH
