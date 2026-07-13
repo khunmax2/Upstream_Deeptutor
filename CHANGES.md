@@ -296,6 +296,18 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — Voice call: mic mute/un-mute toggle in the avatar overlay.**
+  Added a mute button next to hang-up in `VoiceCallWidget.tsx` so a caller can
+  type-test without ambient noise leaking into STT. Muting aborts the Web-Speech
+  recognition immediately (a flag alone wouldn't help — Web Speech buffers audio
+  and delivers a late transcript; abort discards the buffer), and un-muting
+  resumes it if the call is live and the bot is quiet. The mute state also guards
+  the three recognition-restart paths (onend, playback-tail, un-mute) and the
+  onresult handler, and shows an honest "🔇 ไมค์ปิด" status (a moded UI must show
+  its mode). Resets to listening on each new call / hang-up. Icon 🎤↔🔇 and
+  colour toggle verified live in the browser (state, aria-pressed, colour);
+  device capture itself is unchanged. File: `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-13 — page-actuator serialize: label icon-only interactive elements
   (issue 02).** An interactive element that would serialize as a blank
   `[N]<tag />` (no text, no shown attributes) now falls back to a label — nested

@@ -557,6 +557,10 @@ export default function VoiceCallWidget() {
   // Secretary (dictation) mode — server-owned; mirrored here for the
   // always-visible indicator (a moded UI must show its mode: Dragon lesson).
   const [secretary, setSecretary] = useState(false)
+  // Mic mute — lets the caller type-test without ambient noise leaking into STT.
+  // The recognition callbacks read the ref (no stale closure); state drives the UI.
+  const [micMuted, setMicMuted] = useState(false)
+  const micMutedRef = useRef(false)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const mascotRef = useRef<MascotHandle | null>(null)
@@ -879,7 +883,7 @@ export default function VoiceCallWidget() {
         // Resume recognition after the echo tail (it was aborted at playback start).
         if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current)
         restartTimerRef.current = window.setTimeout(() => {
-          if (runningRef.current && !playingRef.current) {
+          if (runningRef.current && !playingRef.current && !micMutedRef.current) {
             try {
               recogRef.current?.start()
             } catch {
@@ -1023,6 +1027,8 @@ export default function VoiceCallWidget() {
     wsRef.current = null
     setMascot('idle')
     setSecretary(false) // a mode must never outlive its call
+    micMutedRef.current = false
+    setMicMuted(false) // next call starts listening
     setVisible(false) // fade out…
     window.setTimeout(() => {
       mascotRef.current?.dispose()
@@ -1032,10 +1038,38 @@ export default function VoiceCallWidget() {
     }, FADE_MS)
   }, [setMascot, stopPlayback])
 
+  // Mic mute toggle — abort recognition immediately on mute (Web Speech buffers
+  // audio, so a flag alone would still deliver a late transcript; abort discards
+  // the buffer), and resume on un-mute if the call is live and the bot is quiet.
+  const toggleMute = useCallback(() => {
+    setMicMuted(prev => {
+      const next = !prev
+      micMutedRef.current = next
+      if (next) {
+        try {
+          recogRef.current?.abort()
+        } catch {
+          /* already stopped */
+        }
+        setStatus('🔇 ไมค์ปิด — พิมพ์ทดสอบได้')
+      } else if (runningRef.current && !playingRef.current) {
+        try {
+          recogRef.current?.start()
+        } catch {
+          /* already running */
+        }
+        setStatus('ฟังอยู่…')
+      }
+      return next
+    })
+  }, [])
+
   const startCall = useCallback(async () => {
     setMounted(true)
     setStatus('กำลังเชื่อมต่อ…')
     runningRef.current = true
+    micMutedRef.current = false
+    setMicMuted(false)
     // Next frame: start the fade-in once the overlay is in the DOM.
     requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
 
@@ -1133,7 +1167,7 @@ export default function VoiceCallWidget() {
       recog.interimResults = true
       recog.maxAlternatives = 3 // runner-up hypotheses rescue garbled commands
       recog.onresult = (ev: any) => {
-        if (playingRef.current || Date.now() < muteUntilRef.current) return
+        if (playingRef.current || micMutedRef.current || Date.now() < muteUntilRef.current) return
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const result = ev.results[i]
           if (!result.isFinal) continue
@@ -1149,8 +1183,10 @@ export default function VoiceCallWidget() {
         }
       }
       recog.onend = () => {
-        // Stay silent while the bot speaks; playback-end schedules the restart.
-        if (runningRef.current && recogRef.current && !playingRef.current) recog.start()
+        // Stay silent while the bot speaks or the mic is muted; playback-end (and
+        // un-mute) schedule the restart.
+        if (runningRef.current && recogRef.current && !playingRef.current && !micMutedRef.current)
+          recog.start()
       }
       recog.onerror = (e: any) => {
         if (e.error !== 'no-speech') console.warn('speech:', e.error)
@@ -1334,6 +1370,29 @@ export default function VoiceCallWidget() {
                   color: '#dbe7ff',
                 }}
               />
+              <button
+                onClick={toggleMute}
+                aria-label={micMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
+                aria-pressed={micMuted}
+                title={
+                  micMuted
+                    ? 'ไมค์ปิดอยู่ — กดเพื่อเปิด'
+                    : 'ปิดไมค์ (พิมพ์ทดสอบได้โดยไม่มีเสียงรบกวน)'
+                }
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: micMuted ? '#f59e0b' : 'rgba(90,110,160,.55)',
+                  color: '#fff',
+                  fontSize: 15,
+                  flexShrink: 0,
+                }}
+              >
+                {micMuted ? '🔇' : '🎤'}
+              </button>
               <button
                 onClick={hangUp}
                 aria-label="วางสาย"
