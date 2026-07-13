@@ -561,6 +561,10 @@ export default function VoiceCallWidget() {
   // The recognition callbacks read the ref (no stale closure); state drives the UI.
   const [micMuted, setMicMuted] = useState(false)
   const micMutedRef = useRef(false)
+  // Mic permission denied (or blocked, e.g. an embedded pane): recognition emits
+  // `not-allowed` and onend would restart it forever — a tight loop that floods
+  // the console. Latch it to stop retrying; the caller can still type.
+  const micDeniedRef = useRef(false)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const mascotRef = useRef<MascotHandle | null>(null)
@@ -883,7 +887,12 @@ export default function VoiceCallWidget() {
         // Resume recognition after the echo tail (it was aborted at playback start).
         if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current)
         restartTimerRef.current = window.setTimeout(() => {
-          if (runningRef.current && !playingRef.current && !micMutedRef.current) {
+          if (
+            runningRef.current &&
+            !playingRef.current &&
+            !micMutedRef.current &&
+            !micDeniedRef.current
+          ) {
             try {
               recogRef.current?.start()
             } catch {
@@ -1052,7 +1061,7 @@ export default function VoiceCallWidget() {
           /* already stopped */
         }
         setStatus('🔇 ไมค์ปิด — พิมพ์ทดสอบได้')
-      } else if (runningRef.current && !playingRef.current) {
+      } else if (runningRef.current && !playingRef.current && !micDeniedRef.current) {
         try {
           recogRef.current?.start()
         } catch {
@@ -1070,6 +1079,7 @@ export default function VoiceCallWidget() {
     runningRef.current = true
     micMutedRef.current = false
     setMicMuted(false)
+    micDeniedRef.current = false // fresh call re-attempts the mic
     // Next frame: start the fade-in once the overlay is in the DOM.
     requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
 
@@ -1183,12 +1193,29 @@ export default function VoiceCallWidget() {
         }
       }
       recog.onend = () => {
-        // Stay silent while the bot speaks or the mic is muted; playback-end (and
-        // un-mute) schedule the restart.
-        if (runningRef.current && recogRef.current && !playingRef.current && !micMutedRef.current)
+        // Stay silent while the bot speaks, the mic is muted, or permission was
+        // denied (restarting on `not-allowed` is an infinite loop); playback-end
+        // and un-mute schedule the restart otherwise.
+        if (
+          runningRef.current &&
+          recogRef.current &&
+          !playingRef.current &&
+          !micMutedRef.current &&
+          !micDeniedRef.current
+        )
           recog.start()
       }
       recog.onerror = (e: any) => {
+        // Permission denied / blocked: stop the restart loop and tell the caller
+        // they can still type. Everything else is transient (log it, keep going).
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          if (!micDeniedRef.current) {
+            micDeniedRef.current = true
+            setStatus('🎤 ไมค์ถูกบล็อก — พิมพ์คุยแทนได้')
+            addMsg('sys', '⚠ ไมค์ถูกบล็อก/ไม่ได้รับอนุญาต — พิมพ์คุยแทนได้')
+          }
+          return
+        }
         if (e.error !== 'no-speech') console.warn('speech:', e.error)
       }
       recog.start()

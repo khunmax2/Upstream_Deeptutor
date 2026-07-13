@@ -296,6 +296,16 @@ code is additive and isolated for mergeability.
   `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
   `VOICE.md`.
 
+- **2026-07-13 — Voice call: stop the infinite `not-allowed` restart loop when
+  the mic is blocked/denied.** `SpeechRecognition` re-arms itself in `onend`, so a
+  denied/blocked mic (permission refused, or an embedded browser pane that blocks
+  capture) produced a tight start→`not-allowed`→end→start loop that flooded the
+  console. `onerror` now latches a `micDeniedRef` on `not-allowed` /
+  `service-not-allowed`, all three restart paths (`onend`, playback-tail, un-mute)
+  respect it, and the caller sees "🎤 ไมค์ถูกบล็อก — พิมพ์คุยแทนได้". The latch
+  clears on each new call so a later permission grant re-attempts. File:
+  `web/components/voice/VoiceCallWidget.tsx`.
+
 - **2026-07-13 — Voice call: mic mute/un-mute toggle in the avatar overlay.**
   Added a mute button next to hang-up in `VoiceCallWidget.tsx` so a caller can
   type-test without ambient noise leaking into STT. Muting aborts the Web-Speech
