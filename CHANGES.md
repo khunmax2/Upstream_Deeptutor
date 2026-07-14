@@ -1882,6 +1882,18 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     on bad `pathId`).
   - Spec / source-of-truth for state logic: `docs/issues/anima-habitat/README.md`.
 
+- **2026-07-14 — Day 2: bridge reads real learning state (proven end-to-end).**
+  The `_snapshot` adapter reads a real `LearningProgress` from `LearningStore`
+  and maps `QuizAttempt.is_correct` + per-KP `calculate_mastery` into the pet.
+  Confirmed against the confidence cap: 1 correct answer (mastery 0.5, capped) →
+  no `LEARN_CONCEPT`; 2 correct (0.8, crosses 0.7) → concept learned. No pet-side
+  code change was needed — Day-1's adapter shape held.
+  - Tests: `tests/pet/test_pet_bridge_integration.py` (4) — drives the whole
+    stack (`grade_and_record` → on-disk `LearningStore` → `PetBridge` → derive),
+    hermetic in `tmp_path`, no mocks: real graded attempts feed the pet, signal
+    is not double-counted across reads, wrong answers don't feed, unknown path →
+    fresh pet.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
