@@ -2043,6 +2043,24 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     (no `pathId`) aggregates real paths; `/anima` route serves 200 with the pet
     canvas + CTA; sidebar shows the `/anima` link.
 
+- **2026-07-14 — Learner Anima art overhaul: high-DPI smooth cozy-room render.**
+  The pet canvas was a low-res (200×140) pixel-art port that read as blocky when
+  scaled up. Replaced with a **high-DPI, anti-aliased "cozy illustration"** render
+  in `web/components/pet/PetHabitat.tsx`: an 800×520 logical scene drawn at
+  `devicePixelRatio` with `ResizeObserver`-driven fitting — a warm room (wainscot
+  wall, plank floor, sage rug, bookshelf, bed, potted plants, a glowing floor lamp,
+  a framed picture) and a rounder companion (radial-gradient body, glossy eyes,
+  blush, blinking, walk squash), plus mood-tinted lighting/vignette and
+  star/heart/crumb particles. Server-authoritative + pure-renderer split is
+  unchanged — the numbers still come only from the bridge; all new motion is
+  cosmetic, fired on observed state deltas.
+  - Added two robustness items flagged earlier: the render loop **pauses while the
+    tab is hidden** (`visibilitychange`) and **respects `prefers-reduced-motion`**
+    (draws a single calm frame, redrawn on state change; no continuous animation).
+  - Design workflow: `docs/issues/anima-habitat/preview.html` is a standalone,
+    self-contained art workspace (mock-state buttons) — iterate the look there
+    first, then port into the component. Bridge/API untouched.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
