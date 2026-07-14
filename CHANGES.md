@@ -53,6 +53,27 @@ back to HKUDS; once merged upstream the divergence is removed.
   tests (`tests/services/partners/test_channel_manager.py::TestValidateAllowFrom`).
   Candidate for an upstream PR (see `REPORT_line_allowfrom_crash.md`).
 
+- **2026-07-14 — `web/.prettierrc.json` now matches the style `web/` is actually
+  written in.** The config (present since upstream's initial commit, never since
+  modified) declared `semi: false`, `singleQuote: true`, `printWidth: 100`,
+  `arrowParens: "avoid"`, `trailingComma: "es5"` — but no file in `web/` has ever
+  been formatted that way. The tree is written in Prettier defaults: 355 of 400
+  checkable files are byte-for-byte default-clean, and `prettier --check` failed
+  on **389/400** files under the declared config versus **44** under defaults.
+  The mismatch was latent because nothing enforced it (`web/package.json` has no
+  `format` script, and the `.pre-commit-config.yaml` prettier hook — which globs
+  all of `^web/.*` — is not installed locally). It was a live trap: any ad-hoc
+  `npx prettier --write` reformatted an entire file (one 11-line edit produced a
+  123-insertion/144-deletion diff), and `pre-commit run --all-files` would have
+  rewritten the whole frontend. Realigned the five deviating options to Prettier
+  3.x defaults, verified equivalent: `prettier --check` with the config now fails
+  on exactly the same file set as `--no-config`. Config-only, 5 lines, no source
+  file touched — deliberately *not* reformatting `web/` to the old config, which
+  would have rewritten 389 files and produced conflicts on essentially every
+  frontend file at each upstream sync (fork policy §3). Candidate for an upstream
+  PR. The 44 files that are not default-clean are pre-existing and untouched;
+  they must be formatted before the pre-commit prettier hook can be enabled.
+
 ## Thai (th) localization — 2026-06-17
 
 Added full Thai language support across the whole stack. 5 commits, merged to
