@@ -1,8 +1,8 @@
 """Pure, deterministic pet-state math (Anima Habitat §5).
 
-No I/O, no clocks read internally — callers pass ``now``/``elapsed`` — so every
-function is trivially unit-testable. All tuning numbers live here as constants
-(handoff §4 defaults; balanced on day 5).
+No I/O, no clocks read internally — callers pass ``now``/``elapsed`` — and every
+tunable number arrives as a :class:`PetTuning`, so each function is trivially
+unit-testable and balancing never means editing this file.
 
 The signal→state contract:
 
@@ -21,17 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from deeptutor.pet.models import LearningSnapshot, PetEvent, PetRecord, PetState
-
-# --- tuning constants (handoff §4; day-5 balancing) -------------------------
-DECAY_HUNGER_PER_SEC = 1.0 / 15.0  # demo: ~+1 hunger / 15s (real ≈ +5/hour)
-HAPPY_DECAY_PER_SEC = 2.0 / 15.0  # happiness bleeds while starving
-HUNGER_UNHAPPY = 60.0  # above this, decay also hurts happiness
-SICK_THRESHOLD = 75.0  # at/above this the pet falls sick
-LEARN_EXP = 20.0
-LEARN_HUNGER_RELIEF = 25.0
-LEARN_HAPPY = 10.0
-QUIZ_PASS_HAPPY = 20.0
-QUIZ_FAIL_HAPPY = 5.0
+from deeptutor.pet.tuning import DEFAULT_TUNING, PetTuning
 
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -42,7 +32,16 @@ def _iso(now: float) -> str:
     return datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
 
 
-def _raise_hunger(state: PetState, amount: float) -> None:
+def new_pet_state(tuning: PetTuning = DEFAULT_TUNING) -> PetState:
+    """A fresh pet, starting from the tuned initial condition (demo: hungry)."""
+    return PetState(
+        hunger=tuning.initial_hunger,
+        happy=tuning.initial_happy,
+        exp_to_next=tuning.exp_to_next,
+    )
+
+
+def _raise_hunger(state: PetState, amount: float, tuning: PetTuning) -> None:
     """Increase hunger; trip sickness only on an *upward* crossing of the gate.
 
     Edge-triggered on purpose: a pet cured by ``QUIZ_PASS`` while still hungry
@@ -52,36 +51,38 @@ def _raise_hunger(state: PetState, amount: float) -> None:
     """
     before = state.hunger
     state.hunger = _clamp(state.hunger + amount)
-    if before < SICK_THRESHOLD <= state.hunger:
+    if before < tuning.sick_threshold <= state.hunger:
         state.sick = True
 
 
 # --- event deltas (each mutates ``state`` in place) -------------------------
-def apply_learn_concept(state: PetState) -> None:
-    state.exp += LEARN_EXP
-    state.hunger = _clamp(state.hunger - LEARN_HUNGER_RELIEF)
-    state.happy = _clamp(state.happy + LEARN_HAPPY)
+def apply_learn_concept(state: PetState, tuning: PetTuning = DEFAULT_TUNING) -> None:
+    state.exp += tuning.learn_exp
+    state.hunger = _clamp(state.hunger - tuning.learn_hunger_relief)
+    state.happy = _clamp(state.happy + tuning.learn_happy)
     state.last_event = PetEvent.LEARN_CONCEPT.value
 
 
-def apply_quiz_pass(state: PetState) -> None:
-    state.happy = _clamp(state.happy + QUIZ_PASS_HAPPY)
+def apply_quiz_pass(state: PetState, tuning: PetTuning = DEFAULT_TUNING) -> None:
+    state.happy = _clamp(state.happy + tuning.quiz_pass_happy)
     state.sick = False
     state.last_event = PetEvent.QUIZ_PASS.value
 
 
-def apply_quiz_fail(state: PetState) -> None:
-    state.happy = _clamp(state.happy - QUIZ_FAIL_HAPPY)
+def apply_quiz_fail(state: PetState, tuning: PetTuning = DEFAULT_TUNING) -> None:
+    state.happy = _clamp(state.happy - tuning.quiz_fail_happy)
     state.last_event = PetEvent.QUIZ_FAIL.value
 
 
-def apply_time_decay(state: PetState, elapsed_sec: float) -> None:
+def apply_time_decay(
+    state: PetState, elapsed_sec: float, tuning: PetTuning = DEFAULT_TUNING
+) -> None:
     """Integrate hunger (and, while starving, unhappiness) over ``elapsed_sec``."""
     if elapsed_sec <= 0:
         return
-    _raise_hunger(state, DECAY_HUNGER_PER_SEC * elapsed_sec)
-    if state.hunger > HUNGER_UNHAPPY:
-        state.happy = _clamp(state.happy - HAPPY_DECAY_PER_SEC * elapsed_sec)
+    _raise_hunger(state, tuning.decay_hunger_per_sec * elapsed_sec, tuning)
+    if state.hunger > tuning.hunger_unhappy:
+        state.happy = _clamp(state.happy - tuning.happy_decay_per_sec * elapsed_sec)
     state.last_event = PetEvent.REVIEW_DECAY.value
 
 
@@ -91,38 +92,49 @@ def apply_rules(state: PetState) -> None:
     Sickness is *not* set here — it is edge-triggered by :func:`_raise_hunger`
     where hunger actually rises, so a ``QUIZ_PASS`` cure is not immediately undone.
     """
-    while state.exp >= state.exp_to_next:
+    while state.exp_to_next > 0 and state.exp >= state.exp_to_next:
         state.exp -= state.exp_to_next
         state.level += 1
     state.hunger = _clamp(state.hunger)
     state.happy = _clamp(state.happy)
 
 
-def apply_event(state: PetState, event: PetEvent, *, decay_amount: float = 0.0) -> None:
+def apply_event(
+    state: PetState,
+    event: PetEvent,
+    *,
+    decay_amount: float = 0.0,
+    tuning: PetTuning = DEFAULT_TUNING,
+) -> None:
     """Apply a single named event + rules. Used by ``POST /pet/event`` (mock/test).
 
     ``decay_amount`` (hunger units) applies only to ``REVIEW_DECAY``; the pull
     path uses :func:`apply_time_decay` with wall-clock elapsed instead.
     """
     if event is PetEvent.LEARN_CONCEPT:
-        apply_learn_concept(state)
+        apply_learn_concept(state, tuning)
     elif event is PetEvent.QUIZ_PASS:
-        apply_quiz_pass(state)
+        apply_quiz_pass(state, tuning)
     elif event is PetEvent.QUIZ_FAIL:
-        apply_quiz_fail(state)
+        apply_quiz_fail(state, tuning)
     elif event is PetEvent.REVIEW_DECAY:
-        _raise_hunger(state, decay_amount)
-        if state.hunger > HUNGER_UNHAPPY:
+        _raise_hunger(state, decay_amount, tuning)
+        if state.hunger > tuning.hunger_unhappy:
             state.happy = _clamp(state.happy - 2.0)
         state.last_event = PetEvent.REVIEW_DECAY.value
     apply_rules(state)
 
 
-def derive_on_read(record: PetRecord, snapshot: LearningSnapshot, now: float) -> PetRecord:
+def derive_on_read(
+    record: PetRecord,
+    snapshot: LearningSnapshot,
+    now: float,
+    tuning: PetTuning = DEFAULT_TUNING,
+) -> PetRecord:
     """Advance a pet-state to ``now`` given the latest learning snapshot.
 
     Order (spec §5): decay first, then drain new quiz attempts (which can heal),
-    then award newly-mastered concepts, then apply derived rules. Bookkeeping in
+    then award newly-mastered objectives, then apply derived rules. Bookkeeping in
     ``record.seen`` keeps the pull idempotent — replaying the same snapshot is a
     no-op except for time decay.
     """
@@ -130,21 +142,21 @@ def derive_on_read(record: PetRecord, snapshot: LearningSnapshot, now: float) ->
     seen = record.seen
 
     # 1. lazy time decay
-    apply_time_decay(state, max(0.0, now - seen.last_read_at))
+    apply_time_decay(state, max(0.0, now - seen.last_read_at), tuning)
 
     # 2. drain quiz attempts not yet seen (append-only → slice by count)
     for attempt in snapshot.attempts[seen.last_attempt_count :]:
         if attempt.is_correct:
-            apply_quiz_pass(state)
+            apply_quiz_pass(state, tuning)
         else:
-            apply_quiz_fail(state)
+            apply_quiz_fail(state, tuning)
     seen.last_attempt_count = len(snapshot.attempts)
 
     # 3. objectives newly cleared by DeepTutor's own mastery gate
     mastered = set(seen.mastered_kp_ids)
     for kp_id in sorted(snapshot.mastered_kp_ids):
         if kp_id not in mastered:
-            apply_learn_concept(state)
+            apply_learn_concept(state, tuning)
             mastered.add(kp_id)
     seen.mastered_kp_ids = sorted(mastered)
 
@@ -164,4 +176,5 @@ __all__ = [
     "apply_rules",
     "apply_time_decay",
     "derive_on_read",
+    "new_pet_state",
 ]

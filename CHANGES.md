@@ -1990,6 +1990,30 @@ is additive and isolated for mergeability — the only upstream-file edit is one
   one: no spinner, and a failed poll keeps the last good data rather than blanking
   the map.
 
+- **2026-07-14 — Day 5: balancing extracted to config + demo runbook.** Every
+  number the game feel depends on moved out of the code path into
+  `deeptutor/pet/tuning.py` (`PetTuning`), overridable by dropping any subset of
+  the fields into `data/user/settings/pet.json` — so balancing (and live tuning on
+  stage) is a config edit, not a code edit. `derive.py` stays pure: the tuning is
+  threaded through as a parameter.
+  - **Two balancing bugs the live demo exposed**, both of which silently broke the
+    demo script: (1) a fresh pet started at hunger 20 — *not hungry* — so the
+    opening beat ("pet หิวโซ") never landed; `initial_hunger` is now 70. (2) At 20
+    exp per mastered objective a level-up needed **5** mastered objectives, which
+    is unreachable in a 3-minute demo, so the level-up beat could **never fire**;
+    `learn_exp` is now 50, making 2 mastered objectives = 1 level.
+  - Tests pin `DEFAULT_TUNING` explicitly, so a local `pet.json` tweak can never
+    change what the suite asserts. Added a balancing lock:
+    `test_demo_arc_two_mastered_objectives_level_the_pet_up` (pet suite → 21).
+  - `docs/issues/anima-habitat/DEMO.md` — runbook: how to start both processes
+    (incl. the `DEEPTUTOR_API_BASE_URL` gotcha), the beat-by-beat script, the
+    anti-cheese explanation, the tuning table, and stage fallbacks.
+  - Verified live end-to-end: pet starts hungry (70%) → 1st correct answer cheers
+    but doesn't feed (mastery 0.5) → 2nd still doesn't (0.8 < the tutor's 0.9 gate)
+    → 3rd masters it and the pet **eats** (exp 0→50, hunger 71%→46%) → mastering
+    the second objective **levels it up** (Lv.2, hunger →21%), with the map showing
+    "2/2 mastered" in the same beat.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

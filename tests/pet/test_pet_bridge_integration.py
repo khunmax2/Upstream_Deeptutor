@@ -18,6 +18,7 @@ from deeptutor.learning.storage import LearningStore
 from deeptutor.pet.models import PetEvent
 from deeptutor.pet.service import PetBridge
 from deeptutor.pet.store import PetStore
+from deeptutor.pet.tuning import DEFAULT_TUNING
 
 PATH_ID = "demo_path"
 
@@ -48,8 +49,12 @@ def _answer(svc: LearningService, *, correct: bool, n: str) -> None:
 
 
 def _bridge(tmp_path, learning_store: LearningStore) -> PetBridge:
+    # Pin the tuning: PetBridge otherwise reads data/user/settings/pet.json, so a
+    # local balancing tweak must not be able to change what these tests assert.
     return PetBridge(
-        store=PetStore(path=tmp_path / "pet_state.json"), learning_store=learning_store
+        store=PetStore(path=tmp_path / "pet_state.json"),
+        learning_store=learning_store,
+        tuning=DEFAULT_TUNING,
     )
 
 
@@ -133,6 +138,44 @@ def test_unknown_path_returns_fresh_pet(tmp_path):
     state = _bridge(tmp_path, ls).get_state("never_studied")
     assert state.exp == 0.0
     assert state.level == 1
+
+
+def test_demo_arc_two_mastered_objectives_level_the_pet_up(tmp_path):
+    """Day-5 balancing lock: the demo path has 2 objectives, and the script's
+    money-shot is a LEVEL-UP. With the old 20-exp award a level needed 5 mastered
+    objectives — unreachable in a 3-minute demo, so the beat never fired."""
+    ls = LearningStore(root=tmp_path / "learning")
+    svc = LearningService(ls)
+    progress = svc.get_or_create(PATH_ID)
+    kps = [
+        KnowledgePoint(id="kp1", name="A", type=KnowledgeType.MEMORY, module_id="m1"),
+        KnowledgePoint(id="kp2", name="B", type=KnowledgeType.MEMORY, module_id="m1"),
+    ]
+    progress.modules = [LearningModule(id="m1", name="Intro", order=0, knowledge_points=kps)]
+    svc.save(progress)
+
+    bridge = _bridge(tmp_path, ls)
+    start = bridge.get_state(PATH_ID)
+    assert start.hunger == DEFAULT_TUNING.initial_hunger, "the pet must start hungry"
+    assert start.level == 1
+
+    # Master both objectives (3 correct answers each clears the 0.9 gate).
+    for kp_id in ("kp1", "kp2"):
+        for i in range(3):
+            p = svc.get_or_create(PATH_ID)
+            svc.grade_and_record(
+                p,
+                question_id=f"q_{kp_id}_{i}",
+                knowledge_point_id=kp_id,
+                module_id="m1",
+                user_answer="42",
+                expected_answer="42",
+                question_type="short",
+            )
+
+    end = bridge.get_state(PATH_ID)
+    assert end.level == 2, "mastering the demo path's 2 objectives must level the pet up"
+    assert end.hunger < start.hunger, "and it should have eaten along the way"
 
 
 def test_heal_loop_a_real_correct_answer_cures_a_sick_pet(tmp_path):

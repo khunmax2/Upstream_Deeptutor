@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 
-from deeptutor.pet.derive import apply_event, derive_on_read
+from deeptutor.pet.derive import _iso, apply_event, derive_on_read, new_pet_state
 from deeptutor.pet.models import (
     Attempt,
     LearningSnapshot,
@@ -24,23 +24,37 @@ from deeptutor.pet.models import (
     SeenState,
 )
 from deeptutor.pet.store import PetStore
+from deeptutor.pet.tuning import PetTuning, load_tuning
 
 
 class PetBridge:
-    def __init__(self, store: PetStore | None = None, learning_store: object | None = None) -> None:
+    def __init__(
+        self,
+        store: PetStore | None = None,
+        learning_store: object | None = None,
+        tuning: PetTuning | None = None,
+    ) -> None:
         self._store = store or PetStore()
         # Injected for tests; lazily constructed otherwise so importing the pet
         # module never forces the learning stack to load.
         self._learning_store = learning_store
+        # Balancing knobs; overridable via data/user/settings/pet.json.
+        self._tuning = tuning or load_tuning()
+
+    def _record(self, path_id: str, now: float) -> PetRecord:
+        """The stored pet, or a fresh one starting from the tuned initial state."""
+        return self._store.get(path_id) or PetRecord(
+            path_id=path_id,
+            state=new_pet_state(self._tuning),
+            seen=SeenState(last_read_at=now),
+        )
 
     # --- read path (authoritative pull) ------------------------------------
     def get_state(self, path_id: str) -> PetState:
         now = time.time()
-        record = self._store.get(path_id) or PetRecord(
-            path_id=path_id, seen=SeenState(last_read_at=now)
-        )
+        record = self._record(path_id, now)
         snapshot = self._snapshot(path_id)
-        derive_on_read(record, snapshot, now)
+        derive_on_read(record, snapshot, now, self._tuning)
         self._store.put(record)
         return record.state
 
@@ -49,12 +63,8 @@ class PetBridge:
         self, path_id: str, event: PetEvent, *, decay_amount: float = 0.0
     ) -> PetState:
         now = time.time()
-        record = self._store.get(path_id) or PetRecord(
-            path_id=path_id, seen=SeenState(last_read_at=now)
-        )
-        apply_event(record.state, event, decay_amount=decay_amount)
-        from deeptutor.pet.derive import _iso  # local import: formatting helper
-
+        record = self._record(path_id, now)
+        apply_event(record.state, event, decay_amount=decay_amount, tuning=self._tuning)
         record.state.updated_at = _iso(now)
         record.seen.last_read_at = now
         self._store.put(record)

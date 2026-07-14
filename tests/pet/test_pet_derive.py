@@ -7,19 +7,19 @@ temp store. Proves signal→state mapping and pull idempotency.
 from __future__ import annotations
 
 from deeptutor.pet import derive
-from deeptutor.pet.derive import (
-    LEARN_EXP,
-    LEARN_HAPPY,
-    LEARN_HUNGER_RELIEF,
-    QUIZ_FAIL_HAPPY,
-    QUIZ_PASS_HAPPY,
-    SICK_THRESHOLD,
-    apply_rules,
-    derive_on_read,
-)
+from deeptutor.pet.derive import apply_rules, derive_on_read
 from deeptutor.pet.models import Attempt, LearningSnapshot, PetEvent, PetRecord, PetState, SeenState
 from deeptutor.pet.service import PetBridge
 from deeptutor.pet.store import PetStore
+from deeptutor.pet.tuning import DEFAULT_TUNING
+
+T = DEFAULT_TUNING
+LEARN_EXP = T.learn_exp
+LEARN_HAPPY = T.learn_happy
+LEARN_HUNGER_RELIEF = T.learn_hunger_relief
+QUIZ_FAIL_HAPPY = T.quiz_fail_happy
+QUIZ_PASS_HAPPY = T.quiz_pass_happy
+SICK_THRESHOLD = T.sick_threshold
 
 
 def _fresh_record(now: float) -> PetRecord:
@@ -150,7 +150,7 @@ def test_read_applies_decay_by_elapsed():
 # --- bridge write path (POST /pet/event) ------------------------------------
 def test_bridge_manual_event_persists(tmp_path):
     store = PetStore(path=tmp_path / "pet_state.json")
-    bridge = PetBridge(store=store, learning_store=object())  # learning unused here
+    bridge = PetBridge(store=store, learning_store=object(), tuning=T)  # learning unused here
 
     s1 = bridge.apply_manual_event("p1", PetEvent.LEARN_CONCEPT)
     assert s1.exp == LEARN_EXP
