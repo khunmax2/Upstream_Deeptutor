@@ -2014,6 +2014,35 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     the second objective **levels it up** (Lv.2, hunger →21%), with the map showing
     "2/2 mastered" in the same beat.
 
+- **2026-07-14 — v2: Learner Anima goes top-level + aggregates all paths.** After a
+  second grill (`docs/issues/anima-habitat/README.md` §v2), the pet moved out of the
+  Mastery dashboard to its own top-level page and became **one companion per user,
+  fed by every mastery path**.
+  - **Backend (aggregate):** `PetBridge` is now keyed by **userId** (not `pathId`);
+    `_snapshot` iterates `LearningStore.list_all()` (already user-scoped) and merges
+    all paths — mastered KPs unioned and **namespaced `{path_id}:{kp_id}`**, attempts
+    grouped per path. `SeenState.last_attempt_count`→`attempt_counts: dict`;
+    `mastered_kp_ids` is **monotonic** (a path reset/delete never claws back exp).
+    Endpoints re-key to the current user: `GET/POST/DELETE /api/v1/pet/state` take no
+    `pathId`. `derive` math, `PetTuning`, and the canvas renderer are unchanged.
+  - **Robustness:** the store now drops records from an older schema instead of
+    crashing (a leftover `pet_state.json` used to break the whole pet on load).
+  - **Frontend:** new top-level page `web/app/(utility)/anima/page.tsx` ("Learner
+    Anima", route `/anima`, `PawPrint` icon, `PRIMARY_NAV` under Learning Space,
+    ungated) reusing `<PetHabitat>` centered + a CTA when the user has no paths yet.
+    Pet **removed** from the Mastery dashboard (its live-map polling stays — good UX
+    on its own). `/anima` added to the voice-steer manifest (`UI_PAGES`) and i18n
+    keys added to en/th/zh.
+  - **Rationale:** a top-level pet has no "selected path", so per-path scoping stopped
+    making sense; aggregate is the natural model and degenerates to the old behavior
+    for a single path (demo-safe). **North star (deferred):** reviews-as-food —
+    DeepTutor's spaced-repetition already flows through `grade_and_record` into the
+    `quiz_attempts` the pet reads, so it layers cleanly onto monotonic exp.
+  - Tests: pet suite → 25 (aggregate across two paths; monotonic-across-reset;
+    per-path attempt draining; stale-record drop). Verified live: `GET /pet/state`
+    (no `pathId`) aggregates real paths; `/anima` route serves 200 with the pet
+    canvas + CTA; sidebar shows the `/anima` link.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

@@ -59,35 +59,49 @@ class Attempt(BaseModel):
 
 
 class LearningSnapshot(BaseModel):
-    """Normalized pull from ``LearningProgress`` (the only input the math needs).
+    """Normalized pull from **all** of one user's learning paths (the only input
+    the math needs — one pet aggregates every path).
 
     ``mastered_kp_ids`` are the objectives DeepTutor's OWN hard gate
     (``learning.policy.is_mastered``) considers mastered — 0.9 recency-weighted
     accuracy for MEMORY/PROCEDURE, a qualitative ``mastery_assess`` pass for
     CONCEPT/DESIGN. The pet deliberately reuses that gate rather than inventing a
     parallel threshold, so "the pet ate" always means the same thing as "the
-    tutor says you mastered it".
+    tutor says you mastered it". Ids are namespaced ``{path_id}:{kp_id}`` so a KP
+    in one path can't collide with a same-named KP in another.
+
+    ``attempts_by_path`` keeps each path's append-only attempt list separate so
+    draining stays idempotent per path (paths grow independently).
     """
 
     version: int = 0
-    attempts: list[Attempt] = Field(default_factory=list)
+    attempts_by_path: dict[str, list[Attempt]] = Field(default_factory=dict)
     mastered_kp_ids: list[str] = Field(default_factory=list)
 
 
 class SeenState(BaseModel):
-    """What the bridge last observed for one path — so pulls stay idempotent."""
+    """What the bridge last observed for this user — so pulls stay idempotent.
+
+    ``attempt_counts`` is per-path (``{path_id: count}``): each path is append-only,
+    so a count is enough to slice off the not-yet-seen tail. ``mastered_kp_ids``
+    holds namespaced ids and is **monotonic** — a mastered objective stays fed even
+    if its path is later reset or deleted (v3: no clawback).
+    """
 
     last_version: int = -1
-    last_attempt_count: int = 0
+    attempt_counts: dict[str, int] = Field(default_factory=dict)
     mastered_kp_ids: list[str] = Field(default_factory=list)
     # Wall-clock epoch of the last read; lazy decay integrates ``now - this``.
     last_read_at: float = Field(default_factory=time.time)
 
 
 class PetRecord(BaseModel):
-    """Everything persisted for one pet: the public state + internal bookkeeping."""
+    """Everything persisted for one pet: the public state + internal bookkeeping.
 
-    path_id: str
+    ``key`` is the pet's identity — one pet per user (the user id), not per path.
+    """
+
+    key: str
     state: PetState = Field(default_factory=PetState)
     seen: SeenState = Field(default_factory=SeenState)
 

@@ -23,7 +23,6 @@ import {
   type MasteryMapResult,
   type ObjectiveStatus,
 } from "@/lib/learning-api";
-import PetHabitat from "@/components/pet/PetHabitat";
 
 /**
  * Mastery Path dashboard — the persistent "screen" of the mastery experience.
@@ -36,12 +35,12 @@ import PetHabitat from "@/components/pet/PetHabitat";
  * that session in mastery mode.
  *
  * The map is polled, not loaded once: the learner answers in Chat (another tab
- * or window), and the ``PetHabitat`` rendered beside the map polls the SAME
- * ``LearningProgress`` every few seconds. A map that only loaded once would
- * visibly disagree with the pet — pet fed and levelling while the map still
- * reads "0/2 mastered". Both panels therefore refresh on the same cadence.
+ * or window), so a map that only loaded on open would go stale mid-session.
+ * Polling keeps it live as the tutor grades answers. (The Learner Anima pet used
+ * to sit here too; it now lives at its own top-level page, but live polling is
+ * good UX on its own and stays.)
  */
-const POLL_MS = 4000; // matches PetHabitat's poll, so the two never disagree
+const POLL_MS = 4000; // live-refresh cadence for the mastery map
 
 export default function MasteryPathPage() {
   const { i18n } = useTranslation();
@@ -224,7 +223,6 @@ export default function MasteryPathPage() {
             result={detail}
             zh={!!zh}
             tr={tr}
-            pathId={selected}
             onContinue={() =>
               selected && router.push(`/home/${encodeURIComponent(selected)}`)
             }
@@ -273,7 +271,6 @@ function MapView({
   result,
   zh,
   tr,
-  pathId,
   onContinue,
   onRedo,
   onDelete,
@@ -281,7 +278,6 @@ function MapView({
   result: MasteryMapResult;
   zh: boolean;
   tr: (cn: string, en: string) => string;
-  pathId: string | null;
   onContinue: () => void;
   onRedo: () => void;
   onDelete: () => void;
@@ -297,13 +293,6 @@ function MapView({
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-5">
-      {/* Anima Habitat — the companion, fed by real mastery on this path */}
-      {pathId && (
-        <div className="mb-5">
-          <PetHabitat pathId={pathId} tr={tr} />
-        </div>
-      )}
-
       {/* Header: progress + next + actions */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">

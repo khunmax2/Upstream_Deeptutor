@@ -34,7 +34,7 @@ appears under **Learning Space → Mastery Path**.
 **3. Reset the pet** so it starts hungry and at level 1:
 
 ```bash
-curl -X DELETE "http://localhost:8002/api/v1/pet/state?pathId=<PATH_ID>"
+curl -X DELETE "http://localhost:8002/api/v1/pet/state"   # one pet per user; no pathId
 ```
 
 The next page load re-creates it at `initial_hunger` (70) — hungry, as the script
@@ -44,18 +44,26 @@ wants.
 
 ## The script
 
+**Setup:** two windows side by side — **Learner Anima** (`/anima`, the pet) on the
+left, **Chat** in Mastery Path mode on the right. The pet polls every ~4s, so it
+reacts live while you learn in the other window; no page switching needed.
+
 | # | Beat | What the audience sees |
 |---|------|------------------------|
-| 1 | Open **Learning Space → Mastery Path** | Pixel, **hungry** (~70%), drifting toward the food bowl |
-| 2 | Say: *"the only way to feed it is to actually learn something"* | — |
+| 1 | Open **Learner Anima** (sidebar) | Pixel, **hungry** (~70%), drifting toward the food bowl |
+| 2 | Say: *"one companion, fed by everything you master — and the only way to feed it is to actually learn"* | — |
 | 3 | In Chat (Mastery Path mode), answer the tutor's quiz on one objective | 1st correct → pet **cheers** (happiness up) but **does not eat** — mastery is 0.5, capped |
 | 4 | Keep answering that objective | 2nd correct (0.8) → **still no food.** DeepTutor's gate is 0.9 |
-| 5 | Answer it a third time | Objective flips to **Mastered** on the map **and the pet eats** — Knowledge +50, hunger drops. Both panels move together |
+| 5 | Answer it a third time | Objective clears the gate **and the pet eats** — Knowledge +50, hunger drops, live on the Anima window |
 | 6 | Master the **second** objective the same way | **LEVEL UP** — the pet hops, violet motes rise |
 | 7 | (Optional) Leave it alone / let it starve past 75% | Pet turns **sick** (red ✚). One correct answer **cures** it |
 
 **The line that sells it (beat 4):** *"Two correct answers still isn't enough —
 the pet is using the tutor's own 90% mastery gate. You can't cheese it."*
+
+**Aggregate angle (optional):** because one pet is fed by *all* paths, you can point
+out that mastering objectives in a *different* subject also feeds the same
+companion — it reflects the learner's whole journey, not one path.
 
 ---
 
@@ -92,15 +100,15 @@ starves during the talk, and/or lower `exp_to_next` so one objective levels it.
 
 - **Pet not moving / "Companion offline":** the frontend can't reach the backend.
   Almost always the `DEEPTUTOR_API_BASE_URL` above. Check
-  `curl "http://localhost:8002/api/v1/pet/state?pathId=<PATH_ID>"`.
+  `curl "http://localhost:8002/api/v1/pet/state"`.
 - **Grading won't run** (LLM down, quota): drive the pet directly — this is the
   mock-event path that exists for exactly this reason:
   ```bash
   curl -X POST http://localhost:8002/api/v1/pet/event \
     -H 'Content-Type: application/json' \
-    -d '{"path_id":"<PATH_ID>","event":"LEARN_CONCEPT"}'      # feed + exp
-  curl ... -d '{"path_id":"<PATH_ID>","event":"REVIEW_DECAY","decay_amount":80}'  # make it sick
-  curl ... -d '{"path_id":"<PATH_ID>","event":"QUIZ_PASS"}'   # cure it
+    -d '{"event":"LEARN_CONCEPT"}'                          # feed + exp
+  curl ... -d '{"event":"REVIEW_DECAY","decay_amount":80}'  # make it sick
+  curl ... -d '{"event":"QUIZ_PASS"}'                       # cure it
   ```
   Be honest that this is the manual trigger, not real learning.
-- **Pet in a weird state:** `DELETE /api/v1/pet/state?pathId=…` and reload.
+- **Pet in a weird state:** `DELETE /api/v1/pet/state` and reload.

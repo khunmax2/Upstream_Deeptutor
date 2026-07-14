@@ -12,6 +12,16 @@ external handoff (`anima-handoff.md`) wherever they differ. The handoff was
 written before reading DeepTutor source; the sections below are grounded against
 the real code (see **§ Source-verified corrections**).
 
+> **⚠️ Read this first — v2 pivot (2026-07-14, post-demo):** after Days 1–5 shipped
+> the per-path pet embedded in the Mastery dashboard, a second grill decided to
+> **move the pet to a top-level page** (`/anima`, "Learner Anima" in the sidebar)
+> and **aggregate across all paths into one pet per user**. The two are the same
+> change: the moment the pet becomes a top-level *identity* rather than a per-path
+> widget, "which path's pet?" (the per-path model of decision 4) stops making
+> sense, and one-companion-fed-by-everything is the natural model. See
+> **§ v2 — top-level + aggregate** below. Decisions 1–3, 5, 7 are unchanged;
+> 4 and 6 are superseded there.
+
 ---
 
 ## Design (locked — 7 decisions)
@@ -172,6 +182,51 @@ All numbers are §4 defaults → tuned on day 5.
   moves once a path exists and a KP is graded.
 - Out of demo scope (later phases): 5-element categorization, evolution,
   multiplayer, aggregate-across-paths, Unity WebGL mask (contract unchanged).
+
+---
+
+## v2 — top-level + aggregate (grilled 2026-07-14)
+
+The pet moves out of the Mastery dashboard to its own top-level page, and becomes
+**one companion per user, fed by all their learning paths**. Server-authoritative
+model, canvas-as-pure-renderer, tuning, decay, and the mastery gate are all
+unchanged — only *what the pet aggregates over* and *where it renders* change.
+
+**Decisions (this grill):**
+
+| # | Branch | Decision | Why |
+|---|--------|----------|-----|
+| v1 | pathId source on a standalone page | **Gone** — aggregate, so no path selection is needed | A top-level pet has no "selected path" context |
+| v2 | Sequencing | **Build aggregate directly**, no interim path-picker | The picker is throwaway; aggregate isn't large and degenerates to current behavior for a single path (demo-safe) |
+| v3 | Clawback on path reset/delete | **Monotonic** exp/level (never goes down); `seen.mastered_kp_ids` only grows | A companion that loses levels when you reset an old study path feels punishing; anti-cheese is intact (exp still only from real first-time mastery) |
+| v3-northstar | Long-term "ongoing effort" food | **Reviews-as-food** (not reset-clawback) | DeepTutor's spaced-repetition already flows through `grade_and_record` → the same `quiz_attempts` the pet reads; naturally un-farmable. Layers cleanly on monotonic exp |
+| v4 | Pet in the Mastery dashboard | **Removed**; keep the dashboard's live map polling | A global pet beside one path's map mis-signals; the map-poll is good UX on its own |
+| v5 | Sidebar | **"Learner Anima"** · route `/anima` · `PRIMARY_NAV` under Learning Space · `PawPrint` · `(utility)` group · **ungated** | Un-hides the pet (1 click); ungated because it only reads learning state |
+| v6 | `/anima` page | Reuse `<PetHabitat>` centered; **CTA when the user has no paths** | Honors "just move the UI"; a hungry pet + "start a path" is its own motivation |
+
+**Aggregate mechanics (confirmed):**
+
+- Pet is keyed by **userId** (demo → `local-admin`), not `pathId`.
+- `_snapshot` iterates `LearningStore.list_all()`, loads each path, and merges:
+  - **mastered** = union across paths, KP ids **namespaced `{path_id}:{kp_id}`** so
+    ids can't collide; a KP counts when `policy.is_mastered` clears it (unchanged
+    gate).
+  - **attempts** grouped by path so draining stays idempotent per path.
+  - `version` = max across paths (cheap change hint).
+- `SeenState.last_attempt_count: int` → **`attempt_counts: dict[path_id, int]`**;
+  `mastered_kp_ids` holds the namespaced ids and is **monotonic** (v3).
+- Every path's graded attempts feed the one pet — that IS "fed by everything".
+
+**API contract change** (the one thing "just move the UI" cannot avoid): the
+endpoints re-key from a `pathId` query to the **current user**:
+`GET /api/v1/pet/state`, `POST /api/v1/pet/event`, `DELETE /api/v1/pet/state`
+(all resolve the authenticated user; no `pathId`).
+
+**Unchanged:** `derive` event/decay/rules math, `PetTuning`, the canvas renderer,
+server-authoritative + pure-renderer split, `pet_state.json` persistence.
+
+**Deferred (north star):** reviews-as-food; per-path "which paths feed me" context
+on the `/anima` page (v6 option B).
 
 ---
 

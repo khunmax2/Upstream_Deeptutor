@@ -19,6 +19,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  PawPrint,
   PenLine,
   Settings,
   type LucideIcon,
@@ -84,6 +85,15 @@ const PRIMARY_NAV: NavEntry[] = [
     label: "Learning Space",
     icon: LayoutGrid,
     tooltipKey: "Space tooltip",
+  },
+  {
+    // Learner Anima: the learning-companion pet, pulled out to top level so it
+    // is one click from anywhere. One pet per user, fed by every mastery path.
+    // Ungated — it only reads learning state, no per-user model grant needed.
+    href: "/anima",
+    label: "Learner Anima",
+    icon: PawPrint,
+    tooltipKey: "Anima tooltip",
   },
 ];
 

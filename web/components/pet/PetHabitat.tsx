@@ -131,10 +131,8 @@ function drawSprite(
 }
 
 export default function PetHabitat({
-  pathId,
   tr,
 }: {
-  pathId: string;
   tr: (cn: string, en: string) => string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -197,7 +195,7 @@ export default function PetHabitat({
     let cancelled = false;
     const poll = async () => {
       try {
-        const next = await fetchPetState(pathId);
+        const next = await fetchPetState();
         if (!cancelled) onServerState(next);
       } catch {
         if (!cancelled) setFailed(true);
@@ -209,7 +207,7 @@ export default function PetHabitat({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [pathId, onServerState]);
+  }, [onServerState]);
 
   // --- cosmetic render loop -------------------------------------------------
   useEffect(() => {

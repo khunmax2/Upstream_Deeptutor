@@ -41,75 +41,90 @@ class PetBridge:
         # Balancing knobs; overridable via data/user/settings/pet.json.
         self._tuning = tuning or load_tuning()
 
-    def _record(self, path_id: str, now: float) -> PetRecord:
+    def _record(self, key: str, now: float) -> PetRecord:
         """The stored pet, or a fresh one starting from the tuned initial state."""
-        return self._store.get(path_id) or PetRecord(
-            path_id=path_id,
+        return self._store.get(key) or PetRecord(
+            key=key,
             state=new_pet_state(self._tuning),
             seen=SeenState(last_read_at=now),
         )
 
     # --- read path (authoritative pull) ------------------------------------
-    def get_state(self, path_id: str) -> PetState:
+    def get_state(self, key: str) -> PetState:
+        """``key`` is the pet's identity — the user id (one pet per user)."""
         now = time.time()
-        record = self._record(path_id, now)
-        snapshot = self._snapshot(path_id)
+        record = self._record(key, now)
+        snapshot = self._snapshot()
         derive_on_read(record, snapshot, now, self._tuning)
         self._store.put(record)
         return record.state
 
     # --- write path (manual/mock event) ------------------------------------
     def apply_manual_event(
-        self, path_id: str, event: PetEvent, *, decay_amount: float = 0.0
+        self, key: str, event: PetEvent, *, decay_amount: float = 0.0
     ) -> PetState:
         now = time.time()
-        record = self._record(path_id, now)
+        record = self._record(key, now)
         apply_event(record.state, event, decay_amount=decay_amount, tuning=self._tuning)
         record.state.updated_at = _iso(now)
         record.seen.last_read_at = now
         self._store.put(record)
         return record.state
 
-    def reset(self, path_id: str) -> None:
-        self._store.reset(path_id)
+    def reset(self, key: str) -> None:
+        self._store.reset(key)
 
     # --- learning adapter (the only coupling to deeptutor.learning) ---------
-    def _snapshot(self, path_id: str) -> LearningSnapshot:
+    def _learning(self):
         store = self._learning_store
         if store is None:
             from deeptutor.learning.storage import LearningStore
 
             store = LearningStore()
             self._learning_store = store
+        return store
 
-        progress = store.load(path_id)
-        if progress is None:
-            return LearningSnapshot()
+    def _snapshot(self) -> LearningSnapshot:
+        """Aggregate ALL of the current user's paths into one snapshot.
 
+        ``LearningStore`` is already user-scoped (rooted at the user's workspace),
+        so ``list_all()`` yields exactly this user's paths. One pet, fed by every
+        path.
+        """
         from deeptutor.learning import policy as learning_policy
 
-        attempts = [
-            Attempt(
-                knowledge_point_id=a.knowledge_point_id,
-                is_correct=a.is_correct,
-                timestamp=a.timestamp,
+        store = self._learning()
+        attempts_by_path: dict[str, list[Attempt]] = {}
+        mastered: list[str] = []
+        version = 0
+
+        for path_id in store.list_all():
+            progress = store.load(path_id)
+            if progress is None:
+                continue
+            version = max(version, progress.version)
+            attempts_by_path[path_id] = [
+                Attempt(
+                    knowledge_point_id=a.knowledge_point_id,
+                    is_correct=a.is_correct,
+                    timestamp=a.timestamp,
+                )
+                for a in progress.quiz_attempts
+            ]
+            # Reuse the tutor's OWN hard gate (0.9 for MEMORY/PROCEDURE; a
+            # qualitative `mastery_assess` pass for CONCEPT/DESIGN). Namespace the
+            # KP id by path so a KP in one path can't collide with a same-named KP
+            # in another.
+            mastered.extend(
+                f"{path_id}:{kp.id}"
+                for m in progress.modules
+                for kp in m.knowledge_points
+                if learning_policy.is_mastered(progress, kp)
             )
-            for a in progress.quiz_attempts
-        ]
-        # Reuse the tutor's OWN hard gate (0.9 for MEMORY/PROCEDURE; a qualitative
-        # `mastery_assess` pass for CONCEPT/DESIGN) rather than a parallel
-        # threshold — otherwise the pet would feed on objectives DeepTutor still
-        # considers unmastered, and CONCEPT/DESIGN points (which have no quiz
-        # attempts) could never feed it at all.
-        mastered = [
-            kp.id
-            for m in progress.modules
-            for kp in m.knowledge_points
-            if learning_policy.is_mastered(progress, kp)
-        ]
+
         return LearningSnapshot(
-            version=progress.version,
-            attempts=attempts,
+            version=version,
+            attempts_by_path=attempts_by_path,
             mastered_kp_ids=sorted(mastered),
         )
 

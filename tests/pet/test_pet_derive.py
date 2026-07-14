@@ -23,7 +23,7 @@ SICK_THRESHOLD = T.sick_threshold
 
 
 def _fresh_record(now: float) -> PetRecord:
-    return PetRecord(path_id="p1", state=PetState(), seen=SeenState(last_read_at=now))
+    return PetRecord(key="u1", state=PetState(), seen=SeenState(last_read_at=now))
 
 
 # --- event deltas -----------------------------------------------------------
@@ -126,16 +126,37 @@ def test_new_attempts_drain_once():
     record = _fresh_record(now)
     snap = LearningSnapshot(
         version=1,
-        attempts=[Attempt(knowledge_point_id="kp1", is_correct=True)],
+        attempts_by_path={"p1": [Attempt(knowledge_point_id="kp1", is_correct=True)]},
     )
     base_happy = record.state.happy
     derive_on_read(record, snap, now)
     assert record.state.happy == min(100.0, base_happy + QUIZ_PASS_HAPPY)
-    assert record.seen.last_attempt_count == 1
+    assert record.seen.attempt_counts == {"p1": 1}
 
     # Same attempt list on next pull → not counted again.
     derive_on_read(record, snap, now)
-    assert record.seen.last_attempt_count == 1
+    assert record.seen.attempt_counts == {"p1": 1}
+
+
+def test_attempts_drain_independently_per_path():
+    # Aggregate: two paths grow independently; each drains by its own count.
+    now = 1_000.0
+    record = _fresh_record(now)
+    snap = LearningSnapshot(
+        version=1,
+        attempts_by_path={
+            "pA": [Attempt(knowledge_point_id="a", is_correct=True)],
+            "pB": [Attempt(knowledge_point_id="b", is_correct=False)],
+        },
+    )
+    derive_on_read(record, snap, now)
+    assert record.seen.attempt_counts == {"pA": 1, "pB": 1}
+    # pB gains a new attempt; pA unchanged → only the new one drains.
+    snap.attempts_by_path["pB"].append(Attempt(knowledge_point_id="b", is_correct=True))
+    happy_before = record.state.happy
+    derive_on_read(record, snap, now)
+    assert record.seen.attempt_counts == {"pA": 1, "pB": 2}
+    assert record.state.happy == min(100.0, happy_before + QUIZ_PASS_HAPPY)
 
 
 def test_read_applies_decay_by_elapsed():
@@ -145,6 +166,20 @@ def test_read_applies_decay_by_elapsed():
     snap = LearningSnapshot(version=0)
     derive_on_read(record, snap, start + 150.0)  # +10 hunger
     assert record.state.hunger == 10.0
+
+
+def test_store_drops_incompatible_records(tmp_path):
+    # Robustness: a record from an older schema (pre-aggregate `path_id`) must not
+    # crash the whole pet — the store is disposable state, not a correctness input.
+    path = tmp_path / "pet_state.json"
+    path.write_text('{"anima_demo": {"path_id": "anima_demo", "state": {}, "seen": {}}}')
+    store = PetStore(path=path)
+    assert store.get("anima_demo") is None  # dropped, not raised
+    # a fresh valid record still writes/reads fine over the same file
+    store.put(PetRecord(key="u1", state=PetState(exp=5.0)))
+    reloaded = store.get("u1")
+    assert reloaded is not None
+    assert reloaded.state.exp == 5.0
 
 
 # --- bridge write path (POST /pet/event) ------------------------------------

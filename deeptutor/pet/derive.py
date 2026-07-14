@@ -144,15 +144,18 @@ def derive_on_read(
     # 1. lazy time decay
     apply_time_decay(state, max(0.0, now - seen.last_read_at), tuning)
 
-    # 2. drain quiz attempts not yet seen (append-only → slice by count)
-    for attempt in snapshot.attempts[seen.last_attempt_count :]:
-        if attempt.is_correct:
-            apply_quiz_pass(state, tuning)
-        else:
-            apply_quiz_fail(state, tuning)
-    seen.last_attempt_count = len(snapshot.attempts)
+    # 2. drain quiz attempts not yet seen, per path (each path is append-only →
+    #    slice by its own count). One pet reacts to every path's attempts.
+    for path_id, attempts in sorted(snapshot.attempts_by_path.items()):
+        for attempt in attempts[seen.attempt_counts.get(path_id, 0) :]:
+            if attempt.is_correct:
+                apply_quiz_pass(state, tuning)
+            else:
+                apply_quiz_fail(state, tuning)
+        seen.attempt_counts[path_id] = len(attempts)
 
-    # 3. objectives newly cleared by DeepTutor's own mastery gate
+    # 3. objectives newly cleared by DeepTutor's own mastery gate (monotonic:
+    #    mastered ids only ever grow, so a path reset/delete never claws back exp)
     mastered = set(seen.mastered_kp_ids)
     for kp_id in sorted(snapshot.mastered_kp_ids):
         if kp_id not in mastered:

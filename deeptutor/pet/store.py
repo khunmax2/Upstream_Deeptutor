@@ -8,12 +8,17 @@ Single-user demo scope — no locking beyond atomic replace.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
 
+from pydantic import ValidationError
+
 from deeptutor.pet.models import PetRecord
 from deeptutor.services.path_service import get_path_service
+
+logger = logging.getLogger(__name__)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -38,22 +43,35 @@ class PetStore:
     def _load_all(self) -> dict[str, PetRecord]:
         if not self._path.exists():
             return {}
-        raw = json.loads(self._path.read_text(encoding="utf-8"))
-        return {pid: PetRecord.model_validate(rec) for pid, rec in raw.items()}
+        try:
+            raw = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            logger.warning("pet: unreadable %s; starting fresh", self._path, exc_info=True)
+            return {}
+        out: dict[str, PetRecord] = {}
+        for k, rec in raw.items():
+            try:
+                out[k] = PetRecord.model_validate(rec)
+            except ValidationError:
+                # A record from an older schema must not break the whole pet — the
+                # store is disposable state, not a correctness input. Drop it; the
+                # next read re-creates a fresh pet.
+                logger.warning("pet: dropping incompatible record %r", k)
+        return out
 
-    def get(self, path_id: str) -> PetRecord | None:
-        return self._load_all().get(path_id)
+    def get(self, key: str) -> PetRecord | None:
+        return self._load_all().get(key)
 
     def put(self, record: PetRecord) -> None:
         records = self._load_all()
-        records[record.path_id] = record
-        data = {pid: rec.model_dump() for pid, rec in records.items()}
+        records[record.key] = record
+        data = {k: rec.model_dump() for k, rec in records.items()}
         _atomic_write_text(self._path, json.dumps(data, ensure_ascii=False, indent=2))
 
-    def reset(self, path_id: str) -> None:
+    def reset(self, key: str) -> None:
         records = self._load_all()
-        if records.pop(path_id, None) is not None:
-            data = {pid: rec.model_dump() for pid, rec in records.items()}
+        if records.pop(key, None) is not None:
+            data = {k: rec.model_dump() for k, rec in records.items()}
             _atomic_write_text(self._path, json.dumps(data, ensure_ascii=False, indent=2))
 
 

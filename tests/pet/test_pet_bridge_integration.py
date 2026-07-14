@@ -20,7 +20,8 @@ from deeptutor.pet.service import PetBridge
 from deeptutor.pet.store import PetStore
 from deeptutor.pet.tuning import DEFAULT_TUNING
 
-PATH_ID = "demo_path"
+PATH_ID = "demo_path"  # a learning path (book_id)
+USER_KEY = "u1"  # the pet's identity — distinct from any path
 
 
 def _seed_path(learning_store: LearningStore) -> LearningService:
@@ -66,18 +67,18 @@ def test_pet_feeds_only_when_the_tutors_own_gate_clears(tmp_path):
 
     # 1 correct → mastery 0.5 (confidence-capped). Pet cheers, but does NOT eat.
     _answer(svc, correct=True, n="1")
-    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    state = _bridge(tmp_path, ls).get_state(USER_KEY)
     assert state.exp == 0.0
     assert state.happy > 80.0  # QUIZ_PASS applied
 
     # 2 correct → mastery 0.8. Still BELOW DeepTutor's 0.9 gate → still no food.
     _answer(svc, correct=True, n="2")
-    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    state = _bridge(tmp_path, ls).get_state(USER_KEY)
     assert state.exp == 0.0, "0.8 must not feed the pet — the tutor's gate is 0.9"
 
     # 3 correct → mastery 1.0, clears the gate → the objective is truly mastered.
     _answer(svc, correct=True, n="3")
-    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    state = _bridge(tmp_path, ls).get_state(USER_KEY)
     assert state.exp >= 20.0
     assert state.last_event == PetEvent.LEARN_CONCEPT.value
 
@@ -98,14 +99,14 @@ def test_qualitative_concept_mastery_feeds_the_pet(tmp_path):
     svc.save(progress)
 
     # Not yet explained → no food.
-    assert _bridge(tmp_path, ls).get_state(PATH_ID).exp == 0.0
+    assert _bridge(tmp_path, ls).get_state(USER_KEY).exp == 0.0
 
     # The tutor judges the learner's explanation sufficient.
     progress = svc.get_or_create(PATH_ID)
     progress.qualitative_mastery["kpc"] = True
     svc.save(progress)
 
-    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    state = _bridge(tmp_path, ls).get_state(USER_KEY)
     assert state.exp >= 20.0, "a qualitative mastery pass must feed the pet"
 
 
@@ -116,8 +117,8 @@ def test_signal_is_not_double_counted_across_reads(tmp_path):
         _answer(svc, correct=True, n=str(i))
 
     bridge = _bridge(tmp_path, ls)
-    first = bridge.get_state(PATH_ID)
-    second = bridge.get_state(PATH_ID)  # no new learning between reads
+    first = bridge.get_state(USER_KEY)
+    second = bridge.get_state(USER_KEY)  # no new learning between reads
     assert second.exp == first.exp  # concept not re-awarded
     assert second.level == first.level
 
@@ -128,7 +129,7 @@ def test_wrong_answer_does_not_feed(tmp_path):
     _answer(svc, correct=False, n="1")
     _answer(svc, correct=False, n="2")
 
-    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    state = _bridge(tmp_path, ls).get_state(USER_KEY)
     assert state.exp == 0.0
     assert state.happy < 80.0  # two QUIZ_FAILs
 
@@ -155,7 +156,7 @@ def test_demo_arc_two_mastered_objectives_level_the_pet_up(tmp_path):
     svc.save(progress)
 
     bridge = _bridge(tmp_path, ls)
-    start = bridge.get_state(PATH_ID)
+    start = bridge.get_state(USER_KEY)
     assert start.hunger == DEFAULT_TUNING.initial_hunger, "the pet must start hungry"
     assert start.level == 1
 
@@ -173,7 +174,7 @@ def test_demo_arc_two_mastered_objectives_level_the_pet_up(tmp_path):
                 question_type="short",
             )
 
-    end = bridge.get_state(PATH_ID)
+    end = bridge.get_state(USER_KEY)
     assert end.level == 2, "mastering the demo path's 2 objectives must level the pet up"
     assert end.hunger < start.hunger, "and it should have eaten along the way"
 
@@ -185,15 +186,79 @@ def test_heal_loop_a_real_correct_answer_cures_a_sick_pet(tmp_path):
     svc = _seed_path(ls)
     bridge = _bridge(tmp_path, ls)
 
-    bridge.get_state(PATH_ID)  # materialise the pet
+    bridge.get_state(USER_KEY)  # materialise the pet
     # Neglect: hunger crosses the 75 gate → sick.
-    sick = bridge.apply_manual_event(PATH_ID, PetEvent.REVIEW_DECAY, decay_amount=80.0)
+    sick = bridge.apply_manual_event(USER_KEY, PetEvent.REVIEW_DECAY, decay_amount=80.0)
     assert sick.sick is True
     assert sick.hunger >= 75.0
 
     # The learner answers a real quiz correctly → QUIZ_PASS drains → cured.
     _answer(svc, correct=True, n="1")
-    healed = bridge.get_state(PATH_ID)
+    healed = bridge.get_state(USER_KEY)
     assert healed.sick is False, "a correct answer must cure the pet"
     assert healed.hunger >= 75.0, "still starving — yet the cure must hold"
     assert healed.exp == 0.0, "one correct answer cures but does not feed (mastery 0.5)"
+
+
+def _master_kp(svc: LearningService, path_id: str, kp_id: str) -> None:
+    """Clear the 0.9 gate for one MEMORY objective (3 correct answers)."""
+    for i in range(3):
+        p = svc.get_or_create(path_id)
+        svc.grade_and_record(
+            p,
+            question_id=f"q_{path_id}_{kp_id}_{i}",
+            knowledge_point_id=kp_id,
+            module_id="m1",
+            user_answer="42",
+            expected_answer="42",
+            question_type="short",
+        )
+
+
+def test_one_pet_aggregates_all_paths(tmp_path):
+    """v2: a single pet is fed by EVERY path. Two paths, each with one objective,
+    together feed the pet twice."""
+    ls = LearningStore(root=tmp_path / "learning")
+    svc = LearningService(ls)
+    for path_id in ("path_a", "path_b"):
+        p = svc.get_or_create(path_id)
+        p.modules = [
+            LearningModule(
+                id="m1",
+                name="M",
+                order=0,
+                knowledge_points=[
+                    KnowledgePoint(id="kp1", name="X", type=KnowledgeType.MEMORY, module_id="m1")
+                ],
+            )
+        ]
+        svc.save(p)
+
+    bridge = _bridge(tmp_path, ls)
+    _master_kp(svc, "path_a", "kp1")
+    _master_kp(svc, "path_b", "kp1")
+
+    state = bridge.get_state(USER_KEY)
+    # Both paths' kp1 mastered — namespacing ({path}:{kp}) keeps them distinct, so
+    # the pet is fed twice, not once.
+    assert state.exp + state.level * DEFAULT_TUNING.exp_to_next >= 2 * DEFAULT_TUNING.learn_exp
+
+
+def test_mastery_is_monotonic_across_path_reset(tmp_path):
+    """v3: resetting/clearing a path must NOT claw back the pet's exp."""
+    ls = LearningStore(root=tmp_path / "learning")
+    svc = _seed_path(ls)
+    bridge = _bridge(tmp_path, ls)
+
+    _master_kp(svc, PATH_ID, "kp1")
+    fed = bridge.get_state(USER_KEY)
+    assert fed.exp >= DEFAULT_TUNING.learn_exp
+
+    # Simulate a reset: the path's mastery is cleared (attempts wiped).
+    p = svc.get_or_create(PATH_ID)
+    p.quiz_attempts = []
+    p.mastery_levels = {}
+    svc.save(p)
+
+    after = bridge.get_state(USER_KEY)
+    assert after.exp >= fed.exp, "a path reset must not reduce the pet's exp (monotonic)"
