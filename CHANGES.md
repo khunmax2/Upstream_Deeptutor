@@ -1846,6 +1846,42 @@ code is additive and isolated for mergeability.
     session barge-in), `tests/services/test_voice_bespoke.py` (adapter wire shape),
     `tests/api/test_voice_realtime_ws.py` (WS routing).
 
+## Anima Habitat — learning-companion pet (in progress)
+
+A Tamagotchi-style pet whose state (hunger/happy/exp/level/sick) is *derived* from
+real DeepTutor mastery progress: demonstrate understanding in a Mastery Path
+session → the pet is fed, grows, and heals. 5-day demo. Design is fully grounded
+against source (the external handoff assumed `SUMMARY.md`/`PROFILE.md` polling and
+plain-chat signals, both of which do **not** exist / fire in DeepTutor). All code
+is additive and isolated for mergeability — the only upstream-file edit is one
+`include_router` line in `deeptutor/api/main.py`.
+
+- **2026-07-14 — Day 1: pet bridge core (module + in-process router + tests).**
+  Server is authoritative; the frontend will be a pure renderer (a replaceable
+  "mask"). Signal is *pulled* from `LearningProgress` (no hooks): on read, the
+  bridge applies lazy time-decay and drains new mastery signal, so there is no
+  background worker.
+  - New module `deeptutor/pet/` (no upstream edits): `models.py` (pet-state
+    contract + normalized `LearningSnapshot` + internal bookkeeping), `derive.py`
+    (pure, deterministic state math — decay, event deltas, rules), `store.py`
+    (atomic `data/user/pet_state.json`), `service.py` (`PetBridge` — ties one
+    `mastery_path_id` to one pet; the only coupling to `deeptutor.learning` is the
+    `_snapshot` adapter).
+  - Signal→state mapping: `QUIZ_PASS`/`QUIZ_FAIL` from each `QuizAttempt.is_correct`;
+    `LEARN_CONCEPT` fires when a KP's confidence-capped `compute_mastery` crosses
+    `pass_threshold` (0.7) for the first time (this is the anti-cheese — mastery,
+    not clicks). Sickness is edge-triggered on an upward hunger crossing so a
+    `QUIZ_PASS` cure is not instantly undone while still hungry.
+  - New router `deeptutor/api/routers/pet.py`: `GET /api/v1/pet/state?pathId=`
+    (authoritative pull), `POST /api/v1/pet/event` (manual/mock + future push
+    seam), `DELETE /api/v1/pet/state` (demo re-run). In-process, same-origin →
+    no CORS/auth-to-self. Wired via one line in `deeptutor/api/main.py`.
+  - Tests: `tests/pet/test_pet_derive.py` (14 — event deltas, decay, mastery-gate
+    idempotency, level-up, cure-sticks regression + bridge persistence). Verified
+    end-to-end by driving the live endpoints (feed → sick → heal → persist → 400
+    on bad `pathId`).
+  - Spec / source-of-truth for state logic: `docs/issues/anima-habitat/README.md`.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

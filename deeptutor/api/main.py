@@ -321,6 +321,7 @@ from deeptutor.api.routers import (
     notebook,
     partners,
     personas,
+    pet,
     plugins_api,
     question,
     question_notebook,
@@ -379,6 +380,7 @@ app.include_router(
 app.include_router(
     co_writer.router, prefix="/api/v1/co_writer", tags=["co_writer"], dependencies=_auth
 )
+app.include_router(pet.router, prefix="/api/v1/pet", tags=["pet"], dependencies=_auth)
 app.include_router(
     notebook.router, prefix="/api/v1/notebook", tags=["notebook"], dependencies=_auth
 )
