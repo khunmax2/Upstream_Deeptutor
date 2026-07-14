@@ -23,6 +23,7 @@ import {
   type MasteryMapResult,
   type ObjectiveStatus,
 } from "@/lib/learning-api";
+import PetHabitat from "@/components/pet/PetHabitat";
 
 /**
  * Mastery Path dashboard — the persistent "screen" of the mastery experience.
@@ -205,6 +206,7 @@ export default function MasteryPathPage() {
             result={detail}
             zh={!!zh}
             tr={tr}
+            pathId={selected}
             onContinue={() =>
               selected && router.push(`/home/${encodeURIComponent(selected)}`)
             }
@@ -253,6 +255,7 @@ function MapView({
   result,
   zh,
   tr,
+  pathId,
   onContinue,
   onRedo,
   onDelete,
@@ -260,6 +263,7 @@ function MapView({
   result: MasteryMapResult;
   zh: boolean;
   tr: (cn: string, en: string) => string;
+  pathId: string | null;
   onContinue: () => void;
   onRedo: () => void;
   onDelete: () => void;
@@ -275,6 +279,13 @@ function MapView({
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-5">
+      {/* Anima Habitat — the companion, fed by real mastery on this path */}
+      {pathId && (
+        <div className="mb-5">
+          <PetHabitat pathId={pathId} tr={tr} />
+        </div>
+      )}
+
       {/* Header: progress + next + actions */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">

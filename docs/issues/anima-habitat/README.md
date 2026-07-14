@@ -26,7 +26,7 @@ the API contract.
 | 2 | Demo scene | **Mastery/quiz flow**, not plain chat | Plain chat never writes learning state; quiz activity is the only real signal |
 | 3 | Bridge location | **In-process FastAPI router** (`deeptutor/api/routers/pet.py`) | Kills CORS / auth-to-self / file-race; contract unchanged so standalone extraction stays possible |
 | 4 | Scope | **One `mastery_path_id` → one pet** | Tight demo causality; simplest diff bookkeeping; aggregation is a later, contract-preserving extension |
-| 5 | Derivation | Version-diff on read + **lazy decay-on-read**; `LEARN_CONCEPT` gates on **mastery ≥ `pass_threshold` (0.7)** | Maps every event onto a real field; no background loop; rewards *understanding*, not clicking |
+| 5 | Derivation | Version-diff on read + **lazy decay-on-read**; `LEARN_CONCEPT` gates on **DeepTutor's own `policy.is_mastered`** | Maps every event onto a real field; no background loop; rewards *understanding*, not clicking |
 | 6 | UI | **React component in the Mastery Path dashboard** (`web/app/(utility)/space/learning/`), reusing the prototype's canvas code | Pet sits beside real progress; same-origin React; no separate page/auth |
 | 7 | State authority | **Server authoritative**, canvas = pure renderer; cosmetic animations fire on observed deltas; state persisted to `pet_state.json` | UI is a replaceable "mask"; bridge + learning logic are the only source of truth |
 
@@ -100,10 +100,20 @@ monotonic) + the set of KP-ids already counted as "mastered."
 2. **Drain new quiz attempts** (`timestamp > last_seen`):
    - `is_correct == true` → **QUIZ_PASS**: `happy += 20`, `sick = false`
    - `is_correct == false` → **QUIZ_FAIL**: `happy −= 5`
-3. **LEARN_CONCEPT** — for each KP whose mastery (`calculate_mastery(progress,
-   kp_id)`) **crosses `pass_threshold` (0.7) for the first time**:
-   `exp += 20`, `hunger −= 25`. Confidence-capped → requires several correct
-   attempts (this IS the anti-cheese).
+3. **LEARN_CONCEPT** — for each objective **newly mastered by DeepTutor's own hard
+   gate**, `learning.policy.is_mastered(progress, kp)`: `exp += 20`, `hunger −= 25`.
+   The pet **reuses the tutor's gate rather than inventing a parallel threshold**:
+   - **MEMORY / PROCEDURE → 0.9** recency-weighted accuracy (`QUANTITATIVE_GATE`,
+     "90% before you advance"), on top of the confidence cap in `compute_mastery`
+     (1 correct = 0.5, 2 = 0.8, 3 = 1.0) → **3 correct answers** to clear it.
+   - **CONCEPT / DESIGN → qualitative**: a Feynman-style explanation judged by the
+     tutor (`mastery_assess` → `qualitative_mastery[kp] = True`). These KPs have
+     *no quiz attempts at all*, so an attempt-score gate could never feed the pet.
+
+   ⚠️ Getting this wrong was a real bug (fixed 2026-07-14, day 3): the pet
+   originally used `module.pass_threshold` (0.7), so it fed on objectives the
+   tutor still showed as "Learning", and CONCEPT/DESIGN objectives could never
+   feed it. "The pet ate" must mean exactly "the tutor says you mastered it".
 4. **Apply rules** — `hunger ≥ 75 → sick = true`; `exp ≥ 100 → level += 1,
    exp −= 100` (`expToNext` fixed = 100 for demo). Persist to `pet_state.json`.
 

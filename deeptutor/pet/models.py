@@ -61,15 +61,17 @@ class Attempt(BaseModel):
 class LearningSnapshot(BaseModel):
     """Normalized pull from ``LearningProgress`` (the only input the math needs).
 
-    ``mastery`` is per-KP mastery already computed via
-    ``LearningService.calculate_mastery`` (confidence-capped). ``pass_threshold``
-    is the module gate (default 0.7); a KP crossing it counts as *understood*.
+    ``mastered_kp_ids`` are the objectives DeepTutor's OWN hard gate
+    (``learning.policy.is_mastered``) considers mastered — 0.9 recency-weighted
+    accuracy for MEMORY/PROCEDURE, a qualitative ``mastery_assess`` pass for
+    CONCEPT/DESIGN. The pet deliberately reuses that gate rather than inventing a
+    parallel threshold, so "the pet ate" always means the same thing as "the
+    tutor says you mastered it".
     """
 
     version: int = 0
     attempts: list[Attempt] = Field(default_factory=list)
-    mastery: dict[str, float] = Field(default_factory=dict)
-    pass_threshold: float = 0.7
+    mastered_kp_ids: list[str] = Field(default_factory=list)
 
 
 class SeenState(BaseModel):

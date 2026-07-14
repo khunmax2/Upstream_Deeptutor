@@ -6,9 +6,12 @@ function is trivially unit-testable. All tuning numbers live here as constants
 
 The signal→state contract:
 
-* ``LEARN_CONCEPT`` fires when a KP's mastery crosses ``pass_threshold`` for the
-  first time. Because upstream ``compute_mastery`` is confidence-capped, crossing
-  the gate requires several correct attempts — this IS the anti-cheese.
+* ``LEARN_CONCEPT`` fires when an objective is newly mastered *by DeepTutor's own
+  hard gate* (``learning.policy.is_mastered``: 0.9 recency-weighted accuracy for
+  MEMORY/PROCEDURE, a qualitative ``mastery_assess`` pass for CONCEPT/DESIGN).
+  The pet reuses that gate instead of inventing a parallel threshold, so feeding
+  the pet and clearing the tutor's gate are the same event. Combined with the
+  confidence cap in ``compute_mastery``, this IS the anti-cheese.
 * ``QUIZ_PASS`` / ``QUIZ_FAIL`` come straight from each attempt's ``is_correct``.
 * ``REVIEW_DECAY`` is integrated continuously on read from wall-clock elapsed.
 """
@@ -137,10 +140,10 @@ def derive_on_read(record: PetRecord, snapshot: LearningSnapshot, now: float) ->
             apply_quiz_fail(state)
     seen.last_attempt_count = len(snapshot.attempts)
 
-    # 3. concepts crossing the mastery gate for the first time
+    # 3. objectives newly cleared by DeepTutor's own mastery gate
     mastered = set(seen.mastered_kp_ids)
-    for kp_id, mastery in sorted(snapshot.mastery.items()):
-        if mastery >= snapshot.pass_threshold and kp_id not in mastered:
+    for kp_id in sorted(snapshot.mastered_kp_ids):
+        if kp_id not in mastered:
             apply_learn_concept(state)
             mastered.add(kp_id)
     seen.mastered_kp_ids = sorted(mastered)

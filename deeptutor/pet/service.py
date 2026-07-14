@@ -76,9 +76,8 @@ class PetBridge:
         if progress is None:
             return LearningSnapshot()
 
-        from deeptutor.learning.service import LearningService
+        from deeptutor.learning import policy as learning_policy
 
-        service = LearningService(store)
         attempts = [
             Attempt(
                 knowledge_point_id=a.knowledge_point_id,
@@ -87,16 +86,21 @@ class PetBridge:
             )
             for a in progress.quiz_attempts
         ]
-        kp_ids = {kp.id for m in progress.modules for kp in m.knowledge_points}
-        mastery = {kp_id: service.calculate_mastery(progress, kp_id) for kp_id in kp_ids}
-        # Modules share a threshold in the demo path; take the strictest so a KP
-        # must genuinely clear its own module's gate.
-        threshold = max((m.pass_threshold for m in progress.modules), default=0.7)
+        # Reuse the tutor's OWN hard gate (0.9 for MEMORY/PROCEDURE; a qualitative
+        # `mastery_assess` pass for CONCEPT/DESIGN) rather than a parallel
+        # threshold — otherwise the pet would feed on objectives DeepTutor still
+        # considers unmastered, and CONCEPT/DESIGN points (which have no quiz
+        # attempts) could never feed it at all.
+        mastered = [
+            kp.id
+            for m in progress.modules
+            for kp in m.knowledge_points
+            if learning_policy.is_mastered(progress, kp)
+        ]
         return LearningSnapshot(
             version=progress.version,
             attempts=attempts,
-            mastery=mastery,
-            pass_threshold=threshold,
+            mastered_kp_ids=sorted(mastered),
         )
 
 

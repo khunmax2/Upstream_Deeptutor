@@ -1894,6 +1894,31 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     is not double-counted across reads, wrong answers don't feed, unknown path →
     fresh pet.
 
+- **2026-07-14 — Day 3: pet rendered in the Mastery Path dashboard + mastery-gate
+  correction.** The companion now lives on the learner's own progress screen, and
+  a real graded answer visibly feeds it.
+  - New `web/components/pet/PetHabitat.tsx` + `web/lib/pet-api.ts`; mounted in
+    `web/app/(utility)/space/learning/page.tsx` (**+11 lines**, no reformatting).
+    Canvas render/animation is ported from the `anima-habitat.html` prototype but
+    its local state logic is dropped: the component is a **pure renderer** that
+    polls `GET /api/v1/pet/state` every 4s. Cosmetic reactions (run-to-bowl, hop,
+    level-up motes, heal sparkle) fire on *observed server deltas*, so the UI is a
+    replaceable mask over the bridge.
+  - **Fix (found by live verification): the pet used a parallel mastery threshold.**
+    It gated `LEARN_CONCEPT` on `module.pass_threshold` (0.7) while DeepTutor's own
+    hard gate (`learning.policy.is_mastered`) is **0.9 for MEMORY/PROCEDURE** and a
+    **qualitative `mastery_assess` pass for CONCEPT/DESIGN**. Two consequences, both
+    real: the pet fed on objectives the dashboard still showed as "Learning", and
+    CONCEPT/DESIGN objectives — which have *no quiz attempts* — could never feed it
+    at all. `PetBridge._snapshot` now reuses `policy.is_mastered`, so "the pet ate"
+    means exactly "the tutor says you mastered it". `LearningSnapshot` carries
+    `mastered_kp_ids` instead of raw scores + a threshold.
+  - Tests: pet suite now 19 (added: 0.8 mastery must NOT feed — the gate is 0.9;
+    qualitative CONCEPT mastery MUST feed). Verified live in-browser end-to-end:
+    1 correct → pet cheers but doesn't eat; 2 correct (0.8) → still no food;
+    3 correct (1.0) → objective flips to "Mastered" on the map *and* the pet eats
+    (exp 0 → 20, hunger 32% → 1%); state survives reload via `pet_state.json`.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

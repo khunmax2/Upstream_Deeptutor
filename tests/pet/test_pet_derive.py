@@ -98,10 +98,10 @@ def test_level_up_carries_remainder():
 
 
 # --- derive_on_read (the pull path) ----------------------------------------
-def test_learn_concept_fires_once_on_mastery_crossing():
+def test_learn_concept_fires_once_when_engine_reports_mastered():
     now = 1_000.0
     record = _fresh_record(now)
-    snap = LearningSnapshot(version=1, mastery={"kp1": 0.85}, pass_threshold=0.7)
+    snap = LearningSnapshot(version=1, mastered_kp_ids=["kp1"])
 
     derive_on_read(record, snap, now)  # same instant → no decay
     assert record.state.exp == LEARN_EXP
@@ -112,10 +112,10 @@ def test_learn_concept_fires_once_on_mastery_crossing():
     assert record.state.exp == LEARN_EXP
 
 
-def test_below_threshold_does_not_feed():
+def test_unmastered_objective_does_not_feed():
     now = 1_000.0
     record = _fresh_record(now)
-    snap = LearningSnapshot(version=1, mastery={"kp1": 0.6}, pass_threshold=0.7)
+    snap = LearningSnapshot(version=1, mastered_kp_ids=[])
     derive_on_read(record, snap, now)
     assert record.state.exp == 0.0
     assert record.seen.mastered_kp_ids == []
@@ -127,7 +127,6 @@ def test_new_attempts_drain_once():
     snap = LearningSnapshot(
         version=1,
         attempts=[Attempt(knowledge_point_id="kp1", is_correct=True)],
-        pass_threshold=0.7,
     )
     base_happy = record.state.happy
     derive_on_read(record, snap, now)

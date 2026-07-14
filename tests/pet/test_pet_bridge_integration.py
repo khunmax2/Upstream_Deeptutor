@@ -53,29 +53,62 @@ def _bridge(tmp_path, learning_store: LearningStore) -> PetBridge:
     )
 
 
-def test_two_correct_attempts_feed_the_pet(tmp_path):
+def test_pet_feeds_only_when_the_tutors_own_gate_clears(tmp_path):
+    """The pet must agree with ``policy.is_mastered`` — a MEMORY point needs 0.9,
+    not some parallel threshold the pet invented."""
     ls = LearningStore(root=tmp_path / "learning")
     svc = _seed_path(ls)
 
-    # One correct answer: mastery capped at 0.5 (< 0.7) → NO concept learned yet,
-    # but the pass still cheers the pet.
+    # 1 correct → mastery 0.5 (confidence-capped). Pet cheers, but does NOT eat.
     _answer(svc, correct=True, n="1")
     state = _bridge(tmp_path, ls).get_state(PATH_ID)
-    assert state.exp == 0.0  # LEARN_CONCEPT has not fired
+    assert state.exp == 0.0
     assert state.happy > 80.0  # QUIZ_PASS applied
 
-    # Second correct answer: mastery 0.8 crosses 0.7 → concept learned.
+    # 2 correct → mastery 0.8. Still BELOW DeepTutor's 0.9 gate → still no food.
     _answer(svc, correct=True, n="2")
     state = _bridge(tmp_path, ls).get_state(PATH_ID)
-    assert state.exp >= 20.0  # LEARN_CONCEPT fired
+    assert state.exp == 0.0, "0.8 must not feed the pet — the tutor's gate is 0.9"
+
+    # 3 correct → mastery 1.0, clears the gate → the objective is truly mastered.
+    _answer(svc, correct=True, n="3")
+    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    assert state.exp >= 20.0
     assert state.last_event == PetEvent.LEARN_CONCEPT.value
+
+
+def test_qualitative_concept_mastery_feeds_the_pet(tmp_path):
+    """Regression: CONCEPT/DESIGN points are gated qualitatively (mastery_assess)
+    and have no quiz attempts — an attempt-score gate would never feed the pet."""
+    ls = LearningStore(root=tmp_path / "learning")
+    svc = LearningService(ls)
+    progress = svc.get_or_create(PATH_ID)
+    kp = KnowledgePoint(
+        id="kpc", name="Why photosynthesis matters", type=KnowledgeType.CONCEPT, module_id="m1"
+    )
+    progress.modules = [
+        LearningModule(id="m1", name="Intro", order=0, knowledge_points=[kp]),
+    ]
+    progress.knowledge_types = {"kpc": KnowledgeType.CONCEPT}
+    svc.save(progress)
+
+    # Not yet explained → no food.
+    assert _bridge(tmp_path, ls).get_state(PATH_ID).exp == 0.0
+
+    # The tutor judges the learner's explanation sufficient.
+    progress = svc.get_or_create(PATH_ID)
+    progress.qualitative_mastery["kpc"] = True
+    svc.save(progress)
+
+    state = _bridge(tmp_path, ls).get_state(PATH_ID)
+    assert state.exp >= 20.0, "a qualitative mastery pass must feed the pet"
 
 
 def test_signal_is_not_double_counted_across_reads(tmp_path):
     ls = LearningStore(root=tmp_path / "learning")
     svc = _seed_path(ls)
-    _answer(svc, correct=True, n="1")
-    _answer(svc, correct=True, n="2")
+    for i in range(3):
+        _answer(svc, correct=True, n=str(i))
 
     bridge = _bridge(tmp_path, ls)
     first = bridge.get_state(PATH_ID)
