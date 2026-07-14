@@ -133,3 +133,24 @@ def test_unknown_path_returns_fresh_pet(tmp_path):
     state = _bridge(tmp_path, ls).get_state("never_studied")
     assert state.exp == 0.0
     assert state.level == 1
+
+
+def test_heal_loop_a_real_correct_answer_cures_a_sick_pet(tmp_path):
+    """Day-4 loop: neglect → sick; one REAL graded correct answer → cured, and the
+    cure holds even though the pet is still starving (sickness is edge-triggered)."""
+    ls = LearningStore(root=tmp_path / "learning")
+    svc = _seed_path(ls)
+    bridge = _bridge(tmp_path, ls)
+
+    bridge.get_state(PATH_ID)  # materialise the pet
+    # Neglect: hunger crosses the 75 gate → sick.
+    sick = bridge.apply_manual_event(PATH_ID, PetEvent.REVIEW_DECAY, decay_amount=80.0)
+    assert sick.sick is True
+    assert sick.hunger >= 75.0
+
+    # The learner answers a real quiz correctly → QUIZ_PASS drains → cured.
+    _answer(svc, correct=True, n="1")
+    healed = bridge.get_state(PATH_ID)
+    assert healed.sick is False, "a correct answer must cure the pet"
+    assert healed.hunger >= 75.0, "still starving — yet the cure must hold"
+    assert healed.exp == 0.0, "one correct answer cures but does not feed (mastery 0.5)"

@@ -1919,6 +1919,47 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     3 correct (1.0) → objective flips to "Mastered" on the map *and* the pet eats
     (exp 0 → 20, hunger 32% → 1%); state survives reload via `pet_state.json`.
 
+- **2026-07-14 — Day 3 follow-up: the Mastery Path map no longer goes stale beside
+  the pet.** The dashboard fetched the mastery map **once** (a `useEffect` keyed on
+  the selected path), while `PetHabitat` beside it polls the same `LearningProgress`
+  every 4s. After a graded answer the two panels visibly disagreed — pet Knowledge
+  0 → 20 while the map still read "0/2 mastered" / "Not started" until a manual
+  reload. `web/app/(utility)/space/learning/page.tsx` now refreshes the map (and the
+  path list's `avg_mastery_pct`, which was stale in the same way) on the pet's 4s
+  cadence. Only file touched; **+35/−17 lines**, no reformatting (verified with
+  `prettier --no-config --check`).
+  - Refreshes are *background* refreshes: they never raise the loading spinner, and
+    a failed poll keeps the last good map on screen instead of blanking it. The
+    first load of a newly-selected path still shows the spinner as before.
+  - Chose whole-map polling over "refetch only when the pet's state changes":
+    `derive_on_read` applies lazy time decay on **every** read, so `hunger`/`happy`/
+    `lastEvent`/`updatedAt` change on every poll — a state-delta trigger would fire
+    every tick anyway. Narrowing the trigger to `exp`/`level` would miss quiz
+    *failures*, which move an objective "Not started" → "Learning" and change
+    `next.action` without touching `exp`. Exact causality would need the bridge to
+    serialize the `LearningProgress.version` watermark it already tracks in
+    `seen.last_version` — deferred; the map read costs the same as the pet read the
+    page already pays on that cadence (both run `policy.is_mastered` over every KP).
+  - Verified live in-browser, no reload: with the map open, a real graded answer
+    driven through `LearningService.grade_and_record` (3 correct on "Calvin cycle")
+    flipped the map 1/2 → 2/2, the objective "Not started" → "Mastered", Next →
+    "All mastered 🎉", the sidebar 50% → 100%, **and** the pet (Knowledge 20 → 40,
+    hunger 42% → 22%) — all within one poll, no console errors.
+
+- **2026-07-14 — Day 4: heal loop verified end-to-end (no code change needed).**
+  The full demo loop now runs against real learning state: neglect → the pet
+  crosses the hunger gate and falls sick → the learner answers a real quiz
+  correctly → `grade_and_record` → `QUIZ_PASS` → the pet is cured, live in the
+  browser (sick badge + red cross clear, happiness 78% → 95%).
+  - Confirms the Day-1 **edge-triggered sickness** decision in the real system:
+    the pet stays cured at hunger 88% (still far above the 75 gate) because
+    sickness only re-trips on a *fresh* upward crossing. With the original
+    "re-assert sick whenever hunger ≥ 75" rule the cure would have been undone on
+    the very next poll, making `QUIZ_PASS` useless.
+  - Also confirms the gate separation: one correct answer (mastery 0.5) **cures
+    but does not feed** — feeding still requires clearing the tutor's 0.9 gate.
+  - Test: `test_heal_loop_a_real_correct_answer_cures_a_sick_pet` (pet suite → 20).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
