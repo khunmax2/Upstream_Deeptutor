@@ -1960,6 +1960,15 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     but does not feed** — feeding still requires clearing the tutor's 0.9 gate.
   - Test: `test_heal_loop_a_real_correct_answer_cures_a_sick_pet` (pet suite → 20).
 
+- **2026-07-14 — Mastery map now refreshes on the pet's cadence.** The dashboard
+  loaded `fetchMasteryMap` once per selection and never re-polled, so after a
+  graded answer the pet (polling every 4s) visibly disagreed with the map beside
+  it — pet fed and levelling while the map still read "0/2 mastered" until a
+  manual reload. Both panels now refresh on the same 4s cadence
+  (`web/app/(utility)/space/learning/page.tsx`). The refresh is a *background*
+  one: no spinner, and a failed poll keeps the last good data rather than blanking
+  the map.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
