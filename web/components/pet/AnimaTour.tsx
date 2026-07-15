@@ -25,13 +25,13 @@ export const ANIMA_TOUR_STEPS: TourStep[] = [
     target: "anima-status",
     titleKey: "Companion status",
     descKey:
-      "These are read straight from the server: hunger, happiness, and knowledge toward the next level. There is no shortcut feed button.",
+      "These fill only through real learning — no button. Master an objective and Pixel eats (hunger drops) and gains Knowledge toward the next level; answer quizzes right and Happiness rises. Hunger also creeps up over time.",
   },
   {
     target: "anima-profile",
     titleKey: "Knowledge Mastery Profile",
     descKey:
-      "Your mastery across the four knowledge types, pooled across every path and counted with the tutor's own gate. N/A means there are no objectives of that type yet.",
+      "The four knowledge types — Memory, Concept, Procedure, Design. Each bar is the share of that type's objectives you've mastered across all paths. Memory & Procedure clear at ~90% quiz accuracy; Concept & Design by explaining the idea to the tutor. N/A means no objectives of that type yet.",
   },
   {
     target: "anima-growth",
@@ -43,7 +43,7 @@ export const ANIMA_TOUR_STEPS: TourStep[] = [
     target: "anima-activity",
     titleKey: "Activity & reviews",
     descKey:
-      "Your latest quiz answers and the spaced-repetition reviews that are due.",
+      "Your latest answers from Mastery Path quizzes — correct or incorrect, with the mistake type on a miss. Only questions the tutor grades in a Mastery Path show here.",
   },
   {
     target: "anima-paths",
@@ -175,7 +175,7 @@ export default function AnimaTour({ onClose }: { onClose: () => void }) {
       />
 
       <div
-        className="animate-fade-in pointer-events-auto absolute z-10 w-[340px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.3)]"
+        className="anima-tooltip animate-fade-in pointer-events-auto absolute z-10 w-[340px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.3)]"
         style={{ top: tooltipTop, left: tooltipLeft }}
         role="dialog"
         aria-labelledby="anima-tour-title"

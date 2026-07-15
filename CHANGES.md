@@ -2257,6 +2257,28 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     and rely solely on the highlight ring's large `box-shadow` spread (darkened to
     0.55) to dim only *outside* the target rect — the highlighted card now stays
     crisp and unblurred while its surroundings darken. Verified live.
+  - **Habitat room realism pass (design workspace only).** Upgraded the cozy-room
+    scene in `preview.html` per the art workflow (iterate in the preview first,
+    port to `PetHabitat.tsx` after visual approval): the picture frame became a
+    real four-pane window (sky gradient, clouds, rolling hills, sun with halo,
+    sill resting on the wainscot, curtain rod + pleated tie-back curtains) casting
+    a soft light shaft onto the floor; the wall gained crown molding and faint
+    wallpaper stripes; floor planks gained deterministic wood-grain streaks and
+    knots (stable per frame — no flicker); the rug gained a diamond motif ring, a
+    stitched dashed border, side fringe, and a soft occlusion shade; the bookshelf
+    gained edge shading, an occasional leaning book, and top decor (book stack +
+    tiny plant); the bed quilt gained stitched seams and fabric creases. Pure
+    canvas drawing — no assets, no bridge/API changes; blockers and furniture
+    positions unchanged so the pet's wander targets still hold.
+  - **Habitat follows the app theme — night mode (production).** The room canvas
+    was always daytime regardless of theme. `PetHabitat.tsx` now reads the `dark`
+    class on `<html>` (maintained by `ThemeScript`, and carried by both the dark
+    and glass themes) via a `MutationObserver`, so switching theme retints the
+    room live (including the reduced-motion single-frame repaint). At night the
+    scene gets a cool `multiply` dim pass, a stronger vignette, the daytime warm
+    tint is skipped, and the floor lamp re-lights its corner with a warm glow —
+    the room reads as "lamp on in the evening" rather than a gray filter. Pure
+    renderer change; no bridge/API/state edits.
 
 - **2026-07-15 — Fix: preserve Gemini 3 `thought_signature` in the shared agentic loop.**
   Gemini 3 attaches a REQUIRED `thought_signature` (in `extra_content` on each

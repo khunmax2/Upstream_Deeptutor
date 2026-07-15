@@ -610,16 +610,30 @@ function drawParts(ctx: Ctx, parts: Part[], dt: number): Part[] {
   return alive;
 }
 
-function drawLighting(ctx: Ctx, mood: Mood) {
+function drawLighting(ctx: Ctx, mood: Mood, night: boolean) {
+  if (night) {
+    // Dark theme = evening in the room: a cool multiply pass dims everything,
+    // then the floor lamp re-lights its corner so it reads as "lamp on at
+    // night", not a gray filter over a daytime scene.
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "#8b87b8";
+    ctx.fillRect(0, 0, LW, LH);
+    ctx.globalCompositeOperation = "source-over";
+    const lampGlow = ctx.createRadialGradient(600, 120, 16, 600, 175, 280);
+    lampGlow.addColorStop(0, "rgba(255,206,120,.42)");
+    lampGlow.addColorStop(1, "rgba(255,206,120,0)");
+    ctx.fillStyle = lampGlow;
+    ctx.fillRect(0, 0, LW, LH);
+  }
   const v = ctx.createRadialGradient(LW / 2, LH / 2, 180, LW / 2, LH / 2, 560);
   v.addColorStop(0, "transparent");
-  v.addColorStop(1, "rgba(10,6,20,.4)");
+  v.addColorStop(1, night ? "rgba(8,6,18,.55)" : "rgba(10,6,20,.4)");
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, LW, LH);
   if (mood.sick) {
     ctx.fillStyle = "rgba(90,120,110,.14)";
     ctx.fillRect(0, 0, LW, LH);
-  } else {
+  } else if (!night) {
     ctx.fillStyle = `rgba(255,190,120,${0.04 + 0.05 * (mood.happy / 100)})`;
     ctx.fillRect(0, 0, LW, LH);
   }
@@ -650,6 +664,9 @@ export default function PetHabitat({
 
   const stateRef = useRef<PetState | null>(null);
   const prevRef = useRef<PetState | null>(null);
+  // Dark theme (incl. glass) renders the room at night — read from the <html>
+  // class the app's ThemeScript maintains, kept in a ref for the draw loop.
+  const darkRef = useRef(false);
   const partsRef = useRef<Part[]>([]);
   const redrawRef = useRef<(() => void) | null>(null);
   const petRef = useRef<Cosmetic>({
@@ -755,6 +772,21 @@ export default function PetHabitat({
     const ro = new ResizeObserver(fit);
     ro.observe(canvas);
 
+    // Track theme switches live so the room darkens/brightens immediately
+    // (and reduced-motion mode repaints its single frame).
+    const readTheme = () => {
+      darkRef.current = document.documentElement.classList.contains("dark");
+    };
+    readTheme();
+    const themeObserver = new MutationObserver(() => {
+      readTheme();
+      redrawRef.current?.();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
     let raf = 0;
     let last = performance.now();
     let running = true;
@@ -821,7 +853,7 @@ export default function PetHabitat({
       drawRoom(ctx);
       drawPet(ctx, pet, m);
       if (!reduced) partsRef.current = drawParts(ctx, partsRef.current, dt);
-      drawLighting(ctx, m);
+      drawLighting(ctx, m, darkRef.current);
 
       if (running && !reduced) raf = window.requestAnimationFrame(frame);
     };
@@ -849,6 +881,7 @@ export default function PetHabitat({
       running = false;
       window.cancelAnimationFrame(raf);
       ro.disconnect();
+      themeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVis);
       redrawRef.current = null;
     };

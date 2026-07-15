@@ -153,6 +153,16 @@
     transform: translateY(-1px);
   }
 
+  /* Learner Anima cards + tour tooltip render their own dense content, so they
+     stay opaque in the translucent glass theme (they use raw bg tokens, not
+     .surface-card's frosted treatment — without this they show through). */
+  .theme-glass .anima-surface {
+    background-color: #17152b;
+  }
+  .theme-glass .anima-tooltip {
+    background-color: #211d3a;
+  }
+
   * {
     @apply border-[color:var(--border)];
     scrollbar-width: thin;

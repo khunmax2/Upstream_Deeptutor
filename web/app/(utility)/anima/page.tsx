@@ -2,12 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { PawPrint, MessageSquare, Sparkles } from "lucide-react";
+import {
+  PawPrint,
+  MessageSquare,
+  Sparkles,
+  Target,
+  Trophy,
+  Flag,
+  RotateCw,
+  GraduationCap,
+  Map,
+  PenLine,
+  Users,
+  HelpCircle,
+} from "lucide-react";
 
 import PetHabitat from "@/components/pet/PetHabitat";
 import AnimaTour from "@/components/pet/AnimaTour";
+import AnimaGuide from "@/components/pet/AnimaGuide";
+import { BookIcon } from "@/components/pet/AnimaIcons";
 import {
   fetchPetDashboard,
   type PetDashboard,
@@ -52,6 +68,7 @@ export default function AnimaPage() {
   const [now, setNow] = useState(0);
   const [seeded, setSeeded] = useState(false); // true after the first good fetch
   const [tourOpen, setTourOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,14 +151,24 @@ export default function AnimaPage() {
               {t("Great learning today! Pixel is ready to grow alongside you.")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setTourOpen(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {t("Take a tour")}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              {t("How it works")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTourOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t("Take a tour")}
+            </button>
+          </div>
         </header>
 
         {/* hero: habitat (left) + status & mastery (right) */}
@@ -230,6 +257,7 @@ export default function AnimaPage() {
       </div>
 
       {tourOpen && <AnimaTour onClose={closeTour} />}
+      {guideOpen && <AnimaGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );
 }
@@ -249,7 +277,7 @@ function Card({
   return (
     <div
       data-tour={dataTour}
-      className={`rounded-xl border border-[var(--border)] bg-[var(--card)] ${className}`}
+      className={`anima-surface rounded-xl border border-[var(--border)] bg-[var(--card)] ${className}`}
     >
       {children}
     </div>
@@ -260,16 +288,31 @@ function CardHead({
   title,
   action,
   right,
+  icon,
 }: {
   title: string;
   action?: { label: string; onClick: () => void };
   right?: ReactNode;
+  icon?: { node: ReactNode; color: string };
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3.5">
-      <h2 className="text-sm font-semibold text-[var(--foreground)]">
-        {title}
-      </h2>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {icon && (
+          <span
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
+            style={{
+              background: `color-mix(in srgb, ${icon.color} 16%, transparent)`,
+              color: icon.color,
+            }}
+          >
+            {icon.node}
+          </span>
+        )}
+        <h2 className="truncate text-sm font-semibold text-[var(--foreground)]">
+          {title}
+        </h2>
+      </div>
       {action && (
         <button
           onClick={action.onClick}
@@ -560,7 +603,11 @@ function AlmostCard({
   const items = dash?.growth.almost ?? [];
   return (
     <Card>
-      <CardHead title={t("Almost there")} right={<Pill>{items.length}</Pill>} />
+      <CardHead
+        title={t("Close to mastery")}
+        icon={{ node: <Target className="h-4 w-4" />, color: "#5fa892" }}
+        right={<Pill>{items.length}</Pill>}
+      />
       <div className="flex flex-col gap-3.5 px-4 pb-4">
         {items.length === 0 && (
           <p className="py-2 text-center text-[11px] text-[var(--muted-foreground)]">
@@ -599,7 +646,10 @@ function WeakPointsCard({ dash, t }: { dash: PetDashboard | null; t: Tr }) {
   const active = dash?.growth.weakPointsActive ?? 0;
   return (
     <Card>
-      <CardHead title={t("Weak points cleared")} />
+      <CardHead
+        title={t("Weak points cleared")}
+        icon={{ node: <Trophy className="h-4 w-4" />, color: "#d9a24a" }}
+      />
       <div className="px-4 pb-5 pt-2 text-center">
         <div className="flex items-baseline justify-center gap-1.5">
           <span className="text-[46px] font-extrabold leading-none tracking-tight text-[var(--primary)] tabular-nums">
@@ -646,6 +696,7 @@ function NextStepCard({
     <Card>
       <CardHead
         title={t("Next step")}
+        icon={{ node: <Flag className="h-4 w-4" />, color: "#b07a9c" }}
         right={
           ns ? (
             <span className="rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">
@@ -716,7 +767,7 @@ function QuizLogCard({
   const items = dash?.quizLog ?? [];
   return (
     <Card>
-      <CardHead title={t("Recent quiz answers")} />
+      <CardHead title={t("Mastery Path answers")} />
       <ul className="px-4 pb-4">
         {items.length === 0 && (
           <li className="py-3 text-center text-[11px] text-[var(--muted-foreground)]">
@@ -794,8 +845,19 @@ function ReviewsCard({
       />
       <ul className="px-4">
         {items.length === 0 && (
-          <li className="py-3 text-center text-[11px] text-[var(--muted-foreground)]">
-            {t("No reviews due")}
+          <li className="flex flex-col items-center gap-2 py-6 text-center">
+            <Image
+              src="/anima/reviews-clipboard.png"
+              alt=""
+              width={512}
+              height={446}
+              className="h-auto w-[104px] select-none"
+              draggable={false}
+              priority={false}
+            />
+            <span className="text-[11px] text-[var(--muted-foreground)]">
+              {t("No reviews due")}
+            </span>
           </li>
         )}
         {items.map((r, i) => (
@@ -803,8 +865,8 @@ function ReviewsCard({
             key={`${r.knowledgePointId}:${i}`}
             className="grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[var(--border)] py-2.5 first:border-t-0"
           >
-            <span className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[var(--border)] bg-[var(--background)] text-base text-[var(--muted-foreground)]">
-              ↻
+            <span className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]">
+              <RotateCw className="h-4 w-4" />
             </span>
             <div className="min-w-0">
               <strong className="block truncate text-[11px] text-[var(--foreground)]">
@@ -870,10 +932,22 @@ function PathsCard({
               key={p.pathId}
               className="rounded-[10px] border border-[var(--border)] bg-[var(--background)] p-3"
             >
-              <strong className="block truncate text-[11px] text-[var(--foreground)]">
-                {p.name}
-              </strong>
-              <span className="mt-1 block text-[9px] text-[var(--muted-foreground)]">
+              <div className="flex items-center gap-2">
+                <span
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--primary) 14%, transparent)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  <GraduationCap className="h-3.5 w-3.5" />
+                </span>
+                <strong className="min-w-0 flex-1 truncate text-[11px] text-[var(--foreground)]">
+                  {p.name}
+                </strong>
+              </div>
+              <span className="mt-2 block text-[9px] text-[var(--muted-foreground)]">
                 {t("{{mastered}}/{{total}} mastered", {
                   mastered: p.mastered,
                   total: p.total,
@@ -903,11 +977,11 @@ function ShortcutsCard({
   t: Tr;
   router: ReturnType<typeof useRouter>;
 }) {
-  const items: [string, string, string][] = [
-    ["⌂", t("Mastery Path"), NAV.learn],
-    ["▤", t("Books"), NAV.book],
-    ["✎", t("Co-Writer"), NAV.coWriter],
-    ["♧", t("Partners"), NAV.partners],
+  const items: [ReactNode, string, string][] = [
+    [<Map key="mp" className="h-4 w-4" />, t("Mastery Path"), NAV.learn],
+    [<BookIcon key="bk" className="h-6 w-6" />, t("Books"), NAV.book],
+    [<PenLine key="cw" className="h-4 w-4" />, t("Co-Writer"), NAV.coWriter],
+    [<Users key="pt" className="h-4 w-4" />, t("Partners"), NAV.partners],
   ];
   return (
     <Card>
@@ -919,7 +993,7 @@ function ShortcutsCard({
             onClick={() => router.push(href)}
             className="flex min-h-[48px] items-center gap-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--background)] p-2.5 text-[10px] text-[var(--foreground)] transition-colors hover:border-[var(--primary)]"
           >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[15px] text-[var(--primary)]">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]">
               {icon}
             </span>
             {label}
