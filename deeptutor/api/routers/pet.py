@@ -3,11 +3,13 @@
 One companion per user, fed by **all** their mastery paths (aggregate). The pet
 is keyed by the current user, so these endpoints take no ``pathId``:
 
-* ``GET  /api/v1/pet/state``  — authoritative pull: applies lazy decay, drains new
+* ``GET  /api/v1/pet/state``     — authoritative pull: applies lazy decay, drains new
   mastery signal across every path, persists, returns the pet-state (contract JSON).
-* ``POST /api/v1/pet/event``  — manual/mock event write (tests, demo fallback,
+* ``GET  /api/v1/pet/dashboard`` — the whole ``/anima`` page: pet state + a read-only
+  aggregate of every path's learning progress (profile, growth, reviews, quiz log).
+* ``POST /api/v1/pet/event``     — manual/mock event write (tests, demo fallback,
   future push seam).
-* ``DELETE /api/v1/pet/state`` — reset (demo re-run helper).
+* ``DELETE /api/v1/pet/state``   — reset (demo re-run helper).
 
 State logic lives in ``deeptutor.pet`` (fork extension; no upstream edits). See
 ``docs/issues/anima-habitat/README.md`` §v2.
@@ -45,6 +47,14 @@ async def get_pet_state():
     """Current pet-state for the authenticated user (contract camelCase JSON)."""
     state = get_bridge().get_state(_current_key())
     return state.model_dump(by_alias=True)
+
+
+@router.get("/dashboard")
+async def get_pet_dashboard():
+    """The aggregated ``/anima`` dashboard for the authenticated user: pet state +
+    a read-only view of every path's learning progress (camelCase JSON)."""
+    dashboard = get_bridge().get_dashboard(_current_key())
+    return dashboard.model_dump(by_alias=True)
 
 
 @router.post("/event")

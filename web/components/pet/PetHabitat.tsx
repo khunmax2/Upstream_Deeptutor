@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { fetchPetState, type PetState } from "@/lib/pet-api";
 
@@ -624,14 +625,28 @@ function drawLighting(ctx: Ctx, mood: Mood) {
   }
 }
 
+/**
+ * The habitat canvas — a PURE renderer. It shows the cozy room + creature and
+ * plays cosmetic reactions (run-to-bowl, level sparkles, heal hearts) fired by
+ * deltas between server states. It never computes pet stats.
+ *
+ * Two modes: pass `controlledState` and the parent owns fetching (the dashboard
+ * polls one aggregate endpoint and feeds state in); pass nothing and the canvas
+ * polls `fetchPetState` itself. Either way it renders only the stage — the
+ * surrounding status/mastery cards live in the page.
+ */
 export default function PetHabitat({
-  tr,
+  controlledState,
+  offline = false,
 }: {
-  tr: (cn: string, en: string) => string;
-}) {
+  controlledState?: PetState | null;
+  offline?: boolean;
+} = {}) {
+  const { t } = useTranslation();
+  const controlled = controlledState !== undefined;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [state, setState] = useState<PetState | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [selfFailed, setSelfFailed] = useState(false);
+  const failed = controlled ? offline : selfFailed;
 
   const stateRef = useRef<PetState | null>(null);
   const prevRef = useRef<PetState | null>(null);
@@ -667,7 +682,7 @@ export default function PetHabitat({
   }, []);
 
   /** Observe a new server state and fire the cosmetic reactions it implies. */
-  const onServerState = useCallback(
+  const observe = useCallback(
     (next: PetState) => {
       const prev = prevRef.current;
       const pet = petRef.current;
@@ -683,22 +698,26 @@ export default function PetHabitat({
       }
       prevRef.current = next;
       stateRef.current = next;
-      setState(next);
-      setFailed(false);
       redrawRef.current?.(); // reduced-motion mode redraws on state change
     },
     [spawn],
   );
 
-  // --- poll the bridge (the only source of truth) ---------------------------
+  // --- state source ---------------------------------------------------------
+  // Uncontrolled: poll the bridge directly. Controlled: the parent (the dashboard)
+  // owns the fetch and feeds `controlledState` in — one poller for the whole page.
   useEffect(() => {
+    if (controlled) return;
     let cancelled = false;
     const poll = async () => {
       try {
         const next = await fetchPetState();
-        if (!cancelled) onServerState(next);
+        if (!cancelled) {
+          observe(next);
+          setSelfFailed(false);
+        }
       } catch {
-        if (!cancelled) setFailed(true);
+        if (!cancelled) setSelfFailed(true);
       }
     };
     poll();
@@ -707,7 +726,11 @@ export default function PetHabitat({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [onServerState]);
+  }, [controlled, observe]);
+
+  useEffect(() => {
+    if (controlled && controlledState) observe(controlledState);
+  }, [controlled, controlledState, observe]);
 
   // --- cosmetic render loop -------------------------------------------------
   useEffect(() => {
@@ -831,96 +854,14 @@ export default function PetHabitat({
     };
   }, [spawn]);
 
-  const expPct = state ? (state.exp / state.expToNext) * 100 : 0;
-
   return (
-    <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-      <div className="flex flex-col sm:flex-row">
-        {/* Stage */}
-        <div className="relative bg-[#0b0913] sm:w-[62%]">
-          <canvas ref={canvasRef} className="block w-full" />
-          {failed && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white/80">
-              {tr("无法连接到伙伴", "Companion offline")}
-            </div>
-          )}
+    <div className="relative h-full w-full bg-[#1f1c1a]">
+      <canvas ref={canvasRef} className="block h-auto w-full" />
+      {failed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white/80">
+          {t("Companion offline")}
         </div>
-
-        {/* Stats — straight from the server, never computed here */}
-        <div className="flex-1 p-3 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-[var(--foreground)]">
-                {state?.name ?? "—"}
-                {state?.sick && (
-                  <span className="ml-1.5 text-xs text-red-500">
-                    {tr("生病了", "sick")}
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
-                {`${state?.element ?? ""} ${tr("元素精灵", "anima")}`}
-              </div>
-            </div>
-            <div className="text-xs font-medium text-amber-500">
-              {`${tr("等级", "Lv.")} ${state?.level ?? 1}`}
-            </div>
-          </div>
-
-          <Bar
-            label={tr("饥饿", "Hunger")}
-            value={state?.hunger ?? 0}
-            text={`${Math.round(state?.hunger ?? 0)}%`}
-            className="bg-orange-500"
-          />
-          <Bar
-            label={tr("快乐", "Happiness")}
-            value={state?.happy ?? 0}
-            text={`${Math.round(state?.happy ?? 0)}%`}
-            className="bg-emerald-500"
-          />
-          <Bar
-            label={tr("知识", "Knowledge")}
-            value={expPct}
-            text={`${Math.round(state?.exp ?? 0)} / ${state?.expToNext ?? 100}`}
-            className="bg-violet-500"
-          />
-
-          <p className="pt-0.5 text-[10px] leading-relaxed text-[var(--muted-foreground)]">
-            {tr(
-              "答对测验喂养它：真正掌握一个知识点才会长大。",
-              "Feed it by answering quizzes — it only grows when you truly master an objective.",
-            )}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Bar({
-  label,
-  value,
-  text,
-  className,
-}: {
-  label: string;
-  value: number;
-  text: string;
-  className: string;
-}) {
-  return (
-    <div>
-      <div className="flex justify-between text-[10px] text-[var(--muted-foreground)]">
-        <span>{label}</span>
-        <span>{text}</span>
-      </div>
-      <div className="mt-1 h-1.5 w-full rounded-full bg-[var(--accent)] overflow-hidden">
-        <div
-          className={`h-full transition-all duration-500 ${className}`}
-          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-        />
-      </div>
+      )}
     </div>
   );
 }

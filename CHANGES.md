@@ -95,6 +95,16 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 
 ## Documentation
 
+- **2026-07-14 — Configured Matt Pocock engineering skills for this fork.**
+  Added the `## Agent skills` consumer block to `CLAUDE.md` and created
+  `docs/agents/` configuration for the installed mattpocock/skills workflows:
+  GitHub Issues as the issue tracker, the default five triage labels, and a
+  single-context domain-doc layout (`CONTEXT.md` + `docs/adr/`). This lets
+  `to-spec`, `to-tickets`, `triage`, `wayfinder`, `grill-with-docs`, and related
+  skills read a repo-local contract before acting. Files: `CLAUDE.md`,
+  `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`,
+  `docs/agents/domain.md`, `docs/reports/REPORT_agent_skills_setup_2026-07-14.md`.
+
 - **2026-07-13 — Refreshed `VOICE.md` (voice feature map) to current state.**
   The flow diagram now shows the `unclear` classifier bucket, the layer-2
   `kb_router` (meta/unrelated/content), and the loop's hard-grounding step;
@@ -2060,6 +2070,193 @@ is additive and isolated for mergeability — the only upstream-file edit is one
   - Design workflow: `docs/issues/anima-habitat/preview.html` is a standalone,
     self-contained art workspace (mock-state buttons) — iterate the look there
     first, then port into the component. Bridge/API untouched.
+
+- **2026-07-15 — Learner Anima pixel-dashboard preview (design workspace only).**
+  Reworked `docs/issues/anima-habitat/preview.html` before any production UI port,
+  following the project's art workflow. The standalone mock is now a responsive,
+  DeepTutor-theme-aware dashboard (dark/light, EN/TH/ZH) around an original
+  low-resolution pixel-art diorama. Pixel keeps its Wind Anima identity and can
+  wander throughout the room with collision-aware targets, depth ordering, and
+  pixel-native idle/eat/sick/heal/level reactions; `prefers-reduced-motion` keeps
+  a calm pose. Dashboard cards deliberately mirror only data the real code can
+  supply: authoritative pet state, mastery-gate ratios for the four actual
+  `KnowledgeType`s, learning-only activity, due reviews, Mastery Paths, and real
+  navigation shortcuts. Unsupported economy concepts (energy, gems, rank,
+  missions, rewards) are omitted, and mock state controls are visibly separated
+  from learner actions. No React, API, bridge, or mastery-engine code changed in
+  this preview round.
+  - **Visual-density follow-up:** the first mock rasterized its habitat at only
+    240×144 and enlarged that buffer across the card, making the intentionally
+    pixel-styled scene read like low-resolution video. The preview now rasterizes
+    the same original composition at **8× source density (1920×1152)** and lets
+    the browser downsample it normally. Pixel-inspired silhouettes and texture
+    remain, while curves, diagonal edges, lighting, and facial details no longer
+    come from a visibly enlarged low-resolution buffer.
+  - **Art-direction correction after visual review:** increasing the backing
+    buffer alone preserved the coarse 240×144 source geometry, so the scene still
+    read as enlarged low-resolution art. Replaced that renderer with the proven
+    **800×520 smooth illustrated scene**, fitted at CSS size × devicePixelRatio
+    with anti-aliasing enabled: continuous curves, gradients, fine furniture and
+    facial detail, and theme-aware lighting. The dashboard shell and its agreed
+    real-data semantics are unchanged; this remains preview-only.
+  - Added the root domain glossary (`CONTEXT.md`) and defined **Knowledge Mastery
+  Profile** as the canonical name for the aggregate, four-axis,
+  mastery-gate-based learner profile across all of a user's Mastery Paths;
+  explicitly avoids presenting it as invented subject elements or as historical
+  growth.
+  - Replaced the preview's four duplicated mastery progress rows with a crisp,
+    dependency-free **SVG Knowledge Mastery Profile radar**. Its four fixed
+    0–100 axes are the real `KnowledgeType`s (Memory, Concept, Procedure,
+    Design); each point is pooled `policy.is_mastered` objectives divided by
+    available objectives of that type across all paths, with persistent percent
+    and `mastered / total` labels plus screen-reader fallback. The preview shows
+    current state only; the agreed production rule is `N/A` (never zero) when a
+    type has no objectives and no polygon when fewer than three axes are measured.
+  - **Profile-viz A/B comparison (design workspace only).** A grill reopened the
+    four-axis radar because a 4-vertex radar is a degenerate diamond that reads as
+    lopsided, cannot show a per-type `N/A`, and (per the agreed rule) draws nothing
+    when fewer than three types are measured — the most common state for a new
+    learner. Since `KnowledgeType` has exactly four members, axes can never be
+    added for balance. The preview now renders the same pooled data three ways
+    behind a `Profile` toggle in the mock bar — **Tiles** (2×2 progress rings,
+    default), **Bars** (horizontal), and the original **Radar** for reference — so
+    the visual form can be chosen by eye before any port. All three share one
+    per-type accent palette, honest `N/A` handling, `percent · mastered/total`
+    labels, and a single screen-reader fallback list. No production, React, API,
+    or mastery-engine code changed; the `Knowledge Mastery Profile` glossary term
+    (`CONTEXT.md`) is unchanged — only the rendering is under review.
+  - **Bars chosen for the profile; added a "Learner Growth" band (workspace
+    only).** After eyeballing the three profile options the horizontal **Bars**
+    form was chosen and set as the preview default (Tiles/Radar remain behind the
+    toggle for reference). A grill then confirmed the codebase has no learner
+    persona/XP/streak/level system (`personas.py` is *tutor* voice presets, not a
+    learner identity) and no historical mastery time-series — so a "how far have I
+    come" view must be built from real mastery signals, never an invented economy.
+    The preview now shows a three-card Learner Growth band, each card an
+    engine-derived signal: **Almost there** (quantitative objectives between the
+    `compute_mastery` confidence cap and the 0.9 `policy` gate, with attempts-left),
+    **Weak points cleared** (graduated vs active `error_records`), and **Next step**
+    (`policy.next_objective`'s own adaptive choice, with a to-gate meter). All
+    values are still mock, JS-rendered in EN/TH/ZH; no production, React, API, or
+    mastery-engine code changed. The pet's own state signals are untouched.
+  - **Recent-activity card reworked to an honest quiz-only feed.** The old card
+    invented data the engine cannot supply — a `+50 EXP` tag (EXP is pet-owned,
+    not per-attempt), a "Mastered: …" row for a CONCEPT objective (qualitative
+    `mastery_assess` passes carry no timestamp, so they can't be time-ordered),
+    and a "Review" label (a `QuizAttempt` can't be distinguished from a first-time
+    quiz). The card now renders only fields that exist on a real `QuizAttempt`:
+    knowledge point, correct/incorrect, relative time from `timestamp`, and the
+    `error_type` (structural / deviation / application / metacognitive) on a miss.
+    Retitled "Recent quiz answers"; the eight dead `activity*` i18n keys were
+    removed and replaced with quiz/error-type keys across EN/TH/ZH. Preview-only,
+    JS-rendered, mock values; no engine, API, or production code touched.
+  - **Reviews card: honest urgency from `due_at`, not raw priority.** The mock
+    previously printed "priority 1/2/3", but the engine's `priority` (`scheduler`)
+    is a stable sort key by knowledge type (`1` = an error/weak-point KP, then
+    `2`–`5` by type) — not a user-facing urgency level, so surfacing the integer
+    misleads. The card (scope A) now lists currently-due items first, then a peek
+    at upcoming ones, with urgency derived from `due_at` relative to now
+    ("Due now" in red / "2h" / "Tomorrow"). A "Weak point" chip flags `priority==1`
+    items (real, meaningful), and the count badge reflects due-now only
+    (`policy.due_reviews` length). Retitled "Reviews"; the four dead review i18n
+    keys were dropped and `tomorrow` / `weakBadge` added across EN/TH/ZH.
+    Preview-only, JS-rendered, mock values; no engine, API, or production changes.
+  - **Greeting de-fabricated; path-name source pinned.** The mock greeted a
+    hard-coded "Max", but `CurrentUser` (`multi_user/context.py`) carries only
+    `username` / `id` / `role` — no display name — so any personal name is
+    invented. The greeting is now pet-forward and time-of-day based
+    (morning/afternoon/evening, EN/TH/ZH), naming no user; the dead `welcome`
+    i18n key was removed. Confirmed the Mastery Path cards should derive their
+    title from `modules[0].name` (falling back to `book_id`) — the same
+    convention `LearningService.list_progress` already uses — rather than a new
+    path-naming scheme; the mock's path names already reflect that, so no visual
+    change was needed. Preview-only; no engine, API, or production code changed.
+  - **Filled the hero's empty right column.** The status card alone left a large
+    gap beside the tall habitat scene. The right column is now a `side-col` that
+    stacks the status card and the Knowledge Mastery Profile card, so the hero
+    reads as "companion + how I'm doing"; the middle row drops to two columns
+    (recent quiz answers + reviews). The mastery card is relocated by moving the
+    existing DOM node at load, so its canvas/SVG markup is untouched. Preview-only
+    layout change; no engine, API, or production code changed.
+  - **Re-based the palette on DeepTutor's real theme (was invented green).** The
+    preview's green tokens matched nothing in the app; `web/app/globals.css`'s
+    default theme is a warm "Cream / Terracotta" (`--primary #b0501e` light /
+    `#d4734b` dark on `#fdfcf9` / `#1a1918`), with only a single accent plus
+    destructive and neutrals. Both preview theme blocks now use those real values,
+    which also harmonizes with the already-warm habitat art. To break the
+    single-tone look only where it carries meaning, the four Knowledge Mastery
+    Profile categories get harmonized earthy accents (Memory = terracotta,
+    Concept = teal/sage, Procedure = amber, Design = plum, via new `--teal` /
+    `--plum` tokens); status meters stay semantic (hunger = amber, happy =
+    terracotta, knowledge = teal); same-metric bars (gate meters, path progress)
+    stay on the single primary by design. Preview-only; no production, engine, or
+    API code changed.
+
+- **2026-07-15 — Learner Anima dashboard: backend read model (production port, stage 1).**
+  With the preview approved, began porting the dashboard. Added a self-contained
+  aggregate read model so the frontend makes one call instead of N+1 across a
+  user's paths. New file `deeptutor/pet/dashboard.py` (`PetDashboard` +
+  `build_dashboard`): pools every path from `LearningStore.list_all()` and derives
+  the four-axis Knowledge Mastery Profile (via `policy.is_mastered`; `total == 0`
+  ⇒ N/A), the Learner Growth signals ("almost there" = quantitative objectives
+  between the `compute_mastery` cap and the 0.9 gate with a simulated
+  attempts-needed count; graduated vs active `error_records`; `policy.next_objective`
+  ranked across paths), a quiz-only activity log (newest first, `QuizAttempt`
+  fields only), reviews (due-first, `due_at`-based, `priority == 1` ⇒ weak-point
+  flag), and per-path summaries. Wired `PetBridge.get_dashboard` and a new
+  `GET /api/v1/pet/dashboard` endpoint (the pet router is already a fork file — no
+  new upstream edits). Shapes are camelCase-on-the-wire to match the existing
+  `PetState` contract. Files: `deeptutor/pet/dashboard.py` (new),
+  `deeptutor/pet/service.py`, `deeptutor/api/routers/pet.py`,
+  `tests/pet/test_pet_dashboard.py` (new, 6 tests driving the real learning stack).
+  Verified: 31 pet tests pass, ruff lint + format clean, and the live endpoint
+  returns 200 with the expected aggregate. Frontend port is stage 2 (next).
+
+- **2026-07-15 — Learner Anima dashboard: frontend port (production port, stage 2).**
+  Ported the approved `preview.html` design into the real `/anima` page. The page
+  now polls the single `GET /api/v1/pet/dashboard` every 4s and renders the full
+  dashboard: hero (habitat canvas + companion status + Knowledge Mastery Profile
+  bars), the Learner Growth band (Almost there / Weak points cleared / Next step),
+  a quiz-only Recent-answers feed, a due-driven Reviews card, a Mastery Path
+  overview, and Shortcuts — each degrading to an honest empty state, plus the
+  no-paths CTA. `web/components/pet/PetHabitat.tsx` was refactored to a pure
+  canvas-only renderer that accepts a controlled `state` (the page owns the single
+  poll) or self-polls when uncontrolled, and now uses `react-i18next` (its old
+  `tr(cn, en)` prop, which skipped Thai, is gone). `web/lib/pet-api.ts` gained the
+  `PetDashboard` types + `fetchPetDashboard()`. All UI strings use `t()` with 55
+  new keys added across `web/locales/{en,th,zh}/app.json` (only missing keys were
+  appended; existing translations reused), so EN/TH/ZH parity holds. Colors come
+  from the app's real theme tokens; the four profile categories get harmonized
+  earthy accents. Verified: `tsc`, `eslint`, `i18n:check`, and the 203-test node
+  suite all pass, and the app was **driven live** — `/anima` loads against a real
+  backend, polls the endpoint at a correct 4s cadence with no console errors, and
+  renders real aggregated data (mastery bars with N/A for empty types, quiz-only
+  activity, due-driven reviews, path summaries) in both dark and light themes.
+  Files: `web/app/(utility)/anima/page.tsx`, `web/components/pet/PetHabitat.tsx`,
+  `web/lib/pet-api.ts`, `web/locales/{en,th,zh}/app.json`.
+
+- **2026-07-15 — Learner Anima dashboard: hero fill + guided tour (post-port polish).**
+  Two follow-ups after the live review. (1) The hero's right column now stretches to
+  the habitat's height: the status and mastery-profile cards are `flex-1` and
+  distribute their content, so the column no longer leaves empty space beside the
+  taller habitat card. (2) Added a first-visit **guided tour** of `/anima` — a new
+  `web/components/pet/AnimaTour.tsx` (a self-contained, single-page mirror of the
+  settings tour: soft scrim + spotlight ring + tooltip, keyboard nav, six steps
+  anchored to `data-tour` attributes on the cards). It auto-opens once (guarded by
+  `localStorage["anima_tour_seen_v1"]`, deferred a frame so no synchronous setState
+  in an effect), and a "Take a tour" button in the header replays it; Esc/Skip
+  dismisses and persists. 11 new tour i18n keys added across EN/TH/ZH (control keys
+  like Back/Next/Skip/Got it were reused). Verified: `tsc`, `eslint`, `i18n:check`,
+  prettier, and the 203-test node suite pass, and the tour was **driven live** —
+  auto-opens on first load, the spotlight follows each step, and Esc closes it and
+  sets the seen flag. Files: `web/components/pet/AnimaTour.tsx` (new),
+  `web/app/(utility)/anima/page.tsx`, `web/locales/{en,th,zh}/app.json`.
+  - **Spotlight fix:** the tour originally stacked a full-screen
+    `backdrop-blur` scrim *under* the highlight, so the highlighted card was
+    dimmed and blurred along with everything else. Dropped the full-screen scrim
+    and rely solely on the highlight ring's large `box-shadow` spread (darkened to
+    0.55) to dim only *outside* the target rect — the highlighted card now stays
+    crisp and unblurred while its surroundings darken. Verified live.
 
 ## Upstream syncs
 

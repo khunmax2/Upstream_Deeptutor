@@ -59,6 +59,16 @@ class PetBridge:
         self._store.put(record)
         return record.state
 
+    # --- read path (aggregated dashboard) ----------------------------------
+    def get_dashboard(self, key: str):
+        """The full ``/anima`` view for one user: an authoritative pet pull plus a
+        read-only aggregate of every path's learning state (profile, growth,
+        reviews, quiz log, paths). One call, so the frontend avoids N+1 reads."""
+        from deeptutor.pet.dashboard import build_dashboard
+
+        state = self.get_state(key)
+        return build_dashboard(self._learning(), state, now=time.time())
+
     # --- write path (manual/mock event) ------------------------------------
     def apply_manual_event(
         self, key: str, event: PetEvent, *, decay_amount: float = 0.0

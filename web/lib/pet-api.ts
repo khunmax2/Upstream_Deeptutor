@@ -23,6 +23,78 @@ export interface PetState {
 export type PetEventType =
   "LEARN_CONCEPT" | "QUIZ_PASS" | "QUIZ_FAIL" | "REVIEW_DECAY";
 
+// --- dashboard read model (mirrors deeptutor/pet/dashboard.py) ---------------
+// One aggregate GET so the page never does N+1 reads across a user's paths.
+export interface MasteryAxis {
+  type: string; // "memory" | "concept" | "procedure" | "design"
+  mastered: number;
+  total: number; // 0 => render N/A, never 0%
+}
+export interface AlmostItem {
+  knowledgePointId: string;
+  name: string;
+  knowledgeType: string;
+  pathName: string;
+  mastery: number;
+  gate: number;
+  attemptsNeeded: number;
+}
+export interface NextStep {
+  action: string;
+  knowledgePointName: string;
+  knowledgeType: string;
+  pathName: string;
+  mastery: number;
+  gate: number;
+}
+export interface GrowthSummary {
+  almost: AlmostItem[];
+  weakPointsCleared: number;
+  weakPointsActive: number;
+  nextStep: NextStep | null;
+}
+export interface QuizLogItem {
+  knowledgePointId: string;
+  name: string;
+  pathName: string;
+  isCorrect: boolean;
+  errorType: string | null;
+  timestamp: number;
+}
+export interface ReviewItem {
+  knowledgePointId: string;
+  name: string;
+  knowledgeType: string;
+  dueAt: number;
+  isDue: boolean;
+  weak: boolean;
+}
+export interface PathSummary {
+  pathId: string;
+  name: string;
+  mastered: number;
+  total: number;
+  dueReviews: number;
+}
+export interface PetDashboard {
+  pet: PetState;
+  profile: MasteryAxis[];
+  profileMastered: number;
+  profileTotal: number;
+  growth: GrowthSummary;
+  reviews: ReviewItem[];
+  reviewsDueCount: number;
+  quizLog: QuizLogItem[];
+  paths: PathSummary[];
+}
+
+/** Aggregated pull for the whole /anima page (pet + all-path learning view). */
+export async function fetchPetDashboard(): Promise<PetDashboard> {
+  const res = await apiFetch(apiUrl(`/api/v1/pet/dashboard`));
+  if (!res.ok) throw new Error(`Failed to fetch pet dashboard: ${res.status}`);
+  return res.json() as Promise<PetDashboard>;
+}
+
 /** Authoritative pull: the server applies decay + drains new mastery signal. */
 export async function fetchPetState(): Promise<PetState> {
   const res = await apiFetch(apiUrl(`/api/v1/pet/state`));
