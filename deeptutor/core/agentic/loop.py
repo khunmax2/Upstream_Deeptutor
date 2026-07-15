@@ -445,6 +445,34 @@ def _append_repair_messages(
     messages.append({"role": "user", "content": host.protocol_repair_message(violation)})
 
 
+def build_tool_call_entries(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the OpenAI-shape assistant ``tool_calls`` entries for a replayed
+    assistant turn, echoing any provider extras captured from the stream.
+
+    Gemini 3 rides a REQUIRED ``thought_signature`` in ``extra_content`` on each
+    tool-call delta (``run_labeled_step`` accumulates it into ``tc["extra"]``);
+    the provider 400s any follow-up round whose replayed function call omits it.
+    Echoing the extras back verbatim keeps multi-round tool turns alive. Absent
+    extras are a no-op, so this stays provider-agnostic. Hosts should build their
+    assistant tool-call messages through this helper rather than open-coding the
+    entries, so the signature is never dropped again.
+    """
+    entries: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        entry: dict[str, Any] = {
+            "id": tc["id"],
+            "type": "function",
+            "function": {
+                "name": tc["name"],
+                "arguments": tc.get("arguments") or "{}",
+            },
+        }
+        for key, value in (tc.get("extra") or {}).items():
+            entry.setdefault(key, value)
+        entries.append(entry)
+    return entries
+
+
 # Re-export ``Awaitable`` here so consumers needn't import it just to type
 # their host implementations (mirrors what ``asyncio`` does with ``Future``).
 __all__ = [
@@ -452,5 +480,6 @@ __all__ = [
     "LabelProtocol",
     "LoopHost",
     "LoopOutcome",
+    "build_tool_call_entries",
     "run_agentic_loop",
 ]

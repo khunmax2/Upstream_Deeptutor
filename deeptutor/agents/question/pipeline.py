@@ -49,6 +49,7 @@ from deeptutor.core.agentic import (
     UsageTracker,
     build_completion_kwargs,
     build_openai_client,
+    build_tool_call_entries,
     can_use_native_tool_calling,
     dispatch_tool_calls,
     run_agentic_loop,
@@ -1966,20 +1967,13 @@ class _BaseLoopHost:
         content: str,
         tool_calls: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        # Route through the shared builder so provider extras (Gemini 3's
+        # required thought_signature) ride back on replay — see
+        # ``build_tool_call_entries``.
         return {
             "role": "assistant",
             "content": content or None,
-            "tool_calls": [
-                {
-                    "id": tc["id"],
-                    "type": "function",
-                    "function": {
-                        "name": tc["name"],
-                        "arguments": tc.get("arguments") or "{}",
-                    },
-                }
-                for tc in tool_calls
-            ],
+            "tool_calls": build_tool_call_entries(tool_calls),
         }
 
     def protocol_retry_notice(self) -> str:

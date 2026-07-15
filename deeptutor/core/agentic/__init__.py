@@ -33,7 +33,13 @@ from deeptutor.core.agentic.labels import (
     find_inline_labels,
     strip_label_probe_prefix,
 )
-from deeptutor.core.agentic.loop import LabelProtocol, LoopHost, LoopOutcome, run_agentic_loop
+from deeptutor.core.agentic.loop import (
+    LabelProtocol,
+    LoopHost,
+    LoopOutcome,
+    build_tool_call_entries,
+    run_agentic_loop,
+)
 from deeptutor.core.agentic.tool_dispatch import (
     MAX_PARALLEL_TOOL_CALLS,
     DispatchOutcome,
@@ -60,6 +66,7 @@ __all__ = [
     "dispatch_tool_calls",
     "execute_tool_call",
     "find_inline_labels",
+    "build_tool_call_entries",
     "run_agentic_loop",
     "run_labeled_step",
     "strip_label_probe_prefix",

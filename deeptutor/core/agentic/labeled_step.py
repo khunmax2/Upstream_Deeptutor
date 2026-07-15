@@ -592,6 +592,14 @@ async def run_labeled_step(
                 entry = tc_acc.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                 if getattr(tc_delta, "id", None):
                     entry["id"] = tc_delta.id
+                # Provider extras on the tool-call delta (pydantic model_extra)
+                # must survive the round trip: Gemini 3 rides its REQUIRED
+                # thought_signature in ``extra_content`` here — dropping it makes
+                # every follow-up round 400 ("missing a thought_signature"). Added
+                # lazily so tool calls without extras keep their minimal shape.
+                tc_extra = getattr(tc_delta, "model_extra", None)
+                if tc_extra:
+                    entry.setdefault("extra", {}).update(tc_extra)
                 fn = getattr(tc_delta, "function", None)
                 if fn is not None:
                     if getattr(fn, "name", None):

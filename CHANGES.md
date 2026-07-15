@@ -2258,6 +2258,33 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     0.55) to dim only *outside* the target rect — the highlighted card now stays
     crisp and unblurred while its surroundings darken. Verified live.
 
+- **2026-07-15 — Fix: preserve Gemini 3 `thought_signature` in the shared agentic loop.**
+  Gemini 3 attaches a REQUIRED `thought_signature` (in `extra_content` on each
+  streamed tool-call delta, OpenAI-compat) and 400s any follow-up request whose
+  replayed assistant message omits it ("missing a thought_signature in
+  functionCall parts"). Commit `d3b76d0d` fixed this for the **chat** capability's
+  own loop (`agents/chat/agent_loop.py`) but the **shared** agentic loop
+  (`core/agentic/labeled_step.py` + `loop.py`), used by **`deep_question`** and
+  **`deep_research`**, still dropped it in two places: the tool-call accumulation
+  never captured `model_extra`, and the three host `assistant_message_with_tool_calls`
+  builders (`agents/question/pipeline.py`, `agents/research/pipeline.py` ×2) never
+  echoed it — so every multi-round tool turn (e.g. a `rag` call) failed at round 2.
+  Fix: `run_labeled_step` now accumulates `model_extra` into each tool call
+  (lazily, so extra-less calls keep their minimal shape), and a new shared
+  `build_tool_call_entries()` helper in `core/agentic/loop.py` echoes the extras
+  back verbatim; all three hosts now route through it (centralized so a future host
+  can't reintroduce the drop). Provider-agnostic — absent extras are a no-op.
+  Diagnosed with a red/green regression test driving `run_labeled_step` with a
+  tool-call delta carrying a `thought_signature`
+  (`tests/core/test_labeled_step_tool_extras.py`, new). Verified: the new tests go
+  red before / green after, and the full `tests/core` + `tests/agents/{chat,research,question}`
+  suites pass (246). This fix is **unrelated to the Learner Anima work** (which
+  touches only `deeptutor/pet/*` and `web/*`); it was surfaced by a live
+  `deep_question` run. Files: `deeptutor/core/agentic/labeled_step.py`,
+  `deeptutor/core/agentic/loop.py`, `deeptutor/core/agentic/__init__.py`,
+  `deeptutor/agents/question/pipeline.py`, `deeptutor/agents/research/pipeline.py`,
+  `tests/core/test_labeled_step_tool_extras.py` (new).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
