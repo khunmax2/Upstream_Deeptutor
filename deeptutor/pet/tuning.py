@@ -50,6 +50,11 @@ class PetTuning(BaseModel):
     initial_hunger: float = 70.0
     initial_happy: float = 80.0
 
+    # evolution: levels at which the pet advances to its next form (stage 2, 3, …).
+    # Stage is recomputed from level in ``apply_rules`` — the SINGLE source of the
+    # thresholds, so the frontend renders ``stage`` and never re-derives it.
+    evolve_levels: list[int] = [3, 7]
+
 
 DEFAULT_TUNING = PetTuning()
 

@@ -447,6 +447,12 @@
       <button class="tool-button" type="button" onclick="previewEvent('heal')">♥ Heal</button>
       <button class="tool-button" type="button" onclick="previewEvent('reset')">↺</button>
     </div>
+    <div class="tool-group" aria-label="Evolution stage">
+      <span class="tool-label">Stage</span>
+      <button class="tool-button" type="button" onclick="previewStage(1)">◔ 1</button>
+      <button class="tool-button" type="button" onclick="previewStage(2)">◑ 2</button>
+      <button class="tool-button" type="button" onclick="previewStage(3)">● 3</button>
+    </div>
     <div class="tool-group" aria-label="Mastery profile visual">
       <span class="tool-label" data-i18n="profileViz">Profile</span>
       <button class="tool-button viz-button" type="button" data-viz="bars" aria-pressed="true">▤ Bars</button>
@@ -653,7 +659,7 @@
     const ctx = canvas.getContext("2d");
     const LW = 800, LH = 520, FLOOR = 196;
     const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const pet = { x: 400, y: 380, tx: 400, ty: 380, dir: 1, action: "idle", actionAt: 0, anim: 0, hop: 0, blink: false, hunger: 54, happy: 82, exp: 50, level: 2, sick: false, glow: .6 };
+    const pet = { x: 400, y: 380, tx: 400, ty: 380, dir: 1, action: "idle", actionAt: 0, anim: 0, hop: 0, blink: false, hunger: 54, happy: 82, exp: 50, level: 2, stage: 1, sick: false, glow: .6 };
     let lastTime = performance.now(), nextWander = lastTime + 1800, particles = [];
 
     function fitCanvas() {
@@ -692,7 +698,47 @@
     function wallFrame(x,y){const w=168,h=112;ctx.fillStyle="rgba(0,0,0,.10)";rr(x-4,y-2,w+12,h+16,10);ctx.fill();ctx.fillStyle=C.frameW;rr(x-7,y-7,w+14,h+14,8);ctx.fill();ctx.fillStyle="rgba(255,255,255,.14)";rr(x-7,y-7,w+14,5,3);ctx.fill();const sg=ctx.createLinearGradient(0,y,0,y+h);sg.addColorStop(0,C.sky2);sg.addColorStop(1,C.sky);ctx.fillStyle=sg;ctx.fillRect(x,y,w,h);ctx.fillStyle=C.sun;ctx.beginPath();ctx.arc(x+w-34,y+26,13,0,7);ctx.fill();ctx.fillStyle="rgba(255,224,138,.35)";ctx.beginPath();ctx.arc(x+w-34,y+26,20,0,7);ctx.fill();ctx.fillStyle=C.cloud;for(const [ox,oy,s] of [[40,30,1],[98,52,.8],[58,80,.6]]){ctx.beginPath();ctx.ellipse(x+ox,y+oy,17*s,7*s,0,0,7);ctx.ellipse(x+ox+13*s,y+oy-5*s,11*s,6*s,0,0,7);ctx.ellipse(x+ox-12*s,y+oy-3*s,10*s,5*s,0,0,7);ctx.fill()}ctx.fillStyle=C.hill;ctx.beginPath();ctx.moveTo(x,y+h);ctx.quadraticCurveTo(x+w*.28,y+h-36,x+w*.6,y+h);ctx.closePath();ctx.fill();ctx.fillStyle="#7db07d";ctx.beginPath();ctx.moveTo(x+w*.38,y+h);ctx.quadraticCurveTo(x+w*.74,y+h-27,x+w,y+h);ctx.closePath();ctx.fill();ctx.strokeStyle=C.frameW;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+w/2,y+h);ctx.moveTo(x,y+h/2);ctx.lineTo(x+w,y+h/2);ctx.stroke();ctx.fillStyle=C.frameW;rr(x-14,y+h+5,w+28,9,4);ctx.fill();ctx.fillStyle="rgba(0,0,0,.15)";ctx.fillRect(x-14,y+h+12,w+28,3);ctx.fillStyle=C.woodDk;rr(x-26,y-16,w+52,5,2.5);ctx.fill();ctx.beginPath();ctx.arc(x-26,y-13.5,4,0,7);ctx.fill();ctx.beginPath();ctx.arc(x+w+26,y-13.5,4,0,7);ctx.fill();for(const cx2 of [x-19,x+w+1]){ctx.fillStyle=C.curtain;rr(cx2,y-10,18,h+30,7);ctx.fill();ctx.fillStyle="rgba(0,0,0,.10)";for(const lx of [4,9,14]){ctx.fillRect(cx2+lx,y-4,2,h+18)}ctx.fillStyle=C.curtain2;rr(cx2-2,y+42,22,10,5);ctx.fill()}}
     function lightShaft(){const g=ctx.createLinearGradient(430,160,520,430);g.addColorStop(0,"rgba(255,238,190,.22)");g.addColorStop(1,"rgba(255,238,190,0)");ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(352,160);ctx.lineTo(514,160);ctx.lineTo(596,430);ctx.lineTo(296,430);ctx.closePath();ctx.fill()}
     function drawRoomBase(){drawWall();wallFrame(348,30);drawFloor();lightShaft();drawRug();bookshelf(40,FLOOR-120);plant(240,FLOOR-30,1);lamp(600,44)}
-    function drawPet(now){const walking=pet.action==="walk"||pet.action==="seekfood",bob=walking?Math.sin(pet.anim*11)*5:Math.sin(pet.anim*3)*3.4,squash=walking?Math.sin(pet.anim*11)*.05:Math.sin(pet.anim*3)*.02,hop=pet.hop>0?-Math.sin(pet.hop*Math.PI)*30:0,R=46,cx=pet.x,cy=pet.y-R+bob+hop;shadow(pet.x,pet.y+4,48,15,.32);pet.glow+=((pet.sick?.25:.4+pet.happy/260)-pet.glow)*.05;const aura=ctx.createRadialGradient(cx,cy,8,cx,cy,70);aura.addColorStop(0,`rgba(${pet.sick?"150,190,175":"140,240,200"},${.28*pet.glow})`);aura.addColorStop(1,"transparent");ctx.fillStyle=aura;ctx.beginPath();ctx.arc(cx,cy,70,0,7);ctx.fill();ctx.save();ctx.translate(cx,cy);ctx.scale(pet.dir*(1-squash),1+squash);const b1=pet.sick?"#a9bfb2":C.body1,b2=pet.sick?"#7f978a":C.body2,bh=pet.sick?"#c8d6cd":C.bodyHi;ctx.fillStyle=b2;for(const sx of [-1,1]){ctx.beginPath();ctx.moveTo(sx*20,-R*.7);ctx.quadraticCurveTo(sx*40,-R*1.25,sx*14,-R*.95);ctx.quadraticCurveTo(sx*6,-R*.78,sx*20,-R*.7);ctx.fill()}ctx.fillStyle=C.cheek;for(const sx of [-1,1]){ctx.beginPath();ctx.ellipse(sx*24,-R*.98,4,6,0,0,7);ctx.fill()}const bg=ctx.createRadialGradient(-14,-16,6,0,0,R+6);bg.addColorStop(0,bh);bg.addColorStop(.5,b1);bg.addColorStop(1,b2);ctx.fillStyle=bg;ctx.beginPath();ctx.ellipse(0,0,R,R*.92,0,0,7);ctx.fill();ctx.fillStyle=C.cream;ctx.beginPath();ctx.ellipse(0,14,R*.62,R*.6,0,0,7);ctx.fill();ctx.fillStyle=C.cheek;ctx.globalAlpha=.85;ctx.beginPath();ctx.ellipse(-26,6,9,7,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(26,6,9,7,0,0,7);ctx.fill();ctx.globalAlpha=1;if(pet.blink){ctx.strokeStyle=C.eye;ctx.lineWidth=3;for(const sx of [-1,1]){ctx.beginPath();ctx.moveTo(sx*18-7,-4);ctx.quadraticCurveTo(sx*18,1,sx*18+7,-4);ctx.stroke()}}else{for(const sx of [-1,1]){ctx.fillStyle=C.white;ctx.beginPath();ctx.ellipse(sx*18,-4,10,12,0,0,7);ctx.fill();ctx.fillStyle=C.eye;ctx.beginPath();ctx.ellipse(sx*18+sx*2,-1,6,8,0,0,7);ctx.fill();ctx.fillStyle=C.white;ctx.beginPath();ctx.arc(sx*18-1,-6,2.6,0,7);ctx.fill()}}ctx.strokeStyle=C.eye;ctx.lineWidth=2.4;ctx.lineCap="round";if(pet.action==="eat"){ctx.fillStyle="#7a3b46";ctx.beginPath();ctx.ellipse(0,16,5,6,0,0,7);ctx.fill()}else{ctx.beginPath();ctx.moveTo(-8,pet.sick?18:13);ctx.quadraticCurveTo(0,pet.sick?13:21,8,pet.sick?18:13);ctx.stroke()}ctx.fillStyle=b2;ctx.beginPath();ctx.ellipse(-16,R*.82,10,6,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(16,R*.82,10,6,0,0,7);ctx.fill();ctx.restore();if(pet.sick){ctx.fillStyle="#ff6b8a";ctx.font="bold 22px "+getComputedStyle(document.body).fontFamily;ctx.fillText("✚",cx+40,cy-34)}}
+    // Evolution stages (level-driven, mirrors the planned server rule):
+    //   stage 1 (Lv.1–2) baby — current look
+    //   stage 2 (Lv.3–6) grown — bigger, longer ears, wind-wisp tail, forehead swirl
+    //   stage 3 (Lv.7+)  full — biggest, floats, cloud crest, orbiting wind ring
+    function drawPet(now){
+      const walking=pet.action==="walk"||pet.action==="seekfood",
+        bob=walking?Math.sin(pet.anim*11)*5:Math.sin(pet.anim*3)*3.4,
+        squash=walking?Math.sin(pet.anim*11)*.05:Math.sin(pet.anim*3)*.02,
+        hop=pet.hop>0?-Math.sin(pet.hop*Math.PI)*30:0,
+        k=pet.stage===3?1.3:pet.stage===2?1.15:1,
+        lift=pet.stage===3?7+Math.sin(now/520)*4:0,
+        R=46,cx=pet.x,cy=pet.y-R*k+bob+hop-lift;
+      shadow(pet.x,pet.y+4,48*k,15*k,pet.stage===3?.22:.32);
+      pet.glow+=((pet.sick?.25:.4+pet.happy/260)-pet.glow)*.05;
+      const auraR=70*k+(pet.stage===3?16:0);
+      const aura=ctx.createRadialGradient(cx,cy,8,cx,cy,auraR);
+      aura.addColorStop(0,`rgba(${pet.sick?"150,190,175":"140,240,200"},${(.28+(pet.stage===3?.1:0))*pet.glow})`);
+      aura.addColorStop(1,"transparent");
+      ctx.fillStyle=aura;ctx.beginPath();ctx.arc(cx,cy,auraR,0,7);ctx.fill();
+      ctx.save();ctx.translate(cx,cy);ctx.scale(pet.dir*(1-squash)*k,(1+squash)*k);
+      const b1=pet.sick?"#a9bfb2":C.body1,b2=pet.sick?"#7f978a":C.body2,bh=pet.sick?"#c8d6cd":C.bodyHi;
+      if(pet.stage>=2){ctx.globalAlpha=.65;ctx.fillStyle=bh;for(const [wx,wy,wr] of [[-R*1.04,8,7],[-R*1.24,3,5],[-R*1.4,-2,3.5]]){ctx.beginPath();ctx.arc(wx,wy,wr,0,7);ctx.fill()}ctx.globalAlpha=1}
+      const e=pet.stage===3?1.32:pet.stage===2?1.16:1;
+      ctx.fillStyle=b2;for(const sx of [-1,1]){ctx.beginPath();ctx.moveTo(sx*20,-R*.7);ctx.quadraticCurveTo(sx*40*e,-R*1.25*e,sx*14,-R*.95*e);ctx.quadraticCurveTo(sx*6,-R*.78,sx*20,-R*.7);ctx.fill()}
+      ctx.fillStyle=C.cheek;for(const sx of [-1,1]){ctx.beginPath();ctx.ellipse(sx*24,-R*.98*e,4,6,0,0,7);ctx.fill()}
+      const bg=ctx.createRadialGradient(-14,-16,6,0,0,R+6);bg.addColorStop(0,bh);bg.addColorStop(.5,b1);bg.addColorStop(1,b2);
+      ctx.fillStyle=bg;ctx.beginPath();ctx.ellipse(0,0,R,R*.92,0,0,7);ctx.fill();
+      ctx.fillStyle=C.cream;ctx.beginPath();ctx.ellipse(0,14,R*.62,R*.6,0,0,7);ctx.fill();
+      ctx.fillStyle=C.cheek;ctx.globalAlpha=.85;ctx.beginPath();ctx.ellipse(-26,6,9,7,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(26,6,9,7,0,0,7);ctx.fill();ctx.globalAlpha=1;
+      if(pet.blink){ctx.strokeStyle=C.eye;ctx.lineWidth=3;for(const sx of [-1,1]){ctx.beginPath();ctx.moveTo(sx*18-7,-4);ctx.quadraticCurveTo(sx*18,1,sx*18+7,-4);ctx.stroke()}}
+      else{for(const sx of [-1,1]){ctx.fillStyle=C.white;ctx.beginPath();ctx.ellipse(sx*18,-4,10,12,0,0,7);ctx.fill();ctx.fillStyle=C.eye;ctx.beginPath();ctx.ellipse(sx*18+sx*2,-1,6,8,0,0,7);ctx.fill();ctx.fillStyle=C.white;ctx.beginPath();ctx.arc(sx*18-1,-6,2.6,0,7);ctx.fill()}}
+      ctx.strokeStyle=C.eye;ctx.lineWidth=2.4;ctx.lineCap="round";
+      if(pet.action==="eat"){ctx.fillStyle="#7a3b46";ctx.beginPath();ctx.ellipse(0,16,5,6,0,0,7);ctx.fill()}
+      else{ctx.beginPath();ctx.moveTo(-8,pet.sick?18:13);ctx.quadraticCurveTo(0,pet.sick?13:21,8,pet.sick?18:13);ctx.stroke()}
+      if(pet.stage>=2){ctx.strokeStyle="rgba(255,255,255,.7)";ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(0,-R*.52,6,-.6,3.6);ctx.stroke();ctx.beginPath();ctx.arc(1,-R*.52,2.6,.5,4.4);ctx.stroke()}
+      if(pet.stage===3){ctx.fillStyle="rgba(255,255,255,.92)";for(const [ox,oy,r2] of [[-9,-R*1.3,6.5],[1,-R*1.4,8.5],[11,-R*1.3,6]]){ctx.beginPath();ctx.arc(ox,oy,r2,0,7);ctx.fill()}}
+      ctx.fillStyle=b2;ctx.beginPath();ctx.ellipse(-16,R*.82,10,6,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(16,R*.82,10,6,0,0,7);ctx.fill();
+      ctx.restore();
+      if(pet.stage===3){ctx.save();ctx.translate(cx,cy+6*k);ctx.rotate(Math.sin(now/900)*.12);ctx.strokeStyle="rgba(190,236,214,.55)";ctx.lineWidth=3;ctx.setLineDash([16,12]);ctx.lineDashOffset=-now/26;ctx.beginPath();ctx.ellipse(0,0,R*1.4*k,R*.34*k,0,0,7);ctx.stroke();ctx.setLineDash([]);ctx.restore()}
+      if(pet.sick){ctx.fillStyle="#ff6b8a";ctx.font="bold 22px "+getComputedStyle(document.body).fontFamily;ctx.fillText("✚",cx+40*k,cy-34*k)}
+    }
     function spawn(kind){const n=kind==="level"?18:kind==="heal"?12:8;for(let i=0;i<n;i++)particles.push({x:pet.x+Math.random()*60-30,y:pet.y-40,vx:(Math.random()*2-1)*40,vy:-(60+Math.random()*90),life:1,kind})}
     function drawParticles(dt){for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=90*dt;p.life-=dt*.85}particles=particles.filter(p=>p.life>0);for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.kind==="heal"?"#ff9db0":"#ffd76a";ctx.beginPath();ctx.arc(p.x,p.y,p.kind==="heal"?6:4,0,7);ctx.fill();ctx.globalAlpha=1}}
     function drawLighting(){const v=ctx.createRadialGradient(LW/2,LH/2,180,LW/2,LH/2,560);v.addColorStop(0,"transparent");v.addColorStop(1,document.documentElement.dataset.theme==="dark"?"rgba(10,6,20,.34)":"rgba(60,45,28,.12)");ctx.fillStyle=v;ctx.fillRect(0,0,LW,LH);ctx.fillStyle=pet.sick?"rgba(90,120,110,.14)":`rgba(255,190,120,${.04+.05*(pet.happy/100)})`;ctx.fillRect(0,0,LW,LH)}
@@ -703,6 +749,10 @@
     function animate(now){const dt=Math.min(.05,(now-lastTime)/1000);lastTime=now;if(!reducedQuery.matches){pet.blink=Math.floor(now/2600)%9===0;if(pet.hop>0)pet.hop=Math.max(0,pet.hop-dt*1.7);const dx=pet.tx-pet.x,dy=pet.ty-pet.y,d=Math.hypot(dx,dy);if((pet.action==="walk"||pet.action==="seekfood")&&d>4){const speed=pet.action==="seekfood"?132:78;pet.x+=dx/d*speed*dt;pet.y+=dy/d*speed*dt;if(Math.abs(dx)>2)pet.dir=dx>0?1:-1;pet.anim+=dt}else if(pet.action==="seekfood"){pet.action="eat";pet.actionAt=now}else if(pet.action==="walk"){pet.action="idle";nextWander=now+1300+Math.random()*2200}else if(pet.action==="eat"&&now-pet.actionAt>1400){pet.action="idle";pet.hop=1;spawn("crumb");nextWander=now+1800}else if(pet.action==="idle"&&now>nextWander)chooseTarget()}drawScene(now,dt);requestAnimationFrame(animate)}
 
     function syncState() {
+      // Stage mirrors the planned server rule: Lv.1–2 → 1, Lv.3–6 → 2, Lv.7+ → 3.
+      const nextStage = pet.level >= 7 ? 3 : pet.level >= 3 ? 2 : 1;
+      if (nextStage > pet.stage) { pet.stage = nextStage; pet.hop = 1; spawn("level"); spawn("heal"); }
+      else pet.stage = nextStage;
       const hunger = Math.round(pet.hunger), happy = Math.round(pet.happy);
       document.getElementById("hungerValue").textContent = hunger + "%";
       document.getElementById("happyValue").textContent = happy + "%";
@@ -717,6 +767,11 @@
       document.getElementById("moodQuote").textContent = "“" + (pet.sick ? copy[lang].quoteSick : hunger >= 65 ? copy[lang].quoteHungry : copy[lang].quoteHealthy) + "”";
     }
 
+    function previewStage(n) {
+      pet.level = n === 3 ? 7 : n === 2 ? 3 : 1;
+      pet.exp = 0;
+      syncState();
+    }
     function previewEvent(kind) {
       if (kind === "feed") { pet.tx = 628; pet.ty = 388; pet.action = "seekfood"; pet.actionAt = performance.now(); pet.exp += 50; pet.hunger = Math.max(0, pet.hunger - 25); pet.happy = Math.min(100, pet.happy + 10); if (pet.exp >= 100) { pet.exp -= 100; pet.level += 1; spawn("level"); } }
       if (kind === "neglect") { pet.hunger = Math.min(100, pet.hunger + 22); pet.happy = Math.max(0, pet.happy - 8); if (pet.hunger >= 75) pet.sick = true; }

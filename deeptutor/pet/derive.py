@@ -86,15 +86,18 @@ def apply_time_decay(
     state.last_event = PetEvent.REVIEW_DECAY.value
 
 
-def apply_rules(state: PetState) -> None:
-    """Derived gates: level-up + clamp. Idempotent.
+def apply_rules(state: PetState, tuning: PetTuning = DEFAULT_TUNING) -> None:
+    """Derived gates: level-up + evolution stage + clamp. Idempotent.
 
     Sickness is *not* set here — it is edge-triggered by :func:`_raise_hunger`
     where hunger actually rises, so a ``QUIZ_PASS`` cure is not immediately undone.
+    Stage is recomputed from level against ``tuning.evolve_levels`` every pass —
+    monotonic because level is monotonic, and the thresholds live only here.
     """
     while state.exp_to_next > 0 and state.exp >= state.exp_to_next:
         state.exp -= state.exp_to_next
         state.level += 1
+    state.stage = 1 + sum(1 for lv in tuning.evolve_levels if state.level >= lv)
     state.hunger = _clamp(state.hunger)
     state.happy = _clamp(state.happy)
 
@@ -122,7 +125,7 @@ def apply_event(
         if state.hunger > tuning.hunger_unhappy:
             state.happy = _clamp(state.happy - 2.0)
         state.last_event = PetEvent.REVIEW_DECAY.value
-    apply_rules(state)
+    apply_rules(state, tuning)
 
 
 def derive_on_read(
@@ -164,7 +167,7 @@ def derive_on_read(
     seen.mastered_kp_ids = sorted(mastered)
 
     # 4. derived gates + bookkeeping
-    apply_rules(state)
+    apply_rules(state, tuning)
     seen.last_version = snapshot.version
     seen.last_read_at = now
     state.updated_at = _iso(now)

@@ -53,6 +53,7 @@ const STATS: Stat[] = [
         dir: "up",
         textKey: "A level every 2 objectives, and it only ever goes up",
       },
+      { dir: "up", textKey: "Pixel evolves into a new form at Lv.3 and Lv.7" },
     ],
   },
 ];

@@ -41,6 +41,10 @@ class PetState(BaseModel):
     name: str = "Pixel"
     element: str = "wind"
     level: int = 1
+    # Evolution form (1..len(evolve_levels)+1), derived from ``level`` against
+    # ``PetTuning.evolve_levels`` in ``apply_rules`` — server-computed so the
+    # thresholds live in exactly one place.
+    stage: int = 1
     exp: float = 0.0
     exp_to_next: float = Field(default=100.0, serialization_alias="expToNext")
     hunger: float = 20.0

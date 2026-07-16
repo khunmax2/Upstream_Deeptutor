@@ -44,7 +44,7 @@ type Cosmetic = {
   blinkT: number;
   glow: number;
 };
-type Mood = { hunger: number; happy: number; sick: boolean };
+type Mood = { hunger: number; happy: number; sick: boolean; stage: number };
 type Part = {
   x: number;
   y: number;
@@ -422,44 +422,68 @@ function drawPet(ctx: Ctx, pet: Cosmetic, mood: Mood) {
     ? Math.sin(pet.anim * 11) * 0.05
     : Math.sin(pet.anim * 3) * 0.02;
   const hop = pet.hop > 0 ? -Math.sin(pet.hop * Math.PI) * 30 : 0;
+  // Evolution stages (server-derived `stage`): 2 = grown (+15%, longer ears,
+  // wind-wisp tail, forehead swirl), 3 = full (+30%, floats, cloud crest,
+  // orbiting wind ring). The whole creature scales via the transform so every
+  // feature keeps its proportions.
+  const k = mood.stage === 3 ? 1.3 : mood.stage === 2 ? 1.15 : 1;
+  const lift = mood.stage === 3 ? 7 + Math.sin(pet.anim * 2) * 4 : 0;
   const R = 46;
   const cx = pet.x;
-  const cy = pet.y - R + bob + hop;
+  const cy = pet.y - R * k + bob + hop - lift;
 
-  shadow(ctx, pet.x, pet.y + 4, 48, 15, 0.32);
+  shadow(ctx, pet.x, pet.y + 4, 48 * k, 15 * k, mood.stage === 3 ? 0.22 : 0.32);
 
   pet.glow += ((mood.sick ? 0.25 : 0.4 + mood.happy / 260) - pet.glow) * 0.05;
-  const aura = ctx.createRadialGradient(cx, cy, 8, cx, cy, 70);
+  const auraR = 70 * k + (mood.stage === 3 ? 16 : 0);
+  const aura = ctx.createRadialGradient(cx, cy, 8, cx, cy, auraR);
   aura.addColorStop(
     0,
-    `rgba(${mood.sick ? "150,190,175" : "140,240,200"},${0.28 * pet.glow})`,
+    `rgba(${mood.sick ? "150,190,175" : "140,240,200"},${(0.28 + (mood.stage === 3 ? 0.1 : 0)) * pet.glow})`,
   );
   aura.addColorStop(1, "transparent");
   ctx.fillStyle = aura;
   ctx.beginPath();
-  ctx.arc(cx, cy, 70, 0, 7);
+  ctx.arc(cx, cy, auraR, 0, 7);
   ctx.fill();
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(pet.dir * (1 - squash), 1 + squash);
+  ctx.scale(pet.dir * (1 - squash) * k, (1 + squash) * k);
 
   const b1 = mood.sick ? "#a9bfb2" : C.body1;
   const b2 = mood.sick ? "#7f978a" : C.body2;
   const bh = mood.sick ? "#c8d6cd" : C.bodyHi;
-  // ears
+  // wind-wisp tail (stage 2+), trailing behind the body
+  if (mood.stage >= 2) {
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = bh;
+    const wisps: [number, number, number][] = [
+      [-R * 1.04, 8, 7],
+      [-R * 1.24, 3, 5],
+      [-R * 1.4, -2, 3.5],
+    ];
+    for (const [wx, wy, wr] of wisps) {
+      ctx.beginPath();
+      ctx.arc(wx, wy, wr, 0, 7);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // ears — longer with each stage
+  const e = mood.stage === 3 ? 1.32 : mood.stage === 2 ? 1.16 : 1;
   ctx.fillStyle = b2;
   for (const sx of [-1, 1]) {
     ctx.beginPath();
     ctx.moveTo(sx * 20, -R * 0.7);
-    ctx.quadraticCurveTo(sx * 40, -R * 1.25, sx * 14, -R * 0.95);
+    ctx.quadraticCurveTo(sx * 40 * e, -R * 1.25 * e, sx * 14, -R * 0.95 * e);
     ctx.quadraticCurveTo(sx * 6, -R * 0.78, sx * 20, -R * 0.7);
     ctx.fill();
   }
   ctx.fillStyle = C.cheek;
   for (const sx of [-1, 1]) {
     ctx.beginPath();
-    ctx.ellipse(sx * 24, -R * 0.98, 4, 6, 0, 0, 7);
+    ctx.ellipse(sx * 24, -R * 0.98 * e, 4, 6, 0, 0, 7);
     ctx.fill();
   }
   // body
@@ -533,6 +557,32 @@ function drawPet(ctx: Ctx, pet: Cosmetic, mood: Mood) {
     ctx.quadraticCurveTo(0, 21, 8, 13);
     ctx.stroke();
   }
+  // forehead swirl (stage 2+)
+  if (mood.stage >= 2) {
+    ctx.strokeStyle = "rgba(255,255,255,.7)";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(0, -R * 0.52, 6, -0.6, 3.6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(1, -R * 0.52, 2.6, 0.5, 4.4);
+    ctx.stroke();
+  }
+  // cloud crest (stage 3)
+  if (mood.stage === 3) {
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    const puffs: [number, number, number][] = [
+      [-9, -R * 1.3, 6.5],
+      [1, -R * 1.4, 8.5],
+      [11, -R * 1.3, 6],
+    ];
+    for (const [ox, oy, r2] of puffs) {
+      ctx.beginPath();
+      ctx.arc(ox, oy, r2, 0, 7);
+      ctx.fill();
+    }
+  }
   // feet
   ctx.fillStyle = b2;
   ctx.beginPath();
@@ -543,10 +593,26 @@ function drawPet(ctx: Ctx, pet: Cosmetic, mood: Mood) {
   ctx.fill();
   ctx.restore();
 
+  // orbiting wind ring (stage 3) — around the creature, outside the body transform
+  if (mood.stage === 3) {
+    ctx.save();
+    ctx.translate(cx, cy + 6 * k);
+    ctx.rotate(Math.sin(pet.anim * 0.7) * 0.12);
+    ctx.strokeStyle = "rgba(190,236,214,.55)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([16, 12]);
+    ctx.lineDashOffset = -pet.anim * 40;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, R * 1.4 * k, R * 0.34 * k, 0, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   if (mood.sick) {
     ctx.fillStyle = "#ff6b8a";
     ctx.font = "bold 22px system-ui, sans-serif";
-    ctx.fillText("✚", cx + 40, cy - 34);
+    ctx.fillText("✚", cx + 40 * k, cy - 34 * k);
   }
 }
 
@@ -711,6 +777,12 @@ export default function PetHabitat({
           pet.actT = 0;
         }
         if (next.level > prev.level) spawn("level");
+        if ((next.stage ?? 1) > (prev.stage ?? 1)) {
+          // Evolution! A double burst + hop marks the new form.
+          pet.hop = 1;
+          spawn("level");
+          spawn("heal");
+        }
         if (prev.sick && !next.sick) spawn("heal");
       }
       prevRef.current = next;
@@ -797,6 +869,7 @@ export default function PetHabitat({
         hunger: s?.hunger ?? 0,
         happy: s?.happy ?? 80,
         sick: s?.sick ?? false,
+        stage: s?.stage ?? 1,
       };
     };
 

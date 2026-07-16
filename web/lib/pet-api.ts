@@ -11,6 +11,8 @@ export interface PetState {
   name: string;
   element: string;
   level: number;
+  /** Evolution form (1..3), derived server-side from level vs `evolve_levels`. */
+  stage: number;
   exp: number;
   expToNext: number;
   hunger: number;

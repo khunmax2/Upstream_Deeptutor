@@ -2279,6 +2279,40 @@ is additive and isolated for mergeability — the only upstream-file edit is one
     tint is skipped, and the floor lamp re-lights its corner with a warm glow —
     the room reads as "lamp on in the evening" rather than a gray filter. Pure
     renderer change; no bridge/API/state edits.
+  - **Evolution stages — design locked + art draft (workspace only).** A grill
+    settled the "Pixel evolves" mechanic in four decisions: (1) driven by
+    **level only** (level is already monotonic, real-mastery-derived: 2 mastered
+    objectives = 1 level); (2) **three forms at Lv.1 / Lv.3 / Lv.7** (first
+    evolution reachable within half a path; thresholds to be config like the
+    rest of `PetTuning`); (3) **progressive growth** — the same creature grows
+    and gains features (identity preserved; the parametric canvas scales rather
+    than 3 redesigns); (4) the level→stage mapping will live **server-side**
+    (`PetState.stage` + `evolve_levels` in `PetTuning`) so thresholds are never
+    duplicated in the frontend — the parallel-threshold lesson. `preview.html`
+    now drafts all three forms behind Stage 1/2/3 mock buttons: stage 2 is
+    bigger with longer ears, a wind-wisp tail, and a forehead swirl; stage 3 is
+    biggest, floats with a bobbing hover, and adds a cloud crest plus an
+    animated orbiting wind ring; the mock's stage derives from mock level via
+    the planned rule, with an evolve particle burst on upward crossings.
+    Backend `stage` field + tests and the `PetHabitat` port follow only after
+    visual approval of the preview art.
+  - **Evolution ported to production (after preview approval).** Backend:
+    `PetTuning.evolve_levels = [3, 7]` (config-overridable like every other
+    knob), `PetState.stage` (additive contract field), and `apply_rules` now
+    recomputes stage from level each pass — the one place the thresholds live;
+    both callers pass tuning through. New `tests/pet/test_pet_stage.py` (5
+    tests: fresh pet, default thresholds, stage advance through real
+    LEARN_CONCEPT events, config override, wire serialization) — 36 pet tests
+    pass. Frontend: `PetState.stage` in `pet-api.ts`; `PetHabitat` renders the
+    three forms (stage 2: +15% scale, longer ears, wind-wisp tail, forehead
+    swirl; stage 3: +30%, hover float with softer shadow, cloud crest, animated
+    orbiting wind ring, stronger aura) and plays a double particle burst + hop
+    when a poll observes `stage` increase; `stage ?? 1` guards older cached
+    states. The how-it-works guide gained an "evolves at Lv.3 and Lv.7" row
+    (EN/TH/ZH). Verified live: restarted the backend, drove two mock
+    LEARN_CONCEPT events — level 2→3 flipped `stage` 1→2 on
+    `GET /pet/state` and the dashboard passes it through; ruff + pytest,
+    tsc/eslint/prettier, i18n parity, and the 203-test node suite all pass.
 
 - **2026-07-15 — Fix: preserve Gemini 3 `thought_signature` in the shared agentic loop.**
   Gemini 3 attaches a REQUIRED `thought_signature` (in `extra_content` on each
