@@ -721,6 +721,9 @@ export default function VoiceCallWidget() {
   // Mic mute — lets the caller type-test without ambient noise leaking into STT.
   // The recognition callbacks read the ref (no stale closure); state drives the UI.
   const [micMuted, setMicMuted] = useState(false);
+  // Typed-command box + on-screen log start COLLAPSED on call start — the
+  // caller sees only the mascot; the 💬 control reopens it to type/inspect.
+  const [chatOpen, setChatOpen] = useState(false);
   const micMutedRef = useRef(false);
   // Mic permission denied (or blocked, e.g. an embedded pane): recognition emits
   // `not-allowed` and onend would restart it forever — a tight loop that floods
@@ -1190,7 +1193,7 @@ export default function VoiceCallWidget() {
       // collection problem; no line at all means the frame never went out.
       addMsg(
         "sys",
-        `📸 อ่านจอ: ${context.buttons.length} ปุ่ม ${context.fields.length} ช่อง`,
+        `Scanned ${context.buttons.length} buttons, ${context.fields.length} fields`,
       );
       if (context.summary)
         ws.send(JSON.stringify({ type: "ui_context", context }));
@@ -1597,56 +1600,58 @@ export default function VoiceCallWidget() {
             </div>
           </div>
 
-          {/* compact chat/control panel */}
-          <div
-            style={{
-              background: "rgba(12,18,34,.88)",
-              border: "1px solid rgba(120,160,240,.22)",
-              borderRadius: 14,
-              padding: 10,
-              backdropFilter: "blur(10px)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
+          {/* collapsible chat panel — typed-command box + on-screen log (incl.
+              the "Scanned N buttons, M fields" DOM-read notes). Hidden by
+              default so only the mascot shows; the 💬 control below reopens it. */}
+          {chatOpen && (
             <div
               style={{
-                maxHeight: 130,
-                overflowY: "auto",
+                background: "rgba(12,18,34,.88)",
+                border: "1px solid rgba(120,160,240,.22)",
+                borderRadius: 14,
+                padding: 10,
+                backdropFilter: "blur(10px)",
                 display: "flex",
                 flexDirection: "column",
-                gap: 4,
+                gap: 6,
               }}
             >
-              {log.map((m, i) => (
-                <div
-                  key={i}
-                  style={{
-                    alignSelf:
-                      m.who === "user"
-                        ? "flex-end"
-                        : m.who === "bot"
-                          ? "flex-start"
-                          : "center",
-                    background:
-                      m.who === "user"
-                        ? "rgba(37,74,150,.9)"
-                        : m.who === "bot"
-                          ? "rgba(31,41,55,.9)"
-                          : "rgba(90,60,140,.7)",
-                    color: "#e8eefb",
-                    borderRadius: 9,
-                    padding: "5px 10px",
-                    fontSize: 12.5,
-                    maxWidth: "85%",
-                  }}
-                >
-                  {m.text}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
+              <div
+                style={{
+                  maxHeight: 130,
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                {log.map((m, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      alignSelf:
+                        m.who === "user"
+                          ? "flex-end"
+                          : m.who === "bot"
+                            ? "flex-start"
+                            : "center",
+                      background:
+                        m.who === "user"
+                          ? "rgba(37,74,150,.9)"
+                          : m.who === "bot"
+                            ? "rgba(31,41,55,.9)"
+                            : "rgba(90,60,140,.7)",
+                      color: "#e8eefb",
+                      borderRadius: 9,
+                      padding: "5px 10px",
+                      fontSize: 12.5,
+                      maxWidth: "85%",
+                    }}
+                  >
+                    {m.text}
+                  </div>
+                ))}
+              </div>
               <input
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
@@ -1658,8 +1663,8 @@ export default function VoiceCallWidget() {
                 }}
                 placeholder="พิมพ์แทรก/ทดสอบโดยไม่ใช้ไมค์…"
                 style={{
-                  flex: 1,
-                  minWidth: 0,
+                  width: "100%",
+                  boxSizing: "border-box",
                   padding: "7px 10px",
                   borderRadius: 9,
                   fontSize: 12.5,
@@ -1668,47 +1673,77 @@ export default function VoiceCallWidget() {
                   color: "#dbe7ff",
                 }}
               />
-              <button
-                onClick={toggleMute}
-                aria-label={micMuted ? "เปิดไมค์" : "ปิดไมค์"}
-                aria-pressed={micMuted}
-                title={
-                  micMuted
-                    ? "ไมค์ปิดอยู่ — กดเพื่อเปิด"
-                    : "ปิดไมค์ (พิมพ์ทดสอบได้โดยไม่มีเสียงรบกวน)"
-                }
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: "50%",
-                  border: "none",
-                  cursor: "pointer",
-                  background: micMuted ? "#f59e0b" : "rgba(90,110,160,.55)",
-                  color: "#fff",
-                  fontSize: 15,
-                  flexShrink: 0,
-                }}
-              >
-                {micMuted ? "🔇" : "🎤"}
-              </button>
-              <button
-                onClick={hangUp}
-                aria-label="วางสาย"
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: "50%",
-                  border: "none",
-                  cursor: "pointer",
-                  background: "#ef4444",
-                  color: "#fff",
-                  fontSize: 15,
-                  flexShrink: 0,
-                }}
-              >
-                ⏹
-              </button>
             </div>
+          )}
+
+          {/* always-visible controls: toggle chat panel, mute, hang up. Kept
+              OUT of the collapsible panel so hang-up/mute stay reachable in the
+              mascot-only (collapsed) view. Centred under the panel so hang-up
+              clears the app's bottom-right account avatar. */}
+          <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+            <button
+              onClick={() => setChatOpen((v) => !v)}
+              aria-label={chatOpen ? "ซ่อนช่องแชท" : "เปิดช่องแชทเพื่อพิมพ์สั่ง"}
+              aria-pressed={chatOpen}
+              title={
+                chatOpen
+                  ? "ซ่อนช่องแชท (เห็นเฉพาะตัวมาสคอต)"
+                  : "พิมพ์สั่ง / ดูบันทึกหน้าจอ"
+              }
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: "none",
+                cursor: "pointer",
+                background: chatOpen ? "#3b82f6" : "rgba(90,110,160,.55)",
+                color: "#fff",
+                fontSize: 15,
+                flexShrink: 0,
+              }}
+            >
+              {chatOpen ? "✕" : "💬"}
+            </button>
+            <button
+              onClick={toggleMute}
+              aria-label={micMuted ? "เปิดไมค์" : "ปิดไมค์"}
+              aria-pressed={micMuted}
+              title={
+                micMuted
+                  ? "ไมค์ปิดอยู่ — กดเพื่อเปิด"
+                  : "ปิดไมค์ (พิมพ์ทดสอบได้โดยไม่มีเสียงรบกวน)"
+              }
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: "none",
+                cursor: "pointer",
+                background: micMuted ? "#f59e0b" : "rgba(90,110,160,.55)",
+                color: "#fff",
+                fontSize: 15,
+                flexShrink: 0,
+              }}
+            >
+              {micMuted ? "🔇" : "🎤"}
+            </button>
+            <button
+              onClick={hangUp}
+              aria-label="วางสาย"
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: "none",
+                cursor: "pointer",
+                background: "#ef4444",
+                color: "#fff",
+                fontSize: 15,
+                flexShrink: 0,
+              }}
+            >
+              ⏹
+            </button>
           </div>
         </div>
       )}

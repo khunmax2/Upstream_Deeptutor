@@ -321,6 +321,20 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-07-16 — Voice call overlay: collapsible chat panel + calmer DOM-read
+  highlights.** The call overlay now starts as the mascot ALONE — the typed-
+  command box and the on-screen log (incl. the DOM-read notes) collapse by
+  default so the pet isn't buried under a panel. A `💬` control (with `🎤` mute
+  and `⏹` hang-up, moved out of the input row so they stay reachable when
+  collapsed, and centred under the panel so hang-up clears the app's bottom-
+  right account avatar) reopens the panel to type/inspect. The DOM-read note is
+  now concise English without the camera glyph (`Scanned N buttons, M fields`,
+  was `📸 อ่านจอ: …`). Separately, the agent's neon element-highlight layer was
+  too loud over the page — added a single `STEADY_OPACITY` dial
+  (`neonHighlights.ts`, 1.0 → 0.55) that dims every box and label uniformly.
+  Files: `web/components/voice/VoiceCallWidget.tsx`,
+  `web/lib/page-actuator/neonHighlights.ts`.
+
 - **2026-07-13 — In-page agent grounding: HARD destination check (issue 01).**
   The prompt-only "confirm the URL before a confident `done`" rule proved
   necessary but NOT sufficient live (false success ~2/5, the model conflating

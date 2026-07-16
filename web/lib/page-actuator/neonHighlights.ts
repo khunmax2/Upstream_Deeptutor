@@ -20,6 +20,11 @@ const LABEL_CLASS = 'playwright-highlight-label'
 const FADE_IN_MS = 420
 const FADE_OUT_MS = 650
 
+// Steady-state opacity of the WHOLE highlight layer (boxes + number labels).
+// Live feedback: at full strength the neon frames read too loud over the page —
+// this one dial dims every box and label uniformly. Lower = subtler. (0..1)
+const STEADY_OPACITY = '0.55'
+
 let pendingFadeOut: number | null = null
 
 /** Blend an 0-255 channel toward white — pure #F00-style hues read harsh;
@@ -64,11 +69,11 @@ export function neonizeHighlights(): void {
     container.style.opacity = '0'
     requestAnimationFrame(() => {
       container.style.transition = `opacity ${FADE_IN_MS}ms ease-out`
-      container.style.opacity = '1'
+      container.style.opacity = STEADY_OPACITY
     })
   } else {
     container.style.transition = 'none'
-    container.style.opacity = '1'
+    container.style.opacity = STEADY_OPACITY
   }
 
   for (const el of Array.from(container.querySelectorAll<HTMLElement>('div'))) {
@@ -125,6 +130,6 @@ export function fadeOutHighlights(cleanup: () => void): void {
     // The engine reuses the container across draws — never leave it stuck
     // transparent for the next sweep.
     container.style.transition = 'none'
-    container.style.opacity = '1'
+    container.style.opacity = STEADY_OPACITY
   }, FADE_OUT_MS)
 }
