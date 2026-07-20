@@ -345,8 +345,8 @@ export function SidebarShell({
           <Image
             src="/banner.png"
             alt="DeepTutor"
-            width={897}
-            height={236}
+            width={1701}
+            height={442}
             priority
             className="h-[22px] w-auto transition-transform duration-200 group-hover:scale-105"
           />

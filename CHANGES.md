@@ -93,6 +93,27 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 - **Learning / quiz:** `deeptutor/learning/prompts/th.yaml`; quiz judge accepts `th`.
 - **Detail:** `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
 
+## Branding
+
+- **2026-07-20 — Swapped the primary logo art for the "DeepWitya" brand.**
+  Replaced the visible-surface logos with new art: a book/circuit icon (square)
+  and a "DeepWitya" wordmark. Source images shipped with an opaque dark-navy
+  background; removed it via a difference-matte (per-pixel colour distance from
+  the corner-sampled background → smoothstep alpha) and trimmed to the content
+  bbox, so both work over light *and* dark UI. The icon was padded to a centred
+  square to avoid distortion in the fixed square containers. Files:
+  `web/public/logo.png` (Sidebar header icon), `web/public/logo_black.png`
+  (Home landing + session-loading icon), `web/public/banner.png` (Sidebar
+  wordmark), and `web/components/sidebar/SidebarShell.tsx` (banner
+  intrinsic `width`/`height` updated 897×236 → 1701×442 to match the new
+  aspect ratio). The browser/OS icons were regenerated from the new icon art:
+  `web/public/favicon-16x16.png` and `favicon-32x32.png` (transparent, LANCZOS
+  downscale) and `apple-touch-icon.png` (180×180 composited on an opaque
+  dark-navy field, since iOS ignores alpha); the `icons` metadata in
+  `web/app/layout.tsx` already points at these paths, so no code change was
+  needed there. Not yet reskinned: `web/public/logo-ver2.png` (co-writer
+  template).
+
 ## Documentation
 
 - **2026-07-14 — Configured Matt Pocock engineering skills for this fork.**
