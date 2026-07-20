@@ -111,8 +111,9 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   downscale) and `apple-touch-icon.png` (180×180 composited on an opaque
   dark-navy field, since iOS ignores alpha); the `icons` metadata in
   `web/app/layout.tsx` already points at these paths, so no code change was
-  needed there. Not yet reskinned: `web/public/logo-ver2.png` (co-writer
-  template).
+  needed there. `web/public/logo-ver2.png` (the brand mark embedded in the
+  co-writer sample template) was reset to the transparent DeepWitya wordmark
+  (900×233). All logo surfaces are now on the new brand.
 
 ## Documentation
 
