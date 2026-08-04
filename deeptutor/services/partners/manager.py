@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
+import hashlib
 import logging
 from pathlib import Path
 import re
@@ -91,15 +92,42 @@ def strip_legacy_global_delivery(channels: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in channels.items() if k not in LEGACY_GLOBAL_DELIVERY_KEYS}
 
 
-def slugify_partner_id(name: str) -> str:
-    # Keep Unicode letters/digits so non-Latin names (e.g. 中文) survive as a
-    # readable id; collapse every other run of characters to a single hyphen.
-    # ``isalnum`` is Unicode-aware and (unlike ``\w``) excludes underscore, so
-    # an id can never collide with the reserved ``_souls`` directory. ASCII is
-    # lower-cased; case-less scripts (CJK, …) pass through unchanged.
-    cleaned = "".join(c if c.isalnum() else "-" for c in name.strip().lower())
+def _slugify_id(name: str, *, fallback: str) -> str:
+    # Ids ride in URLs (``/partners/<id>``, ``/souls/<id>``) and can become
+    # on-disk names, so they must be ASCII/URL-safe: a non-Latin id (e.g.
+    # ``中文``) yields a link the browser can't cleanly display or share, which
+    # left CJK-named entities unreachable. Keep ASCII letters/digits
+    # (lower-cased) and collapse every other run to a single hyphen —
+    # ``isascii`` drops CJK/other scripts and ``isalnum`` excludes underscore,
+    # so a partner id can't collide with the reserved ``_souls`` directory. When
+    # no ASCII survives (a pure-CJK name), fall back to a stable per-name handle
+    # so distinct non-Latin names still get distinct ids while the same name
+    # round-trips to the same id (keeping the create-time duplicate check
+    # meaningful). Only the id is slugged; the entity keeps its display name.
+    stripped = name.strip()
+    cleaned = "".join(c if c.isascii() and c.isalnum() else "-" for c in stripped.lower())
     slug = _HYPHEN_RUN_RE.sub("-", cleaned).strip("-")
-    return slug or "partner"
+    if slug:
+        return slug
+    if not stripped:
+        return fallback
+    # SHA1 here is a content-addressing handle (stable per-name id), not
+    # security; ``usedforsecurity=False`` documents that and clears bandit B324.
+    digest = hashlib.sha1(stripped.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
+    return f"{fallback}-{digest}"
+
+
+def slugify_partner_id(name: str) -> str:
+    """ASCII/URL-safe partner id derived from a display name (see
+    :func:`_slugify_id`); pure-CJK names get a stable ``partner-<hash>`` id."""
+    return _slugify_id(name, fallback="partner")
+
+
+def slugify_soul_id(name: str) -> str:
+    """ASCII/URL-safe soul-library id. Soul ids ride in ``/souls/<id>`` URLs
+    exactly like partner ids, so they get the same treatment (see
+    :func:`_slugify_id`); pure-CJK names get a stable ``soul-<hash>`` id."""
+    return _slugify_id(name, fallback="soul")
 
 
 def _optional_str_list(value: Any) -> list[str] | None:
@@ -107,6 +135,35 @@ def _optional_str_list(value: Any) -> list[str] | None:
     if isinstance(value, list):
         return [str(item) for item in value]
     return None
+
+
+#: On-disk spelling of "no restriction" for ``mcp_tools``. Deliberately *not*
+#: YAML null: a bare ``mcp_tools:`` key parses as null, and a hand-edit that
+#: writes it almost certainly means "none" — the one reading it must not be
+#: allowed to grant everything. Mirrors the ``["*"]`` convention
+#: ``MCPServerConfig.enabled_tools`` already uses.
+MCP_TOOLS_UNRESTRICTED = "*"
+
+
+def _mcp_tools_setting(data: dict[str, Any]) -> list[str] | None:
+    """Stored ``mcp_tools`` → whitelist, defaulting to deny.
+
+    MCP tools proxy host-side capabilities an admin configured deployment-wide,
+    so no partner may inherit them without an owner decision. Everything
+    ambiguous therefore denies: a config written before that default (no
+    ``mcp_tools`` key), a bare key (YAML null), and a malformed value all read
+    as ``[]`` — MCP off. Unrestricted has exactly one on-disk spelling,
+    ``["*"]``, which :meth:`PartnerManager.save_config` writes for it.
+    """
+    if "mcp_tools" not in data:
+        return []
+    value = data["mcp_tools"]
+    if value is None:
+        return []
+    names = _optional_str_list(value)
+    if names is None:
+        return []
+    return None if MCP_TOOLS_UNRESTRICTED in names else names
 
 
 @dataclass
@@ -138,8 +195,17 @@ class PartnerConfig:
     # built-in; list = whitelist. Lets an owner deny e.g. memory to an
     # IM-facing partner.
     builtin_tools: list[str] | None = None
-    # Configured MCP tools the partner may load. None = all; [] = MCP off.
-    mcp_tools: list[str] | None = None
+    # Configured MCP tools the partner may load. Defaults to ``[]`` — MCP off —
+    # because these tools reach host-side capabilities configured
+    # deployment-wide, and a partner exposed on an IM channel must not inherit
+    # them just because an admin added a server. ``None`` still means
+    # unrestricted, reachable only when an owner opts in explicitly (on disk:
+    # ``["*"]``, see ``MCP_TOOLS_UNRESTRICTED``).
+    # NOTE the polarity here is the inverse of the *user grant* of the same name:
+    # ``grant.mcp_tools=None`` denies (``multi_user.tool_access``), because a
+    # missing grant must not hand a real account the deployment's servers, while
+    # a partner's ``None`` is an owner's deliberate "allow everything".
+    mcp_tools: list[str] | None = field(default_factory=list)
 
 
 @dataclass
@@ -322,7 +388,7 @@ class PartnerManager:
                 soul_origin=dict(data.get("soul_origin", {}) or {}),
                 enabled_tools=_optional_str_list(data.get("enabled_tools")),
                 builtin_tools=_optional_str_list(data.get("builtin_tools")),
-                mcp_tools=_optional_str_list(data.get("mcp_tools")),
+                mcp_tools=_mcp_tools_setting(data),
             )
         except Exception:
             logger.exception("Failed to load partner config %s", partner_id)
@@ -363,8 +429,12 @@ class PartnerManager:
             data["enabled_tools"] = list(config.enabled_tools)
         if config.builtin_tools is not None:
             data["builtin_tools"] = list(config.builtin_tools)
-        if config.mcp_tools is not None:
-            data["mcp_tools"] = list(config.mcp_tools)
+        # Written unconditionally: an absent key reads as deny (see
+        # :func:`_mcp_tools_setting`), so the unrestricted opt-in only survives a
+        # round-trip when it lands on disk as its own explicit spelling.
+        data["mcp_tools"] = (
+            [MCP_TOOLS_UNRESTRICTED] if config.mcp_tools is None else list(config.mcp_tools)
+        )
 
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         tmp_path.write_text(yaml.dump(data, allow_unicode=True), encoding="utf-8")

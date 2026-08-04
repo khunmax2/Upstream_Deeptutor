@@ -28,12 +28,16 @@ import SoulEditor from "@/components/partners/SoulEditor";
 
 type SourceTab = "library" | "persona" | "custom";
 
+// Soul ids ride in /souls/<id> URLs, so keep them ASCII/URL-safe (a CJK id is
+// unreachable) — the server re-slugs authoritatively and the create flow uses
+// the returned id, but producing an ASCII slug here keeps the preview honest
+// and avoids sending a non-ASCII id over the wire.
 function slugifySoulId(name: string): string {
   return (
     name
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9一-鿿]+/g, "-")
+      .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || `soul-${Date.now().toString(36)}`
   );
 }

@@ -7,6 +7,7 @@ from deeptutor.services.partners.manager import (
     get_partner_manager,
     mask_channel_secrets,
     slugify_partner_id,
+    slugify_soul_id,
 )
 from deeptutor.services.partners.runtime import PartnerRunner
 from deeptutor.services.partners.sessions import PartnerSessionStore
@@ -20,4 +21,5 @@ __all__ = [
     "get_partner_manager",
     "mask_channel_secrets",
     "slugify_partner_id",
+    "slugify_soul_id",
 ]

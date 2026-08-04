@@ -62,7 +62,6 @@ from deeptutor.core.agentic import (
     UsageTracker,
     build_completion_kwargs,
     build_openai_client,
-    build_tool_call_entries,
     can_use_native_tool_calling,
     classify_label,
     dispatch_tool_calls,
@@ -2430,21 +2429,6 @@ class _BlockLoopHost:
         # actual report begins.
         return None
 
-    def assistant_message_with_tool_calls(
-        self,
-        *,
-        content: str,
-        tool_calls: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        # Route through the shared builder so provider extras (Gemini 3's
-        # required thought_signature) ride back on replay — see
-        # ``build_tool_call_entries``.
-        return {
-            "role": "assistant",
-            "content": content or None,
-            "tool_calls": build_tool_call_entries(tool_calls),
-        }
-
     def protocol_retry_notice(self) -> str:
         return self._pipeline._t(
             "notices.protocol_retry",
@@ -2767,21 +2751,6 @@ class _RephraseLoopHost:
     async def emit_final(self, text: str, final_meta: dict[str, Any]) -> None:
         # The refined topic is internal; not streamed as user content.
         return None
-
-    def assistant_message_with_tool_calls(
-        self,
-        *,
-        content: str,
-        tool_calls: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        # Route through the shared builder so provider extras (Gemini 3's
-        # required thought_signature) ride back on replay — see
-        # ``build_tool_call_entries``.
-        return {
-            "role": "assistant",
-            "content": content or None,
-            "tool_calls": build_tool_call_entries(tool_calls),
-        }
 
     def protocol_retry_notice(self) -> str:
         return self._pipeline._t(

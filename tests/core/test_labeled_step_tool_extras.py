@@ -119,12 +119,18 @@ async def test_labeled_step_preserves_gemini_thought_signature() -> None:
     )
 
 
-def test_build_tool_call_entries_echoes_provider_extras() -> None:
-    """Replay seam: the shared entry builder echoes the extra back verbatim."""
-    from deeptutor.core.agentic.loop import build_tool_call_entries
+def test_assistant_message_echoes_provider_extras() -> None:
+    """Replay seam: the canonical builder the loop calls echoes the extra back.
 
-    entries = build_tool_call_entries(
-        [{"id": "call_1", "name": "rag", "arguments": "{}", "extra": SIGNATURE}]
+    This is the seam that actually runs — ``run_agentic_loop`` builds its
+    replayed assistant turn through ``messages.assistant_message_with_tool_calls``
+    so the signature must survive there, not merely in a helper.
+    """
+    from deeptutor.core.agentic.messages import assistant_message_with_tool_calls
+
+    message = assistant_message_with_tool_calls(
+        "", [{"id": "call_1", "name": "rag", "arguments": "{}", "extra": SIGNATURE}]
     )
+    entries = message["tool_calls"]
     assert entries[0]["function"]["name"] == "rag"
     assert entries[0]["extra_content"] == SIGNATURE["extra_content"]
