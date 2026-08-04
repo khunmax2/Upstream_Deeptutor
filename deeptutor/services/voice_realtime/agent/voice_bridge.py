@@ -80,7 +80,16 @@ class AgentVoiceBridge:
 
     @property
     def waiting_on_user(self) -> bool:
-        return self._loop.waiting_on_user
+        """True exactly while incoming speech is consumed as the answer.
+
+        Derived from the pending answer future rather than the loop's flag: the
+        loop raises ``waiting_on_user`` before it awaits the gate, so there is a
+        window where it is waiting but nothing can receive an answer yet. Anyone
+        routing speech (or waiting for readiness) must see the seam that
+        ``deliver_speech`` actually checks, not the loop's earlier intent.
+        """
+        answer = self._answer
+        return answer is not None and not answer.done()
 
     def abort(self) -> None:
         """Barge-in / takeover / hang-up: stop the run, release any waiter."""
@@ -92,7 +101,7 @@ class AgentVoiceBridge:
     def deliver_speech(self, text: str) -> bool:
         """Feed incoming speech; True when it was consumed as an answer."""
         answer = self._answer
-        if self._loop.waiting_on_user and answer is not None and not answer.done():
+        if answer is not None and not answer.done():
             answer.set_result(text)
             return True
         return False
@@ -150,10 +159,14 @@ class AgentVoiceBridge:
         await self._notify(text)
 
     async def _ask_user(self, question: str) -> str:
+        # Arm the answer BEFORE notifying/speaking: the user can start replying
+        # while the question is still being read out, and that speech is the
+        # answer, not a barge-in. See ``_new_answer``.
+        answer = self._new_answer()
         await self._notify(question)
         await self._speak(question)
         try:
-            return await asyncio.wait_for(self._new_answer(), timeout=ANSWER_TIMEOUT_S)
+            return await asyncio.wait_for(answer, timeout=ANSWER_TIMEOUT_S)
         except (TimeoutError, asyncio.TimeoutError):
             return "(no answer — the user stayed silent)"
         finally:
@@ -161,10 +174,11 @@ class AgentVoiceBridge:
 
     async def _confirm(self, question: str) -> bool:
         """Danger-gate confirm: strict — only a clear yes releases the click."""
+        answer_future = self._new_answer()  # armed first — see ``_ask_user``
         await self._notify(question)
         await self._speak(question)
         try:
-            answer = await self._new_answer()
+            answer = await answer_future
         except asyncio.CancelledError:
             # The gate's own timeout cancels us: no answer is a no.
             raise
@@ -173,6 +187,13 @@ class AgentVoiceBridge:
         return is_affirmative(answer)
 
     def _new_answer(self) -> asyncio.Future[str]:
+        """Arm the answer seam; from here ``waiting_on_user`` reads True.
+
+        Callers must arm before their first ``await`` so no scheduling order can
+        open a window where the run is gated but speech has nowhere to land —
+        on Python 3.11 ``asyncio.wait_for`` wraps its coroutine in a Task, so the
+        gate body does not start until the loop schedules it.
+        """
         future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         self._answer = future
         return future
