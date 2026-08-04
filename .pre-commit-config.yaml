@@ -39,8 +39,12 @@ repos:
   # ============================================
   # Python code formatting and linting
   # ============================================
+  # Keep this pin in step with the ruff version CI installs
+  # (.github/workflows/tests.yml → "Install lint tools"). A drift here means the
+  # hook can format code the CI gate then rejects — 0.16 formats python blocks
+  # inside Markdown, older versions leave them alone.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.7
+    rev: v0.16.0
     hooks:
       - id: ruff
         # Added --quiet to suppress logs; --exit-zero makes it a "soft fail" if desired
