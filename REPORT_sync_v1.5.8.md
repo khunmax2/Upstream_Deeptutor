@@ -49,7 +49,7 @@ Upstream added a **new** partial-update model in
 
 ```python
 class UISettingsUpdate(BaseModel):
-    language: Literal["zh", "en"] | None = None   # no "th"
+    language: Literal["zh", "en"] | None = None  # no "th"
 ```
 
 It **auto-merged cleanly** — no conflict, because the class is entirely new. The
