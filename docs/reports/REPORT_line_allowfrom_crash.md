@@ -95,11 +95,11 @@ Runtime layer ปฏิเสธข้อความจาก sender ที่�
           ch = self.channels[name]
           if getattr(ch.config, "allow_from", None) == []:
               _logger().error(
-                  '{} channel disabled: empty allowFrom (denies all). '
+                  "{} channel disabled: empty allowFrom (denies all). "
                   'Set ["*"] to allow everyone, or add specific user IDs.',
                   name,
               )
-              del self.channels[name]   # ปิดเฉพาะตัวนี้ ไม่ crash ทั้ง backend
+              del self.channels[name]  # ปิดเฉพาะตัวนี้ ไม่ crash ทั้ง backend
   ```
 
 ### ตัวเลือก B — แก้ default ตอนสร้าง config ไม่ให้ออกมาว่าง
