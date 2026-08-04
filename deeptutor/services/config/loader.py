@@ -172,30 +172,33 @@ def parse_language(language: Any) -> str:
     """
     Unified language configuration parser, supports multiple input formats
 
-    Supported language representations:
-    - English: "en", "english", "English"
-    - Chinese: "zh", "chinese", "Chinese"
-    - Thai: "th", "thai", "Thai"
+    Resolves the spelled-out aliases of the locales that ship prompt
+    resources ("english"/"en", "chinese"/"cn"/"zh", "thai"/"th") and otherwise
+    passes the code through normalized, so a request for Japanese stays ``"ja"``
+    instead of collapsing to Chinese (#712). Callers that load per-language
+    prompt files fall back to English when a code has no files of its own; what
+    makes the model actually answer in that language is the directive built from
+    this code, not the prompt file.
 
     Args:
-        language: Language configuration value (can be "zh"/"en"/"th"/"Chinese"/"English" etc.)
+        language: Language configuration value ("zh"/"en"/"th"/"Chinese"/"ja"/…)
 
     Returns:
-        Standardized language code: 'zh', 'en' or 'th', defaults to 'zh'
+        Normalized language code, defaulting to 'zh' when nothing is configured
     """
-    if not language:
+    if not isinstance(language, str) or not language.strip():
         return "zh"
 
-    if isinstance(language, str):
-        lang_lower = language.lower()
-        if lang_lower in ["en", "english"]:
-            return "en"
-        if lang_lower in ["th", "thai"]:
-            return "th"
-        if lang_lower in ["zh", "chinese", "cn"]:
-            return "zh"
+    from deeptutor.services.prompt.language import normalize_language
 
-    return "zh"  # Default Chinese
+    code = normalize_language(language)
+    if code in ("en", "english"):
+        return "en"
+    if code in ("zh", "chinese", "cn"):
+        return "zh"
+    if code in ("th", "thai"):
+        return "th"
+    return code
 
 
 def get_agent_params(module_name: str) -> dict:

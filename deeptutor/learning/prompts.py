@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 from deeptutor.services.config import parse_language
+from deeptutor.services.prompt.language import append_language_directive
 
 _PROMPT_DIR = Path(__file__).with_name("prompts")
 
@@ -31,14 +32,10 @@ def _get_nested(data: dict[str, Any], path: str, default: str = "") -> str:
 def get_learning_prompts(language: str = "zh") -> dict[str, Any]:
     """Load localized Mastery Path LLM prompts."""
     lang = parse_language(language)
-    # Each language falls back to English (then Chinese) rather than coercing
-    # Thai onto the Chinese asset.
-    if lang == "th":
-        candidates = ["th", "en"]
-    elif lang == "zh":
-        candidates = ["zh", "en"]
-    else:
-        candidates = ["en", "zh"]
+    # Regional codes reuse their base locale's file ("zh-tw" -> zh.yaml, "th-TH"
+    # -> th.yaml); a language with no file of its own lands on English, not
+    # Chinese (#712) — so Thai is never coerced onto the Chinese asset.
+    candidates = dict.fromkeys([lang, lang.split("-", 1)[0], "en", "zh"])
     for candidate in candidates:
         path = _PROMPT_DIR / f"{candidate}.yaml"
         if path.exists():
@@ -54,6 +51,11 @@ def notebook_generation_prompts(language: str, records_json: str) -> tuple[str, 
     prompts = get_learning_prompts(language)
     system_prompt = _get_nested(prompts, "notebook.system", NOTEBOOK_SYSTEM)
     user_template = _get_nested(prompts, "notebook.user", NOTEBOOK_USER)
+    # Only en/zh ship prompt files, so a Japanese learner is handed English
+    # scaffolding. The directive — the same one book, quiz and Deep Research
+    # already append — is what makes the answer come back in the language that
+    # was actually asked for (#712).
+    system_prompt = append_language_directive(system_prompt, parse_language(language))
     return system_prompt, user_template.format(records_json=records_json)
 
 
