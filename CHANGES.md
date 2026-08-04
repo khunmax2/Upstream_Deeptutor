@@ -134,6 +134,58 @@ icon, Thai labels) deferred._
 
 _Record each upstream version merged into this fork here._
 
+### v1.5.8 (`44fa7a15`) — merged 2026-08-04
+
+Merged upstream **v1.5.8** into `main` (merge commit `60844ff8`) from the previous
+fork point v1.4.15 (`bca6f6e9`). **516 files, +51,963 / −4,474** across 157
+upstream commits — the largest sync so far. New surface: admin **User-Management**,
+**MCP store/services** + **CLI-Anything apps**, attachment size/extraction
+settings, **Codex OAuth**, a **context-budget meter**, four new agent CLIs
+(Gemini / Kimi / opencode / MiMo Code), and book-engine work. Upstream CI green.
+
+**8 conflicts**, resolved "upstream structure wins + Thai re-applied":
+
+- `services/config/loader.py` — took upstream's generalized `parse_language`
+  (#712: a request for Japanese stays `"ja"` instead of collapsing to Chinese) and
+  re-added the `th`/`thai` alias, which upstream's passthrough would otherwise
+  return as `"thai"` and break every `== "th"` consumer.
+- `learning/prompts.py` — took upstream's generalized candidate chain
+  (`[lang, base, "en", "zh"]`); `th.yaml` still wins for Thai and `en` precedes
+  `zh`, so Thai is never coerced onto the Chinese asset.
+- `agents/chat/agentic_pipeline.py` — took upstream: the fork's Thai KB-attach
+  string belonged to a function upstream refactored into `render_manifest_note`;
+  keeping our side would have raised `NameError` on a stale `joined`.
+- `runtime/registry/deferred_tools.py` — took upstream's regrouped tool manifest
+  (tuple group keys, new CLI-apps group) and re-added `normalize_agent_language`
+  plus the `th` headers.
+- `web/lib/settings-nav.ts` — dropped the fork's `/settings/mcp` nav entry:
+  upstream moved MCP to `/space/mcp` and restructured the nav to
+  tools / capabilities / attachments.
+- `SettingsContext.tsx`, `ConnectedAgents.tsx`, `SubagentSettingsEditor.tsx` —
+  took upstream's new fields and per-backend feature-flag gating, re-added `th`.
+
+**Silent Thai regression caught (not a git conflict):** upstream's new
+`UISettingsUpdate` model in `deeptutor/api/routers/settings.py` shipped
+`language: Literal["zh", "en"]`, so `PUT /api/v1/settings/ui` with `"th"` — which
+is exactly what the frontend sends — would have failed pydantic validation with a
+422. Auto-merged in cleanly, invisible to build and parity checks. Added `"th"`.
+
+**Language-trap sweeps** (now a permanent checklist item, both sides): 24 TS
+`Lang` objects missing `th` (settings-nav, SpaceDashboard, and the new
+`SYSTEM_PROMPT_HINT` / `GEMINI_PERMISSION_MODES` maps in SubagentSettingsEditor)
+and 1 Python language `Literal`. All fixed; both sweeps clean.
+
+**Thai i18n delta:** +246 new keys, −3 orphaned → `set(th) == set(en)` = **2911**
+(exact parity). Translations recorded in `th_i18n_delta_v1.5.8.json`.
+
+Verification: web build OK (57 pages), node tests **371/371**, i18n parity OK,
+`ruff check`/`format` OK, pytest **3607 passed** (25 failed — all from the
+uninstalled `[partners]` extra: `mcp`, `telegram`, `slack_sdk`, `PyJWT[crypto]`;
+CI installs `.[all]`), live Thai chat replied in fluent Thai. Detail:
+`REPORT_sync_v1.5.8.md`.
+
+> Next sync merge-base = `44fa7a15`.
+
 ### v1.4.15 (`bca6f6e9`) — merged 2026-07-01
 
 Merged upstream **v1.4.15** into `main` (merge commit `bdb41011`) from the previous
