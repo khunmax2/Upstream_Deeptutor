@@ -10,10 +10,10 @@ upstream.
 - **Upstream:** https://github.com/HKUDS/DeepTutor
 - **Upstream baseline:** v1.4.6 (commit `7ac3a3ba`)
 
-> Detailed, per-round records are in the committed `REPORT_*.md` files and the
-> git commit history. This file is the high-level, human-readable summary.
-> See also `ARCHITECTURE_overview.md` — how the three workstreams (Thai i18n,
-> v1.4.8 sync, LINE) attach to the upstream core.
+> Detailed, per-round records are in the committed `docs/reports/REPORT_*.md`
+> files and the git commit history. This file is the high-level, human-readable
+> summary. See also `docs/ARCHITECTURE_overview.md` — how the three workstreams
+> (Thai i18n, v1.4.8 sync, LINE) attach to the upstream core.
 
 ---
 
@@ -22,6 +22,25 @@ upstream.
 These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
+
+- **2026-07-09 — Gemini 3 tool calls no longer 400 on the second agent-loop
+  round (`thought_signature`).** Gemini 3 models attach a REQUIRED
+  `thought_signature` to every function call (delivered as `extra_content`
+  on the streamed tool-call delta via the OpenAI-compat endpoint) and reject
+  any follow-up request whose replayed assistant message lacks it
+  (`400 INVALID_ARGUMENT: Function call is missing a thought_signature`).
+  The agent loop (`deeptutor/agents/chat/agent_loop.py`) accumulated only
+  `id`/`name`/`arguments` from stream deltas and rebuilt a minimal
+  OpenAI-shape message, so with a Gemini 3 chat model EVERY multi-round turn
+  failed at round 2 and degraded to a forced finish — whose summary could
+  claim tool actions that never ran (live symptom: voice UI said
+  "พิมพ์แล้วครับ" while nothing was typed). Fix: provider extras from
+  `model_extra` on the tool-call delta are accumulated and echoed back
+  verbatim in `_assistant_message_with_tool_calls`. Provider-agnostic
+  (extras pass through untouched; absent extras are a no-op). Reproduced
+  red/green against the live API before the fix; regression test
+  `tests/agents/chat/test_agent_loop.py::test_tool_call_provider_extras_survive_the_replay`.
+  Candidate for an upstream PR.
 
 - **2026-06-20 — `allowFrom` empty no longer crashes the whole backend.**
   `ChannelManager._validate_allow_from` (`deeptutor/partners/channels/manager.py`)
@@ -33,6 +52,27 @@ back to HKUDS; once merged upstream the divergence is removed.
   senders when the allowlist is empty, so deny-by-default is preserved. Added unit
   tests (`tests/services/partners/test_channel_manager.py::TestValidateAllowFrom`).
   Candidate for an upstream PR (see `REPORT_line_allowfrom_crash.md`).
+
+- **2026-07-14 — `web/.prettierrc.json` now matches the style `web/` is actually
+  written in.** The config (present since upstream's initial commit, never since
+  modified) declared `semi: false`, `singleQuote: true`, `printWidth: 100`,
+  `arrowParens: "avoid"`, `trailingComma: "es5"` — but no file in `web/` has ever
+  been formatted that way. The tree is written in Prettier defaults: 355 of 400
+  checkable files are byte-for-byte default-clean, and `prettier --check` failed
+  on **389/400** files under the declared config versus **44** under defaults.
+  The mismatch was latent because nothing enforced it (`web/package.json` has no
+  `format` script, and the `.pre-commit-config.yaml` prettier hook — which globs
+  all of `^web/.*` — is not installed locally). It was a live trap: any ad-hoc
+  `npx prettier --write` reformatted an entire file (one 11-line edit produced a
+  123-insertion/144-deletion diff), and `pre-commit run --all-files` would have
+  rewritten the whole frontend. Realigned the five deviating options to Prettier
+  3.x defaults, verified equivalent: `prettier --check` with the config now fails
+  on exactly the same file set as `--no-config`. Config-only, 5 lines, no source
+  file touched — deliberately *not* reformatting `web/` to the old config, which
+  would have rewritten 389 files and produced conflicts on essentially every
+  frontend file at each upstream sync (fork policy §3). Candidate for an upstream
+  PR. The 44 files that are not default-clean are pre-existing and untouched;
+  they must be formatted before the pre-commit prettier hook can be enabled.
 
 ## Thai (th) localization — 2026-06-17
 
@@ -53,8 +93,173 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 - **Learning / quiz:** `deeptutor/learning/prompts/th.yaml`; quiz judge accepts `th`.
 - **Detail:** `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
 
+## Branding
+
+- **2026-07-20 — Swapped the primary logo art for the "DeepWitya" brand.**
+  Replaced the visible-surface logos with new art: a book/circuit icon (square)
+  and a "DeepWitya" wordmark. Source images shipped with an opaque dark-navy
+  background; removed it via a difference-matte (per-pixel colour distance from
+  the corner-sampled background → smoothstep alpha) and trimmed to the content
+  bbox, so both work over light *and* dark UI. The icon was padded to a centred
+  square to avoid distortion in the fixed square containers. Files:
+  `web/public/logo.png` (Sidebar header icon), `web/public/logo_black.png`
+  (Home landing + session-loading icon), `web/public/banner.png` (Sidebar
+  wordmark), and `web/components/sidebar/SidebarShell.tsx` (banner
+  intrinsic `width`/`height` updated 897×236 → 1701×442 to match the new
+  aspect ratio). The browser/OS icons were regenerated from the new icon art:
+  `web/public/favicon-16x16.png` and `favicon-32x32.png` (transparent, LANCZOS
+  downscale) and `apple-touch-icon.png` (180×180 composited on an opaque
+  dark-navy field, since iOS ignores alpha); the `icons` metadata in
+  `web/app/layout.tsx` already points at these paths, so no code change was
+  needed there. `web/public/logo-ver2.png` (the brand mark embedded in the
+  co-writer sample template) was reset to the transparent DeepWitya wordmark
+  (900×233). All logo surfaces are now on the new brand.
+
 ## Documentation
 
+- **2026-07-14 — Configured Matt Pocock engineering skills for this fork.**
+  Added the `## Agent skills` consumer block to `CLAUDE.md` and created
+  `docs/agents/` configuration for the installed mattpocock/skills workflows:
+  GitHub Issues as the issue tracker, the default five triage labels, and a
+  single-context domain-doc layout (`CONTEXT.md` + `docs/adr/`). This lets
+  `to-spec`, `to-tickets`, `triage`, `wayfinder`, `grill-with-docs`, and related
+  skills read a repo-local contract before acting. Files: `CLAUDE.md`,
+  `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`,
+  `docs/agents/domain.md`, `docs/reports/REPORT_agent_skills_setup_2026-07-14.md`.
+
+- **2026-07-13 — Refreshed `VOICE.md` (voice feature map) to current state.**
+  The flow diagram now shows the `unclear` classifier bucket, the layer-2
+  `kb_router` (meta/unrelated/content), and the loop's hard-grounding step;
+  added a "two lines by surface/WebSocket" note (call-widget input — voice OR
+  typed-in-widget — rides the voice pipeline, while the home chat composer goes
+  straight to `ChatOrchestrator`, bypassing the rungs). Tables gained
+  `kb_router.py`, `route_grounding.py`, `route_manifest.json`, the feature-flag
+  envs (`DEEPTUTOR_VOICE_KB_ROUTING`, `DEEPTUTOR_AGENT_HARD_GROUNDING`), and the
+  new tests; the backlog was re-cut (grounding 01/02/03 + KB routing marked done,
+  live e2e + Gemini thinking-disable remain). Files: `VOICE.md`.
+
+- **2026-07-11 — Closed the in-page agent build rounds (Phases A–D) with a
+  report.** New `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`:
+  what each phase shipped (with commit SHAs), the three live-hardening rounds
+  (routing gaps, perf, narration, 429 fail-fast), and every deviation from the
+  plan with its reason. `docs/planning/PLAN_inpage_agent_parity.md` status
+  updated — A–D checkboxes ticked, Phase E (+ D4 `ui_graph` fate, which
+  depends on E data) left open; preamble links the report. Per fork policy
+  §1.3 (multi-step work closes each round with a committed report). Files:
+  `docs/reports/REPORT_inpage_agent_phases_AD_2026-07-11.md`,
+  `docs/planning/PLAN_inpage_agent_parity.md`.
+
+- **2026-07-13 — Voice intent classifier: a semantic router before the chat
+  fallback (behind a flag).** New
+  `deeptutor/services/voice_realtime/intent_classifier.py` decides `chat` vs
+  `ui_task` for an utterance; a seam in `pipeline.run_text_turn` (right before
+  `rung=llm`, gated on `DEEPTUTOR_VOICE_CLASSIFIER` + a configured model + the
+  loop) sends `ui_task` to the in-page agent loop instead of letting the chat LLM
+  do one shallow UI action. Fixes the class where a multi-step / paraphrased
+  command ("สร้างหนังสือใหม่") half-navigated and stopped — keyword rungs can't
+  scale, so meaning is interpreted first (A1 hybrid: the free deterministic
+  fast-path still runs before the classifier). Uses a cheap LITE model
+  (classification is easy); off ⇒ today's routing byte-identical; a classifier
+  failure defers to the chat path (never breaks a turn). Voice suite 410 green
+  (+10 tests). See `docs/issues/voice-intent-classifier/`. Files:
+  `deeptutor/services/voice_realtime/intent_classifier.py`,
+  `deeptutor/services/voice_realtime/pipeline.py`,
+  `tests/services/voice_realtime/test_intent_classifier.py`,
+  `tests/services/voice_realtime/agent/test_wiring.py`, `.env.agent.example`.
+
+- **2026-07-12 — Provider adaptation (part 1): reasoning params drop on hosts
+  that reject them.** `reasoning_params.py::build_openai_compatible_reasoning_kwargs`
+  now takes the request `base_url` and, for hosts in `_REASONING_UNSUPPORTED_HOSTS`
+  (Groq is the first), emits NO `reasoning_effort` / thinking `extra_body` — the
+  model falls back to its own default and the call succeeds. This fixes BOTH
+  Groq failures at once (the dashscope-style `enable_thinking` 400 and the
+  `reasoning_effort=minimal` 400) regardless of which provider the model name
+  routed to, so switching the agent onto Groq needs no code change. Host-matched
+  on `self.api_base` from `openai_compat_provider`; only the listed hosts change
+  behaviour (Gemini/OpenAI/etc. untouched — live-verified). llm suite 125 green
+  (+4 tests). Part of `docs/issues/llm-provider-adaptation/`. Files:
+  `deeptutor/services/llm/reasoning_params.py`,
+  `deeptutor/services/llm/provider_core/openai_compat_provider.py`,
+  `tests/services/llm/test_reasoning_params.py`.
+
+- **2026-07-12 — Phase E4: page-agent comparison harness (deferred).** New
+  `eval/inpage_agent/run_pageagent.mjs` + `_pageagent_entry.ts` bundle Alibaba
+  page-agent's core into a headless Chromium and drive it on the same live app /
+  task set / model, reading per-step token usage from its own history. Proven
+  through step 0 (observe → correct pick → click → navigate → tokens captured);
+  it then hangs on the observe of the step after a navigation (page-agent's own
+  `getBrowserState` waiting on the always-active DeepTutor SPA — it worked in the
+  prior eval bundled into the app, not injected headless). Deferred; the finding
+  and the "run via dev mount" path are recorded in the Phase E report. The
+  generated bundle is gitignored.
+
+- **2026-07-12 — Phase E: OUR full run is done — 10/10 on the live app, danger
+  gate proven live.** On a paid Gemini account (`gemini-3.5-flash`; the 2.5
+  family 404s "no longer available to new users" there) the harness ran all 10
+  standard tasks end-to-end with zero 429s: easy-nav (2 steps / ~9K tok each),
+  garble, multi-step (theme change 4 steps, new-KB dialog, model-settings), and
+  the danger case — `delete_kb_danger` fired the gate **twice** and the KB
+  survived (`gate_blocks=2`, `kb_present=True`), the exact trace page-agent
+  executes without hesitation. The token-usage log (prior entry) was verified
+  live too. Report + plan updated; the page-agent column (E4) + D4 remain.
+  Files: `docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`,
+  `docs/planning/PLAN_inpage_agent_parity.md`, `eval/inpage_agent/results_ours.json`.
+
+- **2026-07-12 — Test robustness: `test_ui_control.py` no longer depends on
+  ambient `DEEPTUTOR_AGENT_LOOP`.** The click/fill-miss outcome tests assert the
+  shipped-default (agent loop OFF) message, but a dev shell that sources
+  `.env.agent` sets `DEEPTUTOR_AGENT_LOOP=1`, flipping the result to the
+  `ui_agent_task` branch → 3 spurious failures locally (green in CI, which runs
+  the flag off). Added an autouse fixture that pins the agent-loop env off for
+  the file, so it is deterministic regardless of ambient env. Test-only; no
+  product behaviour changed. File:
+  `tests/services/voice_realtime/test_ui_control.py`.
+
+- **2026-07-12 — Voice agent: exact per-call token usage in the log.** The
+  in-page agent's `think()` (`deeptutor/services/voice_realtime/agent/llm.py`)
+  now calls a new **additive** `complete_with_usage()`
+  (`deeptutor/services/llm/factory.py`) that returns the full `TutorResponse`
+  (so `.usage` — the provider's real prompt/completion/total tokens — survives)
+  and logs one `agent llm usage: … prompt=… completion=… total=…` line per LLM
+  round. Paired with the loop's existing `steps=N`, this gives tokens-per-call
+  AND rounds-per-turn for voice from the log alone (the offline eval had to
+  estimate with tiktoken; this is the real count). `complete()` is left
+  byte-for-byte untouched — `complete_with_usage()` is a sibling, not a refactor
+  — so no existing caller (chat/tools/voice-chat) changes; verified by the llm
+  suite (121) + agent suite (102, +1 usage test) staying green. Files:
+  `deeptutor/services/llm/factory.py`, `deeptutor/services/llm/__init__.py`,
+  `deeptutor/services/voice_realtime/agent/llm.py`,
+  `tests/services/voice_realtime/agent/test_llm_scope.py`.
+
+- **2026-07-12 — Phase E: reproducible in-page-agent eval harness + first live
+  numbers + a fixer hardening.** New `eval/inpage_agent/` (all isolated, no
+  `web/`/`deeptutor/` source touched): a Playwright browser host that drives our
+  REAL page-actuator on a REAL live DeepTutor page over an HTTP bridge, a
+  10-task standard set grounded in the live UI, and a runner that exercises the
+  UNCHANGED `InPageAgentLoop` (real prompt/fixer/danger gate) with tiktoken
+  accounting and objective page-state success checks. Running it live surfaced a
+  real robustness bug: llama-3.x (Groq) emits the action *named by a field*
+  (`{"action_name":"…","index":2}`) instead of keyed — added fixer **heuristic
+  #7** (`deeptutor/services/voice_realtime/agent/fixer.py`) + tests
+  (`tests/services/voice_realtime/agent/test_fixer.py`, 14 green). The full
+  10×2 quantitative head-to-head is gated on a paid LLM tier (measured, not
+  guessed: free Gemini ~20 req/day; free Groq TPM below one ~8K-token call).
+  Files: `eval/inpage_agent/*`, `deeptutor/services/voice_realtime/agent/fixer.py`,
+  `tests/services/voice_realtime/agent/test_fixer.py`,
+  `docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`.
+
+- **2026-07-11 — Reorganized fork working docs out of the repo root into `docs/`.**
+  All 21 `REPORT_*.md` files moved to `docs/reports/`; `PLAN_inpage_agent_parity.md`,
+  `DESIGN_voice_grounding.md`, `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`,
+  and `th_i18n_delta_v1.4.15.json` moved to `docs/planning/`;
+  `ARCHITECTURE_overview.md` and `RUNBOOK_line_local.md` moved to `docs/`. Added
+  `docs/README.md` index. `FORK_TOUCHPOINTS.txt` stays at the root because
+  `scripts/thai_impact.sh` references it by path; upstream docs and compliance
+  files (`CHANGES.md`, `NOTICE`, `LICENSE`) also stay at the root. Updated path
+  references in `CLAUDE.md`, `CHANGES.md` (header note), and
+  `docs/ARCHITECTURE_overview.md`. Removed the upstream `/docs/` entry from
+  `.gitignore` (nothing generates into `docs/`; the fork now tracks it).
+  Pure `git mv` — file history preserved.
 - **2026-06-25 — Added production deployment guide + deploy templates.** New
   `DEPLOY.md`: step-by-step Docker Compose (production) deploy on a fresh server,
   including LINE webhook setup behind Caddy reverse proxy + auto-TLS, the
@@ -129,6 +334,2048 @@ icon, Thai labels) deferred._
   eviction; reply-token store also prunes expired entries opportunistically, so
   a public OA can't grow memory without bound. See the "Post-review fixes"
   section in `REPORT_line_implementation.md`.
+
+## Voice call (realtime) — prototype (in progress)
+
+Adding a two-way realtime voice layer (Mic → STT → LLM → TTS → speaker), Thai-first
+and low-latency. Design decision: a **separate realtime I/O layer**, not a Partners
+channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
+`MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
+code is additive and isolated for mergeability.
+
+- **2026-07-16 — Voice call overlay: collapsible chat panel + calmer DOM-read
+  highlights.** The call overlay now starts as the mascot ALONE — the typed-
+  command box and the on-screen log (incl. the DOM-read notes) collapse by
+  default so the pet isn't buried under a panel. A `💬` control (with `🎤` mute
+  and `⏹` hang-up, moved out of the input row so they stay reachable when
+  collapsed, and centred under the panel so hang-up clears the app's bottom-
+  right account avatar) reopens the panel to type/inspect. The DOM-read note is
+  now concise English without the camera glyph (`Scanned N buttons, M fields`,
+  was `📸 อ่านจอ: …`). Separately, the agent's neon element-highlight layer was
+  too loud over the page — added a single `STEADY_OPACITY` dial
+  (`neonHighlights.ts`, 1.0 → 0.55) that dims every box and label uniformly.
+  Files: `web/components/voice/VoiceCallWidget.tsx`,
+  `web/lib/page-actuator/neonHighlights.ts`.
+
+- **2026-07-13 — In-page agent grounding: HARD destination check (issue 01).**
+  The prompt-only "confirm the URL before a confident `done`" rule proved
+  necessary but NOT sufficient live (false success ~2/5, the model conflating
+  `/settings/tools`'s "Web Search" *tool* toggle with the dedicated
+  `/settings/search`). The loop now hard-verifies the destination independently
+  of the acting model: `resolve_target_route(task)` maps a navigation task to the
+  ONE canonical route it named — deterministically (exact/substring alias match,
+  contains-ties broken by matched-alias length; ambiguous or non-navigation tasks
+  resolve to `None` → no gate, so false-FAILURE risk is near zero), and at `done`
+  the loop compares the landed URL against that target and forces
+  `success=false` (`stopped_reason="grounding_miss"`) on a mismatch. Scope is
+  nav-destination tasks only — action tasks ("create a book", "toggle dark mode")
+  name no route and stay on the prompt + DangerGate. The route data is a new
+  curated manifest (`agent/route_manifest.json`, aliases seeded from
+  `web/lib/settings-nav.ts` + UI_PAGES), deliberately SEPARATE from
+  `ui_graph.json`'s open_path whitelist (a route may be grounded without being
+  voice-steerable). Rollback switch `DEEPTUTOR_AGENT_HARD_GROUNDING` (default on).
+  Tests: `test_route_grounding.py` (+21, incl. the exact tools-vs-search case),
+  `test_loop.py` (+5, override fires on wrong dest / passes on right / skips
+  action tasks / kill-switch / never resurrects a failure), and a node parity
+  test (`web/tests/voice-route-manifest-parity.test.ts`, manifest path ↔ real
+  page.tsx). 484 py + 203 node green; ruff clean. Live full-path e2e still
+  pending a non-503 full-tier model (the mechanism is deterministically pinned).
+  Files: `deeptutor/services/voice_realtime/agent/{route_grounding.py,
+  route_manifest.json,loop.py,llm.py,voice_bridge.py,types.py}`,
+  `tests/services/voice_realtime/agent/{test_route_grounding.py,test_loop.py,
+  test_voice_bridge.py}`, `web/tests/voice-route-manifest-parity.test.ts`,
+  issue 01 progress note, `docs/reports/REPORT_grounding_verify_2026-07-13.md`.
+
+- **2026-07-13 — In-page agent loop: env-tunable step delay + max steps
+  (latency lever, default-safe).** Reading the reference implementation
+  (`@page-agent`) confirmed it has no hidden reasoning knob for the loop's per-
+  step latency — for gemini-3.x flash it also settles on `reasoning_effort=
+  minimal`, exactly what our `reasoning_params.py` already sends; the real lever
+  is model choice + the between-step settle delay (page-agent's default 0.4s vs
+  our conservative 0.8s, chosen for animation-heavy DOMs). Rather than flip the
+  documented default and risk a mis-observation regression, added two optional
+  env knobs, `DEEPTUTOR_AGENT_STEP_DELAY` and `DEEPTUTOR_AGENT_MAX_STEPS`
+  (`agent/llm.py::step_delay_override`/`max_steps_override`), resolved at loop
+  construction in `agent/voice_bridge.py`. Unset ⇒ byte-identical to today
+  (0.8s / 15 steps); a deployment on light pages can set `0.4` to trim latency.
+  Invalid/negative ⇒ ignored. Tests in `test_llm_scope.py`; documented in
+  `.env.agent.example` and `VOICE.md`. Files: `agent/llm.py`,
+  `agent/voice_bridge.py`, `agent/loop.py` (comment), `.env.agent.example`,
+  `VOICE.md`.
+
+- **2026-07-13 — Voice router: layer-2 KB routing (Phase 3 of KB-aware routing).**
+  New `deeptutor/services/voice_realtime/kb_router.py` runs after the classifier
+  says `chat` (when `DEEPTUTOR_VOICE_KB_ROUTING` is on): from the KB content
+  manifest it decides `meta` (answer straight from the manifest — no RAG),
+  `content` (needs RAG), or `unrelated` (answer with RAG suppressed), so RAG fires
+  only when the question is actually about the KB — and whole-corpus questions
+  ("มีเอกสารอะไรบ้าง", "สรุป KB") are answered from the manifest, which top-k RAG
+  handles worst. Pipeline seam in `run_text_turn`: `meta` → spoken manifest
+  answer; `unrelated` → `_run_text_turn(..., knowledge_bases=[])` (a new param that
+  threads to `build_voice_context` to suppress RAG); `content`/`None` → today's
+  chat turn unchanged. Flag off ⇒ byte-identical. Tests: `test_kb_router.py` (16),
+  `test_wiring.py` (+4); voice+rag suites 630 green. Live on the real `LAWs_thai`
+  manifest: routing 6/6 and the meta answer named both statutes correctly with no
+  RAG. Env in `.env.agent.example`. See `docs/issues/kb-content-routing/PRD.md`.
+
+- **2026-07-13 — Voice router: `unclear` bucket (Phase 2 of KB-aware routing).**
+  The intent classifier now routes `chat | ui_task | unclear` instead of two
+  buckets: `intent_classifier.py` gained an `unclear` intent (garbled / cut-off /
+  incoherent utterances) with a narrower `chat` definition and a "short-but-clear
+  is NOT unclear" guard; `_parse_intent` honours explicit `chat`/`unclear` and
+  still biases an unparseable reply to `ui_task`. In `pipeline.run_text_turn`,
+  `unclear` → a spoken "ขอโทษครับ ผมไม่ค่อยเข้าใจ ช่วยพูดอีกครั้งได้ไหมครับ"
+  (`_speak_short_turn`, cached TTS) that ends the turn with **no** RAG search and
+  **no** loop — fixing the live case where a garbled fragment
+  ("แล้วมาวิเคราะห์หรืออะไรสักอย่") triggered a full `Searching KB 'LAWs_thai'`.
+  Gated by the existing classifier flag; off ⇒ unchanged. Tests:
+  `test_intent_classifier.py` (+1), `test_wiring.py` (+1); voice suite 433 green.
+  Live on `gemini-3.1-flash-lite`: 6/6 (both garbled → unclear; short clear
+  utterances not over-triggered). See `docs/issues/kb-content-routing/PRD.md`.
+
+- **2026-07-13 — KB content manifest (Phase 1 of KB-aware routing).** New
+  `deeptutor/services/rag/content_manifest.py` builds a cheap per-KB "what's in
+  here" manifest — `{documents:[{file,title,topics,summary}], summary}` — LAZILY
+  from the chunk text already in the active index's `docstore.json` (no re-upload,
+  no ingest-pipeline change), cached in the KB's `metadata.json` under
+  `content_manifest` and invalidated when `file_hashes` changes. It will let the
+  voice router (later phases) answer "what documents / summarise the KB" without a
+  RAG search and skip RAG on unrelated turns. Additive and INERT — nothing calls
+  it yet, so behaviour is unchanged. Optional `DEEPTUTOR_KB_MANIFEST_*` model env
+  (else the app's chat model). Tests: `tests/services/rag/test_content_manifest.py`
+  (9; rag suite 176 green); read-only verified against the real `LAWs_thai`
+  docstore. See `docs/issues/kb-content-routing/PRD.md`.
+
+- **2026-07-13 — Voice call: stop the infinite `not-allowed` restart loop when
+  the mic is blocked/denied.** `SpeechRecognition` re-arms itself in `onend`, so a
+  denied/blocked mic (permission refused, or an embedded browser pane that blocks
+  capture) produced a tight start→`not-allowed`→end→start loop that flooded the
+  console. `onerror` now latches a `micDeniedRef` on `not-allowed` /
+  `service-not-allowed`, all three restart paths (`onend`, playback-tail, un-mute)
+  respect it, and the caller sees "🎤 ไมค์ถูกบล็อก — พิมพ์คุยแทนได้". The latch
+  clears on each new call so a later permission grant re-attempts. File:
+  `web/components/voice/VoiceCallWidget.tsx`.
+
+- **2026-07-13 — Voice call: mic mute/un-mute toggle in the avatar overlay.**
+  Added a mute button next to hang-up in `VoiceCallWidget.tsx` so a caller can
+  type-test without ambient noise leaking into STT. Muting aborts the Web-Speech
+  recognition immediately (a flag alone wouldn't help — Web Speech buffers audio
+  and delivers a late transcript; abort discards the buffer), and un-muting
+  resumes it if the call is live and the bot is quiet. The mute state also guards
+  the three recognition-restart paths (onend, playback-tail, un-mute) and the
+  onresult handler, and shows an honest "🔇 ไมค์ปิด" status (a moded UI must show
+  its mode). Resets to listening on each new call / hang-up. Icon 🎤↔🔇 and
+  colour toggle verified live in the browser (state, aria-pressed, colour);
+  device capture itself is unchanged. File: `web/components/voice/VoiceCallWidget.tsx`.
+
+- **2026-07-13 — page-actuator serialize: label icon-only interactive elements
+  (issue 02).** An interactive element that would serialize as a blank
+  `[N]<tag />` (no text, no shown attributes) now falls back to a label — nested
+  descendant text (ignoring the interactive-stop), then the href's last path
+  segment (e.g. `[18]<a >models />` for `/settings/models`). This unblocks
+  icon-only navigation (settings sub-pages, toolbars) the loop previously saw as
+  a wall of indistinguishable blank links. Scoped to the fully-blank case only,
+  so every already-labelled line is byte-identical (regression-guarded). Files:
+  `web/lib/page-actuator/serialize.ts`, `web/tests/page-actuator-serialize.test.ts`
+  (+3); node suite 200 green.
+
+- **2026-07-13 — In-page agent loop prompt: grounding rules for honesty +
+  form/commit flows (issues 01 & 03).** `agent/prompt.py` now instructs the loop
+  to (01) CONFIRM it actually reached the asked-for destination — URL / header /
+  a distinctive label must match the goal — before `done` with success=true, and
+  otherwise report an honest miss (`success=false`) rather than a confident wrong
+  "done"; and (03, new `<forms_and_commits>` section) to infer form fields from
+  the request, keep stated defaults, `ask_user` ONCE (batched) for un-inferable
+  required input, and STOP at a review/proposal step to confirm before an
+  expensive/hard-to-reverse final commit (treated like a destructive control) —
+  neither bulldozing a confirm screen nor interrogating cheap reversible steps.
+  Regression guard: `tests/services/voice_realtime/agent/test_prompt.py` (new).
+  Behavioural compliance is verified live; the prompt text is the deliverable
+  here. Files: `agent/prompt.py`, `test_prompt.py`, issues 01/03 progress notes.
+
+- **2026-07-13 — In-page agent grounding: full-tier live verify of issues 01 &
+  03 (docs/eval only — no product code changed).** Ran both replays on a
+  full-tier loop model (`gemini-3.5-flash`; the endpoint has no `gemini-3.1-flash`,
+  only `-lite`) to settle the "pending live verify" left on the grounding-prompt
+  work. **Issue 01 (verify destination):** 5 runs of "ไปตั้งค่าแล้วเข้าหน้าตั้งค่า
+  การค้นหา" → false-success 2/5 (conflates `/settings/tools` with the dedicated
+  `/settings/search`), correct 1/5, honest-miss 1/5, crash 1/5 — the prompt rule
+  is necessary but NOT sufficient even on a full tier; recommend a hard grounding
+  step (compare landed route vs. named target, force `success=false` on mismatch).
+  Also surfaced a fixer fragility: `gemini-3.5-flash` prefaces JSON with a
+  reasoning block that breaks bracket extraction despite `reasoning_effort=
+  "minimal"` (ties to provider-adaptation part-2 thinking-disable). **Issue 03
+  (form/commit):** the prompt half is confirmed — the model correctly emits a
+  single batched `ask_user` for the un-inferable learning intent instead of
+  bulldozing — but two gaps block a full e2e verdict: (a) `run_voice_live.py`
+  builds the loop without `ask_user`/`pre_act`, so it can't exercise the
+  ask/confirm path (harness limitation; `voice_bridge.py` wires both), and (b) the
+  DangerGate backstop does NOT cover the expensive commit — `ui_control.
+  _DANGER_WORDS` omits the Stage-2 "ยืนยันข้อเสนอและสร้างโครงร่าง" button, so
+  fix-direction #1 (treat expensive create/generate/submit as a gated control)
+  remains unimplemented. Full write-up: `docs/reports/REPORT_grounding_verify_
+  2026-07-13.md`. Files: issues 01/03 progress notes, new report.
+
+- **2026-07-13 — In-page agent: expensive-commit confirm rung (issue 03 gap 2) +
+  wired eval harness (gap 1).** The verify pass above found the `DangerGate`
+  backstop did NOT cover the book "ยืนยันข้อเสนอและสร้างโครงร่าง / Confirm proposal
+  & build spine" commit (full book compilation — large LLM spend, hard to reverse),
+  because `ui_control._DANGER_WORDS` only lists destructive words. Added
+  `ui_control.is_expensive_commit()` — a SEPARATE, curated commit-phrase list
+  (ยืนยันข้อเสนอ / สร้างโครงร่าง / confirm proposal / build spine / 确认方案 /
+  生成主线) that trips the same `DangerGate` with a cost-framed question
+  ("ขั้นตอนนี้จะใช้ทรัพยากรมากและย้อนกลับยาก…") instead of the "ผลถาวร" (deletion)
+  wording. Kept deliberately narrow so the cheap create/generate buttons that
+  merely OPEN a form or produce a reviewable draft ("สร้างหนังสือใหม่",
+  "สร้างข้อเสนอ / Generate proposal", "สร้างแชทใหม่") are NOT gated — that is the
+  "interrogate every step" failure the policy warns against. Gate now fires on
+  `is_dangerous_button(line) OR is_expensive_commit(line)`. Also added
+  `eval/inpage_agent/run_voice_live_interactive.py`, a harness variant that wires
+  the loop like `voice_bridge.py` (`ask_user`=scripted answer, `pre_act`=
+  `DangerGate` whose confirm callback DENIES so a book-compile can never fire) — the
+  bare `run_voice_live.py` omits both, so it could not exercise the ask/confirm
+  path. Live full-path e2e is still open (Gemini `gemini-3.5-flash` was 503-throttled
+  the evening this landed; the run reached `/book` before the upstream outage killed
+  it) — the mechanism is unit-proven meanwhile. Tests: `test_ui_control.py` (+2),
+  `test_danger.py` (+2); 243 pass, ruff clean. Files: `ui_control.py`,
+  `agent/danger.py`, both test files, new eval harness, issue 03 + report.
+
+- **2026-07-13 — Provider-adaptation part 2: endpoint-based provider binding via
+  env.** Added `DEEPTUTOR_AGENT_BINDING` (agent loop) and
+  `DEEPTUTOR_VOICE_CLASSIFIER_BINDING` (classifier) so an OpenAI-compatible
+  upstream's provider spec is forced by NAME instead of inferred from the model
+  name — the endpoint wins. Fixes the documented Groq misroute (`qwen/*` →
+  dashscope provider → injects `enable_thinking` the host 400s on): set
+  `binding=openai` and it routes as generic OpenAI-compat; combined with part 1's
+  host-based reasoning-param drop, the voice loop/classifier can switch to Groq
+  (or any OpenAI-compat host — a real latency lever) with a config change, no code
+  edit. Resolved in `agent/llm.py::resolve_agent_llm`/`think` and
+  `intent_classifier.py::classify`, forwarded to `services.llm.complete()`'s
+  first-class `binding` param. Unset ⇒ model-name inference, so Gemini is
+  byte-identical to today. Tests: `test_llm_scope.py` (+4), `test_intent_classifier.py`
+  (+2). Documented in `.env.agent.example`; progress logged in
+  `docs/issues/llm-provider-adaptation/PRD.md`. Note: reading `@page-agent`'s
+  `modelPatch` confirmed our `reasoning_params.py` already matches its coverage
+  for the models in use, so no reasoning-table change was needed. Files:
+  `agent/llm.py`, `intent_classifier.py`, `.env.agent.example`, PRD, tests.
+
+- **2026-07-13 — test: make `test_wiring.py` hermetic against a classifier-on
+  shell.** `classifier_enabled()` reads live env, so a dev shell that sources
+  `.env.agent` with `DEEPTUTOR_VOICE_CLASSIFIER=1` let the real classifier seam
+  intercept transcripts and fail `test_chat_llm_hands_off_to_the_agent_via_tool`
+  (the runner got the raw transcript, not the chat model's restated task). Added
+  an autouse fixture pinning `classifier_enabled` OFF by default; the
+  classifier-routing tests still opt in via `_patch_classifier`. Same class of
+  isolation fix as the earlier `test_ui_control` autouse guard. File:
+  `tests/services/voice_realtime/agent/test_wiring.py`.
+
+- **2026-07-13 — Added `VOICE.md` at the repo root — a single map of the whole
+  voice feature.** Data-flow diagram + per-file tables covering the backend
+  pipeline (`services/voice_realtime/`), the agent loop (`agent/`), API routers,
+  frontend (`web/components/voice/`, `web/lib/page-actuator/`), eval, tests, and
+  config/docs, plus the current backlog — so any agent can locate a voice part
+  fast. Replaces the orientation role of the deleted `voice_prototype/README.md`.
+  Docs-only. File: `VOICE.md`.
+
+- **2026-07-13 — Removed the `voice_prototype/` standalone call bench (legacy).**
+  The static host serving `call.html` (a self-contained mic→STT→WS→TTS test page
+  with mascot/VAD/barge-in) has been superseded: its reusable browser-side pieces
+  (VAD calibration, barge-in mute, mascot lip-sync) were already ported into the
+  in-app `web/components/voice/VoiceCallWidget.tsx`, and the entire in-page agent
+  line of work (loop, page-actuator, intent classifier — all post-2026-07-10)
+  runs only in the real Next.js app, which `call.html` structurally cannot
+  exercise. Nothing outside the folder referenced it. Deleted `voice_prototype/`
+  in full (`server.py`, `config.py`, `static/call.html`, `static/mock-app.html`,
+  README, requirements); history remains in git + the entries below. The live
+  voice UI is `VoiceCallWidget.tsx` (mounted in `web/app/layout.tsx`); the raw
+  voice-loop bench role is now covered by `eval/inpage_agent/run_voice_live.py`.
+
+- **2026-07-11 — Agent LLM: fail fast on 429 — stop burning RPM to wait out
+  RPM.** Live: free-tier Gemini's binding limit is 5 REQUESTS/min (TPM was at
+  10%), and `complete()`'s default policy retried a 429 up to 9 times with
+  exponential backoff — every retry is another request pinning the very limit
+  it waits out (observed: attempt 5/9, 80s backoff, RPM solid red in AI
+  Studio). page-agent's own retry policy is 2 attempts (`llms/index.ts
+  maxRetries ?? 2`) — we were ~4.5× hungrier on failure. Agent `think()` now
+  passes `max_retries=1`; the loop is its own recovery mechanism and ends
+  with an honest spoken line instead of a silent multi-minute stall. Files:
+  `deeptutor/services/voice_realtime/agent/llm.py`. Voice suite: 408 green.
+
+- **2026-07-11 — Routing: clipped "ค้น" reaches the loop.** Live run #3:
+  "กลับไปhomeแล้วค้นราคาน้ำมัน" and "ไปhomeแล้วค้นราคาแตงกวา" died as
+  navigate-only turns ("ได้เลยครับ", search half dropped) — the loop never
+  ran, hence no neon (the vision layer draws only during agent runs; the 📸
+  lines are the ordinary ui_context stream). Verified cause: spoken Thai
+  clips "ค้นหา" to "ค้น", which was not in `agent/intent.py`'s verb list, so
+  the lexical door missed and the chat model (Groq) again chose ui_navigate
+  over the advertised override — the second documented case of the routing
+  model ignoring prompt-level instructions, reinforcing that deterministic
+  coverage is the reliable door and the semantic door's quality tracks the
+  catalog chat model. Added "ค้น" (+ เสิร์ช/เซิร์ช/search) with substring-
+  safety notes; +2 regression tests pinning the live utterances. Voice
+  suite: 408 green.
+
+- **2026-07-11 — Agent voice: steps go quiet, only questions and the final
+  summary speak.** Live verdict on a real run ("ไปหน้าหลักแล้วค้นหาราคาทอง"):
+  per-step narration was too chatty — worse, the model emitted ENGLISH
+  next_goals ("Wait a moment for the home page to load…") for the Thai TTS to
+  read, and the ending displayed twice (narrate-note + assistant_text). Now:
+  step next_goals are SILENT chat notes (`agent_note`, still visible); spoken
+  audio is reserved for ask_user/danger-confirm questions and ONE final
+  summary, spoken by the bridge after the run (aborts stay silent — the
+  caller interrupted on purpose and is already talking). The loop no longer
+  narrates done.text (kills the double display). Language fix at the source:
+  the prompt's output schema now marks `next_goal` and done `text` as
+  USER-FACING, MUST be in the user's language — private fields
+  (`memory`/`evaluation`) stay free. Files: `agent/loop.py`,
+  `agent/voice_bridge.py`, `agent/prompt.py`. Voice suite: 406 green.
+
+- **2026-07-11 — Vision-layer performance: the pickup flash no longer janks.**
+  Live report: pressing call stuttered the machine. Diagnosis, not the user's
+  hardware — our neon styles were far heavier than page-agent's flat boxes:
+  `backdrop-filter: blur(2px)` on EVERY label (a background-blur pass per
+  label — the main jank source), inset+outer box-shadows on every box, a
+  full-page scan for a viewport-only show (each offscreen box still costs a
+  DOM node + its own capture-phase scroll listener in the engine), plus
+  serialize/selector-map work nothing consumes. Fixes in
+  `neonHighlights.ts`/`actuator.ts`: backdrop-filter banned, inset shadows
+  banned, one small outer glow (6px) kept; `will-change: opacity` on the
+  container so fades composite instead of re-rastering hundreds of children;
+  `flashVision()` now scans viewport-only (`viewportExpansion: 0`) and calls
+  the engine directly, skipping serialization entirely. Real observes (the
+  loop's eyes) keep the full-page scan — the LLM needs it; the flash never
+  did. Node suite: 197 green.
+
+- **2026-07-11 — Soft enter/exit for the vision layer + run-mask.** Live
+  feedback: the boxes popped in and vanished mid-frame ("กระทันหันไป") — the
+  vendored engine adds/removes highlight nodes instantly because its
+  highlights were built as a robot-eye debug view (correctness-first: boxes
+  must exactly match the snapshot; instant wipe+redraw guarantees zero
+  drift), not as a human-facing show. Ours IS a show, so the restyle layer
+  now animates the CONTAINER: fade-in 420ms ease-out on every draw (each
+  loop step re-blooms softly), fade-out 650ms ease-in before node removal on
+  flash-timeout and end-of-run (`fadeOutHighlights(cleanup)`); a fresh draw
+  cancels a pending fade-out so it can never wipe re-bloomed boxes, the
+  container's opacity is restored after removal (engine reuses it), and
+  `prefers-reduced-motion` gets instant, animation-free behavior. Run-mask:
+  tint eases in/out over 300ms, the input shield still raises INSTANTLY on
+  show, and on hide the page is handed back immediately (`pointer-events:
+  none`) while only the tint lingers. Mid-run rescans keep instant
+  old-box removal on purpose — new boxes appear the same frame with their
+  own fade-in, and a crossfade would leave stale boxes lying about the
+  screen. Files: `web/lib/page-actuator/neonHighlights.ts`, `actuator.ts`,
+  `runMask.ts`.
+
+- **2026-07-11 — "Eyes open" flash on call pickup (page-agent UX).** Owner
+  request: page-agent sweeps the DOM and washes the layout in neon the moment
+  it starts; ours only lit up once a task ran, so pickup felt blind. Now the
+  router sends one `agent_ready` frame on connect (only when the loop is
+  enabled), and the client bridge answers with `PageActuator.flashVision()` —
+  one highlighted observe so the neon boxes wash over the layout, fading
+  after ~2.6s. Show only: NO input mask is raised (the caller keeps clicking
+  freely during conversation; the mask stays run-only), and a pickup-flash
+  timer still pending when a real task starts is cancelled in `resetTask()`
+  so it cannot wipe the run's own boxes. Tests: +2 ws-router cases
+  (agent_ready sent when enabled / absent when disabled). Voice suite: 405
+  green; node suite: 197.
+
+- **2026-07-11 — Agent LLM: name the upstream on every step.** Live incident:
+  the loop kept hitting a quota-dead Gemini key with a 9-attempt retry storm
+  while the operator believed they had switched providers — `.env.agent`
+  edits only land on re-`source` + restart (the activate hook loads the file
+  once per shell), unlike catalog Settings which apply per call. Nothing in
+  the log named the upstream, so the stale env was invisible. `agent/llm.py
+  think()` now logs `model=… upstream=…` (base_url or "app-catalog") per
+  step. Files: `deeptutor/services/voice_realtime/agent/llm.py`.
+
+- **2026-07-11 — Fallback chain inside the chat turn: click/fill miss →
+  `ui_agent_task`, not defeat.** Source-verified answer to the owner's
+  question (does page-agent call the LLM after every action? — yes:
+  `PageAgentCore.ts` has exactly one `#llm.invoke` inside `while(true)`, no
+  bypass; that per-step re-consultation is WHY it never dead-ends). Our chat
+  turn's equivalent gap: `UIClickTool`/`UIFillTool` miss results said "tell
+  the caller it's not visible" — a dead end for "เปลี่ยนธีมเป็นมืด" when the
+  toggle lives on another page. Now, when the loop is available, a miss
+  result tells the model the target is findable and to call
+  `{ui_agent_task}` with the full request (gated on
+  `_agent_loop_available()`; flag off keeps the honest-miss wording).
+  Ambiguous stays an ask-back on purpose — one clarifying word from the
+  caller beats an agent run. Tests: +3. Voice suite: 403 green.
+
+- **2026-07-11 — Routing fix: connectorless compound commands no longer end
+  as half-done navigations.** Live bug: "ไปตั้งค่าเปลี่ยนธีมมืด" (no "แล้ว")
+  slipped every rung — nav intent requires a หน้า/page word, click/guess
+  didn't apply, the lexical matcher requires a connector — and landed on the
+  chat LLM, whose aggressive ui_navigate imperatives ("MUST call … reply
+  EXACTLY 'ได้เลยครับ'") beat the far-away MULTI-STEP paragraph: it navigated
+  and dropped the theme half. Two-layer fix: (1) `agent/intent.py` Rule 2 —
+  a NAVIGATION opener + a second action verb later in the sentence is a task
+  even with the connector elided (spoken Thai drops "แล้ว" routinely);
+  restricted to nav openers so click phrasings with verby button labels
+  ("กดปุ่มเปลี่ยนธีม") stay on the free click rung, and "หา" excluded from the
+  second-verb scan (false-fires inside nouns like "ปัญหา"). (2)
+  `ui_control.py` — the override is carved INTO the ui_navigate rule block
+  ("call ui_navigate ONLY when opening the page is the ENTIRE request …
+  otherwise call ui_agent_task with the FULL request"), advertised only while
+  the loop is available; instruction-competition was the failure mode, so the
+  counter-rule now lives where the competing rule lives. Tests: +7 (intent
+  rule-2 matrix incl. noun-substring guard; prompt carve-out on/off; full-path
+  regression pinning the exact live utterance to the loop). Voice suite: 400
+  green.
+
+- **2026-07-11 — Vision layer: neon restyle of the highlight boxes.** Live
+  feedback: the engine's default look (2px solid borders in a 12-color loud
+  palette + opaque label chips) reads as visual chaos on a busy page. New
+  `web/lib/page-actuator/neonHighlights.ts`: called right after a highlighted
+  dom_tree pass, it restyles the overlays the engine just drew — hues softened
+  35% toward white, hairline 1px borders with outer/inner glow (box-shadow),
+  near-zero fill, labels as translucent dark pills with glowing text. The
+  vendored `dom_tree/engine.ts` stays byte-identical (vendor contract); box↔
+  label color correlation survives for free because both derive from the same
+  per-index base color, which we read back from the inline styles (computed
+  style would return currentcolor-white for the borderless labels). Hooked in
+  `actuator.ts` observe(). Files: `web/lib/page-actuator/neonHighlights.ts`,
+  `web/lib/page-actuator/actuator.ts`.
+
+- **2026-07-11 — In-page agent: the SEMANTIC door — chat LLM routes tasks via
+  a tool (`ui_agent_task`).** The owner's routing critique, accepted: lexical
+  verb-matching (`agent/intent.py`) is whack-a-mole — every caller phrases
+  tasks differently, and each miss dead-ends in the navigate-only chat path
+  doing half the job ("ได้เลยครับ" and nothing more). The model that already
+  understood the sentence should make the routing call. New
+  `UIAgentTaskTool` in `ui_control.py` (registered alongside
+  ui_navigate/click/fill; `owned_tools` +1): the chat LLM calls it with the
+  caller's restated `task`; the pipeline intercepts that TOOL_CALL, abandons
+  the chat turn (`events.aclose()`, same pattern as the watchdog — one voice
+  on the call, never two), and hands the task to the loop via the existing
+  `agent_runner`. Gating: `execute()` checks `agent_loop_enabled()` per call
+  and refuses with a corrective result when off; the system-block advertises
+  the tool ONLY while the loop is available (lazy-imported flag check —
+  `agent.danger` imports ui_control, so top-level would cycle). Also fixed en
+  route: `run_text_turn` never passed `agent_runner` down to the inner LLM
+  turn (`_run_text_turn`) — the parameter existed but arrived as None.
+  `intent.py`'s docstring demoted to what it now is: a free short-circuit
+  that skips one chat completion on obvious phrasings, not the loop's only
+  door. Tests: +9 (`test_agent_task_tool.py` — flag gating both sides,
+  prompt advertisement on/off, registration; `test_wiring.py` — handoff with
+  the model's restated task, transcript fallback, abandoned-turn-never-
+  speaks, flag-off chat continues). Voice suite: 393 green.
+
+- **2026-07-10 — In-page agent: live-test fixes (JSON mode, verb gap, visible
+  narration).** First live run against a real page surfaced two real failures
+  and one UX gap, all traced to source before fixing:
+  1. **Malformed LLM output ("โมเดลตอบผิดรูปแบบซ้ำหลายครั้งครับ")** — the loop
+     was asking the model to reply in JSON via prompt instructions alone;
+     page-agent's real edge is a provider-level forced `tool_choice`, which
+     `services.llm.complete()` has no seam for. Closest equivalent:
+     `agent/llm.py::think()` now passes `response_format={"type":
+     "json_object"}` (an existing house pattern — see
+     `tools/question/question_extractor.py`; self-gating, silently dropped
+     for unsupported providers), `reasoning_effort="minimal"` (a hybrid
+     model's reasoning preamble can smuggle in a stray brace that breaks the
+     fixer's extraction — same value the voice chat turn already scopes to),
+     and `temperature=0.2` (near-deterministic action selection).
+  2. **"กลับไปหน้าหลักแล้วค้นหาราคาทอง" fell through to the old navigate-only
+     chat path** instead of the agent loop (diagnosed from the log signature:
+     `🖱 ไปหน้า` + generic "ได้เลยครับ" are the OLD `executeUiAction`
+     navigation handler and the existing chat's own `ui_navigate` tool — not
+     anything the agent loop emits). Root cause: `agent/intent.py`'s opener
+     list had no "กลับ" (back-to) family. Added `กลับไปที่ / กลับไปหน้า /
+     กลับไป / กลับ`; writing tests for it also caught a second bug — the
+     sequence-connector check used `pos <= 0` when it should have been
+     `pos < 0` (rejecting the legitimate case where an object-less opener
+     butts straight against the connector, e.g. "กลับไปแล้วเปิด...").
+  3. **The loop was audio-only in the widget** — narration/questions were
+     spoken via a bare `{"type": "audio"}` frame the client never logs, so a
+     TTS hiccup (or just not listening closely) left zero visibility into
+     what the agent was doing, unlike page-agent's step-by-step log.
+     `AgentVoiceBridge` now also emits `{"type": "agent_note", "text": …}`
+     alongside every spoken line; `VoiceCallWidget.tsx` renders it as a `sys`
+     log line. Failure-tolerant (`contextlib.suppress`) — a dying socket
+     during narration must not take the run down with it.
+  Also: fixer-failure logs now include the raw completion text (truncated) —
+  previously only the parsed-away `FixerError` message was logged, making a
+  run like this undiagnosable from logs alone. Tests: +16
+  (`test_llm_scope`, `test_intent`, `test_voice_bridge`, `test_loop`). Voice
+  suite: 384 green.
+
+- **2026-07-10 — In-page agent, Phase D (wired end-to-end, behind a
+  default-off flag) landed.** The loop now answers the phone. New in
+  `services/voice_realtime/agent/`: `ws_actuator.py` (server end of the A4
+  frame protocol — observe/act as correlated request/response, chunked
+  `agent_state` reassembly, honest timeouts), `voice_bridge.py`
+  (`AgentVoiceBridge`: loop + actuator + the C3 speech-routing state machine —
+  pending question ⇒ incoming speech is the ANSWER; otherwise ⇒ barge-in
+  abort; mask always comes down, even on abort), `intent.py`
+  (`match_agent_task`: deterministic multi-step detector — action verb +
+  sequence connector + second verb; conservative by design). Pipeline gains
+  `agent_runner` threading and three entries into the loop: multi-step task
+  (checked BEFORE single-step rungs so "ไปตั้งค่าแล้วเปลี่ยนธีมมืด" cannot
+  half-match navigation), click-ambiguous, click-miss-after-graph; plus
+  `speak_agent_line` (mid-run narration audio) and `_run_agent_turn` (turn
+  framing; a crashed loop speaks the miss line, never a dead line). Session
+  owns the bridge lifecycle + routes `agent_*` frames (router passes them
+  through); loop terminal lines are now spoken Thai. **D0 flag:**
+  `DEEPTUTOR_AGENT_LOOP=1` + `DEEPTUTOR_AGENT_MODEL` both required
+  (env-based rather than the planned settings key — one switchboard with the
+  rest of the agent config); flag off ⇒ byte-identical behavior, proven by
+  the untouched pre-existing suite. Loop robustness: observe() failure now
+  ends the run honestly instead of crashing the call. Tests: +27
+  (`test_ws_actuator`, `test_intent`, `test_voice_bridge`, `test_wiring` —
+  incl. answer-vs-barge-in live routing and mask-always-down). Voice suite:
+  376 green. `ui_graph` fate (D4) deliberately deferred to Phase E data.
+
+- **2026-07-10 — In-page agent, Phase C (trust model) landed.** New
+  `deeptutor/services/voice_realtime/agent/danger.py`: `DangerGate`, the
+  `pre_act` implementation — before ANY loop click fires, the target's real
+  serialized `[index]` line is extracted from the page snapshot
+  (`extract_element_line`, exact-index match) and checked against the same
+  danger lexicon the fast path uses (`ui_control.is_dangerous_button`);
+  dangerous or unverifiable targets pause the run for a SPOKEN confirmation
+  (timeout ⇒ no). A refusal goes back to the LLM as an explicit
+  "User REJECTED …" observation so it re-plans instead of retrying. Typing is
+  not gated (codebase philosophy: typing never submits; the submit press is
+  its own gated click). Loop additions: `waiting_on_user` now also covers the
+  gate's confirmation window (C3 speech routing: answer vs barge-in), and the
+  ending (`done.text`) is always narrated — success or honest failure (C4).
+  Tests: `tests/.../agent/test_danger.py` — 13 cases, anchored by the replay
+  of the real evaluation trace (page-agent pressed "ลบ Knowledge Base" [169]
+  unconfirmed; with the gate that click can never fire, even when the task
+  says "ไม่ต้องถาม"). Voice suite: 349 green.
+
+- **2026-07-10 — In-page agent, Phase A (eyes + hands) landed.** New package
+  `web/lib/page-actuator/`: `serialize.ts` (pure, node-tested port of
+  page-agent's LLM-facing DOM format — `[index]` lines, indent hierarchy,
+  `*[new]` markers via caller-owned WeakSet, attribute hygiene incl. 20-char
+  caps, `data-scrollable` distances, header/footer scroll hints, plus our
+  hard 30K-char cap that cuts on a line boundary with an explicit truncation
+  notice), `actions.ts` (MIT-attributed port: full W3C pointer+mouse click
+  sequence, inner hit-test refinement, native value setter, contenteditable
+  Plan A→verify→Plan B; visible hand = our simulatorCursor), `runMask.ts`
+  (A5: input shield shown only while the loop runs; click-on-mask = takeover;
+  pass-through wrapper for hit-tests), `actuator.ts` (PageActuator: observe →
+  vendored dom_tree engine with the highlight/vision layer switched ON +
+  react-root blacklist; act by index; devtools handle `window.pageActuator`),
+  `wsBridge.ts` (A4 frames `agent_run/agent_observe/agent_state_chunk/`
+  `agent_act/agent_acted/agent_takeover`; agent_state is JSON-then-chunked at
+  6000 chars because control frames are ~8K-capped server-side). Wired into
+  `VoiceCallWidget.tsx` with a bridge ref + one routing line (inert until the
+  server loop sends agent frames). Tests:
+  `web/tests/page-actuator-serialize.test.ts` — 8 cases pinning the exact
+  serialization format on fabricated trees. Node suite: 197 green.
+
+- **2026-07-10 — In-page agent loop, Phase B (the brain) landed.** New package
+  `deeptutor/services/voice_realtime/agent/` implementing our own
+  observe→think→act loop per `PLAN_inpage_agent_parity.md`: `loop.py`
+  (InPageAgentLoop; voice-tuned maxSteps 15 / stepDelay 0.8s; abort;
+  `pre_act` danger-gate seam for Phase C; narration + ask_user hooks with a
+  `waiting_on_user` flag for speech routing), `macro_tool.py` (action catalog +
+  validation, ask_user offered only when answerable), `fixer.py` (all six
+  autoFixer heuristics ported for JSON-contract transport), `prompt.py` (our
+  own voice-first system prompt + page-agent-shaped assembler: reflections-only
+  history, fresh DOM per step), `observations.py` (navigation / wait /
+  step-budget `<sys>` notes), `llm.py` (agent model via `DEEPTUTOR_AGENT_MODEL`
+  (+ optional `_BASE_URL`/`_API_KEY` standalone upstream) — loud failure, never
+  a silent chat-model fallback; per-call kwargs on `services.llm.complete`).
+  Transport decision recorded in code: JSON-contract + fixer as the primary
+  path (provider-universal; `complete()` returns text only), native forced
+  tool_choice can layer on later. Tests:
+  `tests/services/voice_realtime/agent/` — 28 cases incl. the Phase-B
+  acceptance run (3-step navigate→fill→confirm on a fixture actuator), budget
+  exhaustion + warnings, fixer recovery/give-up, mid-run abort, pre_act
+  blocking, ask_user round-trip, narration failure tolerance. Not wired into
+  the pipeline yet (that is Phase D, behind a default-off flag).
+
+- **2026-07-10 — Deep rung removed; superseded by the in-page agent plan.**
+  The 2026-07-10 page-agent evaluation (branch `page-agent-clean-eval`, kept as
+  the page-agent test bed) proved a looped observe→think→act agent covers
+  everything the deep rung was for — so the plan (`PLAN_inpage_agent_parity.md`,
+  now on this branch too) replaces it with our own agent loop. Removed:
+  `services/voice_realtime/ui_deep.py` (LLM picks an index from a flat
+  inventory), its pipeline caller `_run_deep_click` + both call sites (now
+  marked `[agent-loop seam — Phase D2]`, falling through to ask-back /
+  honest-miss), the `inventory_getter` threading, and
+  `tests/services/voice_realtime/test_ui_deep.py`. **Kept deliberately:** the
+  `ui_scan`→`ui_inventory` transport (session future + router handler + web
+  responder — becomes the loop's observe channel, Phase B), the vendored
+  `dom_tree` engine + `pageInventory.ts` + `click_index` executor (seed of the
+  Phase A actuator), and `ui_graph.py` (deterministic fast path; fate decided
+  by data in Phase E). `DESIGN_voice_grounding.md` preamble now records what is
+  superseded vs still authoritative. Voice suite: 308 tests green.
+
+- **2026-06-30 — Standalone prototype landed** under `voice_prototype/` (outside the
+  `deeptutor/` package; no upstream files touched). FastAPI WebSocket server +
+  browser mic client (energy-VAD endpointing + barge-in), pipeline = Groq Whisper STT
+  (batch-on-endpoint) → OpenAI-compatible LLM stream → `SentenceChunker` →
+  pluggable TTS (`openai` / `elevenlabs` / `botnoi`). Per-stage latency instrumentation;
+  network-free tests in `voice_prototype/tests/`. Proves the design before integration.
+  Production target: `deeptutor/api/routers/voice_realtime.py` +
+  `deeptutor/services/voice_realtime/`, reusing the existing `deeptutor/services/voice/`
+  STT/TTS adapters.
+- **2026-07-02 — Call MVP: first end-to-end voice call against the real
+  DeepTutor brain.** Production realtime layer additions
+  (`services/voice_realtime/`, `api/routers/voice_realtime.py`): a
+  `user_text` control frame (`run_text_turn()`) runs LLM→TTS for a
+  client-recognised utterance (browser Web Speech STT) so calls work while no
+  server STT provider is available; raw-PCM TTS output (iApp) is wrapped as
+  WAV before hitting the socket (`containerize_audio()`); and the speakable
+  gate was fixed to match reality — agentic rounds stream as
+  `call_kind='agent_loop_round'` (the previous `llm_final_response`-only gate
+  silenced entire turns). Test page `voice_prototype/static/call.html`
+  (`/call` on the prototype server) connects straight to
+  `ws://localhost:8001/api/v1/voice/ws` with browser-STT / server-STT modes,
+  typed input, and barge-in. E2E verified live: text turn → ChatOrchestrator →
+  20 per-sentence iApp WAV frames streamed while the model was still writing.
+
+- **2026-07-02 — Prototype trimmed to the call page.** Removed the standalone
+  `voice_prototype/static/index.html` (`/`) and `mvp.html` (`/mvp`) demos and
+  their prototype-local `/ws` / `/ws/chat` handlers; `server.py` is now a thin
+  static host serving `call.html` (which talks straight to DeepTutor's
+  `/api/v1/voice/ws`). The provider seam remains in `providers.py` / `pipeline.py`
+  (covered by `selftest.py` + `tests/`).
+
+- **2026-07-08 — Voice scroll ("เลื่อนลง/ขึ้น/ล่างสุด/บนสุด").** First of the
+  page-agent-parity actions. Four new declared actions
+  (scroll_down/up/bottom/top) ride the existing action framework: clear
+  verb+direction phrasings hit the deterministic shortcut (bare "เลื่อน" —
+  reschedule! — never triggers; "เลื่อนลงล่างสุด" is ambiguous → LLM), free
+  phrasings go through the LLM's `ui_navigate`. Scroll acts *silently*
+  (rapid-fire commands + instantly visible effect — no "ได้เลยครับ" spam).
+  Client `scrollByVoice` finds the page's real scroller (DeepTutor's shell is
+  `h-screen overflow-hidden`, so `window` never scrolls — pick the largest
+  visible scrollable container outside the widget) and scrolls smoothly.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `pageContext.ts`.
+
+- **2026-07-09 — Handoff report for account move.** Added
+  `REPORT_voice_handoff_2026-07-09.md` — a self-contained handoff of the whole
+  voice-UI-control effort (state, branch/merge plan, architecture map, feature
+  inventory, verify/run steps, the strategic decisions previously held only in
+  auto-memory, the prioritized backlog, and diagnostic patterns) so a fresh
+  agent in another cowork account can continue cold. Doc only.
+
+- **2026-07-09 — Implicit fill (Tier A): "พิมพ์ X" without naming the field.**
+  The "he didn't even name the field" UX from the grounding design. A bare type
+  command now targets, deterministically and without the LLM: the focused field
+  (client streams `activeField` = the caret's field in `ui_context`), else the
+  last field filled this call (`last_field`, if still on screen), else the only
+  visible field; ambiguous (2+ fields, nothing to disambiguate) falls through
+  untouched so it never hijacks conversation. Type verbs only
+  (พิมพ์/ใส่/กรอก/เขียน) — "เลือก" (implicit dropdown pick) is excluded as too
+  ambiguous. Value still corrected against on-screen vocabulary. Files:
+  `services/voice_realtime/ui_control.py` (`match_implicit_fill`,
+  `implicit_fill_field`, `activeField` in `sanitize_ui_context`), `pipeline.py`,
+  `web/components/voice/pageContext.ts` (streams `activeField`); tests
+  (pytest 252 green, node 183 green). Also added a **Cost & tradeoffs** section
+  to `DESIGN_voice_grounding.md`.
+
+- **2026-07-09 — Implicit fill (Tier B): LLM value→field pick, verified.**
+  The ambiguous half Tier A deliberately leaves untouched (2+ fields, none
+  focused/remembered) now reaches the LLM with permission to pick the field
+  whose *meaning* matches the value — an email address goes in the
+  email-typed field. Field entries in `ui_context` now declare a semantic
+  input type behind a new marker ("อีเมล (ชนิด: email)", matching the
+  existing options marker pattern; plain text stays bare, so the frame
+  budget is untouched for unannotated fields). `ui_fill`'s `field` param is
+  optional: omitted with one visible field → that field; with several → the
+  tool hands the schema back and demands an explicit pick (the server never
+  guesses). Trust model intact: every pick — the model's included — still
+  goes through `resolve_field_target` against the visible fields. Files:
+  `services/voice_realtime/ui_control.py` (`_FIELD_TYPE_MARKER`,
+  `field_label`, `UIFillTool` definition/execute, `system_block` FIELD
+  CHOICE rule), `web/components/voice/pageContext.ts`
+  (`SEMANTIC_INPUT_TYPES`, `formatFieldEntry` type param); tests
+  (pytest 258 green, node 184 green).
+
+- **2026-07-09 — Weighted resolver: focus/recency break ties; Tier B dispatch
+  parity fix.** The fixed 4-tier resolver ladder (exact → substring → phonetic
+  → cross-script) is now one weighted score per candidate. Label-match quality
+  still dominates — tier scores are spaced (100) wider than the sum of all
+  situational boosts (focus +30, recency +20 = 50), so the boosts can only
+  break a tie WITHIN a tier, never promote a weaker label match or resurrect
+  a miss; the full regression suite passed unchanged before any new behaviour
+  was added. New behaviour: a tie between equally-matching field labels
+  ("ค้นหา" vs two ค้นหา-fields) now resolves to the focused field
+  (`activeField`) or the last field filled this call instead of asking back.
+  `last_field` rides only on the deterministic rungs — the LLM tool + its
+  dispatch must resolve identically, so they use `activeField` alone. Also
+  fixes a Tier B parity bug from the previous entry: with `field` omitted and
+  one visible field, the tool result said "Typed" but the pipeline dispatch
+  resolved `""` → missing → nothing typed; both now share
+  `effective_fill_field()`. Files: `services/voice_realtime/ui_control.py`
+  (`_label_score`, `_resolve_spoken_name` boosts, `resolve_field_target`
+  `last_field` kwarg, `effective_fill_field`), `pipeline.py` (rungs pass
+  `last_field`; fill dispatch uses the shared fallback); tests
+  (pytest 267 green, node 184 green).
+
+- **2026-07-09 — Post-action Verify: the client confirms every UI action
+  actually landed.** The grounding design's "Verify (after)" stage — the
+  agentic-loop prerequisite. After executing a `ui_action` the client POLLS
+  the live DOM until the postcondition holds or a deadline passes (never a
+  fixed sleep): fill/edit → the field holds the expected value across two
+  consecutive samples (catches React controlled inputs reverting a
+  native-setter write; fill retries the write once on failure), navigate /
+  open_kb → `location.pathname` reached the target (the poll IS the
+  page-load wait), focus → the caret is in the named field. The verdict
+  rides to the server as a new client→server WS frame
+  `ui_action_result {target, field, ok, detail}`; the server sanitizes it,
+  remembers it on `nav_state["last_action_result"]`, and logs failures —
+  the honest record of a spoken "ได้เลยครับ" whose action did not stick.
+  Executors now return what they wrote (`fillFieldByVoice`/`editFieldByVoice`
+  → `string | null`) so verify has an exact expected value (a `<select>`'s
+  option value differs from the spoken text). Files:
+  `web/components/voice/pageContext.ts` (`verifyFieldValue`,
+  `verifyFieldFocused`, `verifyPath`, `readFieldValue`, executor return
+  types), `VoiceCallWidget.tsx` (verify + retry + `reportActionResult`),
+  `services/voice_realtime/ui_control.py` (`sanitize_action_result`),
+  `api/routers/voice_realtime.py` (frame dispatch + protocol doc); tests
+  (pytest 276 green, node 184 green).
+
+- **2026-07-09 — Website Graph: cross-page single commands ("เปลี่ยนธีมเป็น
+  โหมดมืด" from any page).** The grounding design's Website Graph /
+  Navigation Reasoning stage. A curated, provenance-agnostic graph
+  (`services/voice_realtime/ui_graph.json`: nodes = routes with an action
+  catalog of capability id + visible click text + spoken aliases) lets the
+  ladder answer a command whose control is NOT on the current screen:
+  resolve the name against the graph (same weighted scorer → same garble
+  tolerance), then plan `open_path(/settings/appearance) → click "Dark"`.
+  Execution is verify-gated: the pipeline emits `open_path` and PARKS the
+  follow-up click on `nav_state["pending_graph_step"]`; the router
+  dispatches it only when the client's post-action verify confirms the
+  planned route landed (fires once, TTL-bounded, dropped on failed/wrong
+  navigation — never a sleep). Two entry rungs: goal phrasings
+  ("เปลี่ยนธีมเป็น X", `match_graph_intent`) and the click rung's miss
+  branch ("กดโหมดมืด" from /home). Destructive-sounding controls resolve as
+  a miss (never auto-pressed cross-page). Client: new `open_path` action
+  honours only paths under the UI_PAGES whitelist; click/fill/focus
+  executors now POLL for their element (late mounts after navigation).
+  Curated controls (phase 1): the four theme tiles on /settings/appearance.
+  New parity test `web/tests/voice-graph-parity.test.ts` fails CI when
+  graph paths and real routes/whitelist drift. Files: new
+  `services/voice_realtime/ui_graph.{py,json}`, `pipeline.py` (graph rungs +
+  `_run_graph_plan`), `narration.py` (`GRAPH_CROSS_PAGE_LINE`),
+  `ui_control.py` (`argument` in `sanitize_action_result`),
+  `api/routers/voice_realtime.py` (pending-step dispatch),
+  `web/components/voice/VoiceCallWidget.tsx` (`open_path`, poll-find),
+  `pageContext.ts` (`findWithPoll`); tests (pytest 298 green, node 187
+  green, incl. new `tests/services/voice_realtime/test_ui_graph.py`).
+
+- **2026-07-10 — Ambiguous ties reach the deep rung; ask-backs name the
+  tie; transliteration-hardened deep prompt.** Live round 2 findings:
+  (1) a fuzzy tie ("กดที่ลามะ Index" matching several labels) dead-ended
+  at "พูดชื่อเต็มอีกครั้ง" because only the *missing* outcome fell through
+  to the deep rung — the *ambiguous* outcome now consults it first (the
+  LLM with the full indexed screen is exactly the right adjudicator for a
+  tie), and when even that declines, the ask-back NAMES the tied
+  candidates ("หมายถึง X หรือ Y ครับ", `narration.ambiguous_click_line` +
+  `ui_control.resolve_click_candidates`) — answerable for the caller,
+  live telemetry for the maintainer. (2) The deep-pick model answered
+  NONE for "กราฟเหล็ก" → GraphRAG; the system prompt now teaches Thai
+  phonetic renderings of English UI labels with real garble examples and
+  instructs sounding names out; a deep-pick NONE is logged at WARNING
+  with the raw reply (INFO never reaches the log file), so the next
+  tuning round has evidence. Files:
+  `services/voice_realtime/pipeline.py`, `ui_control.py`, `ui_deep.py`,
+  `narration.py`; tests (pytest 318 green, node 189 green).
+
+- **2026-07-10 — Live-test trio: oversized inventory frame; suffix-twin
+  false ambiguity; the LLM's amputated screen view.** Three defects found
+  in one live session on the knowledge center (109 buttons on screen):
+  (1) the deep rung's ``ui_inventory`` frame budgeted only label lengths,
+  not JSON syntax — 150 items overflowed the 8K control-frame cap and the
+  server rejected the reply whole ("Control frame too large" → honest
+  miss); the scan now budgets the real serialized size (7.2K, envelope
+  included). (2) The engine collector reports some cards twice, so the
+  duplicate-suffix feature produced ordinal twins ("LlamaIndex",
+  "LlamaIndex (2)") that tied in the resolver and asked back "พูดชื่อเต็ม"
+  — a dead end for identical names; tied winners whose labels differ only
+  by the ordinal now resolve to the first in document order (previously-
+  working "ลามะ index" restored). (3) The LLM fallback only saw the
+  summary's tightly-capped prose and falsely told callers a visible button
+  didn't exist; the system prompt now carries the FULL buttons channel
+  (the same list the resolver uses). Server buttons backstop 100→200.
+  Files: `web/components/voice/pageContext.ts`,
+  `services/voice_realtime/ui_control.py`; tests (pytest 316 green,
+  node 189 green).
+
+- **2026-07-10 — Deep target-locking rung (Phase B): an LLM picks the
+  element INDEX when every deterministic rung misses.** The page-agent
+  accuracy inside our gated pipeline: on a click miss (after the graph
+  fallback) the server pulls a full *indexed* inventory of interactive
+  elements from the client (new ``ui_scan`` server→client and
+  ``ui_inventory`` client→server frames; the client keeps live refs,
+  budgets to the 8K frame cap, and always replies — an empty scan beats a
+  timeout), then ONE scoped LLM call maps the utterance to an index
+  (garble-tolerant by instruction), and the client clicks by index
+  (``click_index`` action) — no name matching, no buttons budget, so
+  icon-only buttons, duplicate labels and long-tail phrasings become
+  reachable. Trust rules pinned by tests: the LLM may only answer with an
+  index from the list, destructive-sounding labels are refused
+  server-side whatever the model says, every failure mode (scan timeout,
+  LLM error, NONE) falls through to the honest miss line, and clear
+  commands never pay for any of it. Also adds a per-snapshot diagnosis
+  line in the widget log ("📸 อ่านจอ: N ปุ่ม M ช่อง") so collection
+  problems and naming problems are distinguishable at a glance. Files:
+  new `services/voice_realtime/ui_deep.py`, `pipeline.py`
+  (`_run_deep_click` + `inventory_getter` kwarg), `session.py`
+  (ui_scan/ui_inventory future round trip, `INVENTORY_TIMEOUT_SECONDS`),
+  `api/routers/voice_realtime.py` (frame dispatch + protocol doc),
+  `web/components/voice/pageContext.ts` (`scanInventory`,
+  `findScannedElement`), `VoiceCallWidget.tsx` (`ui_scan` reply,
+  `click_index` executor, snapshot log line); tests (pytest 314 green
+  incl. new `test_ui_deep.py`, node 189 green).
+
+- **2026-07-09 — Collector "eyes" upgrade: vendored browser-use dom_tree
+  engine; char-budgeted buttons; duplicate suffixes; mutation-aware
+  refresh (Phase A of the hybrid plan).** Live testing showed "หาปุ่มไม่เจอ"
+  on nearly every busy page. Root causes and fixes: (1) the collector's
+  fixed CSS selector missed div-based clickables and icon buttons →
+  interactive elements are now discovered by the vendored page-agent/
+  browser-use dom_tree walker (behavioral signals: cursor:pointer, event
+  handlers, tabindex, contenteditable, ARIA; new
+  `web/components/voice/dom_tree/engine.ts` — MIT, attribution added to
+  `NOTICE`; wrapped by new `pageInventory.ts`, with the legacy selector as
+  an automatic fallback if the engine ever throws); (2) the 25-item cap
+  amputated busy pages → the buttons channel is now budgeted by characters
+  (~2600, roughly 60–80 labels; server backstop `_MAX_BUTTONS` 40→100 —
+  the 8K frame cap is the real bound); (3) duplicate labels were dropped,
+  making same-named cards unaddressable → ordinal suffixes ("LlamaIndex
+  (2)"), shared by the streamed context and the click executor via the
+  single collector; (4) snapshot staleness → a debounced, rate-limited
+  MutationObserver re-streams `ui_context` when the page mutates under a
+  live call (own-panel mutations ignored). Files:
+  `web/components/voice/dom_tree/{engine.ts,type.ts}` (vendored),
+  `pageInventory.ts` (new), `pageContext.ts`, `VoiceCallWidget.tsx`,
+  `deeptutor/services/voice_realtime/ui_control.py`, `NOTICE`; tests
+  (node 189 green incl. suffix/budget units, pytest 305 green, Next build
+  green).
+
+- **2026-07-09 — Graph goal matcher: generic "เปลี่ยน/สลับ … เป็น X" form.**
+  Live gap: "เปลี่ยนภาษาอินเตอร์เฟสเป็นภาษาอังกฤษ" matched no fixed verb (the
+  padding vocabulary between the verb and "เป็น" is unbounded), so the
+  command fell to the LLM. `match_graph_intent` now also accepts an
+  utterance starting with เปลี่ยน/สลับ that contains "เป็น", taking what
+  follows as the target — safe because the name still has to hit the curated
+  graph and a miss falls through untouched. Files:
+  `services/voice_realtime/ui_graph.py`; tests (pytest 330 green across the
+  voice + ws + agent-loop suites).
+
+- **2026-07-09 — Graph catalog: language switch + create-KB; field-kind
+  controls.** Extends the Website Graph's curated catalog with
+  source-verified controls: the three language buttons on
+  /settings/appearance (click texts are endonyms — "ภาษาไทย" / "English" /
+  "中文" — identical in every locale, so locale-proof) and the "Knowledge
+  Base ใหม่" create button on /knowledge (Thai-locale text; a non-Thai UI
+  degrades to an honest verify-failure). New goal verbs
+  ("เปลี่ยนภาษาเป็น", bare "สร้าง" last — a graph miss falls through
+  untouched). `plan_graph_step` now supports `kind: "field"` controls
+  (cross-page plan ends in a FOCUS, caret placed, nothing typed) — the
+  mechanism is tested; no field control is curated yet. New guard test:
+  every click text and alias in the SHIPPED graph must resolve uniquely to
+  its own control, so future catalog entries can't silently shadow each
+  other. Files: `services/voice_realtime/ui_graph.{py,json}`,
+  `web/tests/voice-graph-parity.test.ts` (field kind); tests
+  (pytest 302 green, node 187 green).
+
+- **2026-07-09 — Design doc: voice grounding & target-locking architecture.**
+  Added `DESIGN_voice_grounding.md` — the blueprint for the next phase of
+  target-locking (Website Graph / Navigation Reasoning / Scoring / post-action
+  Verify / implicit field targeting), written to keep the engine portable to a
+  future standalone connector: a gated (fast-path + fallback) pipeline, a
+  clean core/per-site-knowledge split, a provenance-agnostic Website Graph
+  schema (source-generated for DeepTutor, runtime-learnable for foreign sites),
+  a signal-priority for grounding (DOM/AX first, vision/OCR deferred), and an
+  app-ignorant `lockTarget` interface. Doc only — no code change.
+
+- **2026-07-09 — Cursor snappiness, field visibility robustness, TTS retry.**
+  Three live-feedback fixes: (1) the simulator cursor felt like it lagged the
+  actual click on first use — it was dashing across the whole screen from its
+  hidden corner; now a hidden cursor snaps to a short offset from the target
+  and glides only that hop, so every appearance is a brief consistent motion
+  the click waits on. (2) `isVisible` (pageContext) fell back to
+  `getClientRects()` when `offsetParent` is null — `offsetParent` is null for
+  `position:fixed`/sticky elements too, which intermittently dropped a visible
+  field/button from the streamed context ("บางครั้งไม่เจอช่อง"). (3) A
+  per-sentence TTS failure dropped a WHOLE sentence silently ("เสียงหาย"):
+  the active provider is a flaky/slow test endpoint hit 4+ times per reply, so
+  `_synthesize_with_retry` now retries a transient failure once and LOGS every
+  failure/empty result (previously silent) — a persistent failure still
+  surfaces one error frame. Not a rate-limit in our code (none exists; a 429
+  already surfaces as an error frame). Files:
+  `web/components/voice/simulatorCursor.ts`, `pageContext.ts`,
+  `services/voice_realtime/pipeline.py` (pytest 239, node 183 green).
+
+- **2026-07-09 — Field glow: the locked-on field blooms so the caller sees
+  the pick.** Companion to focus/fill/edit — once the target field is
+  resolved, a halo shimmers around it: one quick flash on focus-lock, a few
+  soft pulses while typing/editing. Presentation-only, added to the simulator
+  cursor module (`web/components/voice/simulatorCursor.ts`): one singleton
+  overlay on <body>, `pointer-events: none`, positioned over the field's rect
+  (grown by a 4px pad, corner radius matched), `prefers-reduced-motion` → a
+  single static fade, disposed on hang-up alongside the cursor. Wired into the
+  `focus_field` / `fill_field` / `edit_field` handlers. Files:
+  `simulatorCursor.ts`, `VoiceCallWidget.tsx`; node test for the pure glow-box
+  math (node 183 green).
+
+- **2026-07-08 — Click mis-target fixes + faster cursor.** Three live gaps
+  from the same session log, plus a speed pass: (1) "กด/คลิกที่ช่อง X" now
+  FOCUSES the named form field (new `focus_field` ui_action + client caret
+  placement) instead of searching buttons — explicit "ช่อง" never falls back
+  to button tiers, and a click name that equals a visible field label
+  exactly prefers the field ("กดที่ค้นหาหนังสือ" = the search box, not the
+  contained sidebar button "หนังสือ"); the focused field becomes the
+  edit-command target (`last_field`). (2) Cross-script skeleton budget
+  tightened len//3 → len//4 — "กดตรงช่องค้นหา" (kkkn) can no longer reach
+  "เอเจนต์ของฉัน" (jnkkkn, ed 2); every intended cross-script hit sits at
+  ed ≤ 1 and stays green. (3) Fill values peel the quoting word "คำว่า"
+  ("พิมพ์คำว่าสวัสดี" types "สวัสดี"). Simulator cursor glide 450 ms → 200 ms
+  (~quarter-second pointing, no felt delay). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `simulatorCursor.ts`; tests
+  (pytest 239 green, node 182 green).
+
+- **2026-07-08 — Simulator cursor: the caller sees where the agent acts
+  (#6 of the page-agent-parity queue).** Before a voice-driven click / fill /
+  edit touches the page, a virtual cursor glides onto the target, pulses,
+  and only then does the action execute — the page-agent "SimulatorMask"
+  idea. Pure presentation in one new file
+  (`web/components/voice/simulatorCursor.ts`): a singleton fixed overlay on
+  <body> (survives route changes, `pointer-events: none`, never performs
+  actions itself), scrolls off-screen targets into view first, points at the
+  entry area of tall textareas rather than their geometric middle, honors
+  `prefers-reduced-motion` (jump, no pulse), fades after idle, and is
+  disposed on hang-up. `pageContext.ts` gains find-only exports
+  (`findClickableByText`, `findFieldElement`) so the widget can point before
+  acting while executors stay the only hands. Files: `simulatorCursor.ts`
+  (new), `pageContext.ts`, `VoiceCallWidget.tsx`; node test for the pure
+  pointing math (node 182 green).
+
+- **2026-07-08 — Edit-by-voice: undo typing ("ล้างช่อง X", "ลบคำสุดท้าย").**
+  The correction half of fill-by-voice — typed wrong or changed your mind,
+  fix it by voice. Two curated ops: clear the whole field, or remove the
+  last word (client-side `removeLastWord` uses `Intl.Segmenter` for Thai's
+  space-less word boundaries, whitespace fallback elsewhere). A bare command
+  ("ลบคำสุดท้าย") applies to the last field filled this call — the pipeline
+  remembers it in nav_state, Voice-Control style; before any fill it asks
+  honestly which field. Deterministic and silent (scroll's reasoning: rapid-
+  fire, effect visible). Guard: a remainder that names no field ("ลบโน้ตนี้",
+  "ล้างจานให้หน่อย") falls through — deleting content elsewhere stays behind
+  click/confirm. Prompt: the LLM is told the system owns erase commands and
+  that re-filling replaces — never claim text was deleted. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`; tests
+  (pytest 233 green, node 181 green).
+
+- **2026-07-08 — Mode-command fuzzy anchor compares sound classes, not glyphs
+  (the "บิดหมดเลขา" trap).** Live: "ปิดโหมดเลขา" arrived as "บิดหมดเลขา" —
+  within the fuzzy edit budget, but the matcher's first-char anchor required
+  an exact glyph match (บ ≠ ป), so the exit command was typed into chat as
+  dictation text and the caller was trapped in secretary mode. The anchor now
+  compares onset *sound classes* (Thai→Latin homophone fold + voiced→voiceless:
+  บ/ป, ด/ต, ก/ค one class); dictation sentences that merely start with the
+  same sound ("บิดามารดา…", "ปิดเทอม…") still fall through on the edit budget.
+  File: `services/voice_realtime/ui_control.py`; regression params in
+  `tests/services/voice_realtime/test_ui_control.py` (pytest 219 green).
+
+- **2026-07-08 — Fill values corrected against the screen's vocabulary (the
+  "ลาวไทย" gap).** STT transliterates on-screen names (~always: spoken
+  "LAWs_thai" arrives as "ลาวไทย"), and typing the transcript verbatim put
+  the garble into the form. New `resolve_fill_value` (ui_control): a
+  dropdown's value MUST resolve to one of its streamed options (shared
+  cross-script tiers; no match → honest "ช่องนั้นไม่มีตัวเลือกตามที่พูดครับ"
+  instead of a silent non-select behind an ack); a plain input keeps free
+  text verbatim EXCEPT when it uniquely names something visible on screen
+  (case-insensitive exact or consonant-skeleton hit vs buttons/cards), in
+  which case the on-screen spelling is typed. Applied on all three paths
+  (deterministic shortcut, `ui_fill` tool result, LLM tool-call forwarding)
+  so speech and action never disagree. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`;
+  tests in `tests/services/voice_realtime/test_ui_control.py` (pytest 217
+  green).
+
+- **2026-07-08 — Fill-by-voice: type into / pick dropdown options in visible
+  form fields (#2 of the page-agent-parity queue).** "พิมพ์ กฎหมายแรงงาน
+  ในช่องค้นหา" now types into the search box; "เลือก ไทย ในช่องภาษา" picks a
+  native dropdown option. Same see→name→act trust model as click-by-name:
+  the client streams the visible fields (`ui_context.fields` — labels from
+  aria-label/<label>/placeholder/name; a <select>'s options folded in behind
+  the " (เลือกได้:" marker; password/hidden/checkbox/radio/file inputs never
+  listed, values never read), the server verifies the caller-named field
+  against that list (shared `_resolve_spoken_name` tiers, refactored out of
+  the click resolver), and the client sets the value through the native
+  prototype setter + input/change events so React controlled inputs accept
+  it (the page-agent framework-patch lesson). Two paths: deterministic
+  shortcut (`match_fill_intent`, verb + explicit "ช่อง" marker, value keeps
+  original casing) and the `ui_fill` LLM tool for free phrasings — both
+  converge on one `ui_action fill_field` frame. Filling never submits;
+  pressing a button stays a separate (click) step with its own danger rung.
+  Frame-size guard: the fields list is char-budgeted client-side (120/entry,
+  1500 total) so a dropdown-heavy page can't push the ui_context frame past
+  the server's 8K drop threshold. Also made the manifest-parity node test
+  quote-agnostic (prettier's repo style uses single quotes). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`; tests in
+  `tests/services/voice_realtime/test_ui_control.py` (pytest 212 green),
+  `web/tests/voice-page-context.test.ts`, `voice-manifest-parity.test.ts`
+  (node 180 green).
+
+- **2026-07-08 — Action matcher tolerates STT garbles (voice-scroll gap fix).**
+  Live gap: "เลื่อนลง" worked only when STT transcribed it letter-perfect —
+  "เลือนลง" (tone mark dropped), "เลื่อน ลง" (space inserted), "เลื่อนหลง"
+  (one phonetic edit) all fell past the shortcut to the LLM, which sometimes
+  acked "ได้ครับ" without calling the tool (nothing moved). `_ACTION_PATTERNS`
+  matching now folds text and patterns through the same phonetic normalisation
+  the navigation verbs already use (homophones + tone marks + spaces), plus a
+  start-anchored edit-distance-1 pass for patterns ≥5 folded chars — anchored
+  to the utterance head so mid-sentence sound-alikes ("เอาเลื่อยลงมา…") stay
+  out of reach; bare-"เลื่อน" and ambiguity guards unchanged. Prompt hardening
+  for the residue: the no-ack-without-tool-call rule now covers listed
+  *actions* (was navigation/click only), and the voice persona asks a short
+  clarifying question when a turn is an out-of-context short fragment (whole-
+  word mishears like "เริ่มต้น") instead of guessing a topic and lecturing.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`; regression
+  tests in `tests/services/voice_realtime/test_ui_control.py` (9 new params).
+
+- **2026-07-08 — Card labels: first text chunk, not the whole card.** Second
+  half of the "กด LlamaIndex ไม่เจอ" gap: the Knowledge-Center engine cards
+  are `<button>`s whose title is a plain `<span>` (no heading, no aria-label),
+  so `clickableLabel` fell back to the card's ENTIRE text ("LlamaIndex
+  พร้อมใช้งาน Local vector retrieval…") — unmatchable by voice. Labels longer
+  than 40 chars now fall back to the element's first rendered text chunk (the
+  visible title), via a TreeWalker. Client-side only (refresh, no server
+  restart). File: `web/components/voice/pageContext.ts`.
+
+- **2026-07-08 — Skeleton sharpened for mixed-script garbles ("ลามะ index",
+  "ลาวไทย").** Live gaps from the Knowledge Center page: STT rendered
+  "LlamaIndex" as "ลามะ index" and "LAWs_thai" as "ลาวไทย". Research
+  (hotword-retrieval fuzzy matching, arXiv 2512.21828; code-switching
+  normalization, AdaCS 2501.07102) confirms the textbook fix is a
+  normalization layer over the known on-screen vocabulary — true ASR biasing
+  needs recognizer hooks Web Speech doesn't expose (deferred to server STT).
+  Sharpened `_consonant_skeleton`: drop `h` (digraph residue: th/ph) and the
+  semivowel `y`/ย (written inconsistently across transliteration — ไทย vs
+  thai), fold g→k; จ/j kept as a real consonant. All four live garbles now
+  hit (ลามะ index, ลาวไทย, กราฟแรก→GraphRAG, เพจ index→PageIndex) with every
+  earlier case regression-locked. File: `services/voice_realtime/ui_control.py`.
+
+- **2026-07-08 — Click matching crosses scripts (loanwords).** Live gap: the
+  screen says "เพอร์โซนา" but STT romanised the caller's word to "persona" —
+  different scripts, so exact/substring/Thai-phonetic tiers all miss. New
+  final tier in `resolve_click_target`: compare Latin *consonant skeletons*
+  (Thai consonants transliterated, karan-silenced ones dropped, vowels — the
+  unstable part of transliteration — ignored, sound-alike Latin letters
+  folded): เพอร์โซนา→psn vs persona→prsn, distance 1 → hit. Works both
+  directions (Thai speech vs English UI) and covers the network/เน็ตเวิร์ก
+  family. Only consulted when every same-script tier found nothing; the
+  ambiguity guard still applies. File: `services/voice_realtime/ui_control.py`.
+
+- **2026-07-08 — `ui_click`: the LLM can now press visible buttons too.**
+  Click gained the same ladder navigation already had: phrasings the
+  deterministic shortcut doesn't recognise ("เปิดประวัติแชต",
+  "เลือกสมุดบันทึก") used to dead-end — the LLM understood but had no tool to
+  act. New `UIClickTool` (registered runtime like `ui_navigate`): the
+  capability injects the turn's streamed `ui_context` into the tool's kwargs,
+  so its result is computed from the same `resolve_click_target` the pipeline
+  uses — speech and action cannot disagree. Safe hit → pipeline forwards
+  `ui_action click_element` (client re-validates); dangerous hit → NOT
+  pressed, the existing spoken-confirmation state is armed and the LLM asks;
+  miss/ambiguous → the tool result orders honesty ("do NOT claim anything was
+  pressed"). System block teaches the press rules (must call the tool, never
+  choose a button the caller didn't name). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`; tests in
+  `test_ui_control.py` (174 green).
+
+- **2026-07-08 — Click matcher: leading connectives no longer leak into the
+  name.** Live gap: "กดที่ประวัติแชท" extracted the name as "ที่ประวัติแชท", so
+  even the phonetic tier (which handles the ท↔ต mismatch against the real
+  "ประวัติแชต" card by itself) never got a clean string to match. The matcher
+  now peels leading connectives (ที่/ตรงที่/ตรง/ปุ่ม/การ์ด/เมนู/ลิงก์) after the
+  click verb, mirroring the existing trailing-politeness peel. The verbatim
+  live utterance is a regression test. File:
+  `services/voice_realtime/ui_control.py`.
+
+- **2026-07-08 — Click-by-name now covers links and cards, not just
+  `<button>`.** Settings-hub cards ("Network", "Models"…) are `<Link href>`
+  around a heading — invisible to the old `button/[role=button]` selector, so
+  "กดปุ่ม Network" was an honest miss. New shared `visibleClickables()`
+  collector in `pageContext.ts`: selector adds `a[href]`; labels prefer
+  aria-label → inner heading (so a card reads as "Network", not its whole
+  body text); main-content clickables are listed before sidebar/nav links so
+  page actions win under the caps; and BOTH the streamed `buttons` context
+  and the click executor use this one collector, so a name the server
+  approves is guaranteed pressable. File: `web/components/voice/pageContext.ts`.
+
+- **2026-07-07 — Click-by-name: press a visible button the caller names.**
+  The middle rung between curated actions and a full page-agent, completed
+  from the previous session's in-progress work: the caller points ("กดปุ่ม
+  สร้างโน้ตใหม่"), the system only verifies that name against the buttons the
+  page actually shows right now and presses exactly that — no LLM ever
+  chooses a button. Server: `ui_context` now carries a structured `buttons`
+  list (≤40, sanitised); `match_click_intent` (utterance must START with a
+  click verb, question words excluded) + `resolve_click_target` (exact →
+  substring → phonetic-fuzzy tiers; ambiguous → "พูดชื่อเต็มอีกครั้ง",
+  missing → honest "ไม่เห็นปุ่มชื่อนั้นบนจอ"); dangerous names (ลบ/ยกเลิก/
+  รีเซ็ต/logout…) require a spoken yes via the existing confirm rung before
+  the press. Client: `clickVisibleByText` presses only elements outside the
+  widget's own panel that were visible — the same set the context reported.
+  Files: `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `narration.py`, `web/components/voice/pageContext.ts`,
+  `VoiceCallWidget.tsx`; tests in `tests/services/voice_realtime/
+  test_ui_control.py` (pytest 166 green, node 178 green).
+
+- **2026-07-07 — Voice manifest completed + parity test.** The hand-written
+  `UI_PAGES` table had drifted from the app's real routes: `/partners` and
+  `/playground` were missing, so the caller was told those pages don't exist.
+  Added both, and added `web/tests/voice-manifest-parity.test.ts` — a node
+  test that walks `web/app` for top-level `page.tsx` routes (route groups,
+  optional catch-alls handled) and fails when the manifest and the real
+  routes disagree in either direction, so the table can never drift silently
+  again (also guards future upstream syncs that add/rename pages).
+
+- **2026-07-07 — Voice now sees the caller's screen (live `ui_context`).**
+  Asking "หน้านี้มีเมนู/ปุ่มอะไรบ้าง" used to get a guess — the model only knew
+  the manifest's page ids/labels, nothing about what the page shows. The
+  widget (root layout = it sees every page's DOM) now serialises a read-only
+  outline of the visible screen — title, headings, nav links, tabs, buttons;
+  its own panel excluded; input *values* never read — and streams it as a new
+  `ui_context` control frame on connect and before every turn (pages change
+  under a live call). Server side: `sanitize_ui_context()` (size caps,
+  control-char strip), stored on `VoiceSession`, threaded through the
+  pipeline into turn metadata, and injected by `VoiceUICapability` as a
+  "Current screen" system-block section with a "describe only what is listed"
+  rule. Read side only — acting on the page still goes exclusively through
+  the manifest whitelist. E2E-verified live: fabricated button names streamed
+  in context came back verbatim in the spoken answer. New files:
+  `web/components/voice/pageContext.ts` (pure formatter node-tested in
+  `web/tests/voice-page-context.test.ts`); touched: `VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`, `session.py`, `pipeline.py`,
+  `api/routers/voice_realtime.py`. Also repaired
+  `tests/api/test_voice_realtime_ws.py`, which had been failing since the
+  greeting change (its `FakeSession` lacked `greet()`) — the greeting commit
+  only ran the `tests/services/voice_realtime` suite.
+
+- **2026-07-07 — Fix: "ตอนนี้อยู่หน้าไหน" answered from stale navigation
+  history.** Live testing found that after voice-navigating and then clicking
+  to another page by hand, the model reported the last *steered* page — the
+  fresh `ui_context` was streamed correctly, but its raw `Path: /notebook`
+  line lost to the louder "ไปหน้า settings → ได้เลยครับ" turns in history.
+  Two-sided fix: the summary now leads with a plain-words identity line
+  ("หน้าปัจจุบัน: หน้าสมุดโน้ต (/notebook)", label resolved from `UI_PAGES`),
+  and the `voice_ui` "Current screen" block gains a STALENESS RULE — the
+  caller can navigate by hand at any moment, so for "which page am I on" only
+  this section counts, never past navigation turns. Files:
+  `web/components/voice/pageContext.ts`, `VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`.
+  **Round 2 (same day):** the system-block rule alone still lost — reproduced
+  live: a recency-biased model answered from the adjacent navigation turns in
+  history rather than the far-away system block. Decisive fix: the
+  current-page identity line now also rides *the user message itself* per
+  turn (`_screen_turn_note()` in `pipeline.py`, same mechanism as
+  `_VOICE_TURN_REMINDER` — history commits the bare transcript, so it never
+  leaks into later turns). E2E scenario (voice-nav to settings → hand-click
+  to notebook → "ตอนนี้อยู่หน้าไหน") now passes 2/2 against the live server.
+  **Round 3 — made model-independent:** prompt weighting can regress when
+  the LLM changes, so "ตอนนี้อยู่หน้าไหน" joined the deterministic intent
+  ladder alongside stop and navigation: `match_where_am_i()` (exact after
+  stripping polite particles; compound phrasings still fall to the LLM) +
+  `spoken_page_name()` answer straight from the streamed context — no LLM
+  round at all, ~1 s vs ~10 s, correct on any model. The `ui_context` frame
+  gains a `page` field (the manifest label of the current page) so the
+  answer needs no parsing. The LLM path with the turn note stays as the
+  fallback for unmapped pages and paraphrases. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`,
+  `web/components/voice/pageContext.ts`.
+
+- **2026-07-07 — Garbled/unclear navigation now confirms instead of
+  ack-without-action.** Live log showed two failure shapes: STT garbling the
+  verb ("ไฟหน้าหน่วยความจำ" for ไปหน้า…) and unlisted aliases
+  ("ศูนย์ความรู้") — both fell to the LLM, which sometimes said "ได้เลยครับ"
+  *without navigating*. Three-layer fix, all deterministic: (1) common STT
+  garbles of "ไปหน้า" ("ไฟหน้า", "ใบหน้า") are normalised before matching, so
+  those become direct commands; (2) manifest labels gain the aliases callers
+  actually say ("หน่วยความจำ", "ศูนย์ความรู้"); (3) a **confirm-first rung**
+  in the intent ladder — a short utterance that names exactly one page but
+  lacks a verb (and isn't a question) gets "คุณหมายถึงให้เปิด X ใช่ไหมครับ";
+  a bare "ใช่/ครับ" then executes the navigation, "ไม่" acknowledges, and
+  anything else clears the pending question and is processed normally
+  (state lives in session-owned `nav_state`; both ask and confirm are no-LLM
+  turns through the fixed-line TTS cache). The `voice_ui` system block now
+  also hard-forbids a bare acknowledgement — for unmappable navigation the
+  model must ask, never say ได้เลยครับ on its own. Turn routing now logs
+  which ladder rung handled each utterance (`voice rung=…`). E2E: all three
+  failing log lines now navigate (garble → direct, alias → direct, verbless
+  → confirm → ใช่ → navigate). Files: `services/voice_realtime/
+  ui_control.py`, `pipeline.py`, `narration.py`, `session.py`,
+  `web/components/voice/VoiceCallWidget.tsx`.
+  **Round 2 — the garble list replaced by a general fix (two industry-style
+  layers):** (1) *Phonetic fuzzy verb slot* — the hardcoded "ไฟหน้า/ใบหน้า"
+  pairs are gone; the matcher now takes the 2–4 characters before the page
+  word, normalises Thai homophone letters (ใ→ไ, ณ→น, ศ/ษ→ส, …) and tone
+  marks, and accepts edit distance ≤ 1 from any navigation verb — so
+  "ไอหน้า", "ไผ่หน้า" and every future variant work without new entries
+  (guarded by the unique-page + short-utterance + question-word checks, and
+  `match_navigation_intent` gains the question guard too). (2) *N-best
+  rescue* — the widget now requests `maxAlternatives = 3` from Web Speech
+  and, when the top hypothesis is nav-adjacent (mentions a page) but fails
+  the command shape while a runner-up passes it AND names a known page, the
+  runner-up is sent instead; ordinary conversation always keeps rank #1
+  (`web/components/voice/speechAlternatives.ts`, node-tested). E2E:
+  never-hardcoded garbles now navigate correctly. Files:
+  `services/voice_realtime/ui_control.py`,
+  `web/components/voice/speechAlternatives.ts` (new),
+  `VoiceCallWidget.tsx`, `web/tests/voice-speech-alternatives.test.ts`.
+
+- **2026-07-07 — First curated in-page actions: voice can now DO things, not
+  just navigate.** The web widget declares its first `actions` whitelist —
+  `new_chat` (สร้างแชทใหม่), `open_kb <ชื่อ>` (เปิดคลังความรู้ตามชื่อ),
+  `go_back` (ย้อนกลับ) — and `executeUiAction` gains their handlers. Two
+  integration seams: `new_chat` needs the workspace session store, which the
+  root-mounted widget can't reach, so a new `VoiceActionBridge` (own file,
+  one-line mount inside the workspace provider) executes it with the real
+  store functions (cancel streaming turn → new draft session → /home); when
+  no bridge is mounted (caller on a non-workspace page) the widget falls
+  back to plain `/home` navigation, which is a fresh draft session there by
+  design. `open_kb` navigates to `/knowledge?kb=<name>` — E2E showed the
+  model calling it with an empty argument, fixed by an ARGUMENT RULE in the
+  tool definition + system block (pass the spoken/on-screen name verbatim;
+  verified live: 'เปิดคลังความรู้ LAWs_thai' → `open_kb('LAWs_thai')`).
+  Fixed-shape action commands ("สร้างแชทใหม่", "ย้อนกลับ") also joined the
+  deterministic ladder (`match_action_intent`, declared-actions-only,
+  page-naming utterances win first) after E2E caught the LLM coin-flip
+  acknowledging go_back without acting. E2E 3/3. Files:
+  `web/components/voice/VoiceActionBridge.tsx` (new), `VoiceCallWidget.tsx`,
+  `web/app/(workspace)/layout.tsx` (2-line mount),
+  `services/voice_realtime/ui_control.py`, `pipeline.py`.
+
+- **2026-07-07 — Secretary (dictation) mode: "เปิดโหมดเลขา" and the voice
+  types into the real chat.** Explicit moded dictation in the Dragon /
+  macOS-Voice-Control tradition, per design review of how production systems
+  do it: enter with "เปิดโหมดเลขา/โหมดพิมพ์" (deterministic matcher, like
+  stop) and from then on EVERY utterance is sent verbatim into the on-screen
+  chat session — `ui_action type_in_chat` → `VoiceActionBridge` →
+  `UnifiedChatContext.sendMessage()` — so answers render fully (markdown,
+  citations) and persist in real history; the voice stays silent (the screen
+  is the responder). Zero LLM per dictated turn. Mode discipline follows the
+  classic lessons: exit commands ("ปิดโหมดเลขา/ออกจากโหมด" + "หยุด") stay
+  active inside the mode so the caller can never be trapped; an always-on
+  📝 indicator shows the mode on the widget (mode-error mitigation); the mode
+  dies with the call; entering the mode auto-navigates to /home since that is
+  where typing lands. Nav-shaped sentences said while dictating are typed,
+  not executed (mode owns everything — E2E-verified 5/5 against the live
+  server, including 'ไปหน้า settings' typed in-mode and navigating again
+  after exit). State rides the session-owned `nav_state`; server announces
+  boundaries with cached fixed lines and a new `voice_mode` frame. Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`,
+  `web/components/voice/VoiceCallWidget.tsx`, `VoiceActionBridge.tsx`.
+  **Round 2 — two gaps from live testing:** (1) *Trapped in the mode*: STT
+  garbled the exit command ("ปิดโหมดเลขา" heard as "ปิดหมดเรขาค"), which
+  therefore got typed into the chat instead of exiting — the exact trap the
+  design warned about. Mode commands now get the phonetic fuzzy pass too
+  (ร→ล joined the homophone table; length-scaled edit budget, first-char
+  anchor, and an on/off tie declines rather than guessing) — matching the
+  exit generously beats trapping the caller. (2) *Silent off-page redirect*:
+  dictating after clicking away from the chat page only showed a widget
+  text note; the server now uses the streamed `ui_context.path` to detect
+  it, speaks a short "ตอนนี้ไม่ได้อยู่หน้าแชทครับ ผมพาไปแล้ว พูดอีกครั้งนะครับ"
+  and steers back — deterministic, before any typing. E2E extended to 6/6
+  including the verbatim live garble. Known deferral: answering the chat's
+  interactive ask-user prompts by voice while dictating (typed messages
+  don't reach a pending option picker). Files:
+  `services/voice_realtime/ui_control.py`, `pipeline.py`, `narration.py`.
+  **Round 3 — re-entry failed on a heavier garble:** live round 2 heard
+  "เปิดโหมดเลขา" as "เปิดหมดเลยค่ะ" — after politeness-stripping ("เลย" is a
+  filler but was also the mangled "เลขา") the residue "เปิดหมด" sat outside
+  the fuzzy budget of the full-length forms, fell to the LLM, which then
+  (a) *claimed* the mode was open and (b) answered a stale dictated
+  question. Three fixes: short canonical forms "เปิดโหมด/เข้าโหมด" joined
+  the on-set (bare "open the mode" is unambiguous — there is only one mode —
+  and keeps name-destroying garbles within budget); a VOICE MODES honesty
+  rule in the system block (the LLM has no mode control; a mode request
+  reaching it means the system missed it — ask the caller to repeat, never
+  claim a mode switched); and `VoiceSession._commit` now only records full
+  exchanges — a reply-less dictation turn no longer leaves an unanswered
+  user line in voice history for a later LLM turn to answer out of nowhere.
+  E2E extended to 9/9 (both live garbles verbatim, round-2 re-entry, no
+  stale-answer leakage). Files: `services/voice_realtime/ui_control.py`,
+  `session.py`.
+  **Round 4 — N-best rescue extended to mode commands:** the widget's
+  runner-up promotion previously only recognised the navigation shape, so a
+  garbled top hypothesis for "เปิดโหมดเลขา" was sent as-is even when the
+  correct phrase sat in hypothesis #2. `pickUtterance` now also knows the
+  mode-command shape (เปิด/ปิด/ออกจาก + โหมด), gated on mode-adjacent
+  fragments in the top hypothesis (โหมด/หมด/เลขา/เรขา) so ordinary speech
+  is still never rewritten. Both live garbles covered by node tests.
+  Files: `web/components/voice/speechAlternatives.ts`,
+  `web/tests/voice-speech-alternatives.test.ts`.
+
+- **2026-07-07 — Fix: "ไปหน้าหลัก" said ได้เลยครับ but went nowhere.** Three
+  gaps closed: the widget's chat-page label gains the aliases callers
+  actually say ("หน้าหลัก / หน้าแรก / home") and points at `/home` directly;
+  the shortcut matcher keeps unstripped label tokens (so the alias matches
+  "ไปที่หน้าหลัก") while excluding generic words like bare "หน้า" that would
+  collide every page into ambiguity; and the `voice_ui` system block now
+  forbids answering a navigation request with an acknowledgement alone —
+  the pinned "ได้เลยครับ" must come *with* the tool call, never instead of
+  it. Files: `web/components/voice/VoiceCallWidget.tsx`,
+  `services/voice_realtime/ui_control.py`.
+
+- **2026-07-07 — Stop is a control command, not conversation.** "หยุดพูดก่อน"
+  used to reach the LLM, which replied with a paragraph about having stopped
+  talking. Stop/quiet commands (exact match after stripping polite particles —
+  "วันหยุดคืออะไร" still reaches the LLM) now short-circuit like navigation:
+  the session has already cancelled the speaking turn, so the reply is a
+  cached one-syllable "ครับ" and no LLM turn starts. Also taught
+  `VOICE_STYLE_DIRECTIVE` to never end replies with generic offers of further
+  help ("หากมีคำถามเพิ่มเติม…") — a live call doesn't need them. Files:
+  `services/voice_realtime/pipeline.py`, `narration.py`.
+
+- **2026-07-07 — Closing the navigation-reliability gap (two layers).** The
+  same "ไปหน้า settings" sometimes navigated and sometimes just talked — a
+  sampling coin-flip at chat's default temperature. Layer 1: the voice turn's
+  scoped LLM config now also sets `temperature=0.3` (voice-only; chat
+  untouched). Layer 2: a deterministic navigation shortcut
+  (`ui_control.match_navigation_intent`) — short utterances with a nav verb +
+  "หน้า/page" + exactly one manifest page match execute the `ui_action`
+  directly, skipping the LLM round entirely (100% deterministic and faster);
+  ambiguous/compound requests still go to the LLM. The shortcut's ack
+  ("ได้เลยครับ") and the greeting now go through a synthesise-once
+  `_FIXED_LINE_CACHE`, so repeated fixed lines cost zero TTS latency. Files:
+  `services/voice_realtime/pipeline.py`, `ui_control.py`, `narration.py`.
+
+- **2026-07-07 — Post-navigation reply pinned to one phrase.** Live testing
+  showed two leaks: (1) the generic "รอสักครู่ฯ" heard on navigation was the
+  *pipeline's* default filler triggered by the tool round's `PROGRESS`
+  call-status event — killed by the "earned wait" change below once the
+  server restarts; (2) Gemini watered the "three words max" instruction down
+  to polite paragraphs — the `voice_ui` system block and `ui_navigate` tool
+  result now pin the reply to exactly one allowed phrase ("ได้เลยครับ"),
+  validated 3/3 runs on gemini-3.1-flash-lite. File:
+  `services/voice_realtime/ui_control.py`.
+
+- **2026-07-07 — "Please wait" must be earned by a real wait.** Dropped the
+  pre-emptive generic filler ("รอสักครู่นะครับ กำลังดำเนินการให้อยู่") that spoke
+  the moment *any* unmapped tool started — many finish in under a second, and
+  announcing a wait that doesn't happen sounds broken. Now only known-slow
+  tools (rag / web_search / code…) get an immediate specific cue; everything
+  else stays silent, and the existing 8 s watchdog speaks the (reworded)
+  generic wait line only when the silence is real. Files:
+  `services/voice_realtime/narration.py`, `pipeline.py`.
+
+- **2026-07-07 — Natural speech around UI navigation.** With a fast LLM the
+  screen now changes *before* the voice arrives, but the model still narrated
+  politely ("รอสักครู่นะครับ กำลังพาไป…") — announcing an action the caller
+  already saw. The `voice_ui` system block and the `ui_navigate` tool result
+  now tell the model the change is already visible: say nothing or confirm in
+  at most three words, never "wait a moment", never describe the destination.
+  File: `services/voice_realtime/ui_control.py`.
+
+- **2026-07-07 — Latency: reasoning disabled for voice turns (TTFT 21 s → <1 s).**
+  Diagnosis: ~85–90% of call latency was the LLM's hybrid-thinking phase
+  (Qwen3.5/Nemotron reason for 20 s+ before the first token), not the voice
+  pipeline. Fix: `run_text_turn` now wraps each voice turn in a scoped LLM
+  config (`set_scoped_llm_config`, task-local ContextVar — the same public
+  seam `model_selection` uses) with `reasoning_effort="minimal"`, the
+  codebase's portable "thinking off" value (top-level for NVIDIA NIM —
+  verified live: TTFT 0.8–5.8 s on qwen3.5-122b vs 21–64 s with thinking;
+  extra-body flags for DeepSeek/DashScope-style providers). Chat keeps full
+  reasoning — the override never escapes the voice turn's task. Zero
+  upstream edits. File: `services/voice_realtime/pipeline.py`; test in
+  `tests/services/voice_realtime/test_pipeline.py`.
+
+- **2026-07-07 — Spoken greeting on call pickup.** The call now answers with
+  "สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ" the moment the WebSocket connects:
+  `speak_greeting()` in `services/voice_realtime/pipeline.py` synthesises the
+  line through the same TTS catalog and emits it as a normal audio frame pair
+  + `assistant_text` (so lip-sync, echo-guard fingerprint and the chat log all
+  treat it like a spoken turn); `VoiceSession.greet()` records it in history
+  so the model knows it already said hello. TTS failure = silent pickup, never
+  a dropped call. Line lives in `narration.GREETING_LINE`; router awaits the
+  greeting right after `accept()`. Tests added in `test_pipeline.py`.
+
+- **2026-07-07 — Web widget: mascot no longer idles in a slow spin.** The
+  constant yaw drift inherited from the fullscreen prototype looked wrong in
+  the small corner pane; the figure now faces the user at rest, still spins
+  while `searching`, and eases back to front (nearest full turn) afterwards.
+  File: `web/components/voice/VoiceCallWidget.tsx`.
+
+- **2026-07-07 — Voice page-navigation wired into the web widget.**
+  `VoiceCallWidget` now declares the app's real pages (chat / knowledge /
+  notebook / memory / agents / book / co-writer / space / settings / profile)
+  as the `ui_manifest` whitelist on connect, and executes incoming
+  `ui_action` frames via the Next router (`router.push`), re-validating the
+  target against the same table first. Say "พาไปหน้า settings" mid-call and
+  the app navigates while the call continues (the widget lives in the root
+  layout). Server side unchanged — same `ui_navigate` seam the mock bench
+  proved. File: `web/components/voice/VoiceCallWidget.tsx`.
+
+- **2026-07-07 — Web widget mounted globally (root layout).** The widget was
+  mounted in the workspace layout, so navigating to another route group
+  unmounted it mid-call (button gone, call dropped). Moved the two mount
+  lines from `web/app/(workspace)/layout.tsx` to `web/app/layout.tsx` — the
+  root layout persists across client-side navigation, so the call (and the
+  future voice page-navigation) survives on every page.
+
+- **2026-07-07 — Web widget: two more echo defenses (abort + fingerprint).**
+  The time-based mute guard alone still leaked: Web Speech buffers what it
+  hears during playback and delivers the final result *after* the mute
+  window. The widget now (1) aborts recognition the instant bot audio starts
+  (discarding the buffer) and restarts it 800 ms after playback ends, and
+  (2) drops any recognised utterance whose normalised text matches what the
+  bot recently spoke (Botnoi's textFingerprint technique). File:
+  `web/components/voice/VoiceCallWidget.tsx`.
+
+- **2026-07-07 — Voice call in the real web app (branch
+  `feat/voice-web-integration`).** New
+  `web/components/voice/VoiceCallWidget.tsx`: a floating 📞 button in the
+  workspace; pressing it fades in a full-screen mascot overlay
+  (Botnoi-WebAvatar style, 500 ms opacity transition; hang-up fades out then
+  unmounts). Ports the prototype call client natively into React: WS to the
+  same-origin `/api/v1/voice/ws` (via `wsUrl` + web proxy), browser Web-Speech
+  STT with the echo mute-guard, queued TTS playback with real-amplitude
+  lip-sync, typed barge-in, and the 3D mascot (Three.js loaded from CDN on
+  first open — no bundle dependency). Upstream touch limited to two mount
+  lines in `web/app/(workspace)/layout.tsx`. Known deferral: UI strings are
+  Thai literals pending i18n keys (2 lint warnings). Revised same day: the
+  full-screen overlay became a Botnoi-style floating corner layer — the
+  mascot renders on a transparent canvas (no background/fog/floor) in a
+  ~330×240 pane above a compact chat panel at the call-button corner, the
+  page underneath stays interactive, and open/close fades+slides.
+
+- **2026-07-07 — Mock bench: mic-mode selector + headphone barge-in.**
+  `mock-app.html` gains the same STT modes as `call.html`: browser (Web
+  Speech) and server STT (MediaRecorder + energy-VAD with noise-floor
+  calibration, ported from `call.html`) — server mode allows voice barge-in
+  (must be ~2.5× louder than the gate while the bot speaks). New 🎧
+  "headphones" checkbox for browser mode: with no speaker-to-mic echo the
+  mute guard is bypassed and speaking immediately barges in. File:
+  `voice_prototype/static/mock-app.html`.
+
+- **2026-07-06 — Fix: browser-STT echo loop (bot answering its own voice).**
+  In browser-STT mode the mic hears the bot's TTS, Web Speech transcribes it
+  ("สวัสดีครับ" → new turn → reply → …), looping forever and burning LLM quota.
+  `call.html` + `mock-app.html` now drop recognition results while bot audio
+  is playing and for an 800 ms tail after it ends (`muteUntil` guard); typing
+  now barges in instead (voice barge-in remains in the calibrated server-STT
+  mode). Files: `voice_prototype/static/call.html`, `mock-app.html`.
+
+- **2026-07-06 — Voice-driven UI control (Botnoi-WebAvatar style) + mock test
+  bench.** A caller can now steer the on-screen UI by voice ("ไปหน้า settings",
+  "เปิด KB กฎหมาย"). New `deeptutor/services/voice_realtime/ui_control.py`:
+  the client declares a steerable-UI whitelist via a `ui_manifest` WS control
+  frame (sanitised, ≤64 targets); its presence activates `VoiceUICapability`
+  (appended to `LOOP_CAPABILITIES` at runtime) which mounts a new
+  `ui_navigate` tool (registered through the public `ToolRegistry.register()`)
+  with a system block listing the allowed targets. The voice pipeline forwards
+  the tool's `TOOL_CALL` to the client as a `{"type": "ui_action", ...}` frame
+  (no spoken filler — near-instant); the page executes and re-validates it.
+  Plumbing in `pipeline.py` / `session.py` / `api/routers/voice_realtime.py`
+  (all fork-owned; zero upstream edits). Test bench:
+  `voice_prototype/static/mock-app.html` (`/mock`) — a mock DeepTutor UI
+  (Chat / Knowledge Base / Mastery / Settings + `open_kb` action) with an
+  embedded call panel, so voice-controls the fake app before any `web/`
+  wiring. Tests: `tests/services/voice_realtime/test_ui_control.py`.
+
+- **2026-07-06 — Prototype folder slimmed to the static call host.** The
+  standalone STT→LLM→TTS pipeline in `voice_prototype/` was superseded by the
+  production layer (`deeptutor/services/voice_realtime/`) and had been
+  untouched since 2026-07-02; deleted `pipeline.py`, `providers.py`,
+  `selftest.py`, `tests/`, and `.env.openrouter.example`. `config.py` /
+  `requirements.txt` / `.env.example` shrank to just the static host's
+  HOST/PORT (fastapi + uvicorn), and `README.md` was rewritten for what the
+  folder is now: a thin `http://localhost` origin serving `static/call.html`,
+  which talks to DeepTutor's `/api/v1/voice/ws` directly.
+
+- **2026-07-06 — Removed the iApp STT/TTS integration.** The iApp account ran
+  out of credit and its published API docs didn't match the live endpoints
+  (reported to the vendor), so the adapter was dead weight. Deleted
+  `deeptutor/services/voice/adapters/iapp.py` + `tests/services/test_voice_iapp.py`,
+  its registry entries in `deeptutor/services/voice/adapters/__init__.py`, and
+  the `iapp` specs this fork had added to TTS/STT provider tables in
+  `deeptutor/services/config/provider_runtime.py` (shrinking our diff against
+  upstream). Stale iApp mentions in voice_realtime comments/tests reworded.
+  Active voice chain is unchanged: Groq whisper STT + custom PTM TTS.
+
+- **2026-07-06 — Fix: "searching" filler no longer fires on small talk.** The
+  chat capability runs an automatic KB seed lookup on *every* turn when a KB is
+  attached (`call_id` prefix `chat-kb-seed`, same `call_kind=rag_retrieval` as a
+  real LLM-chosen `rag` call), so the call spoke "ขอค้นข้อมูลในเอกสารสักครู่"
+  for every utterance. `_tool_starting()`
+  (`deeptutor/services/voice_realtime/pipeline.py`) now skips the seed lookup;
+  the filler + `searching` mascot state fire only for tools/retrievals the LLM
+  actually chose. Test added in
+  `tests/services/voice_realtime/test_pipeline.py`. Zero upstream edits.
+
+- **2026-07-02 — Voice RAG + spoken "searching" filler + watchdog.** Toward
+  chat parity for the call: `build_voice_context` attaches available knowledge
+  bases so `rag` auto-mounts (the model searches only when a question needs it;
+  small talk never triggers it). When a tool/retrieval starts — the chat
+  capability runs RAG as a stage emitting `PROGRESS(call_kind=rag_retrieval,
+  call_state=running)`, not a `TOOL_CALL`, so `_tool_starting()` detects both —
+  the pipeline speaks a short Thai filler ("ขอค้นข้อมูลในเอกสารสักครู่นะครับ")
+  and sends a `searching` status; a `thinking` status goes out at turn start so
+  a slow reasoning model doesn't look frozen. A watchdog pulls events as a
+  polled task (never `wait_for(__anext__)`, which cancels the generator into a
+  running tool): a quiet gap past the soft limit speaks a reassurance, past the
+  hard limit aborts the hung turn. New `narration.py`; mascot gains a spinning
+  `searching` state. Zero upstream edits; E2E verified against a real KB.
+
+- **2026-07-02 — Call page: 3D talking mascot with audio lip-sync.** Merged a
+  Three.js mascot avatar into `voice_prototype/static/call.html` as the call's
+  face (all prior call logic — VAD calibration, barge-in, browser-TTS fallback —
+  preserved). The mouth is driven by real state: server TTS audio is routed
+  through a WebAudio `AnalyserNode` so it opens by actual amplitude (lip-sync),
+  the Web-Speech fallback uses a procedural mouth, and the rim light + head pose
+  shift per state (idle / listening / thinking / speaking). Prototype-only,
+  outside `deeptutor/`.
+
+- **2026-07-02 — Call page: browser-TTS fallback.** When a turn ends with a
+  reply but zero audio frames (server TTS down / out of credit — iApp hit
+  `INSUFFICIENT_CREDIT` during testing), `call.html` now speaks the reply via
+  the browser's Web Speech synthesis (th-TH voice when available) instead of
+  going silent; barge-in cancels the fallback voice too. File:
+  `voice_prototype/static/call.html`.
+
+- **2026-07-02 — Voice-mode prompt + guarded STT (turn quality).** All inside
+  `deeptutor/services/voice_realtime/` (zero upstream edits): `build_voice_context`
+  now injects a VOICE CALL MODE directive (persona slot + a reminder appended to
+  the current user message — the persona block alone was ignored) so the brain
+  answers in short spoken prose; measured 612-char markdown/LaTeX answer →
+  297 chars of clean spoken Thai, turn 45 s → 4.8 s. New `stt_guard.py`:
+  vocab-biased `verbose_json` transcription with mean `avg_logprob` confidence
+  for the OpenAI-compatible STT cluster (facade fallback for bespoke adapters)
+  plus `screen_transcript()` rejecting empties, known Whisper hallucination
+  phrases, and low-confidence noise with a speakable Thai error. Tests in
+  `tests/services/voice_realtime/test_stt_guard.py` (+ pipeline updates).
+
+- **2026-07-02 — Call page VAD hardening (real-mic feedback).** First live mic
+  test hit a feedback loop: fixed VAD thresholds fired on ambient noise, whisper
+  hallucinated text from the noise clips, and each false trigger barged-in and
+  killed playback (replies arrived but were never heard). `call.html` now
+  calibrates the room noise floor at call start, requires 150 ms sustained
+  speech before an utterance counts (short pops are discarded client-side),
+  raises the barge threshold 2.5× while the assistant is speaking, and surfaces
+  playback errors instead of failing silently. File: `voice_prototype/static/call.html`.
+
+- **2026-07-02 — iApp (Thai) STT/TTS adapters, catalog-integrated.** New
+  `deeptutor/services/voice/adapters/iapp.py` (`IAppTTSAdapter` + `IAppSTTAdapter`
+  — the first bespoke STT adapter): auth via `apikey` header under
+  `https://api.iapp.co.th/v3/store`. TTS v3 posts `{text, speed}` (speed clamped
+  0.8–1.2) and returns raw PCM s16le 24 kHz reported as
+  `audio/pcm;rate=24000;channels=1` so the existing PCM→WAV wrapper containers it;
+  STT is multipart upload with the catalog *model* selecting the variant
+  (`pro` = accurate / anything else = `base` fast + `chunk_size=7`), joining
+  `output[].text` segments. Registered in both adapter registries + added
+  `iapp` specs to `TTS_PROVIDERS`/`STT_PROVIDERS`, so "iApp (Thai)" appears in
+  Settings > Voice for both services. Tests in `tests/services/test_voice_iapp.py`.
+  Live-verified with a real key: **TTS works** (144 KB PCM in ~2.5 s);
+  **STT confirmed correct earlier in the day** (round-trip transcript matched)
+  but iApp's ASR backend degraded to a persistent 500
+  (`'50359' is not a valid task`) during verification — an iApp-side outage
+  affecting base + pro alike, independent of request shape.
+
+- **2026-07-02 — GLM hybrid-reasoning support (`LLM_DISABLE_THINKING`).** Verified a
+  z.ai (Zhipu) key against the prototype: `glm-4.5-flash` (free) works as the LLM
+  brain (Thai OK; measured TTFT ≈2.2 s with thinking off), but z.ai exposes no
+  usable STT/TTS models to this account, so audio stays with other providers /
+  the browser MVP. Added `build_llm_payload()` in `voice_prototype/pipeline.py` +
+  `llm_disable_thinking` in `config.py`: `LLM_DISABLE_THINKING=1` sends the
+  Zhipu-style `{"thinking":{"type":"disabled"}}` switch so GLM answers without a
+  thinking phase (otherwise voice TTFT balloons); off by default so other
+  providers never see the unknown field. Test in `tests/test_pipeline.py`.
+
+- **2026-07-02 — Provider interface + playable MVP.** Added `voice_prototype/providers.py`
+  (`BaseSTT`/`BaseTTS` ABCs + OpenAI-compatible adapters covering the TokenMind
+  `ptm-asr-1`/`ptm-tts-1` endpoints, streaming-first, + Thai number normalizer) and a
+  browser-only MVP (`/mvp` route + `static/mvp.html`) that uses the Web Speech API for
+  STT/TTS so it runs with no audio keys — only a DeepTutor OpenAI-compatible LLM
+  endpoint. Tests in `voice_prototype/tests/test_providers.py`.
+
+- **2026-06-30 — Production realtime layer landed** (prototype → `deeptutor/`,
+  additive). New, isolated for mergeability:
+  - `deeptutor/services/voice_realtime/{chunker,vad,pipeline,session}.py` — the
+    realtime turn machinery. `pipeline.run_turn()` drives `ChatOrchestrator.handle()`
+    directly and consumes `StreamBus` `CONTENT` events, speaking **only** the final
+    answer by gating on `metadata.call_kind == "llm_final_response"` (the same rule
+    `PartnerRunner` uses); final-answer tokens feed `SentenceChunker` → per-sentence
+    TTS so audio for sentence 1 streams while the LLM is still writing. STT/TTS reuse
+    the catalog-driven facade (`transcribe_audio` / `synthesize_speech`).
+    `VoiceSession` owns per-connection history + a single in-flight turn task;
+    a new utterance or `barge` control frame cancels it (barge-in).
+  - `deeptutor/api/routers/voice_realtime.py` — WebSocket `/api/v1/voice/ws`
+    (binary frame = one utterance, `{"type":"barge"}` = cancel); auth via
+    `ws_require_auth` like `unified_ws`. Wired in `deeptutor/api/main.py` (one
+    `include_router` line).
+  - `deeptutor/services/voice/adapters/bespoke.py` — new **ElevenLabs** and
+    **BOTNOI** TTS adapters; registered in `adapters/__init__.py` and added to
+    `TTS_PROVIDERS` in `services/config/provider_runtime.py` so both are selectable
+    from Settings > Voice (Groq STT + OpenAI/Groq TTS already shipped in the catalog).
+  - Tests: `tests/services/voice_realtime/` (chunker, pipeline CONTENT-gating,
+    session barge-in), `tests/services/test_voice_bespoke.py` (adapter wire shape),
+    `tests/api/test_voice_realtime_ws.py` (WS routing).
+
+## Anima Habitat — learning-companion pet (in progress)
+
+A Tamagotchi-style pet whose state (hunger/happy/exp/level/sick) is *derived* from
+real DeepTutor mastery progress: demonstrate understanding in a Mastery Path
+session → the pet is fed, grows, and heals. 5-day demo. Design is fully grounded
+against source (the external handoff assumed `SUMMARY.md`/`PROFILE.md` polling and
+plain-chat signals, both of which do **not** exist / fire in DeepTutor). All code
+is additive and isolated for mergeability — the only upstream-file edit is one
+`include_router` line in `deeptutor/api/main.py`.
+
+- **2026-07-14 — Day 1: pet bridge core (module + in-process router + tests).**
+  Server is authoritative; the frontend will be a pure renderer (a replaceable
+  "mask"). Signal is *pulled* from `LearningProgress` (no hooks): on read, the
+  bridge applies lazy time-decay and drains new mastery signal, so there is no
+  background worker.
+  - New module `deeptutor/pet/` (no upstream edits): `models.py` (pet-state
+    contract + normalized `LearningSnapshot` + internal bookkeeping), `derive.py`
+    (pure, deterministic state math — decay, event deltas, rules), `store.py`
+    (atomic `data/user/pet_state.json`), `service.py` (`PetBridge` — ties one
+    `mastery_path_id` to one pet; the only coupling to `deeptutor.learning` is the
+    `_snapshot` adapter).
+  - Signal→state mapping: `QUIZ_PASS`/`QUIZ_FAIL` from each `QuizAttempt.is_correct`;
+    `LEARN_CONCEPT` fires when a KP's confidence-capped `compute_mastery` crosses
+    `pass_threshold` (0.7) for the first time (this is the anti-cheese — mastery,
+    not clicks). Sickness is edge-triggered on an upward hunger crossing so a
+    `QUIZ_PASS` cure is not instantly undone while still hungry.
+  - New router `deeptutor/api/routers/pet.py`: `GET /api/v1/pet/state?pathId=`
+    (authoritative pull), `POST /api/v1/pet/event` (manual/mock + future push
+    seam), `DELETE /api/v1/pet/state` (demo re-run). In-process, same-origin →
+    no CORS/auth-to-self. Wired via one line in `deeptutor/api/main.py`.
+  - Tests: `tests/pet/test_pet_derive.py` (14 — event deltas, decay, mastery-gate
+    idempotency, level-up, cure-sticks regression + bridge persistence). Verified
+    end-to-end by driving the live endpoints (feed → sick → heal → persist → 400
+    on bad `pathId`).
+  - Spec / source-of-truth for state logic: `docs/issues/anima-habitat/README.md`.
+
+- **2026-07-14 — Day 2: bridge reads real learning state (proven end-to-end).**
+  The `_snapshot` adapter reads a real `LearningProgress` from `LearningStore`
+  and maps `QuizAttempt.is_correct` + per-KP `calculate_mastery` into the pet.
+  Confirmed against the confidence cap: 1 correct answer (mastery 0.5, capped) →
+  no `LEARN_CONCEPT`; 2 correct (0.8, crosses 0.7) → concept learned. No pet-side
+  code change was needed — Day-1's adapter shape held.
+  - Tests: `tests/pet/test_pet_bridge_integration.py` (4) — drives the whole
+    stack (`grade_and_record` → on-disk `LearningStore` → `PetBridge` → derive),
+    hermetic in `tmp_path`, no mocks: real graded attempts feed the pet, signal
+    is not double-counted across reads, wrong answers don't feed, unknown path →
+    fresh pet.
+
+- **2026-07-14 — Day 3: pet rendered in the Mastery Path dashboard + mastery-gate
+  correction.** The companion now lives on the learner's own progress screen, and
+  a real graded answer visibly feeds it.
+  - New `web/components/pet/PetHabitat.tsx` + `web/lib/pet-api.ts`; mounted in
+    `web/app/(utility)/space/learning/page.tsx` (**+11 lines**, no reformatting).
+    Canvas render/animation is ported from the `anima-habitat.html` prototype but
+    its local state logic is dropped: the component is a **pure renderer** that
+    polls `GET /api/v1/pet/state` every 4s. Cosmetic reactions (run-to-bowl, hop,
+    level-up motes, heal sparkle) fire on *observed server deltas*, so the UI is a
+    replaceable mask over the bridge.
+  - **Fix (found by live verification): the pet used a parallel mastery threshold.**
+    It gated `LEARN_CONCEPT` on `module.pass_threshold` (0.7) while DeepTutor's own
+    hard gate (`learning.policy.is_mastered`) is **0.9 for MEMORY/PROCEDURE** and a
+    **qualitative `mastery_assess` pass for CONCEPT/DESIGN**. Two consequences, both
+    real: the pet fed on objectives the dashboard still showed as "Learning", and
+    CONCEPT/DESIGN objectives — which have *no quiz attempts* — could never feed it
+    at all. `PetBridge._snapshot` now reuses `policy.is_mastered`, so "the pet ate"
+    means exactly "the tutor says you mastered it". `LearningSnapshot` carries
+    `mastered_kp_ids` instead of raw scores + a threshold.
+  - Tests: pet suite now 19 (added: 0.8 mastery must NOT feed — the gate is 0.9;
+    qualitative CONCEPT mastery MUST feed). Verified live in-browser end-to-end:
+    1 correct → pet cheers but doesn't eat; 2 correct (0.8) → still no food;
+    3 correct (1.0) → objective flips to "Mastered" on the map *and* the pet eats
+    (exp 0 → 20, hunger 32% → 1%); state survives reload via `pet_state.json`.
+
+- **2026-07-14 — Day 3 follow-up: the Mastery Path map no longer goes stale beside
+  the pet.** The dashboard fetched the mastery map **once** (a `useEffect` keyed on
+  the selected path), while `PetHabitat` beside it polls the same `LearningProgress`
+  every 4s. After a graded answer the two panels visibly disagreed — pet Knowledge
+  0 → 20 while the map still read "0/2 mastered" / "Not started" until a manual
+  reload. `web/app/(utility)/space/learning/page.tsx` now refreshes the map (and the
+  path list's `avg_mastery_pct`, which was stale in the same way) on the pet's 4s
+  cadence. Only file touched; **+35/−17 lines**, no reformatting (verified with
+  `prettier --no-config --check`).
+  - Refreshes are *background* refreshes: they never raise the loading spinner, and
+    a failed poll keeps the last good map on screen instead of blanking it. The
+    first load of a newly-selected path still shows the spinner as before.
+  - Chose whole-map polling over "refetch only when the pet's state changes":
+    `derive_on_read` applies lazy time decay on **every** read, so `hunger`/`happy`/
+    `lastEvent`/`updatedAt` change on every poll — a state-delta trigger would fire
+    every tick anyway. Narrowing the trigger to `exp`/`level` would miss quiz
+    *failures*, which move an objective "Not started" → "Learning" and change
+    `next.action` without touching `exp`. Exact causality would need the bridge to
+    serialize the `LearningProgress.version` watermark it already tracks in
+    `seen.last_version` — deferred; the map read costs the same as the pet read the
+    page already pays on that cadence (both run `policy.is_mastered` over every KP).
+  - Verified live in-browser, no reload: with the map open, a real graded answer
+    driven through `LearningService.grade_and_record` (3 correct on "Calvin cycle")
+    flipped the map 1/2 → 2/2, the objective "Not started" → "Mastered", Next →
+    "All mastered 🎉", the sidebar 50% → 100%, **and** the pet (Knowledge 20 → 40,
+    hunger 42% → 22%) — all within one poll, no console errors.
+
+- **2026-07-14 — Day 4: heal loop verified end-to-end (no code change needed).**
+  The full demo loop now runs against real learning state: neglect → the pet
+  crosses the hunger gate and falls sick → the learner answers a real quiz
+  correctly → `grade_and_record` → `QUIZ_PASS` → the pet is cured, live in the
+  browser (sick badge + red cross clear, happiness 78% → 95%).
+  - Confirms the Day-1 **edge-triggered sickness** decision in the real system:
+    the pet stays cured at hunger 88% (still far above the 75 gate) because
+    sickness only re-trips on a *fresh* upward crossing. With the original
+    "re-assert sick whenever hunger ≥ 75" rule the cure would have been undone on
+    the very next poll, making `QUIZ_PASS` useless.
+  - Also confirms the gate separation: one correct answer (mastery 0.5) **cures
+    but does not feed** — feeding still requires clearing the tutor's 0.9 gate.
+  - Test: `test_heal_loop_a_real_correct_answer_cures_a_sick_pet` (pet suite → 20).
+
+- **2026-07-14 — Mastery map now refreshes on the pet's cadence.** The dashboard
+  loaded `fetchMasteryMap` once per selection and never re-polled, so after a
+  graded answer the pet (polling every 4s) visibly disagreed with the map beside
+  it — pet fed and levelling while the map still read "0/2 mastered" until a
+  manual reload. Both panels now refresh on the same 4s cadence
+  (`web/app/(utility)/space/learning/page.tsx`). The refresh is a *background*
+  one: no spinner, and a failed poll keeps the last good data rather than blanking
+  the map.
+
+- **2026-07-14 — Day 5: balancing extracted to config + demo runbook.** Every
+  number the game feel depends on moved out of the code path into
+  `deeptutor/pet/tuning.py` (`PetTuning`), overridable by dropping any subset of
+  the fields into `data/user/settings/pet.json` — so balancing (and live tuning on
+  stage) is a config edit, not a code edit. `derive.py` stays pure: the tuning is
+  threaded through as a parameter.
+  - **Two balancing bugs the live demo exposed**, both of which silently broke the
+    demo script: (1) a fresh pet started at hunger 20 — *not hungry* — so the
+    opening beat ("pet หิวโซ") never landed; `initial_hunger` is now 70. (2) At 20
+    exp per mastered objective a level-up needed **5** mastered objectives, which
+    is unreachable in a 3-minute demo, so the level-up beat could **never fire**;
+    `learn_exp` is now 50, making 2 mastered objectives = 1 level.
+  - Tests pin `DEFAULT_TUNING` explicitly, so a local `pet.json` tweak can never
+    change what the suite asserts. Added a balancing lock:
+    `test_demo_arc_two_mastered_objectives_level_the_pet_up` (pet suite → 21).
+  - `docs/issues/anima-habitat/DEMO.md` — runbook: how to start both processes
+    (incl. the `DEEPTUTOR_API_BASE_URL` gotcha), the beat-by-beat script, the
+    anti-cheese explanation, the tuning table, and stage fallbacks.
+  - Verified live end-to-end: pet starts hungry (70%) → 1st correct answer cheers
+    but doesn't feed (mastery 0.5) → 2nd still doesn't (0.8 < the tutor's 0.9 gate)
+    → 3rd masters it and the pet **eats** (exp 0→50, hunger 71%→46%) → mastering
+    the second objective **levels it up** (Lv.2, hunger →21%), with the map showing
+    "2/2 mastered" in the same beat.
+
+- **2026-07-14 — v2: Learner Anima goes top-level + aggregates all paths.** After a
+  second grill (`docs/issues/anima-habitat/README.md` §v2), the pet moved out of the
+  Mastery dashboard to its own top-level page and became **one companion per user,
+  fed by every mastery path**.
+  - **Backend (aggregate):** `PetBridge` is now keyed by **userId** (not `pathId`);
+    `_snapshot` iterates `LearningStore.list_all()` (already user-scoped) and merges
+    all paths — mastered KPs unioned and **namespaced `{path_id}:{kp_id}`**, attempts
+    grouped per path. `SeenState.last_attempt_count`→`attempt_counts: dict`;
+    `mastered_kp_ids` is **monotonic** (a path reset/delete never claws back exp).
+    Endpoints re-key to the current user: `GET/POST/DELETE /api/v1/pet/state` take no
+    `pathId`. `derive` math, `PetTuning`, and the canvas renderer are unchanged.
+  - **Robustness:** the store now drops records from an older schema instead of
+    crashing (a leftover `pet_state.json` used to break the whole pet on load).
+  - **Frontend:** new top-level page `web/app/(utility)/anima/page.tsx` ("Learner
+    Anima", route `/anima`, `PawPrint` icon, `PRIMARY_NAV` under Learning Space,
+    ungated) reusing `<PetHabitat>` centered + a CTA when the user has no paths yet.
+    Pet **removed** from the Mastery dashboard (its live-map polling stays — good UX
+    on its own). `/anima` added to the voice-steer manifest (`UI_PAGES`) and i18n
+    keys added to en/th/zh.
+  - **Rationale:** a top-level pet has no "selected path", so per-path scoping stopped
+    making sense; aggregate is the natural model and degenerates to the old behavior
+    for a single path (demo-safe). **North star (deferred):** reviews-as-food —
+    DeepTutor's spaced-repetition already flows through `grade_and_record` into the
+    `quiz_attempts` the pet reads, so it layers cleanly onto monotonic exp.
+  - Tests: pet suite → 25 (aggregate across two paths; monotonic-across-reset;
+    per-path attempt draining; stale-record drop). Verified live: `GET /pet/state`
+    (no `pathId`) aggregates real paths; `/anima` route serves 200 with the pet
+    canvas + CTA; sidebar shows the `/anima` link.
+
+- **2026-07-14 — Learner Anima art overhaul: high-DPI smooth cozy-room render.**
+  The pet canvas was a low-res (200×140) pixel-art port that read as blocky when
+  scaled up. Replaced with a **high-DPI, anti-aliased "cozy illustration"** render
+  in `web/components/pet/PetHabitat.tsx`: an 800×520 logical scene drawn at
+  `devicePixelRatio` with `ResizeObserver`-driven fitting — a warm room (wainscot
+  wall, plank floor, sage rug, bookshelf, bed, potted plants, a glowing floor lamp,
+  a framed picture) and a rounder companion (radial-gradient body, glossy eyes,
+  blush, blinking, walk squash), plus mood-tinted lighting/vignette and
+  star/heart/crumb particles. Server-authoritative + pure-renderer split is
+  unchanged — the numbers still come only from the bridge; all new motion is
+  cosmetic, fired on observed state deltas.
+  - Added two robustness items flagged earlier: the render loop **pauses while the
+    tab is hidden** (`visibilitychange`) and **respects `prefers-reduced-motion`**
+    (draws a single calm frame, redrawn on state change; no continuous animation).
+  - Design workflow: `docs/issues/anima-habitat/preview.html` is a standalone,
+    self-contained art workspace (mock-state buttons) — iterate the look there
+    first, then port into the component. Bridge/API untouched.
+
+- **2026-07-15 — Learner Anima pixel-dashboard preview (design workspace only).**
+  Reworked `docs/issues/anima-habitat/preview.html` before any production UI port,
+  following the project's art workflow. The standalone mock is now a responsive,
+  DeepTutor-theme-aware dashboard (dark/light, EN/TH/ZH) around an original
+  low-resolution pixel-art diorama. Pixel keeps its Wind Anima identity and can
+  wander throughout the room with collision-aware targets, depth ordering, and
+  pixel-native idle/eat/sick/heal/level reactions; `prefers-reduced-motion` keeps
+  a calm pose. Dashboard cards deliberately mirror only data the real code can
+  supply: authoritative pet state, mastery-gate ratios for the four actual
+  `KnowledgeType`s, learning-only activity, due reviews, Mastery Paths, and real
+  navigation shortcuts. Unsupported economy concepts (energy, gems, rank,
+  missions, rewards) are omitted, and mock state controls are visibly separated
+  from learner actions. No React, API, bridge, or mastery-engine code changed in
+  this preview round.
+  - **Visual-density follow-up:** the first mock rasterized its habitat at only
+    240×144 and enlarged that buffer across the card, making the intentionally
+    pixel-styled scene read like low-resolution video. The preview now rasterizes
+    the same original composition at **8× source density (1920×1152)** and lets
+    the browser downsample it normally. Pixel-inspired silhouettes and texture
+    remain, while curves, diagonal edges, lighting, and facial details no longer
+    come from a visibly enlarged low-resolution buffer.
+  - **Art-direction correction after visual review:** increasing the backing
+    buffer alone preserved the coarse 240×144 source geometry, so the scene still
+    read as enlarged low-resolution art. Replaced that renderer with the proven
+    **800×520 smooth illustrated scene**, fitted at CSS size × devicePixelRatio
+    with anti-aliasing enabled: continuous curves, gradients, fine furniture and
+    facial detail, and theme-aware lighting. The dashboard shell and its agreed
+    real-data semantics are unchanged; this remains preview-only.
+  - Added the root domain glossary (`CONTEXT.md`) and defined **Knowledge Mastery
+  Profile** as the canonical name for the aggregate, four-axis,
+  mastery-gate-based learner profile across all of a user's Mastery Paths;
+  explicitly avoids presenting it as invented subject elements or as historical
+  growth.
+  - Replaced the preview's four duplicated mastery progress rows with a crisp,
+    dependency-free **SVG Knowledge Mastery Profile radar**. Its four fixed
+    0–100 axes are the real `KnowledgeType`s (Memory, Concept, Procedure,
+    Design); each point is pooled `policy.is_mastered` objectives divided by
+    available objectives of that type across all paths, with persistent percent
+    and `mastered / total` labels plus screen-reader fallback. The preview shows
+    current state only; the agreed production rule is `N/A` (never zero) when a
+    type has no objectives and no polygon when fewer than three axes are measured.
+  - **Profile-viz A/B comparison (design workspace only).** A grill reopened the
+    four-axis radar because a 4-vertex radar is a degenerate diamond that reads as
+    lopsided, cannot show a per-type `N/A`, and (per the agreed rule) draws nothing
+    when fewer than three types are measured — the most common state for a new
+    learner. Since `KnowledgeType` has exactly four members, axes can never be
+    added for balance. The preview now renders the same pooled data three ways
+    behind a `Profile` toggle in the mock bar — **Tiles** (2×2 progress rings,
+    default), **Bars** (horizontal), and the original **Radar** for reference — so
+    the visual form can be chosen by eye before any port. All three share one
+    per-type accent palette, honest `N/A` handling, `percent · mastered/total`
+    labels, and a single screen-reader fallback list. No production, React, API,
+    or mastery-engine code changed; the `Knowledge Mastery Profile` glossary term
+    (`CONTEXT.md`) is unchanged — only the rendering is under review.
+  - **Bars chosen for the profile; added a "Learner Growth" band (workspace
+    only).** After eyeballing the three profile options the horizontal **Bars**
+    form was chosen and set as the preview default (Tiles/Radar remain behind the
+    toggle for reference). A grill then confirmed the codebase has no learner
+    persona/XP/streak/level system (`personas.py` is *tutor* voice presets, not a
+    learner identity) and no historical mastery time-series — so a "how far have I
+    come" view must be built from real mastery signals, never an invented economy.
+    The preview now shows a three-card Learner Growth band, each card an
+    engine-derived signal: **Almost there** (quantitative objectives between the
+    `compute_mastery` confidence cap and the 0.9 `policy` gate, with attempts-left),
+    **Weak points cleared** (graduated vs active `error_records`), and **Next step**
+    (`policy.next_objective`'s own adaptive choice, with a to-gate meter). All
+    values are still mock, JS-rendered in EN/TH/ZH; no production, React, API, or
+    mastery-engine code changed. The pet's own state signals are untouched.
+  - **Recent-activity card reworked to an honest quiz-only feed.** The old card
+    invented data the engine cannot supply — a `+50 EXP` tag (EXP is pet-owned,
+    not per-attempt), a "Mastered: …" row for a CONCEPT objective (qualitative
+    `mastery_assess` passes carry no timestamp, so they can't be time-ordered),
+    and a "Review" label (a `QuizAttempt` can't be distinguished from a first-time
+    quiz). The card now renders only fields that exist on a real `QuizAttempt`:
+    knowledge point, correct/incorrect, relative time from `timestamp`, and the
+    `error_type` (structural / deviation / application / metacognitive) on a miss.
+    Retitled "Recent quiz answers"; the eight dead `activity*` i18n keys were
+    removed and replaced with quiz/error-type keys across EN/TH/ZH. Preview-only,
+    JS-rendered, mock values; no engine, API, or production code touched.
+  - **Reviews card: honest urgency from `due_at`, not raw priority.** The mock
+    previously printed "priority 1/2/3", but the engine's `priority` (`scheduler`)
+    is a stable sort key by knowledge type (`1` = an error/weak-point KP, then
+    `2`–`5` by type) — not a user-facing urgency level, so surfacing the integer
+    misleads. The card (scope A) now lists currently-due items first, then a peek
+    at upcoming ones, with urgency derived from `due_at` relative to now
+    ("Due now" in red / "2h" / "Tomorrow"). A "Weak point" chip flags `priority==1`
+    items (real, meaningful), and the count badge reflects due-now only
+    (`policy.due_reviews` length). Retitled "Reviews"; the four dead review i18n
+    keys were dropped and `tomorrow` / `weakBadge` added across EN/TH/ZH.
+    Preview-only, JS-rendered, mock values; no engine, API, or production changes.
+  - **Greeting de-fabricated; path-name source pinned.** The mock greeted a
+    hard-coded "Max", but `CurrentUser` (`multi_user/context.py`) carries only
+    `username` / `id` / `role` — no display name — so any personal name is
+    invented. The greeting is now pet-forward and time-of-day based
+    (morning/afternoon/evening, EN/TH/ZH), naming no user; the dead `welcome`
+    i18n key was removed. Confirmed the Mastery Path cards should derive their
+    title from `modules[0].name` (falling back to `book_id`) — the same
+    convention `LearningService.list_progress` already uses — rather than a new
+    path-naming scheme; the mock's path names already reflect that, so no visual
+    change was needed. Preview-only; no engine, API, or production code changed.
+  - **Filled the hero's empty right column.** The status card alone left a large
+    gap beside the tall habitat scene. The right column is now a `side-col` that
+    stacks the status card and the Knowledge Mastery Profile card, so the hero
+    reads as "companion + how I'm doing"; the middle row drops to two columns
+    (recent quiz answers + reviews). The mastery card is relocated by moving the
+    existing DOM node at load, so its canvas/SVG markup is untouched. Preview-only
+    layout change; no engine, API, or production code changed.
+  - **Re-based the palette on DeepTutor's real theme (was invented green).** The
+    preview's green tokens matched nothing in the app; `web/app/globals.css`'s
+    default theme is a warm "Cream / Terracotta" (`--primary #b0501e` light /
+    `#d4734b` dark on `#fdfcf9` / `#1a1918`), with only a single accent plus
+    destructive and neutrals. Both preview theme blocks now use those real values,
+    which also harmonizes with the already-warm habitat art. To break the
+    single-tone look only where it carries meaning, the four Knowledge Mastery
+    Profile categories get harmonized earthy accents (Memory = terracotta,
+    Concept = teal/sage, Procedure = amber, Design = plum, via new `--teal` /
+    `--plum` tokens); status meters stay semantic (hunger = amber, happy =
+    terracotta, knowledge = teal); same-metric bars (gate meters, path progress)
+    stay on the single primary by design. Preview-only; no production, engine, or
+    API code changed.
+
+- **2026-07-15 — Learner Anima dashboard: backend read model (production port, stage 1).**
+  With the preview approved, began porting the dashboard. Added a self-contained
+  aggregate read model so the frontend makes one call instead of N+1 across a
+  user's paths. New file `deeptutor/pet/dashboard.py` (`PetDashboard` +
+  `build_dashboard`): pools every path from `LearningStore.list_all()` and derives
+  the four-axis Knowledge Mastery Profile (via `policy.is_mastered`; `total == 0`
+  ⇒ N/A), the Learner Growth signals ("almost there" = quantitative objectives
+  between the `compute_mastery` cap and the 0.9 gate with a simulated
+  attempts-needed count; graduated vs active `error_records`; `policy.next_objective`
+  ranked across paths), a quiz-only activity log (newest first, `QuizAttempt`
+  fields only), reviews (due-first, `due_at`-based, `priority == 1` ⇒ weak-point
+  flag), and per-path summaries. Wired `PetBridge.get_dashboard` and a new
+  `GET /api/v1/pet/dashboard` endpoint (the pet router is already a fork file — no
+  new upstream edits). Shapes are camelCase-on-the-wire to match the existing
+  `PetState` contract. Files: `deeptutor/pet/dashboard.py` (new),
+  `deeptutor/pet/service.py`, `deeptutor/api/routers/pet.py`,
+  `tests/pet/test_pet_dashboard.py` (new, 6 tests driving the real learning stack).
+  Verified: 31 pet tests pass, ruff lint + format clean, and the live endpoint
+  returns 200 with the expected aggregate. Frontend port is stage 2 (next).
+
+- **2026-07-15 — Learner Anima dashboard: frontend port (production port, stage 2).**
+  Ported the approved `preview.html` design into the real `/anima` page. The page
+  now polls the single `GET /api/v1/pet/dashboard` every 4s and renders the full
+  dashboard: hero (habitat canvas + companion status + Knowledge Mastery Profile
+  bars), the Learner Growth band (Almost there / Weak points cleared / Next step),
+  a quiz-only Recent-answers feed, a due-driven Reviews card, a Mastery Path
+  overview, and Shortcuts — each degrading to an honest empty state, plus the
+  no-paths CTA. `web/components/pet/PetHabitat.tsx` was refactored to a pure
+  canvas-only renderer that accepts a controlled `state` (the page owns the single
+  poll) or self-polls when uncontrolled, and now uses `react-i18next` (its old
+  `tr(cn, en)` prop, which skipped Thai, is gone). `web/lib/pet-api.ts` gained the
+  `PetDashboard` types + `fetchPetDashboard()`. All UI strings use `t()` with 55
+  new keys added across `web/locales/{en,th,zh}/app.json` (only missing keys were
+  appended; existing translations reused), so EN/TH/ZH parity holds. Colors come
+  from the app's real theme tokens; the four profile categories get harmonized
+  earthy accents. Verified: `tsc`, `eslint`, `i18n:check`, and the 203-test node
+  suite all pass, and the app was **driven live** — `/anima` loads against a real
+  backend, polls the endpoint at a correct 4s cadence with no console errors, and
+  renders real aggregated data (mastery bars with N/A for empty types, quiz-only
+  activity, due-driven reviews, path summaries) in both dark and light themes.
+  Files: `web/app/(utility)/anima/page.tsx`, `web/components/pet/PetHabitat.tsx`,
+  `web/lib/pet-api.ts`, `web/locales/{en,th,zh}/app.json`.
+
+- **2026-07-15 — Learner Anima dashboard: hero fill + guided tour (post-port polish).**
+  Two follow-ups after the live review. (1) The hero's right column now stretches to
+  the habitat's height: the status and mastery-profile cards are `flex-1` and
+  distribute their content, so the column no longer leaves empty space beside the
+  taller habitat card. (2) Added a first-visit **guided tour** of `/anima` — a new
+  `web/components/pet/AnimaTour.tsx` (a self-contained, single-page mirror of the
+  settings tour: soft scrim + spotlight ring + tooltip, keyboard nav, six steps
+  anchored to `data-tour` attributes on the cards). It auto-opens once (guarded by
+  `localStorage["anima_tour_seen_v1"]`, deferred a frame so no synchronous setState
+  in an effect), and a "Take a tour" button in the header replays it; Esc/Skip
+  dismisses and persists. 11 new tour i18n keys added across EN/TH/ZH (control keys
+  like Back/Next/Skip/Got it were reused). Verified: `tsc`, `eslint`, `i18n:check`,
+  prettier, and the 203-test node suite pass, and the tour was **driven live** —
+  auto-opens on first load, the spotlight follows each step, and Esc closes it and
+  sets the seen flag. Files: `web/components/pet/AnimaTour.tsx` (new),
+  `web/app/(utility)/anima/page.tsx`, `web/locales/{en,th,zh}/app.json`.
+  - **Spotlight fix:** the tour originally stacked a full-screen
+    `backdrop-blur` scrim *under* the highlight, so the highlighted card was
+    dimmed and blurred along with everything else. Dropped the full-screen scrim
+    and rely solely on the highlight ring's large `box-shadow` spread (darkened to
+    0.55) to dim only *outside* the target rect — the highlighted card now stays
+    crisp and unblurred while its surroundings darken. Verified live.
+  - **Habitat room realism pass (design workspace only).** Upgraded the cozy-room
+    scene in `preview.html` per the art workflow (iterate in the preview first,
+    port to `PetHabitat.tsx` after visual approval): the picture frame became a
+    real four-pane window (sky gradient, clouds, rolling hills, sun with halo,
+    sill resting on the wainscot, curtain rod + pleated tie-back curtains) casting
+    a soft light shaft onto the floor; the wall gained crown molding and faint
+    wallpaper stripes; floor planks gained deterministic wood-grain streaks and
+    knots (stable per frame — no flicker); the rug gained a diamond motif ring, a
+    stitched dashed border, side fringe, and a soft occlusion shade; the bookshelf
+    gained edge shading, an occasional leaning book, and top decor (book stack +
+    tiny plant); the bed quilt gained stitched seams and fabric creases. Pure
+    canvas drawing — no assets, no bridge/API changes; blockers and furniture
+    positions unchanged so the pet's wander targets still hold.
+  - **Habitat follows the app theme — night mode (production).** The room canvas
+    was always daytime regardless of theme. `PetHabitat.tsx` now reads the `dark`
+    class on `<html>` (maintained by `ThemeScript`, and carried by both the dark
+    and glass themes) via a `MutationObserver`, so switching theme retints the
+    room live (including the reduced-motion single-frame repaint). At night the
+    scene gets a cool `multiply` dim pass, a stronger vignette, the daytime warm
+    tint is skipped, and the floor lamp re-lights its corner with a warm glow —
+    the room reads as "lamp on in the evening" rather than a gray filter. Pure
+    renderer change; no bridge/API/state edits.
+  - **Evolution stages — design locked + art draft (workspace only).** A grill
+    settled the "Pixel evolves" mechanic in four decisions: (1) driven by
+    **level only** (level is already monotonic, real-mastery-derived: 2 mastered
+    objectives = 1 level); (2) **three forms at Lv.1 / Lv.3 / Lv.7** (first
+    evolution reachable within half a path; thresholds to be config like the
+    rest of `PetTuning`); (3) **progressive growth** — the same creature grows
+    and gains features (identity preserved; the parametric canvas scales rather
+    than 3 redesigns); (4) the level→stage mapping will live **server-side**
+    (`PetState.stage` + `evolve_levels` in `PetTuning`) so thresholds are never
+    duplicated in the frontend — the parallel-threshold lesson. `preview.html`
+    now drafts all three forms behind Stage 1/2/3 mock buttons: stage 2 is
+    bigger with longer ears, a wind-wisp tail, and a forehead swirl; stage 3 is
+    biggest, floats with a bobbing hover, and adds a cloud crest plus an
+    animated orbiting wind ring; the mock's stage derives from mock level via
+    the planned rule, with an evolve particle burst on upward crossings.
+    Backend `stage` field + tests and the `PetHabitat` port follow only after
+    visual approval of the preview art.
+  - **Evolution ported to production (after preview approval).** Backend:
+    `PetTuning.evolve_levels = [3, 7]` (config-overridable like every other
+    knob), `PetState.stage` (additive contract field), and `apply_rules` now
+    recomputes stage from level each pass — the one place the thresholds live;
+    both callers pass tuning through. New `tests/pet/test_pet_stage.py` (5
+    tests: fresh pet, default thresholds, stage advance through real
+    LEARN_CONCEPT events, config override, wire serialization) — 36 pet tests
+    pass. Frontend: `PetState.stage` in `pet-api.ts`; `PetHabitat` renders the
+    three forms (stage 2: +15% scale, longer ears, wind-wisp tail, forehead
+    swirl; stage 3: +30%, hover float with softer shadow, cloud crest, animated
+    orbiting wind ring, stronger aura) and plays a double particle burst + hop
+    when a poll observes `stage` increase; `stage ?? 1` guards older cached
+    states. The how-it-works guide gained an "evolves at Lv.3 and Lv.7" row
+    (EN/TH/ZH). Verified live: restarted the backend, drove two mock
+    LEARN_CONCEPT events — level 2→3 flipped `stage` 1→2 on
+    `GET /pet/state` and the dashboard passes it through; ruff + pytest,
+    tsc/eslint/prettier, i18n parity, and the 203-test node suite all pass.
+
+- **2026-07-15 — Fix: preserve Gemini 3 `thought_signature` in the shared agentic loop.**
+  Gemini 3 attaches a REQUIRED `thought_signature` (in `extra_content` on each
+  streamed tool-call delta, OpenAI-compat) and 400s any follow-up request whose
+  replayed assistant message omits it ("missing a thought_signature in
+  functionCall parts"). Commit `d3b76d0d` fixed this for the **chat** capability's
+  own loop (`agents/chat/agent_loop.py`) but the **shared** agentic loop
+  (`core/agentic/labeled_step.py` + `loop.py`), used by **`deep_question`** and
+  **`deep_research`**, still dropped it in two places: the tool-call accumulation
+  never captured `model_extra`, and the three host `assistant_message_with_tool_calls`
+  builders (`agents/question/pipeline.py`, `agents/research/pipeline.py` ×2) never
+  echoed it — so every multi-round tool turn (e.g. a `rag` call) failed at round 2.
+  Fix: `run_labeled_step` now accumulates `model_extra` into each tool call
+  (lazily, so extra-less calls keep their minimal shape), and a new shared
+  `build_tool_call_entries()` helper in `core/agentic/loop.py` echoes the extras
+  back verbatim; all three hosts now route through it (centralized so a future host
+  can't reintroduce the drop). Provider-agnostic — absent extras are a no-op.
+  Diagnosed with a red/green regression test driving `run_labeled_step` with a
+  tool-call delta carrying a `thought_signature`
+  (`tests/core/test_labeled_step_tool_extras.py`, new). Verified: the new tests go
+  red before / green after, and the full `tests/core` + `tests/agents/{chat,research,question}`
+  suites pass (246). This fix is **unrelated to the Learner Anima work** (which
+  touches only `deeptutor/pet/*` and `web/*`); it was surfaced by a live
+  `deep_question` run. Files: `deeptutor/core/agentic/labeled_step.py`,
+  `deeptutor/core/agentic/loop.py`, `deeptutor/core/agentic/__init__.py`,
+  `deeptutor/agents/question/pipeline.py`, `deeptutor/agents/research/pipeline.py`,
+  `tests/core/test_labeled_step_tool_extras.py` (new).
 
 ## Upstream syncs
 

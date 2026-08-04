@@ -565,10 +565,20 @@ class AgentLoop:
 
                 for tc_delta in getattr(delta, "tool_calls", None) or []:
                     index = int(getattr(tc_delta, "index", 0) or 0)
-                    acc = tool_acc.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    acc = tool_acc.setdefault(
+                        index, {"id": "", "name": "", "arguments": "", "extra": {}}
+                    )
                     tcid = getattr(tc_delta, "id", None)
                     if tcid:
                         acc["id"] += str(tcid)
+                    # Provider extras on the tool-call delta (pydantic
+                    # model_extra) must survive the round trip: Gemini 3
+                    # rides its REQUIRED thought_signature in
+                    # `extra_content` here — dropping it makes every
+                    # follow-up round 400 ("missing a thought_signature").
+                    tc_extra = getattr(tc_delta, "model_extra", None)
+                    if tc_extra:
+                        acc["extra"].update(tc_extra)
                     fn = getattr(tc_delta, "function", None)
                     if fn is None:
                         continue
@@ -603,6 +613,7 @@ class AgentLoop:
                 "id": data.get("id") or f"call_{idx}",
                 "name": data.get("name", ""),
                 "arguments": data.get("arguments") or "{}",
+                "extra": data.get("extra") or {},
             }
             for idx, data in sorted(tool_acc.items())
             if data.get("name")

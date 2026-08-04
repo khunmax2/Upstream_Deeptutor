@@ -1,0 +1,236 @@
+{
+  "_note": "Hard-grounding route manifest — the INDEPENDENT source of truth the loop uses to verify a navigation task landed where it was asked (issue 01). It is deliberately SEPARATE from ui_graph.json (which is the open_path navigation whitelist): a route may be grounded here without being voice-steerable. Aliases are curated DESTINATION phrasings (nouns / 'หน้า…' / page names) — NOT imperative action verbs: 'สร้างหนังสือ'/'สร้างรูปภาพ'/'อ่านออกเสียง' are action tasks, not navigations, and must NOT resolve a route (that would hard-gate an action on a URL it never promised). Keep aliases SPECIFIC — a phrase that could match two routes must be the LONGER/more-specific alias of the intended one, because the resolver breaks contains-ties by matched-alias length. Paths are parity-tested against real page.tsx (web/tests/voice-route-manifest-parity.test.ts). th/en/zh labels seeded from web/lib/settings-nav.ts + UI_PAGES (web/components/voice/VoiceCallWidget.tsx).",
+  "routes": [
+    {
+      "path": "/settings/search",
+      "aliases": [
+        "ตั้งค่าการค้นหา",
+        "ตั้งค่าค้นหา",
+        "หน้าค้นหา",
+        "การค้นหา",
+        "ค้นหาเว็บ",
+        "ผู้ให้บริการค้นหา",
+        "search settings",
+        "web search",
+        "搜索"
+      ]
+    },
+    {
+      "path": "/settings/tools",
+      "aliases": [
+        "ตั้งค่าเครื่องมือ",
+        "เครื่องมือในตัว",
+        "เครื่องมือ",
+        "tools settings",
+        "built-in tools",
+        "工具"
+      ]
+    },
+    {
+      "path": "/settings/capabilities",
+      "aliases": [
+        "ตั้งค่าความสามารถ",
+        "ความสามารถ",
+        "capabilities",
+        "能力"
+      ]
+    },
+    {
+      "path": "/settings/mcp",
+      "aliases": [
+        "เซิร์ฟเวอร์ mcp",
+        "ตั้งค่า mcp",
+        "mcp servers",
+        "mcp"
+      ]
+    },
+    {
+      "path": "/settings/llm",
+      "aliases": [
+        "ตั้งค่าโมเดลภาษา",
+        "โมเดลภาษา",
+        "language model",
+        "llm settings"
+      ]
+    },
+    {
+      "path": "/settings/embedding",
+      "aliases": [
+        "ตั้งค่า embedding",
+        "โมเดล embedding",
+        "embedding settings",
+        "嵌入模型"
+      ]
+    },
+    {
+      "path": "/settings/tts",
+      "aliases": [
+        "แปลงข้อความเป็นเสียง",
+        "ตั้งค่าเสียงพูด",
+        "เสียงพูดออก",
+        "text-to-speech",
+        "语音合成"
+      ]
+    },
+    {
+      "path": "/settings/stt",
+      "aliases": [
+        "แปลงเสียงเป็นข้อความ",
+        "ถอดเสียงเป็นข้อความ",
+        "speech-to-text",
+        "语音识别"
+      ]
+    },
+    {
+      "path": "/settings/image",
+      "aliases": [
+        "ตั้งค่าการสร้างภาพ",
+        "การสร้างภาพ",
+        "image generation",
+        "文生图"
+      ]
+    },
+    {
+      "path": "/settings/video",
+      "aliases": [
+        "ตั้งค่าการสร้างวิดีโอ",
+        "การสร้างวิดีโอ",
+        "video generation",
+        "文生视频"
+      ]
+    },
+    {
+      "path": "/settings/document-parsing",
+      "aliases": [
+        "แยกวิเคราะห์เอกสาร",
+        "เอนจินแยกวิเคราะห์เอกสาร",
+        "ฐานความรู้",
+        "document parsing",
+        "知识库"
+      ]
+    },
+    {
+      "path": "/settings/memory",
+      "aliases": [
+        "ตั้งค่าความจำ",
+        "หน่วยความจำ",
+        "ความจำ",
+        "memory settings",
+        "记忆"
+      ]
+    },
+    {
+      "path": "/settings/network",
+      "aliases": [
+        "ตั้งค่าเครือข่าย",
+        "เครือข่าย",
+        "network settings",
+        "网络"
+      ]
+    },
+    {
+      "path": "/settings/appearance",
+      "aliases": [
+        "ตั้งค่ารูปลักษณ์",
+        "ธีมและภาษา",
+        "รูปลักษณ์",
+        "appearance settings",
+        "外观"
+      ]
+    },
+    {
+      "path": "/settings/agents",
+      "aliases": [
+        "พาร์ทเนอร์และเอเจนต์",
+        "ตั้งค่าเอเจนต์",
+        "ซับเอเจนต์",
+        "partners and agents",
+        "伙伴和智能体"
+      ]
+    },
+    {
+      "path": "/settings/models",
+      "aliases": [
+        "ตั้งค่าโมเดล",
+        "หน้าโมเดล",
+        "models settings",
+        "模型"
+      ]
+    },
+    {
+      "path": "/settings",
+      "aliases": [
+        "ตั้งค่า",
+        "หน้าตั้งค่า",
+        "settings",
+        "设置"
+      ]
+    },
+    {
+      "path": "/knowledge",
+      "aliases": [
+        "คลังความรู้",
+        "ฐานความรู้",
+        "ศูนย์ความรู้",
+        "knowledge base",
+        "知识库"
+      ]
+    },
+    {
+      "path": "/notebook",
+      "aliases": [
+        "สมุดโน้ต",
+        "หน้าโน้ต",
+        "notebook"
+      ]
+    },
+    {
+      "path": "/memory",
+      "aliases": [
+        "หน้าความจำ",
+        "หน่วยความจำ",
+        "memory page"
+      ]
+    },
+    {
+      "path": "/agents",
+      "aliases": [
+        "เอเจนต์ของฉัน",
+        "หน้าเอเจนต์",
+        "my agents"
+      ]
+    },
+    {
+      "path": "/book",
+      "aliases": [
+        "หน้าสร้างหนังสือ",
+        "หน้าหนังสือ",
+        "book page"
+      ]
+    },
+    {
+      "path": "/co-writer",
+      "aliases": [
+        "หน้าเขียนงานร่วมกัน",
+        "co-writer"
+      ]
+    },
+    {
+      "path": "/partners",
+      "aliases": [
+        "เพื่อนคู่คิด",
+        "บอทคู่หู",
+        "partners"
+      ]
+    },
+    {
+      "path": "/home",
+      "aliases": [
+        "หน้าแชทหลัก",
+        "หน้าหลัก",
+        "หน้าแรก",
+        "home page"
+      ]
+    }
+  ]
+}

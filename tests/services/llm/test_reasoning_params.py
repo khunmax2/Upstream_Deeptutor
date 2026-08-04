@@ -90,3 +90,55 @@ class TestBuildOpenAICompatibleReasoningKwargsForGemini:
             spec=None, binding="openai", model="gpt-4o", reasoning_effort=None
         )
         assert kwargs == {}
+
+
+class TestReasoningUnsupportedHosts:
+    """Endpoints that reject reasoning/thinking params → emit none, so switching
+    a model onto them needs no code change (docs/issues/llm-provider-adaptation)."""
+
+    GROQ = "https://api.groq.com/openai/v1"
+
+    def test_groq_drops_reasoning_effort(self) -> None:
+        # qwen3 on Groq rejects reasoning_effort="minimal" → send nothing.
+        kwargs = build_openai_compatible_reasoning_kwargs(
+            spec=None,
+            binding="openai",
+            model="qwen/qwen3-32b",
+            reasoning_effort="minimal",
+            base_url=self.GROQ,
+        )
+        assert kwargs == {}
+
+    def test_groq_drops_dashscope_enable_thinking(self) -> None:
+        # Even if a qwen name routed to the dashscope style, the Groq host must
+        # not receive `enable_thinking` (its endpoint 400s on it).
+        class _DashscopeSpec:
+            name = "dashscope"
+            thinking_style = "enable_thinking"
+            reasoning_model_patterns = ("qwen3",)
+
+        kwargs = build_openai_compatible_reasoning_kwargs(
+            spec=_DashscopeSpec(),
+            binding="dashscope",
+            model="qwen/qwen3-32b",
+            reasoning_effort="minimal",
+            base_url=self.GROQ,
+        )
+        assert kwargs == {}
+
+    def test_non_groq_host_unchanged(self) -> None:
+        # Gemini's endpoint still gets its reasoning_effort (thinking disabled).
+        kwargs = build_openai_compatible_reasoning_kwargs(
+            spec=None,
+            binding="openai",
+            model="gemini-3.5-flash",
+            reasoning_effort="minimal",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        assert kwargs == {"reasoning_effort": "minimal"}
+
+    def test_no_base_url_unchanged(self) -> None:
+        kwargs = build_openai_compatible_reasoning_kwargs(
+            spec=None, binding="openai", model="gpt-5", reasoning_effort="minimal", base_url=None
+        )
+        assert kwargs == {"reasoning_effort": "minimal"}

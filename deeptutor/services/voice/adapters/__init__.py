@@ -8,6 +8,10 @@ OpenRouter, Azure OpenAI and local vLLM/LM Studio; add bespoke providers
 
 from __future__ import annotations
 
+from deeptutor.services.voice.adapters.bespoke import (
+    BotnoiTTSAdapter,
+    ElevenLabsTTSAdapter,
+)
 from deeptutor.services.voice.adapters.openai_compat import (
     OpenAICompatSTTAdapter,
     OpenAICompatTTSAdapter,
@@ -18,6 +22,8 @@ from deeptutor.services.voice.base import BaseSTTAdapter, BaseTTSAdapter, VoiceP
 TTS_ADAPTERS: dict[str, BaseTTSAdapter] = {
     "openai_compat": OpenAICompatTTSAdapter(),
     "openrouter_tts": OpenRouterTTSAdapter(),
+    "elevenlabs": ElevenLabsTTSAdapter(),
+    "botnoi": BotnoiTTSAdapter(),
 }
 
 STT_ADAPTERS: dict[str, BaseSTTAdapter] = {

@@ -59,7 +59,7 @@ upstream files, plus additive locale data.
 **Consequence:** because it edits upstream files, every touched file is recorded
 in `FORK_TOUCHPOINTS.txt`, and these are exactly the files that conflict on an
 upstream sync. **Thai i18n is the reason a sync is a merge-with-conflicts, not a
-fast-forward.** Detail: `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
+fast-forward.** Detail: `docs/reports/REPORT_round1.md`–`docs/reports/REPORT_round4.md`, `docs/reports/REPORT_final_qa.md`.
 
 ## 2. Upstream sync v1.4.8 — attaches by *git merge + reconcile* (MAINTENANCE)
 
@@ -77,8 +77,8 @@ into the fork's `main` and reconciles it with the fork's customizations.
 **Consequence:** `main` is now the **v1.4.8 baseline** that both Thai and LINE build
 on; the next sync's merge-base is `88c25653`. Workstream 1 is what makes this step
 non-trivial — the more upstream files Thai edits, the more this step costs.
-Detail: `REPORT_sync_v1.4.8.md`, `REPORT_impact_v1.4.8.md`,
-`REPORT_followup_agents_ui.md`.
+Detail: `docs/reports/REPORT_sync_v1.4.8.md`, `docs/reports/REPORT_impact_v1.4.8.md`,
+`docs/reports/REPORT_followup_agents_ui.md`.
 
 ## 3. LINE integration — attaches via an *extension point* (ADD)
 
@@ -111,8 +111,8 @@ LINE webhook POST
 
 **Consequence:** because it touches the core in 0 lines, an upstream sync barely
 affects LINE. Required fork-policy edit is only `FORK_TOUCHPOINTS.txt` (+ optional
-cosmetic icon/locale). Detail: `REPORT_line_integration_feasibility.md`,
-`REPORT_line_implementation.md`.
+cosmetic icon/locale). Detail: `docs/reports/REPORT_line_integration_feasibility.md`,
+`docs/reports/REPORT_line_implementation.md`.
 
 ---
 
@@ -135,6 +135,6 @@ why it is carefully tracked in `FORK_TOUCHPOINTS.txt` and absorbed during each s
 
 - Upstream core: `AGENTS.md`
 - Fork rules / modification log: `CLAUDE.md`, `CHANGES.md`, `FORK_TOUCHPOINTS.txt`
-- Thai i18n: `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`
-- Sync v1.4.8: `REPORT_sync_v1.4.8.md`, `REPORT_impact_v1.4.8.md`, `REPORT_followup_agents_ui.md`
-- LINE: `REPORT_line_integration_feasibility.md`, `REPORT_line_implementation.md`
+- Thai i18n: `docs/reports/REPORT_round1.md`–`docs/reports/REPORT_round4.md`, `docs/reports/REPORT_final_qa.md`
+- Sync v1.4.8: `docs/reports/REPORT_sync_v1.4.8.md`, `docs/reports/REPORT_impact_v1.4.8.md`, `docs/reports/REPORT_followup_agents_ui.md`
+- LINE: `docs/reports/REPORT_line_integration_feasibility.md`, `docs/reports/REPORT_line_implementation.md`

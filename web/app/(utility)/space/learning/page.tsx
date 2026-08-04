@@ -33,7 +33,15 @@ import {
  * by ``deeptutor.learning.policy``) so the colours here agree with the gate the
  * tutor enforces. A path is keyed by its chat session, so "Continue" reopens
  * that session in mastery mode.
+ *
+ * The map is polled, not loaded once: the learner answers in Chat (another tab
+ * or window), so a map that only loaded on open would go stale mid-session.
+ * Polling keeps it live as the tutor grades answers. (The Learner Anima pet used
+ * to sit here too; it now lives at its own top-level page, but live polling is
+ * good UX on its own and stays.)
  */
+const POLL_MS = 4000; // live-refresh cadence for the mastery map
+
 export default function MasteryPathPage() {
   const { i18n } = useTranslation();
   const zh = i18n.language?.toLowerCase().startsWith("zh");
@@ -46,8 +54,10 @@ export default function MasteryPathPage() {
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const loadList = useCallback(async () => {
-    setLoadingList(true);
+  // A background refresh keeps the last good data on screen: no spinner, and a
+  // failed poll is ignored rather than blanking the map.
+  const loadList = useCallback(async (background = false) => {
+    if (!background) setLoadingList(true);
     try {
       const result = await fetchAllProgress();
       const withContent = result.summaries
@@ -56,9 +66,9 @@ export default function MasteryPathPage() {
       setPaths(withContent);
       setSelected((prev) => prev ?? withContent[0]?.book_id ?? null);
     } catch {
-      setPaths([]);
+      if (!background) setPaths([]);
     } finally {
-      setLoadingList(false);
+      if (!background) setLoadingList(false);
     }
   }, []);
 
@@ -72,21 +82,29 @@ export default function MasteryPathPage() {
       return;
     }
     let cancelled = false;
-    setLoadingDetail(true);
-    fetchMasteryMap(selected)
-      .then((result) => {
-        if (!cancelled) setDetail(result);
-      })
-      .catch(() => {
-        if (!cancelled) setDetail(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingDetail(false);
-      });
+    const load = (background: boolean) => {
+      if (!background) setLoadingDetail(true);
+      fetchMasteryMap(selected)
+        .then((result) => {
+          if (!cancelled) setDetail(result);
+        })
+        .catch(() => {
+          if (!cancelled && !background) setDetail(null);
+        })
+        .finally(() => {
+          if (!cancelled && !background) setLoadingDetail(false);
+        });
+    };
+    load(false);
+    const id = window.setInterval(() => {
+      load(true);
+      loadList(true);
+    }, POLL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
-  }, [selected]);
+  }, [selected, loadList]);
 
   const handleDelete = useCallback(
     async (pathId: string) => {

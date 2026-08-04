@@ -1,0 +1,74 @@
+{
+  "origin": "deeptutor",
+  "nodes": [
+    {
+      "id": "settings_appearance",
+      "path": "/settings/appearance",
+      "label": "หน้าตั้งค่าลักษณะที่ปรากฏ (ธีมและภาษา)",
+      "controls": [
+        {
+          "capability": "theme_dark",
+          "click": "Dark",
+          "kind": "button",
+          "aliases": ["โหมดมืด", "ธีมมืด", "ธีมดำ", "โหมดกลางคืน", "dark mode", "ธีม dark"]
+        },
+        {
+          "capability": "theme_default",
+          "click": "ค่าเริ่มต้น",
+          "kind": "button",
+          "aliases": ["ธีมค่าเริ่มต้น", "ธีมปกติ", "โหมดสว่าง", "ธีมสว่าง", "ธีมขาว", "default theme"]
+        },
+        {
+          "capability": "theme_cream",
+          "click": "ครีม",
+          "kind": "button",
+          "aliases": ["ธีมครีม", "โหมดครีม", "cream"]
+        },
+        {
+          "capability": "theme_glass",
+          "click": "Glass",
+          "kind": "button",
+          "aliases": ["ธีมกลาส", "ธีมแก้ว", "ธีมกระจก", "glass"]
+        },
+        {
+          "capability": "language_thai",
+          "click": "ภาษาไทย",
+          "kind": "button",
+          "aliases": ["ไทย", "เป็นภาษาไทย", "thai"]
+        },
+        {
+          "capability": "language_english",
+          "click": "English",
+          "kind": "button",
+          "aliases": ["ภาษาอังกฤษ", "อังกฤษ", "อิงลิช"]
+        },
+        {
+          "capability": "language_chinese",
+          "click": "中文",
+          "kind": "button",
+          "aliases": ["ภาษาจีน", "จีน", "chinese"]
+        }
+      ]
+    },
+    {
+      "id": "knowledge",
+      "path": "/knowledge",
+      "label": "หน้าคลังความรู้ (Knowledge Base)",
+      "controls": [
+        {
+          "capability": "create_kb",
+          "click": "Knowledge Base ใหม่",
+          "kind": "button",
+          "aliases": [
+            "สร้างคลังความรู้",
+            "สร้างคลังใหม่",
+            "คลังความรู้ใหม่",
+            "สร้าง knowledge base",
+            "new knowledge base"
+          ]
+        }
+      ]
+    }
+  ],
+  "edges": [{ "from": "*", "to": "*", "via": "navigate", "cost": 1 }]
+}

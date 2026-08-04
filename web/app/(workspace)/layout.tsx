@@ -3,6 +3,7 @@ import AppShell from "@/components/layout/AppShell";
 import { CapabilityAccessProvider } from "@/components/access/CapabilityAccessContext";
 import CapabilityGate from "@/components/access/CapabilityGate";
 import { UnifiedChatProvider } from "@/context/UnifiedChatContext";
+import VoiceActionBridge from "@/components/voice/VoiceActionBridge";
 
 export default function WorkspaceLayout({
   children,
@@ -12,6 +13,7 @@ export default function WorkspaceLayout({
   return (
     <CapabilityAccessProvider>
       <UnifiedChatProvider>
+        <VoiceActionBridge />
         <AppShell sidebar={<WorkspaceSidebar />}>
           <CapabilityGate>{children}</CapabilityGate>
         </AppShell>

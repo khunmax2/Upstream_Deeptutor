@@ -350,6 +350,7 @@ from deeptutor.api.routers import (
     notebook,
     partners,
     personas,
+    pet,
     plugins_api,
     question,
     question_notebook,
@@ -363,6 +364,7 @@ from deeptutor.api.routers import (
     system,
     unified_ws,
     voice,
+    voice_realtime,
 )
 from deeptutor.api.routers import (
     tools as tools_router,
@@ -409,6 +411,7 @@ app.include_router(
 app.include_router(
     co_writer.router, prefix="/api/v1/co_writer", tags=["co_writer"], dependencies=_auth
 )
+app.include_router(pet.router, prefix="/api/v1/pet", tags=["pet"], dependencies=_auth)
 app.include_router(
     notebook.router, prefix="/api/v1/notebook", tags=["notebook"], dependencies=_auth
 )
@@ -487,6 +490,10 @@ app.include_router(
 # Unified WebSocket endpoint — auth is checked inside the handler (WebSockets
 # cannot use FastAPI dependencies in the standard way)
 app.include_router(unified_ws.router, prefix="/api/v1", tags=["unified-ws"])
+
+# Realtime voice WebSocket (/api/v1/voice/ws) — same WS-auth caveat; checked
+# inside the handler via ws_require_auth.
+app.include_router(voice_realtime.router, prefix="/api/v1/voice", tags=["voice-realtime"])
 
 # Quiz AI-judge WebSocket — same caveat as unified_ws above; auth is checked
 # inside the handler so the WS upgrade isn't rejected by an HTTP-style dep.

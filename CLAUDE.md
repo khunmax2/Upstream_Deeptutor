@@ -27,6 +27,20 @@ settings live in `data/user/settings/*.json` (project-root `.env` is intentional
 ignored). Frontend is a Next.js app under `web/`; Python packages are `deeptutor`
 (full), `deeptutor_cli`, `deeptutor_web`.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the default mattpocock/skills label vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses a single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Development commands
 
 The repo has a local `.venv`; activate it or prefix commands with `python -m`.
@@ -79,8 +93,10 @@ files were changed. **Every change to this fork MUST be recorded** in all of:
    This is the prominent "we changed these files" notice. **Never skip this.**
 2. **Commit message** — Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`,
    `chore:` …). Group related changes.
-3. **`REPORT_*.md`** — for multi-step work, close each round/phase with a report and
-   **commit it**. (Template lives in the maintainer's planning docs.)
+3. **`docs/reports/REPORT_*.md`** — for multi-step work, close each round/phase with a
+   report and **commit it**. Reports live in `docs/reports/` (not the repo root);
+   planning/design docs live in `docs/planning/`. (Template:
+   `docs/planning/thai-i18n/Thai_Localization_DeepTutor_REPORT_TEMPLATE.md`.)
 4. **`NOTICE`** — keep the modification statement current; never remove upstream
    attribution.
 
@@ -92,9 +108,11 @@ files were changed. **Every change to this fork MUST be recorded** in all of:
 
 Before merging any upstream release: never sync onto a **red-CI** upstream release;
 run the impact analysis first (diagnose), then the sync procedure (execute) — both
-maintained in the project's planning docs (`*_UPSTREAM_IMPACT_ANALYSIS.md`,
-`*_UPSTREAM_SYNC_STRATEGY.md`). After a successful sync, add an entry to `CHANGES.md`
-under **"Upstream syncs"** and a `REPORT_sync_*.md`.
+maintained in `docs/planning/upstream-sync/`
+(`Thai_Localization_UPSTREAM_IMPACT_ANALYSIS.md` then
+`Thai_Localization_UPSTREAM_SYNC_STRATEGY.md`; `UPSTREAM_SYNC_handoff.md` warms up a
+new sync task). After a successful sync, add an entry to `CHANGES.md`
+under **"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`.
 
 > Note: `main` currently carries fork customizations (Thai i18n was merged in), so an
 > upstream sync is a real **merge-with-conflicts**, not a fast-forward.
