@@ -232,6 +232,13 @@ on the `/anima` page (v6 option B).
 
 ## Reference
 
-- External handoff: `anima-handoff.md` (visual/UX intent; **not** the state-logic
-  authority — this doc is).
-- Prototype: `anima-habitat.html` (canvas render/animation reference only).
+- Handoff: `docs/planning/ideation/anima-handoff.md` — the original 5-day demo spec
+  (visual/UX intent; **not** the state-logic authority — this doc is).
+- `preview.html` — the current standalone preview, the one the user approves before
+  any production port (see `HANDOFF.md`).
+- `prototype-2026-07-14.html` — the earlier standalone prototype that `preview.html`
+  grew out of; canvas render/animation reference only.
+- `mascot-prototype-2026-06-16.html` — "มาสคอต AI พูดได้", the talking-mascot
+  experiment that predates Anima. Prior art, not part of this issue's design.
+- `clipboard-icon.png` — 3D clipboard/checklist illustration (unattributed; no doc
+  here references it yet).
