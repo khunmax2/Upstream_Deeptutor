@@ -67,19 +67,13 @@ def test_h6_missing_action_falls_back_to_wait():
 
 def test_h7_action_named_by_field_is_reshaped():
     """llama-3.x (live on Groq) names the action in a field instead of the key."""
-    raw = json.dumps(
-        dict(GOOD, action={"action_name": "click_element_by_index", "index": 2})
-    )
+    raw = json.dumps(dict(GOOD, action={"action_name": "click_element_by_index", "index": 2}))
     assert normalize_output(raw)["action"] == {"click_element_by_index": {"index": 2}}
 
 
 def test_h7_named_field_with_text_args():
-    raw = json.dumps(
-        dict(GOOD, action={"tool": "input_text", "index": 3, "text": "pdpa"})
-    )
-    assert normalize_output(raw)["action"] == {
-        "input_text": {"index": 3, "text": "pdpa"}
-    }
+    raw = json.dumps(dict(GOOD, action={"tool": "input_text", "index": 3, "text": "pdpa"}))
+    assert normalize_output(raw)["action"] == {"input_text": {"index": 3, "text": "pdpa"}}
 
 
 def test_h7_leaves_a_real_keyed_action_untouched():

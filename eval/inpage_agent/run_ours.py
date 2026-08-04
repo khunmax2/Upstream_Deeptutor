@@ -136,7 +136,10 @@ async def _check(client: httpx.AsyncClient, task: dict, gate_blocks: int) -> tup
     if kind == "theme_dark":
         p = await _probe(client)
         ok = p.get("themeLS") == "dark" or " dark" in f" {p.get('htmlClass', '')} "
-        return ok, f"themeLS={p.get('themeLS')} class~dark={' dark' in ' ' + p.get('htmlClass', '')}"
+        return (
+            ok,
+            f"themeLS={p.get('themeLS')} class~dark={' dark' in ' ' + p.get('htmlClass', '')}",
+        )
     if kind == "dialog_open":
         p = await _probe(client)
         return bool(p.get("hasDialog")), f"hasDialog={p.get('hasDialog')}"

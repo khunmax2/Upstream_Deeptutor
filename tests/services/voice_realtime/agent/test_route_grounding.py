@@ -20,9 +20,7 @@ from deeptutor.services.voice_realtime.agent.route_grounding import (
 class TestResolveTargetRoute:
     def test_the_issue01_case_resolves_to_the_dedicated_search_route(self):
         # The exact live replay that produced the false success.
-        assert (
-            resolve_target_route("ไปตั้งค่าแล้วเข้าหน้าตั้งค่าการค้นหา") == "/settings/search"
-        )
+        assert resolve_target_route("ไปตั้งค่าแล้วเข้าหน้าตั้งค่าการค้นหา") == "/settings/search"
 
     def test_specific_alias_beats_the_generic_settings_hub(self):
         # "ตั้งค่า" (hub) is a substring of "ตั้งค่าการค้นหา"; the longer, more

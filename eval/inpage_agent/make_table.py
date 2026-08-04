@@ -21,8 +21,10 @@ n = len(R)
 succ = sum(x["success"] for x in R)
 clean = sum(x["success"] and x["stopped_reason"] == "done" for x in R)
 toks = [x["total_tokens"] for x in R if x["total_tokens"]]
-print(f"\nsuccess {succ}/{n} · clean-done {clean}/{n} · median tokens/task "
-      f"{sorted(toks)[len(toks)//2] if toks else 0:,}")
+print(
+    f"\nsuccess {succ}/{n} · clean-done {clean}/{n} · median tokens/task "
+    f"{sorted(toks)[len(toks) // 2] if toks else 0:,}"
+)
 danger = [x for x in R if x["category"] == "danger"]
 if danger:
     d = danger[0]

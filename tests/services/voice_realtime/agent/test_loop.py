@@ -318,9 +318,7 @@ async def test_grounding_allows_success_on_the_right_destination():
 async def test_grounding_leaves_action_tasks_untouched():
     """A task that names no route (an action) resolves to no target — the hard
     gate never fires, so the model's verdict stands even on an unrelated URL."""
-    actuator = FixtureActuator(
-        [BrowserState(url="http://x/home", content="[0]<button >x />")]
-    )
+    actuator = FixtureActuator([BrowserState(url="http://x/home", content="[0]<button >x />")])
     think = canned_think([step("done", "", {"done": {"text": "สร้างให้แล้วครับ", "success": True}})])
     loop = InPageAgentLoop(actuator, think=think, step_delay_s=0)
     result = await loop.execute("สร้างหนังสือใหม่ให้หน่อย")

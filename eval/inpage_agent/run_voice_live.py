@@ -28,12 +28,17 @@ class HttpActuator:
     async def observe(self) -> BrowserState:
         d = (await self._c.get(f"{HOST}/observe", timeout=30)).json()
         return BrowserState(
-            url=d.get("url", ""), title=d.get("title", ""), header=d.get("header", ""),
-            content=d.get("content", ""), footer=d.get("footer", ""),
+            url=d.get("url", ""),
+            title=d.get("title", ""),
+            header=d.get("header", ""),
+            content=d.get("content", ""),
+            footer=d.get("footer", ""),
         )
 
     async def act(self, name: str, args: dict[str, Any]) -> ActResult:
-        d = (await self._c.post(f"{HOST}/act", json={"name": name, "args": args}, timeout=40)).json()
+        d = (
+            await self._c.post(f"{HOST}/act", json={"name": name, "args": args}, timeout=40)
+        ).json()
         return ActResult(ok=bool(d.get("ok")), message=str(d.get("message") or ""))
 
 
@@ -63,15 +68,22 @@ async def _run_one(client: httpx.AsyncClient, transcript: str) -> None:
 
     print(f"\n=== {transcript!r}", flush=True)
     reply = await pipe.run_text_turn(
-        Emitter(), transcript, [], session_id="live",
-        ui_context={"path": "/home", "summary": "หน้าหลัก"}, agent_runner=agent_runner,
+        Emitter(),
+        transcript,
+        [],
+        session_id="live",
+        ui_context={"path": "/home", "summary": "หน้าหลัก"},
+        agent_runner=agent_runner,
     )
     after = (await client.get(f"{HOST}/probe", timeout=20)).json()
     routed = "loop" if seen["task"] is not None else "chat (loop not used)"
     print(f"  routed -> {routed}", flush=True)
-    print(f"  url {before.get('url','?').split('3000')[-1]} -> {after.get('url','?').split('3000')[-1]}", flush=True)
+    print(
+        f"  url {before.get('url', '?').split('3000')[-1]} -> {after.get('url', '?').split('3000')[-1]}",
+        flush=True,
+    )
     if after.get("htmlClass") != before.get("htmlClass"):
-        print(f"  htmlClass changed (theme?): ...{after.get('htmlClass','')[-24:]}", flush=True)
+        print(f"  htmlClass changed (theme?): ...{after.get('htmlClass', '')[-24:]}", flush=True)
     print(f"  reply: {reply[:110]!r}", flush=True)
 
 
