@@ -2377,6 +2377,34 @@ is additive and isolated for mergeability — the only upstream-file edit is one
   `deeptutor/agents/question/pipeline.py`, `deeptutor/agents/research/pipeline.py`,
   `tests/core/test_labeled_step_tool_extras.py` (new).
 
+## Branches kept but not merged
+
+**`page-agent-clean-eval`** (`6dbe8d9f`, 5 commits, ~1,073 lines) — **evaluation
+scaffolding, deliberately not merged.** Cut from `main` as a *control variable*:
+Alibaba's page-agent behaved erratically on the voice branch but fine elsewhere,
+and this branch reproduces the setup with no voice work at all to tell whether
+the fork's voice overlays were interfering or whether page-agent simply struggles
+with DeepTutor's React DOM.
+
+What it carries that `main` does not:
+
+- `deeptutor/api/routers/llm_proxy.py` (+ tests) — an OpenAI-compatible
+  `/chat/completions` pass-through so a browser-side agent can call an LLM
+  without the provider key entering the bundle, with the model pinned
+  server-side.
+- `web/components/dev/PageAgentDevMount.tsx` — a dev-only mount, inert unless
+  `NEXT_PUBLIC_ENABLE_PAGE_AGENT=1`.
+
+Neither is referenced from `main`, so nothing there is dangling. The two ideas
+that mattered already live in `main` in better positions: the Gemini 3
+`thought_signature` fix sits in `core/agentic/messages.py` (the seam the loop
+actually calls), and the "pin a stronger model for the agent loop than the chat
+model" pattern was recreated as `DEEPTUTOR_AGENT_*` in
+`services/voice_realtime/agent/llm.py`, whose docstring cites this branch.
+
+Keep for experiments; do not merge as-is (it also reformats `web/app/layout.tsx`
+to a quote style the repo does not use).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
