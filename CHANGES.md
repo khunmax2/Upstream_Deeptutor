@@ -2381,6 +2381,31 @@ is additive and isolated for mergeability — the only upstream-file edit is one
 
 _Record each upstream version merged into this fork here._
 
+### v1.5.9 (`37c3db6d`) — merged 2026-08-05
+
+Eleven upstream commits: a per-model **reasoning-effort selector**, **Gemini
+Embedding 2** over the native API, **Novita AI** as an LLM gateway, plus fixes to
+auth cookies, terminal chat-capability failures, visualize enum handling, MiniMax
+endpoints, the Codex OAuth bridge, and honouring the saved interface language on
+first load. **Zero conflicts**; 73 source files, +3,018 / −130. Upstream CI green.
+
+- **Dropped upstream's committed build output.** v1.5.9 also carries
+  `web/.next-deeptutor/` — 4,322 generated files, 106 MB — which is why the raw
+  diff reads 4,395 files. This fork already gitignores that path, so the merge
+  removes it from the index instead of taking generated artifacts into history.
+  Future syncs will surface it as deleted-by-us until upstream stops committing
+  it; accepted deliberately.
+- **Thai i18n:** +9 keys (reasoning-effort selector, composer controls) → exact
+  key parity with `en` at **3,009**.
+- First sync run through the new `upstream-sync` skill. It caught the build-output
+  anomaly at the preflight stage and found two bugs in itself — see below.
+
+Verification: `npm run build` OK (58 pages), node tests **428/428**, i18n parity
+OK, `ruff` 0.16.0 check+format clean, pytest **4,227 passed** (26 failures, all
+the usual uninstalled `[partners]` extra), live Thai chat OK.
+
+> Next sync merge-base = `37c3db6d`.
+
 ### v1.5.8 (`44fa7a15`) — merged 2026-08-04
 
 Merged upstream **v1.5.8** into `main` (merge commit `60844ff8`) from the previous
