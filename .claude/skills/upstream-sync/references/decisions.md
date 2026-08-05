@@ -4,15 +4,15 @@ Calibration for the go/no-go call in Stage 3. Read this instead of trusting a
 conflict-count threshold — the relationship between "size of the release" and
 "work required" is weak, and these three show why.
 
-| | v1.4.8 | v1.4.15 | v1.5.8 |
-|---|---|---|---|
-| files / lines | 146 · +11.7k | 210 · +13.8k | **516 · +52k** |
-| upstream commits | — | — | 157 |
-| colliding files | 11 | 8 | 27 |
-| **real conflicts** | **4** | **0** | **8** |
-| Tier-1 pillars hit | 0 | 0 | 4 (3 auto-merged) |
-| th keys +/− | +29 / −2 | +27 / −3 | +246 / −3 |
-| actual effort | ~half day | ~half day | ~1 day |
+| | v1.4.8 | v1.4.15 | v1.5.8 | v1.5.9 |
+|---|---|---|---|---|
+| files / lines | 146 · +11.7k | 210 · +13.8k | **516 · +52k** | 73 source · +3k |
+| upstream commits | — | — | 157 | 11 |
+| colliding files | 11 | 8 | 27 | 7 |
+| **real conflicts** | **4** | **0** | **8** | **0** |
+| Tier-1 pillars hit | 0 | 0 | 4 (3 auto-merged) | 1 (auto-merged) |
+| th keys +/− | +29 / −2 | +27 / −3 | +246 / −3 | +9 / −0 |
+| actual effort | ~half day | ~half day | ~1 day | ~1 hour |
 
 The lesson from v1.4.15: 210 changed files produced **zero** conflicts, because
 almost all of it was net-new surface. And v1.5.8 — three times larger again —
@@ -82,6 +82,22 @@ the 16-line edit that caused it. `--seams` therefore lists the files to read
 (ranked with shared-ownership files first, since "merged clean" is exactly where
 this hides) and leaves the judgement to a person.
 
+**Upstream can commit files you gitignore.** v1.5.9 shipped 4,322 files of
+Next.js build output (106 MB) — the raw diff read 4,395 files when only 73 were
+source. `.gitignore` does not save you: it applies to *untracked* files, and
+upstream tracked these, so a plain merge takes them. The choice is to strip them
+(`git rm -r --cached` in the merge commit, which is what was done — it matches
+the fork's declared intent) or carry them. Stripping means every later sync shows
+them as deleted-by-us until upstream stops; that was accepted as the cheaper
+side. `sync_state.sh` now reports incoming files matching `.gitignore` at
+preflight, so this is a decision made before the merge rather than a surprise
+after it.
+
+Second-order effect worth knowing: `FORK_TOUCHPOINTS.txt` is generated from
+`merge-base..main`, so anything the fork *deletes* counts as a fork change. After
+stripping the build output the file ballooned from 152 to 4,471 entries until the
+regeneration was taught to exclude that path.
+
 ## Test-failure baseline
 
 `pytest` has a stable set of failures locally because the `[partners]` extra
@@ -95,3 +111,26 @@ One more that looks alarming and is not: `tests/runtime/test_api_import_memory_b
 parses a subprocess's stdout as JSON, and this project logs to stdout once
 settings exist. It fails on `main` too whenever `data/user/settings/` is
 populated.
+
+
+## What the first skill-driven sync found (v1.5.9)
+
+Running the playbook as a skill rather than from memory changed the outcome in
+one concrete way: the build-artifact anomaly surfaced at preflight, as a count
+that did not match the commit log, instead of after the merge as a mysteriously
+enormous diff.
+
+It also found three bugs in the skill itself, which is the honest argument for
+Stage 7 existing at all:
+
+- `invariants.py` flagged **itself** — its own source contains the literal
+  conflict-marker sequence it searches for. Marker detection is now anchored to
+  the start of a line, since git writes markers at column 0 and any tooling that
+  discusses them does not.
+- The skill's scripts live in the repo, so `ruff format --check .` covers them.
+  They were not formatted to the CI-pinned ruff and would have failed the Lint
+  gate. Run the repo's own linters over `.claude/skills/` like any other source.
+- `FORK_TOUCHPOINTS.txt` regeneration needed the exclusion described above.
+
+None of these were catchable by thinking harder about the design; they showed up
+the moment the thing ran against a real release.

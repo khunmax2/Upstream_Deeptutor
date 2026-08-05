@@ -67,6 +67,22 @@ hdr "fork files upstream DELETED or RENAMED (highest-severity signal)"
 git diff --name-status "$MB".."$TARGET" 2>/dev/null | grep -E '^[DR]' \
   | grep -Ff /tmp/_sync_ours.txt | sed 's/^/  /' || say "  (none)"
 
+hdr "files upstream added that this fork gitignores"
+# v1.5.9 shipped 4,322 files of committed Next.js build output (106 MB), which
+# made the raw diff read 4,395 files when only 73 were source. gitignore does not
+# protect you here: it is ignored for untracked files, and upstream tracked them.
+# Decide before merging whether to carry them or strip them from the index.
+git diff --name-only "$MB..$TARGET" 2>/dev/null > /tmp/_sync_added.txt
+ignored=$(git check-ignore --stdin < /tmp/_sync_added.txt 2>/dev/null | wc -l | tr -d ' ')
+if [ "${ignored:-0}" != "0" ]; then
+  say "  !! $ignored incoming files match this fork's .gitignore:"
+  git check-ignore --stdin < /tmp/_sync_added.txt 2>/dev/null \
+    | sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -5 | sed 's/^/     /'
+  say "     -> git rm -r --cached <dir> after merging, or take them deliberately"
+else
+  say "  (none)"
+fi
+
 hdr "toolchain pins changed by upstream"
 # A silent CI-only ruff bump turned the Lint job red on an otherwise clean sync:
 # local passed because the venv had an older ruff that ignores Markdown.

@@ -63,6 +63,11 @@ run_case "v1.4.15" b6bd04c0 bca6f6e9 0 ""
 # REPORT_sync_v1.5.8.md §2: 8 conflicts. §3: the silent 422 nothing else caught.
 run_case "v1.5.8"  e7e6795c 44fa7a15 8 "settings.py:120"
 
+# CHANGES.md v1.5.9: zero conflicts. The interesting part is not the conflict
+# count but that 4,322 of the 4,395 changed files were upstream's committed
+# build output — see the build-artifact guard in sync_state.sh.
+run_case "v1.5.9"  cfcdd0c8 37c3db6d 0 ""
+
 p=$(grep -c '^PASS$' "$RESULT" 2>/dev/null); p=${p:-0}
 f=$(grep -c '^FAIL$' "$RESULT" 2>/dev/null); f=${f:-0}
 rm -f "$RESULT"

@@ -12,8 +12,14 @@ a real merge with conflicts, never a fast-forward.
 
 The merge itself is the easy part. What makes these syncs expensive is a specific
 failure mode: **an upstream change that breaks fork behaviour while every gate
-stays green.** Three of those have already shipped past `git`, `tsc`, i18n parity
-and CI. The stages below exist to catch that class; everything else is bookkeeping.
+stays green.** Several have already shipped past `git`, `tsc`, i18n parity and CI
+— a pydantic model that silently 422'd Thai users, a CI-only lint bump, a fix
+orphaned by a refactor that touched none of its files. The stages below exist to
+catch that class; everything else is bookkeeping.
+
+Size is not the signal. v1.5.8 was 516 files and took a day; v1.5.9 was 11
+commits and took an hour — but its raw diff read 4,395 files because upstream had
+committed their build output. Read what preflight tells you, not the headline.
 
 ## Config for this repo
 
@@ -37,11 +43,19 @@ bash .claude/skills/upstream-sync/scripts/sync_state.sh          # main vs upstr
 ```
 
 It prints remotes, merge-base, how far upstream is ahead, fork-owned areas,
-colliding files, fork files upstream deleted, and any toolchain pin upstream
-moved. Everything is derived from git, so a new fork feature appears without
-anyone updating a manifest — which is precisely how the previous prose playbook
-went stale (it hardcoded "59 Thai files" and never learned about LINE, voice or
-pet).
+colliding files, fork files upstream deleted, **incoming files this fork
+gitignores**, and any toolchain pin upstream moved.
+
+Everything is derived from git, so a new fork feature appears without anyone
+updating a manifest — which is precisely how the previous prose playbook went
+stale (it hardcoded "59 Thai files" and never learned about LINE, voice or pet).
+
+That gitignore line matters more than it looks: `.gitignore` only protects
+*untracked* files, so anything upstream tracks arrives regardless. v1.5.9 brought
+4,322 build artifacts (106 MB) that way. Decide before merging whether to strip
+them (`git rm -r --cached <dir>` inside the merge commit) or carry them — and if
+you strip, exclude that path when regenerating `FORK_TOUCHPOINTS.txt`, which
+otherwise counts every deletion as a fork change.
 
 Then check the target's CI and **stop if anything is red**:
 
@@ -82,7 +96,7 @@ Weigh instead: are Tier-1 language pillars involved (`core/i18n.py`,
 `services/prompt/manager.py`, `config/loader.py`, `app-shell-storage.ts`)? Did
 upstream delete or move anything the fork owns? How much of the conflict volume
 is locale JSON, which is nearly free to resolve? Read `references/decisions.md`
-for how the three completed syncs actually went — the numbers there calibrate
+for how the four completed syncs actually went — the numbers there calibrate
 better than a threshold.
 
 ## Stage 4 — resolve
@@ -143,6 +157,10 @@ Only after the matrix is green: `git switch main && git merge --ff-only sync/vX`
 then **stop and confirm before pushing**. Pushing and opening PRs are outward
 facing; the user says when.
 
+The skill's own scripts live in the repo, so the repo's linters cover them —
+run `ruff format` over `.claude/skills/` before landing, or Lint fails on files
+that have nothing to do with the merge.
+
 Then catch up the other branches, and record the sync — `CHANGES.md` entry,
 `REPORT_sync_vX.md`, regenerate `FORK_TOUCHPOINTS.txt` against the new
 merge-base, `graphify update .`. Apache-2.0 §4(b) requires the fork to state what
@@ -162,7 +180,7 @@ moved. That is why `--seams` reports a list to read rather than a verdict.
 
 ## Trusting this skill
 
-The three completed syncs are a regression suite: each merge commit preserves the
+The four completed syncs are a regression suite: each merge commit preserves the
 pre-merge state and the target, and `docs/reports/REPORT_sync_*.md` records what
 actually happened. Replaying a check against those and comparing to the record is
 how you tell a working check from a confident-sounding one.
