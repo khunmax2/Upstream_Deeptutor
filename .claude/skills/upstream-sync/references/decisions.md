@@ -1,0 +1,97 @@
+# What the completed syncs actually cost
+
+Calibration for the go/no-go call in Stage 3. Read this instead of trusting a
+conflict-count threshold — the relationship between "size of the release" and
+"work required" is weak, and these three show why.
+
+| | v1.4.8 | v1.4.15 | v1.5.8 |
+|---|---|---|---|
+| files / lines | 146 · +11.7k | 210 · +13.8k | **516 · +52k** |
+| upstream commits | — | — | 157 |
+| colliding files | 11 | 8 | 27 |
+| **real conflicts** | **4** | **0** | **8** |
+| Tier-1 pillars hit | 0 | 0 | 4 (3 auto-merged) |
+| th keys +/− | +29 / −2 | +27 / −3 | +246 / −3 |
+| actual effort | ~half day | ~half day | ~1 day |
+
+The lesson from v1.4.15: 210 changed files produced **zero** conflicts, because
+almost all of it was net-new surface. And v1.5.8 — three times larger again —
+produced only 8, of which the two "HIGH risk" files predicted by file-level
+analysis both auto-merged cleanly. **Overlap in file names is a weak predictor;
+what matters is whether upstream rewrote a seam the fork sits on.**
+
+Better signals, in rough order of how much they should worry you:
+
+1. Upstream deleted or renamed a file the fork owns (never happened yet — treat
+   it as a stop-and-think).
+2. Upstream refactored a module the fork hooks into. This is what actually costs
+   time, and it does not show up as a conflict.
+3. Tier-1 language pillars touched (`core/i18n.py`, `services/prompt/manager.py`,
+   `config/loader.py`, `web/context/app-shell-storage.ts`).
+4. New locale keys — predictable, roughly an hour per 100.
+5. Raw conflict count — mostly noise on its own.
+
+## Resolutions worth remembering
+
+**Upstream generalises what the fork special-cased.** v1.5.8 replaced the fork's
+hand-rolled `parse_language` alias table with a passthrough that keeps any locale
+code intact (their #712). Taking their version wholesale would have silently
+started returning `"thai"` instead of `"th"` for the spelled-out alias, breaking
+every `== "th"` comparison downstream. The fix was to keep their structure and
+re-add one arm. Expect more of this shape: their design is usually the better
+base, and the fork's contribution shrinks to a few lines inside it.
+
+**Follow upstream's information architecture, don't fight it.** Twice now
+upstream has moved a page the fork had linked into navigation — `/space/agents`
+in v1.4.8, `/settings/mcp` in v1.5.8. Both times the right call was to drop the
+fork's nav entry rather than keep a link to a page upstream had relocated.
+
+**git can mis-align a hunk.** In v1.5.8 the "ours" side of a conflict in
+`agentic_pipeline.py` was the tail of a function upstream had refactored away;
+taking it would have left a `NameError` on a variable no longer in scope. Read
+the whole function before choosing a side.
+
+**A clean merge can still delete a fix.** The Gemini `thought_signature` fix
+hung on a `LoopHost` hook that upstream removed while introducing an equivalent
+canonical builder. The fork's override merged byte-for-byte and became
+unreachable — no conflict, no failing test. It was ported into upstream's new
+builder instead: one implementation, in their file, which is also where it is
+least likely to be orphaned again.
+
+## Failures that no gate caught
+
+Each of these is why a check exists — or, in the last case, why one deliberately
+does not.
+
+**A new pydantic model with `Literal["zh", "en"]`** (v1.5.8). Upstream added
+`UISettingsUpdate` for `PUT /api/v1/settings/ui`. It auto-merged cleanly because
+the class was entirely new; the fork's existing `"th"` arms elsewhere in the file
+survived, so nothing looked wrong. The frontend sends `"th"`, so saving a
+language would have returned 422. `tsc` cannot see Python, i18n parity only
+compares catalogs, and there was no conflict to review. → `invariants.py --only th-py`.
+
+**A CI-only toolchain bump** (v1.5.8). Upstream changed `pip install ruff` to
+`ruff==0.16.0`. Local checks passed because the venv had 0.15, which does not
+format Python blocks inside Markdown; CI failed on files nobody had touched. →
+`sync_state.sh` diffs the workflow pins, and Stage 5 uses the pinned version.
+
+**Orphaned fork fixes** — *not* automated, on purpose. Two attempts failed their
+backtest: reference counting saw nothing because the symbol kept its name and all
+12 references while only its binding moved, and a size-threshold heuristic missed
+the 16-line edit that caused it. `--seams` therefore lists the files to read
+(ranked with shared-ownership files first, since "merged clean" is exactly where
+this hides) and leaves the judgement to a person.
+
+## Test-failure baseline
+
+`pytest` has a stable set of failures locally because the `[partners]` extra
+(`mcp`, `telegram`, `slack_sdk`, `PyJWT[crypto]`) is not installed; CI installs
+`.[all]` and they pass there. The count grows when upstream adds tests to that
+extra — 10 at v1.4.8, 25 at v1.5.8 — so **never compare counts across releases**.
+A failure is a regression only if it does not also fail on `main` in the same
+environment. Prove that by rerunning the subset in a worktree at `main`.
+
+One more that looks alarming and is not: `tests/runtime/test_api_import_memory_boundary.py`
+parses a subprocess's stdout as JSON, and this project logs to stdout once
+settings exist. It fails on `main` too whenever `data/user/settings/` is
+populated.
