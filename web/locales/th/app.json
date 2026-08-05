@@ -2998,5 +2998,14 @@
   "{{role}} · joined {{date}}": "{{role}} · เข้าร่วมเมื่อ {{date}}",
   "{{shown}} of {{total}} apps": "{{shown}} จาก {{total}} แอป",
   "{{shown}} of {{total}} services": "{{shown}} จาก {{total}} บริการ",
-  "{{used}} / {{max}} connected": "เชื่อมต่อแล้ว {{used}} / {{max}}"
+  "{{used}} / {{max}} connected": "เชื่อมต่อแล้ว {{used}} / {{max}}",
+  "Adaptive": "ปรับตามบริบท",
+  "Add files & context": "เพิ่มไฟล์และบริบท",
+  "Extra high": "สูงพิเศษ",
+  "Minimal": "น้อยที่สุด",
+  "Provider default (Auto)": "ค่าเริ่มต้นของผู้ให้บริการ (อัตโนมัติ)",
+  "Reasoning effort": "ระดับการให้เหตุผล",
+  "Record voice": "อัดเสียง",
+  "Select persona": "เลือกเพอร์โซนา",
+  "Sets this model's default reasoning depth. Auto leaves the choice to the provider.": "กำหนดความลึกในการให้เหตุผลเริ่มต้นของโมเดลนี้ ‘อัตโนมัติ’ จะปล่อยให้ผู้ให้บริการเลือกเอง"
 }

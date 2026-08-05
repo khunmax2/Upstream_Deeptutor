@@ -75,10 +75,18 @@ def sh(*args: str) -> str:
     return subprocess.run(args, capture_output=True, text=True).stdout
 
 
+CONFLICT_MARKER = re.compile(r"^<{7} ", re.M)
+
+
 def unresolved(text: str) -> bool:
     """Conflict markers interleave both sides, so any count taken mid-merge is
-    fiction. Say that plainly rather than reporting a number nobody can act on."""
-    return "<<<<<<< " in text
+    fiction. Say that plainly rather than reporting a number nobody can act on.
+
+    Anchored to the start of a line: git writes markers at column 0, while this
+    file (and any tooling that talks about them) mentions the sequence inside a
+    string. The first real run of this script flagged itself.
+    """
+    return bool(CONFLICT_MARKER.search(text))
 
 
 def _read(p: str) -> str | None:
@@ -97,7 +105,9 @@ def ts_missing_th(paths: list[str]) -> list[dict]:
         if text is None:
             continue
         if unresolved(text):
-            out.append({"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"})
+            out.append(
+                {"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"}
+            )
             continue
         for m in LANG_OBJ.finditer(text):
             block = m.group(0)
@@ -121,7 +131,9 @@ def py_missing_th(paths: list[str]) -> list[dict]:
         if text is None:
             continue
         if unresolved(text):
-            out.append({"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"})
+            out.append(
+                {"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"}
+            )
             continue
         for i, line in enumerate(text.splitlines(), 1):
             m = PY_LANG_LITERAL.search(line)
@@ -143,7 +155,9 @@ def _changed_lines(path: str, a: str, b: str) -> int:
 def seams_at_risk(before_ref: str, target_ref: str, merge_base: str) -> list[dict]:
     """Upstream files the fork imports from that this merge touched at all."""
     fork_files = set(sh("git", "diff", "--name-only", f"{merge_base}..{before_ref}").split())
-    upstream_changed = [p for p in sh("git", "diff", "--name-only", f"{merge_base}..{target_ref}").split() if p]
+    upstream_changed = [
+        p for p in sh("git", "diff", "--name-only", f"{merge_base}..{target_ref}").split() if p
+    ]
 
     imported: set[str] = set()
     for f in sorted(fork_files):
@@ -169,10 +183,20 @@ def seams_at_risk(before_ref: str, target_ref: str, merge_base: str) -> list[dic
         n = _changed_lines(p, merge_base, target_ref)
         if n < SEAM_MIN_LINES:
             continue
-        why = "fork edits this too — merged clean does NOT mean the seam held" if both \
+        why = (
+            "fork edits this too — merged clean does NOT mean the seam held"
+            if both
             else "fork imports this"
-        out.append({"file": p, "line": 0, "changed": n, "both": both,
-                    "snippet": f"{why}; upstream changed {n} lines"})
+        )
+        out.append(
+            {
+                "file": p,
+                "line": 0,
+                "changed": n,
+                "both": both,
+                "snippet": f"{why}; upstream changed {n} lines",
+            }
+        )
     # Shared-ownership files first: they carry the silent-orphan risk.
     return sorted(out, key=lambda d: (not d["both"], -d["changed"]))
 
@@ -213,7 +237,9 @@ def main() -> int:
         return 1 if any(results.values()) else 0
 
     for key, findings in results.items():
-        desc = CHECKS.get(key, ("upstream seams the fork hooks into — REVIEW, not a verdict", None))[0]
+        desc = CHECKS.get(
+            key, ("upstream seams the fork hooks into — REVIEW, not a verdict", None)
+        )[0]
         print(f"[{'OK  ' if not findings else 'FIND'}] {key}: {desc} — {len(findings)} finding(s)")
         for f in findings:
             loc = f"{f['file']}:{f['line']}" if f["line"] else f["file"]

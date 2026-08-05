@@ -56,8 +56,10 @@ def main() -> int:
 
     if args.check:
         ok = not add and not remove
-        print(f"{args.locale}: en={len(en)} {args.locale}={len(loc)} missing={len(add)} orphan={len(remove)}"
-              f" — {'exact parity' if ok else 'NOT AT PARITY'}")
+        print(
+            f"{args.locale}: en={len(en)} {args.locale}={len(loc)} missing={len(add)} orphan={len(remove)}"
+            f" — {'exact parity' if ok else 'NOT AT PARITY'}"
+        )
         return 0 if ok else 1
 
     if args.plan:
@@ -69,12 +71,13 @@ def main() -> int:
         if args.out:
             payload = {
                 "_note": f"Fill every value in add[] with {args.locale}. "
-                         "Placeholders must match en exactly; --apply enforces it.",
-                "add": {k: en[k] for k in add},   # seeded with en as a translation stub
+                "Placeholders must match en exactly; --apply enforces it.",
+                "add": {k: en[k] for k in add},  # seeded with en as a translation stub
                 "remove": remove,
             }
             pathlib.Path(args.out).write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
             print(f"\nwrote {args.out} — translate the add[] values, then --apply")
         return 0
 
@@ -96,7 +99,9 @@ def main() -> int:
         # Refuse a partial application: the point is exact parity afterwards.
         after = (set(loc) | set(d_add)) - d_rm
         if after != set(en):
-            problems.append(f"result would not be at parity (would be {len(after)} vs en {len(en)})")
+            problems.append(
+                f"result would not be at parity (would be {len(after)} vs en {len(en)})"
+            )
         if problems:
             print("REFUSING TO APPLY:")
             for p in problems:
