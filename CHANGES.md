@@ -23,6 +23,34 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-08-11 — MCP: a rotated credential now reconnects, and a dead
+  connection no longer reports itself as a timeout.** Two independent bugs in
+  `deeptutor/services/mcp/manager.py`, both found while connecting Google's
+  Maps Grounding Lite MCP server (`mapstools.googleapis.com`). (1)
+  `MCPServerConfig.connection_signature()` fingerprints the *stored* config,
+  which holds `${secret:...}` references rather than values, so changing a
+  credential left the reload diff (`_sync_to_config`) byte-identical and the
+  account kept using the replaced key until a process restart. Fixed with a new
+  `MCPConnectionManager._signature()` that mixes in a SHA-256 digest of the
+  materialized config — digest only, never the credential, and configs with no
+  references keep their plain signature so upgrading does not drop every live
+  session. (2) A transport-level failure on the POST carrying a tool call (an
+  HTTP error, most often auth) is raised inside the MCP SDK's own anyio task
+  group and never resolves the caller's request, so a call that failed in 0.4s
+  was reported as `(MCP tool call timed out after 45s)` — the one explanation
+  that rules out the real cause, and an expensive one to debug. `call_tool` now
+  watches the connection task alongside the call and reports the recorded
+  transport error instead; `_run_server` routes its post-live failure through
+  the existing `describe_connect_failure()` so that string names the 403 rather
+  than "unhandled errors in a TaskGroup". Regression tests in
+  `tests/services/mcp/test_call_failures.py` (red/green verified against the
+  pre-fix module). Note the *root* cause of (2) is upstream of DeepTutor: the
+  MCP Python SDK calls `response.raise_for_status()` in
+  `streamable_http.py::_handle_post_request` before parsing a body that already
+  carries a valid JSON-RPC error — worth a separate report to
+  `modelcontextprotocol/python-sdk`. Both DeepTutor fixes are candidates for an
+  upstream PR.
+
 - **2026-07-09 — Gemini 3 tool calls no longer 400 on the second agent-loop
   round (`thought_signature`).** Gemini 3 models attach a REQUIRED
   `thought_signature` to every function call (delivered as `extra_content`
