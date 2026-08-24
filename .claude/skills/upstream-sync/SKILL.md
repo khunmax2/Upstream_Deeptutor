@@ -157,6 +157,15 @@ Only after the matrix is green: `git switch main && git merge --ff-only sync/vX`
 then **stop and confirm before pushing**. Pushing and opening PRs are outward
 facing; the user says when.
 
+**Reinstall dependencies on the real checkout, not just the worktree.** Stage 5's
+`npm ci` ran inside the throwaway dry-merge worktree — that satisfies the verify
+matrix but leaves the user's actual `web/node_modules` exactly as it was before
+the sync. v1.5.16 landed cleanly and CI was green, but the next `deeptutor start`
+on the real checkout failed with `Module not found: pdfjs-dist` — a dependency
+upstream had added to `package.json` that only ever got installed in the
+worktree. Run `npm ci --legacy-peer-deps` in the real `web/` right after the
+ff-only land, before telling the user the sync is done.
+
 The skill's own scripts live in the repo, so the repo's linters cover them —
 run `ruff format` over `.claude/skills/` before landing, or Lint fails on files
 that have nothing to do with the merge.

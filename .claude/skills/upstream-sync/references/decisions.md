@@ -134,3 +134,17 @@ Stage 7 existing at all:
 
 None of these were catchable by thinking harder about the design; they showed up
 the moment the thing ran against a real release.
+
+## What v1.5.16 found: verify happens in a worktree, `deeptutor start` happens on the real checkout
+
+Everything in Stage 5 — `npm ci`, build, node tests, i18n, pytest, the live Thai
+chat turn — ran green inside the throwaway dry-merge worktree, and CI on `origin`
+was green after push. The first `deeptutor start` on the user's actual checkout
+still failed: `Module not found: pdfjs-dist`. Upstream had added it to
+`package.json` as part of a new reading feature; the worktree's `npm ci` installed
+it there, but the real `web/node_modules` — untouched since before the sync —
+never saw it. A green verify matrix proves the *code* merged correctly; it says
+nothing about whether the environment the user actually runs matches what was
+verified. Stage 6 now runs `npm ci --legacy-peer-deps` on the real checkout
+as part of landing, not as an afterthought triggered by the user hitting the
+error.
