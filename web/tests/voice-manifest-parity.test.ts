@@ -24,7 +24,7 @@ const widgetSource = readFileSync(
 
 // Pages that are deliberately not voice-steerable (kept in sync with
 // VOICE_MANIFEST_EXCLUDED_ROUTES in the widget).
-const EXCLUDED = new Set(['/', '/login', '/register'])
+const EXCLUDED = new Set(['/', '/login', '/register', '/whisper'])
 
 function containsPage(dir: string): boolean {
   for (const name of readdirSync(dir)) {

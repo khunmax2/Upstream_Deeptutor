@@ -94,7 +94,10 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
 // Auth pages are deliberately NOT voice-steerable; everything else must be
 // declared above — tests/voice-manifest-parity.test.mjs fails the build when
 // a new page.tsx appears without a manifest entry.
-export const VOICE_MANIFEST_EXCLUDED_ROUTES = ["/login", "/register"];
+// /whisper is a live, crisis-sensitive dual-seat counseling room (see
+// app/whisper/page.tsx) — steering a voice agent into it is out of scope
+// for the general navigation manifest, same reasoning as the auth pages.
+export const VOICE_MANIFEST_EXCLUDED_ROUTES = ["/login", "/register", "/whisper"];
 export { UI_PAGES };
 
 // In-page actions the voice may trigger — the first rung beyond navigation.

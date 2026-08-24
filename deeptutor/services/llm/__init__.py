@@ -78,6 +78,7 @@ from .exceptions import (
     LLMError,
     LLMModelNotFoundError,
     LLMProviderError,
+    LLMProviderTransportError,
     LLMRateLimitError,
     LLMTimeoutError,
 )
@@ -134,6 +135,7 @@ __all__ = [
     "LLMError",
     "LLMConfigError",
     "LLMProviderError",
+    "LLMProviderTransportError",
     "LLMAPIError",
     "LLMTimeoutError",
     "LLMRateLimitError",

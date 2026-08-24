@@ -4,6 +4,7 @@ import { CapabilityAccessProvider } from "@/components/access/CapabilityAccessCo
 import CapabilityGate from "@/components/access/CapabilityGate";
 import { UnifiedChatProvider } from "@/context/UnifiedChatContext";
 import VoiceActionBridge from "@/components/voice/VoiceActionBridge";
+import { ReadingProvider } from "@/context/ReadingContext";
 
 export default function WorkspaceLayout({
   children,
@@ -14,9 +15,14 @@ export default function WorkspaceLayout({
     <CapabilityAccessProvider>
       <UnifiedChatProvider>
         <VoiceActionBridge />
-        <AppShell sidebar={<WorkspaceSidebar />}>
-          <CapabilityGate>{children}</CapabilityGate>
-        </AppShell>
+        {/* Above the page on purpose: sending the first message navigates
+            /home → /home/<id>, which remounts the page. The open document
+            must not die with it. */}
+        <ReadingProvider>
+          <AppShell sidebar={<WorkspaceSidebar />}>
+            <CapabilityGate>{children}</CapabilityGate>
+          </AppShell>
+        </ReadingProvider>
       </UnifiedChatProvider>
     </CapabilityAccessProvider>
   );

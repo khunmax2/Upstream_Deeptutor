@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,6 +11,27 @@ import pytest
 from deeptutor.partners.bus.events import OutboundMessage
 from deeptutor.partners.channels.manager import ChannelManager
 from deeptutor.partners.config.schema import ChannelsConfig
+
+
+def test_empty_allow_list_skips_only_misconfigured_channel(monkeypatch):
+    class _Channel:
+        display_name = "Test"
+
+        def __init__(self, config, _bus):
+            self.config = SimpleNamespace(allow_from=config["allow_from"])
+
+    monkeypatch.setattr(
+        "deeptutor.partners.channels.registry.discover_all",
+        lambda: {"invalid": _Channel, "valid": _Channel},
+    )
+    config = ChannelsConfig(
+        invalid={"enabled": True, "allow_from": []},
+        valid={"enabled": True, "allow_from": ["user-1"]},
+    )
+
+    manager = ChannelManager(config, _MultiShotBus([]))  # type: ignore[arg-type]
+
+    assert list(manager.channels) == ["valid"]
 
 
 class _OneShotBus:
@@ -32,6 +54,28 @@ class _DummyChannel:
         # from the per-channel config.
         self.send_progress = True
         self.send_tool_hints = True
+
+
+def test_channel_media_is_scoped_to_owning_partner(partners_root):
+    from deeptutor.partners.bus.queue import MessageBus
+    from deeptutor.partners.channels.base import BaseChannel
+
+    class _MediaChannel(BaseChannel):
+        name = "telegram"
+
+        async def start(self):
+            pass
+
+        async def stop(self):
+            pass
+
+        async def send(self, msg):
+            pass
+
+    channel = _MediaChannel({}, MessageBus())
+    channel.partner_id = "ada"
+
+    assert channel.media_dir() == partners_root / "ada" / "media" / "telegram"
 
 
 async def _dispatch_one(
@@ -232,43 +276,6 @@ class TestStreamDispatch:
         assert channel.send_delta.await_count == 2
         chunks = [c.args[1] for c in channel.send_delta.await_args_list]
         assert chunks == ["a", "b"]
-
-
-class _AllowFromChannel:
-    """Minimal channel stub exposing only ``config.allow_from``."""
-
-    def __init__(self, allow_from: list[str]):
-        self.config = type("_Cfg", (), {"allow_from": allow_from})()
-
-
-class TestValidateAllowFrom:
-    def _manager(self) -> ChannelManager:
-        # Empty config enables no channels, so __init__ builds nothing.
-        return ChannelManager(ChannelsConfig(), _MultiShotBus([]))  # type: ignore[arg-type]
-
-    def test_empty_allow_from_disables_only_that_channel(self):
-        manager = self._manager()
-        manager.channels = {  # type: ignore[assignment]
-            "broken": _AllowFromChannel([]),
-            "ok": _AllowFromChannel(["*"]),
-        }
-
-        # Must not raise — one misconfigured channel can't kill the backend.
-        manager._validate_allow_from()
-
-        assert "broken" not in manager.channels
-        assert "ok" in manager.channels
-
-    def test_valid_channels_are_left_intact(self):
-        manager = self._manager()
-        manager.channels = {  # type: ignore[assignment]
-            "a": _AllowFromChannel(["*"]),
-            "b": _AllowFromChannel(["U123"]),
-        }
-
-        manager._validate_allow_from()
-
-        assert set(manager.channels) == {"a", "b"}
 
 
 def test_channel_registry_discovers_builtin_channels() -> None:
