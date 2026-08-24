@@ -2437,6 +2437,84 @@ to a quote style the repo does not use).
 
 _Record each upstream version merged into this fork here._
 
+### v1.5.16 (`8515dfdb`) — merged 2026-08-24
+
+154 upstream commits from the previous fork point v1.5.9 (`37c3db6d`). **776
+source files, +85,115 / −7,985** (upstream also stopped committing its Next.js
+build output between these two releases, so unlike v1.5.9 the raw diff no
+longer inflates past the source count). New surface: a **whisper** dual-seat
+counselor-practice room, MarginNote 4 library sync, CodeBuddy/Codex OAuth
+additions, a model-output `response_language` split from UI `language`, an
+immersive-reading `ReadingProvider`, and a rewritten `ToolCallAccumulator` for
+streamed tool-call deltas. Upstream CI green (14/14 checks).
+
+**22 conflicts** (19 content + 1 add/add + 2 rename/delete false positives from
+git mis-pairing the fork's `docs/branding/*.png` against files upstream's
+stripped build output had also touched), resolved "upstream structure wins +
+Thai/fork behaviour re-applied":
+
+- `services/mcp/manager.py` — took upstream wholesale; it had independently
+  absorbed this fork's own credential-reload and timeout-masking fixes
+  (`docs/reports` 2026-08-11) plus hardened the abandon-on-cancel path further.
+  Result is byte-identical to upstream.
+- `core/agentic/tool_call_stream.py` (upstream's new home for tool-call delta
+  accumulation, replacing the inline dict in `agent_loop.py` /
+  `labeled_step.py`) — **the same orphan class as v1.5.8's `LoopHost` fix**:
+  upstream's `ToolCallAccumulator.feed()` doesn't carry provider `model_extra`,
+  which is where Gemini 3's required `thought_signature` rides. Ported the
+  fork's extras-merge into the new accumulator (lazily, so a call without
+  extras keeps upstream's plain 3-key shape — verified against the existing
+  `test_tool_call_provider_extras_survive_the_replay` test, kept from the fork
+  side of the `test_agent_loop.py` conflict).
+- `partners/channels/manager.py` — dropped the fork's `_validate_allow_from()`
+  method and its dedicated tests: upstream inlined the identical empty-`allowFrom`
+  skip directly into `_init_channels`, so the fork's post-hoc method became
+  dead code reachable by nothing.
+- `api/routers/settings.py`, `SettingsContext.tsx` — upstream split
+  `response_language` (model output) from `language` (UI chrome) as two
+  separate fields; both re-gained `"th"` in every `Literal`/union, both on the
+  Pydantic model and the TS type — the v1.5.8 UISettingsUpdate 422 was exactly
+  this shape of miss.
+- `api/routers/{chat,co_writer,quiz_judge}.py` — took upstream's
+  `get_response_language` accessor (replaces `get_ui_language` for model
+  output) with the fork's `th`/`"thai"` detection arm folded into chat.py's
+  ternary chain.
+- `web/app/(utility)/space/learning/page.tsx` — took upstream's revision-driven
+  event feed wholesale in place of the fork's interval polling; same intent
+  (live map beside an open tutoring chat), upstream's mechanism subsumed it.
+  Byte-identical to upstream after resolution.
+- `BookCreator.tsx` — took upstream's generalized 11-language picker (was a
+  fork-only 3-option `en/zh/th` select) and added Thai as its 12th entry.
+- `web/app/(workspace)/layout.tsx` — kept the fork's `VoiceActionBridge`
+  sibling above upstream's new `ReadingProvider`, so page actions still don't
+  remount with the open document.
+
+**Silent Thai regressions caught (not git conflicts, per `invariants.py`):** 5
+new `{zh, en}` string literals in `SpaceDashboard.tsx` (Whisper feature tile)
+and `settings-nav.ts` (starters nav entry) that auto-merged clean with no `th`
+arm. All 5 translated.
+
+**Real test regression caught by the web suite (not a merge conflict):** the
+new `/whisper` route wasn't in `VoiceCallWidget.tsx`'s `UI_PAGES` steering
+manifest. Added to `VOICE_MANIFEST_EXCLUDED_ROUTES` instead of `UI_PAGES` — it's
+a live, crisis-sensitive dual-seat counseling room, same category as the
+excluded `/login`/`/register` auth pages, not a page a voice agent should
+navigate a user into on its own.
+
+**Thai i18n delta:** +371 new keys, −4 orphaned → `set(th) == set(en)` = **3,376**
+(exact parity, `zh` also re-verified at exact parity).
+
+Verification: web build OK (mirrors upstream's page count plus `/whisper`),
+node tests **634/634**, `npm run lint` 0 errors (59 pre-existing i18n-literal
+warnings, unrelated to this sync), i18n parity OK, `ruff check`/`format` 0.16.0
+clean (including `.claude/skills/`), pytest **5,626 passed** (10 failed — same
+10 fail identically on a clean `main` checkout with the same environment,
+confirmed by rerunning the exact failing subset there: all from the
+uninstalled `[partners]` extra or sandboxed-runner absence, none introduced by
+this sync), live Thai chat replied in fluent Thai with no 422.
+
+> Next sync merge-base = `8515dfdb`.
+
 ### v1.5.9 (`37c3db6d`) — merged 2026-08-05
 
 Eleven upstream commits: a per-model **reasoning-effort selector**, **Gemini
