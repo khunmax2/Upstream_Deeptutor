@@ -1,6 +1,9 @@
 # Loop needs an interaction policy for form-filling / commit flows (ask vs proceed vs confirm)
 
-Status: ready-for-agent
+Status: done — both gaps (harness + `DangerGate` expensive-commit rung) fixed
+and unit-tested 2026-07-13; the live end-to-end run that night was inconclusive
+because Gemini was 503-throttled, a provider outage rather than a policy gap —
+re-run opportunistically when a full-tier model is available
 
 ## Progress
 

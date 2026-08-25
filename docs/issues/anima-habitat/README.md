@@ -1,6 +1,7 @@
 # Anima Habitat — Tamagotchi Knowledge Core (demo)
 
-Status: ready-for-agent
+Status: done (Days 1–5 + v2 top-level/aggregate + art overhaul all built, tested,
+committed — see `HANDOFF.md`; demo lands end-to-end)
 Owner: Attapon · Drafted: 2026-07-14
 
 A learning-companion pet that reflects **real** DeepTutor mastery progress: the

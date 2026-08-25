@@ -12,7 +12,7 @@ repo root. Upstream user-facing docs (`README.md`, `DEPLOY.md`, `CONTAINERIZATIO
   companion record to `CHANGES.md`. Grouped by name:
   - `REPORT_round1`–`round4`, `REPORT_final_qa` — Thai i18n localization rounds
   - `REPORT_sync_*`, `REPORT_impact_*`, `REPORT_dry_merge_*`,
-    `REPORT_followup_agents_ui` — upstream syncs (v1.4.8, v1.4.15)
+    `REPORT_followup_agents_ui` — upstream syncs (v1.4.8, v1.4.15, v1.5.8, v1.5.16)
   - `REPORT_line_*` — LINE channel integration
   - `REPORT_voice_*` — voice realtime / web integration work
 - **`planning/`** — plans, designs, and one-shot execution prompts. Loose files at
@@ -37,7 +37,9 @@ repo root. Upstream user-facing docs (`README.md`, `DEPLOY.md`, `CONTAINERIZATIO
     rounds 1–4, final QA, commit, agents-UI follow-up, and the v1.4.8 sync
     execution. (The v1.4.15 pair — `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`
     + `th_i18n_delta_v1.4.15.json` — stays at the top of `planning/` because it is
-    tracked in git, unlike this subfolder.)
+    tracked in git, unlike this subfolder. `th_i18n_delta_v1.5.8.json`, the delta
+    for the v1.5.8 sync, sits alongside it for the same reason; its report is
+    `reports/REPORT_sync_v1.5.8.md`.)
     Outcomes are in `reports/REPORT_round1`–`round4`, `REPORT_final_qa`.
   - **`line-integration/`** — the LINE channel workstream, **completed** (channel
     coded and live locally): kickoff handoff, implementation prompt, and two fix

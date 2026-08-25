@@ -1,6 +1,8 @@
 # Settings sub-nav serializes as icon-only links (no text) → loop can't distinguish
 
-Status: ready-for-agent
+Status: done — fix shipped in `serialize.ts` + node-tested 2026-07-13; a lite
+loop model's inconsistent use of the now-present labels is a loop-model
+limitation, not a serializer bug (tracked in issue 01 / provider-adaptation)
 
 ## Progress
 

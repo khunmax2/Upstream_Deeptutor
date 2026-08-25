@@ -1,6 +1,9 @@
 # Loop can claim success on the WRONG destination
 
-Status: ready-for-human
+Status: done (mechanism) — hard grounding forces `success=false` on a route
+mismatch, deterministic + regression-tested (`test_route_grounding.py` +21);
+the live full-path replay is an optional confirmation gated on a non-503
+full-tier model, not a correctness risk (see "Remaining" below)
 
 ## Progress
 

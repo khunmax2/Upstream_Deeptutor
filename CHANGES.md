@@ -276,6 +276,49 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   `tests/services/voice_realtime/agent/test_fixer.py`,
   `docs/reports/REPORT_inpage_agent_phaseE_2026-07-12.md`.
 
+- **2026-08-25 — Synced five more issue-tracker `Status:` fields (in-page-agent
+  grounding + LINE) after a project-wide pending-work audit.** All three
+  `docs/issues/inpage-agent-grounding/issues/{01,02,03}` sub-issues had their
+  fix mechanism shipped and regression-tested back on 2026-07-13 — what each
+  file's own "Remaining" note called still open was an optional live e2e
+  confirm blocked by external provider availability (a 503 outage for 03, a
+  non-full-tier model for 01), not unfinished implementation — flipped all
+  three, and the parent `PRD.md`'s `needs-triage` (stale — it was split into
+  and superseded by those three sub-issues), to `done`. Separately, the
+  `## LINE integration` header in this file said `(in progress)` while
+  `docs/README.md` already called the same workstream `completed` — flipped
+  the header to `(done)`, keeping the deferred UI-polish note but reframed as
+  optional rather than in-progress. `docs/issues/llm-provider-adaptation/PRD.md`
+  was also audited and left as `in-progress`: its own "Remaining" line
+  (settings-store config source, deferred) is real unfinished scope, not a
+  stale label. No code changed. Files:
+  `docs/issues/inpage-agent-grounding/PRD.md`,
+  `docs/issues/inpage-agent-grounding/issues/01-loop-verify-destination.md`,
+  `docs/issues/inpage-agent-grounding/issues/02-serialize-settings-nav-labels.md`,
+  `docs/issues/inpage-agent-grounding/issues/03-form-commit-interaction-policy.md`,
+  `CHANGES.md`.
+- **2026-08-25 — Synced three issue-tracker `Status:` fields to what was actually
+  shipped.** A project-wide audit found the labels lagging the `## Progress` logs
+  they sit above: `docs/issues/anima-habitat/README.md` said `ready-for-agent`
+  while `HANDOFF.md` already recorded "Days 1–5 + v2 — all built, tested,
+  committed" (last touched 2026-07-16) — flipped to `done`, and the matching
+  `CHANGES.md` section header `## Anima Habitat — … (in progress)` → `(done)`.
+  `docs/issues/voice-intent-classifier/PRD.md` said `in-progress` though its own
+  last entry reads "**Done.**" (10/10 live-verified 2026-07-13) — flipped to
+  `done`. `docs/issues/kb-content-routing/PRD.md` said `ready-for-human` for work
+  whose Phases 1–3 (the full PRD scope) were already built + live-verified,
+  leaving only an explicitly optional, non-blocking follow-on — flipped to `done`
+  with that follow-on noted inline. No code changed. Files:
+  `docs/issues/anima-habitat/README.md`, `docs/issues/voice-intent-classifier/PRD.md`,
+  `docs/issues/kb-content-routing/PRD.md`, `CHANGES.md`.
+- **2026-08-25 — Moved the stray v1.5.8 sync pair out of the repo root into `docs/`.**
+  `REPORT_sync_v1.5.8.md` → `docs/reports/`, `th_i18n_delta_v1.5.8.json` →
+  `docs/planning/` — these two were left at the root when v1.5.8 shipped,
+  breaking the 2026-07-11 reorg below (the v1.4.15 pair already lived under
+  `docs/planning/`). Updated `docs/README.md`'s file inventory to list both.
+  Pure `git mv`; no path-referencing code touched either file. Files:
+  `docs/reports/REPORT_sync_v1.5.8.md`, `docs/planning/th_i18n_delta_v1.5.8.json`,
+  `docs/README.md`.
 - **2026-07-11 — Reorganized fork working docs out of the repo root into `docs/`.**
   All 21 `REPORT_*.md` files moved to `docs/reports/`; `PLAN_inpage_agent_parity.md`,
   `DESIGN_voice_grounding.md`, `Thai_Localization_PROMPT_sync2_execute_v1.4.15.md`,
@@ -305,12 +348,14 @@ Added full Thai language support across the whole stack. 5 commits, merged to
   tests (`tests/services/partners/`, `tests/api/test_partners_*`), so future agents
   working on channel integrations (e.g. LINE) know where to add code. Files: `CLAUDE.md`.
 
-## LINE integration — (in progress)
+## LINE integration — (done)
 
 Adding LINE Messaging as a Partners channel — primarily a new file
 `deeptutor/partners/channels/line.py` (additive; the channel registry auto-discovers
-adapters). _Backend DM MVP landed 2026-06-20 (see below); UI touch-ups (channel
-icon, Thai labels) deferred._
+adapters). _Backend DM MVP landed 2026-06-20 (see below), coded and live locally
+— matches `docs/README.md`'s "completed" call on this workstream. UI touch-ups
+(channel icon, Thai labels) remain an optional, undated polish item, not
+in-progress work._
 
 - **2026-06-20 — feasibility re-verified against v1.4.8.** Added
   `REPORT_line_integration_feasibility.md` (code-traced, file:line). Confirmed the
@@ -1941,7 +1986,7 @@ code is additive and isolated for mergeability.
     session barge-in), `tests/services/test_voice_bespoke.py` (adapter wire shape),
     `tests/api/test_voice_realtime_ws.py` (WS routing).
 
-## Anima Habitat — learning-companion pet (in progress)
+## Anima Habitat — learning-companion pet (done)
 
 A Tamagotchi-style pet whose state (hunger/happy/exp/level/sick) is *derived* from
 real DeepTutor mastery progress: demonstrate understanding in a Mastery Path

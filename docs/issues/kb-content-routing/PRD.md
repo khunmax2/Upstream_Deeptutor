@@ -1,7 +1,8 @@
 # KB-aware routing via a cheap topic manifest
 
-Status: ready-for-human (Phases 1-3 done + live-verified end-to-end; optional
-upload-hook/filler remain)
+Status: done (Phases 1-3 — the full PRD scope — built, tested, and
+live-verified end-to-end 2026-07-13; the eager upload-hook + first-build filler
+were always called out as an optional follow-on, not built, not blocking)
 Owner: Attapon · Drafted: 2026-07-13
 
 ## Progress

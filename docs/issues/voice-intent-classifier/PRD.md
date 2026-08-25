@@ -1,6 +1,8 @@
 # Voice routing: intent classifier as the primary router (A1 hybrid)
 
-Status: in-progress
+Status: done (built + wired + tested + live-verified 10/10 on 2026-07-13, behind
+`DEEPTUTOR_VOICE_CLASSIFIER`; only open item is a non-blocking model pin — see
+"Non-goals / open")
 Owner: Attapon · Drafted: 2026-07-12 · Prereq: a working agent-loop model + the loop enabled
 
 ## Progress

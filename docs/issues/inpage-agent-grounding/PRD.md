@@ -1,6 +1,8 @@
 # In-page agent grounding gaps (from live voice testing)
 
-Status: needs-triage
+Status: done (mechanism) — all three sub-issues (01/02/03) fixed +
+regression-tested 2026-07-13; only optional live e2e confirms remain, each
+gated on provider/model availability rather than missing work — see sub-issues
 Owner: Attapon · Drafted: 2026-07-13
 
 Two loop/serializer limitations surfaced while live-testing the new voice intent
