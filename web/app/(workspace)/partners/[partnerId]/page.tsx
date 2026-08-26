@@ -37,6 +37,7 @@ import {
   loadPartnerSessionKey,
   persistPartnerSessionKey,
 } from "@/lib/partner-session";
+import { decodeRouteParam } from "@/lib/route-params";
 import PartnerAvatar from "@/components/partners/PartnerAvatar";
 import PartnerChat from "@/components/partners/PartnerChat";
 import PartnerChannels from "@/components/partners/PartnerChannels";
@@ -54,7 +55,9 @@ function PartnerDetail() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { t } = useTranslation();
-  const partnerId = params.partnerId;
+  // useParams() yields the raw (still percent-encoded) segment; the api client
+  // encodes what it is given, so pass it the decoded id or it double-encodes.
+  const partnerId = decodeRouteParam(params.partnerId);
 
   const initialTab = (searchParams.get("tab") as Tab) || "chat";
   const [tab, setTab] = useState<Tab>(

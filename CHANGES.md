@@ -45,13 +45,38 @@ back to HKUDS; once merged upstream the divergence is removed.
   `test_mixed_name_keeps_the_ascii_part` pinned the buggy behavior and was
   updated to assert the `bot-<hash>` shape.
 
-  Not fixed here, and still open: partners created *before* the earlier
-  ASCII-safety fix can carry a raw non-ASCII directory id (e.g. `เพ-อนฉ-น`) and
-  there is no migration for them — such a partner 404s on its detail page and so
-  cannot be opened, edited or deleted from the UI. Suspected cause is
-  double-encoding on the frontend (`useParams()` returns the encoded segment and
-  `getPartner()` in `web/lib/partners-api.ts` applies `encodeURIComponent` to it
-  again), but that was **not** verified and no frontend change was made.
+  The follow-on frontend bug — a partner whose id predates that ASCII-safety
+  work 404ing on its own detail page — is fixed separately, below.
+
+- **2026-08-26 — Partners: a non-ASCII partner id no longer 404s its own detail
+  page (double-encoded request).** A partner created before ids were forced to
+  ASCII carries a raw non-ASCII directory id (e.g. `เพ-อนฉ-น`). Clicking its
+  card opened `/partners/<id>` and the page reported "Partner not found", so it
+  could not be opened, edited or deleted from the UI at all.
+
+  Cause, confirmed from the browser's own network log rather than inferred:
+  `useParams()` hands back the raw pathname segment, still percent-encoded, and
+  `getPartner()` in `web/lib/partners-api.ts` applies `encodeURIComponent` to
+  whatever it is given — so the id was encoded twice and the request went out as
+  `/api/v1/partners/%25E0%25B9%2580%25E0%25B8%259E-…` (`%25` being an encoded
+  `%`) where a correct request carries `%E0%B9%80%E0%B8%9E-…`. The backend
+  decodes once, resolves a different id, and answers 404. Pure-ASCII ids encode
+  to themselves, so the second pass is a no-op — which is why only non-Latin
+  names were ever affected, and why this went unnoticed upstream.
+
+  Fixed with a new `web/lib/route-params.ts` (`decodeRouteParam`) applied to
+  `params.partnerId` in `web/app/(workspace)/partners/[partnerId]/page.tsx` —
+  new file plus a one-line change to an upstream file, per the
+  keep-customizations-mergeable rule. Decoding is idempotent for id-shaped
+  values (a decoded id has no `%`) and falls back to the raw value on a
+  malformed sequence instead of throwing. Tests in
+  `web/tests/route-params.test.ts`.
+
+  Note the FastAPI `TestClient` is **not** a faithful reproduction here: httpx
+  normalizes `%25` back to `%` before the request is sent, so a double-encoded
+  path answers 200 under the test client while the real uvicorn server answers
+  404. This bug can only be reproduced through an actual browser (or a raw HTTP
+  client that does not re-normalize the path).
 
 - **2026-08-11 — MCP: a rotated credential now reconnects, and a dead
   connection no longer reports itself as a timeout.** Two independent bugs in
