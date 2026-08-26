@@ -202,6 +202,40 @@ the language an explicit choice rather than an implicit one.
 
 ## Documentation
 
+- **2026-08-26 — `scripts/precheck.sh`: run the CI suite locally before
+  pushing.** `.github/workflows/tests.yml` triggers on `push` to `main`/`dev`
+  and on `pull_request` — but *not* on pushing a feature branch, so the
+  "branch → push → wait for CI → merge" workflow has nothing to wait for and
+  the checks only run once the code is already on `main`. This script closes
+  that gap for a solo maintainer: it runs exactly what CI runs (`ruff check`,
+  `ruff format --check`, `pytest -q tests deeptutor/learning/tests`,
+  `npm run test:node`, `npx eslint .`), so a green run means push with
+  confidence and no PR ceremony is needed. `--fast` skips the two frontend
+  steps.
+
+  Two local/CI mismatches had to be handled for the signal to be trustworthy:
+
+  1. **Optional partner SDKs.** CI installs `requirements/partners.txt`; a dev
+     venv without it cannot even *collect* the suite — `test_channel_streaming.py`
+     imports `telegram` at module level, so pytest aborts with
+     `Interrupted: 1 error during collection` and runs zero tests. The failure
+     summary points at the one-time `pip install -r requirements/partners.txt`.
+  2. **Runtime config.** CI writes a minimal `data/user/settings/main.yaml`
+     (`logging.level: WARNING`) plus `tests/fixtures/ci_model_catalog.json`,
+     while a real dev install has `level: INFO` + `console_output: true` and
+     configured CORS origins. Against the real config 16 tests fail for reasons
+     unrelated to the code — INFO lines pollute the stdout that
+     `tests/runtime/test_api_import_memory_boundary.py` parses as JSON, and the
+     CORS/cli-app tests see the developer's own settings. The script therefore
+     builds a throwaway `DEEPTUTOR_HOME` with the CI config and points pytest at
+     it, leaving the developer's real settings untouched. With that in place the
+     suite is 5669 passed / 0 failed locally, matching CI.
+
+  Known limits (documented at the foot of the script): it runs one Python
+  version rather than CI's 3.11–3.14 matrix, uses the existing `node_modules`
+  instead of a clean `npm ci`, and skips both the `import-check` job (which
+  proves nothing imports an optional dep) and the Repository Hygiene workflow.
+
 - **2026-07-14 — Configured Matt Pocock engineering skills for this fork.**
   Added the `## Agent skills` consumer block to `CLAUDE.md` and created
   `docs/agents/` configuration for the installed mattpocock/skills workflows:
