@@ -104,29 +104,41 @@ def _slugify_id(name: str, *, fallback: str) -> str:
     # so distinct non-Latin names still get distinct ids while the same name
     # round-trips to the same id (keeping the create-time duplicate check
     # meaningful). Only the id is slugged; the entity keeps its display name.
+    #
+    # A *mixed* name needs that same handle appended, not just a name with no
+    # ASCII at all: the non-ASCII run carries the identity but cannot survive the
+    # filter, so two different names reduce to one id — ``ครู Math`` and
+    # ``ติว Math`` both yield ``math``, and ``ครูคณิต ม.6`` / ``ครูฟิสิกส์ ม.6``
+    # both yield ``6``. The second name then trips the create-time duplicate
+    # check and cannot be created at all. So whenever a non-ASCII character was
+    # dropped, the digest goes on. ASCII punctuation is not identity (``Study
+    # Buddy!!!`` is still ``study-buddy``) and needs no digest.
     stripped = name.strip()
-    cleaned = "".join(c if c.isascii() and c.isalnum() else "-" for c in stripped.lower())
-    slug = _HYPHEN_RUN_RE.sub("-", cleaned).strip("-")
-    if slug:
-        return slug
     if not stripped:
         return fallback
+    cleaned = "".join(c if c.isascii() and c.isalnum() else "-" for c in stripped.lower())
+    slug = _HYPHEN_RUN_RE.sub("-", cleaned).strip("-")
+    if slug and stripped.isascii():
+        return slug
     # SHA1 here is a content-addressing handle (stable per-name id), not
     # security; ``usedforsecurity=False`` documents that and clears bandit B324.
+    # Hashed over the pre-lowercase ``stripped`` so ids minted by the previous
+    # revision for non-ASCII names keep resolving to the same directory.
     digest = hashlib.sha1(stripped.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
-    return f"{fallback}-{digest}"
+    return f"{slug}-{digest}" if slug else f"{fallback}-{digest}"
 
 
 def slugify_partner_id(name: str) -> str:
     """ASCII/URL-safe partner id derived from a display name (see
-    :func:`_slugify_id`); pure-CJK names get a stable ``partner-<hash>`` id."""
+    :func:`_slugify_id`); any name with non-ASCII characters carries a stable
+    per-name digest — ``partner-<hash>`` when nothing else survives."""
     return _slugify_id(name, fallback="partner")
 
 
 def slugify_soul_id(name: str) -> str:
     """ASCII/URL-safe soul-library id. Soul ids ride in ``/souls/<id>`` URLs
     exactly like partner ids, so they get the same treatment (see
-    :func:`_slugify_id`); pure-CJK names get a stable ``soul-<hash>`` id."""
+    :func:`_slugify_id`); a pure non-ASCII name gets a stable ``soul-<hash>``."""
     return _slugify_id(name, fallback="soul")
 
 
