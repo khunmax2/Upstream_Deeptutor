@@ -151,6 +151,33 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 - **Learning / quiz:** `deeptutor/learning/prompts/th.yaml`; quiz judge accepts `th`.
 - **Detail:** `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
 
+### 2026-08-26 — Thai added to the partner "Reply language" picker
+
+The backend has accepted `th` since the localization work above
+(`normalize_agent_language` returns `zh` / `th` / `en`, and
+`language_directive("th")` emits the strict "เขียนทุกอย่างเป็นภาษาไทย"
+instruction), but the two `<select>` menus that write `PartnerConfig.language`
+only ever offered English and 中文 — so a partner could not actually be *set* to
+Thai from the UI. Added `<option value="th">ไทย</option>` to both:
+`web/app/(workspace)/partners/new/page.tsx` (create wizard) and
+`web/components/partners/PartnerConfigure.tsx` (Configure tab).
+
+Frontend-only; no backend change was needed. The chat prompt pack ships just
+`zh/` and `en/`, and `th` correctly falls back to the English files (verified:
+11 keys loaded) — per `PromptManager._fallback_chain`, the language *directive*
+rather than the prompt file is what governs the reply language, so a `th`
+partner gets English scaffolding and Thai output by design.
+
+Note on the existing `""` → "Auto (English)" option: it is not
+language-detection. `normalize_agent_language("")` returns `"en"`, so the strict
+English directive ("Do NOT switch languages") is what actually reaches the
+model; a Thai reply from an "Auto" partner is the model overriding that
+directive because the user wrote in Thai, not a supported mode — it can flip
+back to English on a different model or a more mixed-language conversation.
+Picking `th` explicitly is what makes it deterministic. Closes the "โหมด
+ตอบตามภาษา user ยังเป็นงานค้าง" note in `docs/RUNBOOK_line_local.md` by making
+the language an explicit choice rather than an implicit one.
+
 ## Branding
 
 - **2026-07-20 — Swapped the primary logo art for the "DeepWitya" brand.**

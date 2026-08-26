@@ -340,6 +340,7 @@ export default function PartnerConfigure({
               <option value="">{t("Auto (English)")}</option>
               <option value="en">English</option>
               <option value="zh">中文</option>
+              <option value="th">ไทย</option>
             </select>
           </div>
           <div className="sm:col-span-2">
