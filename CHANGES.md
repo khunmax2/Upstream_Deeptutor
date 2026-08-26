@@ -23,6 +23,36 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-08-26 — Partners: a name mixing Thai (or any non-ASCII script) with an
+  ASCII word or number no longer collapses onto a colliding id.**
+  `_slugify_id()` in `deeptutor/services/partners/manager.py` replaces every
+  non-ASCII-alphanumeric character with a hyphen, and appended a stable per-name
+  SHA1 handle only when *nothing* survived that filter (a pure-CJK/Thai name).
+  A mixed name kept just its ASCII run, silently discarding the part that
+  actually carried the identity: `ครู Math` and `ติว Math` both slugged to
+  `math`, and `ครูคณิต ม.6` / `ครูฟิสิกส์ ม.6` both to `6`. Since
+  `create_partner()` rejects a duplicate id with 409, the second such partner
+  could not be created at all — the failure surfaced as a bogus "already exists"
+  on a name the user had never used. The digest rule now extends to any name
+  containing non-ASCII characters, keeping the ASCII run as a readable prefix
+  (`ครู Math` → `math-3d7018ad`). Backward-compatible by construction: the
+  digest is still taken over the pre-lowercase name, so ids already minted for
+  pure non-ASCII names are unchanged (`เพื่อนฉัน` → `partner-c9f4f98a`, pinned
+  by a test), and pure-ASCII names get no digest (`Math` → `math`), so no
+  existing partner or soul directory is orphaned. Applies to `slugify_soul_id`
+  too, which shares the helper. Regression tests in
+  `tests/services/partners/test_slugify_partner_id.py`; the pre-existing
+  `test_mixed_name_keeps_the_ascii_part` pinned the buggy behavior and was
+  updated to assert the `bot-<hash>` shape.
+
+  Not fixed here, and still open: partners created *before* the earlier
+  ASCII-safety fix can carry a raw non-ASCII directory id (e.g. `เพ-อนฉ-น`) and
+  there is no migration for them — such a partner 404s on its detail page and so
+  cannot be opened, edited or deleted from the UI. Suspected cause is
+  double-encoding on the frontend (`useParams()` returns the encoded segment and
+  `getPartner()` in `web/lib/partners-api.ts` applies `encodeURIComponent` to it
+  again), but that was **not** verified and no frontend change was made.
+
 - **2026-08-11 — MCP: a rotated credential now reconnects, and a dead
   connection no longer reports itself as a timeout.** Two independent bugs in
   `deeptutor/services/mcp/manager.py`, both found while connecting Google's

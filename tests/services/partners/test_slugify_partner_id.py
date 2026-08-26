@@ -54,8 +54,39 @@ class TestNonLatinNames:
         # not both collapse to the same "partner" id.
         assert slugify_partner_id("小助手") != slugify_partner_id("数学老师")
 
-    def test_mixed_name_keeps_the_ascii_part(self):
-        assert slugify_partner_id("小助手Bot") == "bot"
+    def test_mixed_name_keeps_the_ascii_part_and_a_digest(self):
+        # The ASCII run still leads the id (it stays recognisable), but a digest
+        # follows it: the dropped non-ASCII run carries identity, so without one
+        # every "<non-ASCII> Bot" name would collapse onto a single ``bot`` id.
+        slug = slugify_partner_id("小助手Bot")
+        assert _is_url_safe(slug)
+        assert slug.startswith("bot-")
+
+    def test_mixed_names_sharing_an_ascii_run_stay_distinct(self):
+        # Thai names built around one English word: the shared ASCII run is all
+        # that survives the filter, so these collided on ``math`` and the second
+        # one could not be created (create-time duplicate check → 409).
+        assert slugify_partner_id("ครู Math") != slugify_partner_id("ติว Math")
+
+    def test_mixed_names_sharing_a_trailing_number_stay_distinct(self):
+        # Same trap with a digit instead of a word — both reduced to ``6``.
+        assert slugify_partner_id("ครูคณิต ม.6") != slugify_partner_id("ครูฟิสิกส์ ม.6")
+
+    def test_thai_name_is_url_safe_and_stable(self):
+        for name in ("เพื่อนฉัน", "ครู Math", "ครูคณิต ม.6", "ผู้ช่วย AI"):
+            assert _is_url_safe(slugify_partner_id(name))
+            assert slugify_partner_id(name) == slugify_partner_id(name)
+
+    def test_pure_non_ascii_ids_are_unchanged_by_the_digest_rule(self):
+        # Pinned so the fix stays backward-compatible: ids already minted for
+        # pure non-ASCII names must keep resolving to the same on-disk
+        # directory, i.e. the digest is still taken over the pre-lowercase name.
+        assert slugify_partner_id("เพื่อนฉัน") == "partner-c9f4f98a"
+
+    def test_ascii_only_names_get_no_digest(self):
+        # No regression for English names: nothing identity-bearing was dropped.
+        assert slugify_partner_id("Math") == "math"
+        assert slugify_partner_id("Study Buddy!!!") == "study-buddy"
 
 
 class TestSoulSlug:
