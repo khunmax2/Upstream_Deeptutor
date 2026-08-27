@@ -227,6 +227,37 @@ the language an explicit choice rather than an implicit one.
 
 ## Documentation
 
+- **2026-08-26 — `docs/RUNBOOK_line_local.md`: why the tunnel exists, what
+  changes in production, and three corrections.** The runbook covered *how* to
+  start the LINE bot but not *why* cloudflared is in the loop, which left the
+  production question unanswerable. Added a "ทำไมต้องใช้ cloudflared" section
+  spelling out the two independent reasons — LINE cannot reach `localhost`
+  (the main one: no public IP behind NAT, which HTTPS alone would not fix), and
+  LINE requires HTTPS while the channel is a plain `ThreadingHTTPServer` with no
+  `ssl`/`cert`/`key` field on `LineConfig` — plus what moving to a real server
+  does and does not solve, pointing at the existing `deploy/Caddyfile.example`
+  (which already proxies `line.<domain>` → `deeptutor:3979`).
+
+  Three statements in the file were stale or wrong and are corrected:
+
+  1. **"แก้ config ใดๆ ต้องรีสตาร์ท DeepTutor"** — not true for edits made through
+     the web UI. `update_partner()` mutates the same config object the runner
+     reads per turn, so tool/model/language changes take effect on the next
+     message; channel edits trigger `reload_channels()` automatically. Only a
+     hand-edit of `config.yaml` needs a restart — and that hand-edit is
+     overwritten on shutdown if the partner is running.
+  2. **"ล็อก `th` ไว้ชั่วคราว"** — `lineme` has an empty `language`, which
+     normalizes to `en`. Rewritten to describe the picker (now including ไทย)
+     and to warn that "อัตโนมัติ" is not language detection: it sends a strict
+     English directive, so a Thai reply is the model overriding it rather than a
+     supported mode.
+  3. **`allow_from: ['*']`** was mentioned only as a troubleshooting row.
+     Documented what it actually grants — every user who adds the OA, on the
+     owner's API key. Sessions are isolated per LINE user
+     (`line_<userId>.jsonl`), but a partner with `builtin_tools: None` hands a
+     stranger `exec` (shell) and `cron`, and the always-on `partner_read`
+     exposes the owner's shared memory and cannot be switched off.
+
 - **2026-08-26 — `scripts/precheck.sh`: run the CI suite locally before
   pushing.** `.github/workflows/tests.yml` triggers on `push` to `main`/`dev`
   and on `pull_request` — but *not* on pushing a feature branch, so the
