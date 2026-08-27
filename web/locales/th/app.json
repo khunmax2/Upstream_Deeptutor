@@ -3374,5 +3374,15 @@
   "{{used}} · {{percent}}% of {{total}}": "{{used}} · {{percent}}% จาก {{total}}",
   "~{{count}} min to generate": "ใช้เวลาสร้างราว {{count}} นาที",
   "~{{count}} words": "ราว {{count}} คำ",
-  "← / → to turn pages": "← / → เพื่อเปลี่ยนหน้า"
+  "← / → to turn pages": "← / → เพื่อเปลี่ยนหน้า",
+  "Who may talk to this partner": "ใครคุยกับพาร์ทเนอร์นี้ได้บ้าง",
+  "Only these senders": "เฉพาะผู้ส่งที่ระบุ",
+  "One sender id per line.": "ใส่ id ผู้ส่งบรรทัดละหนึ่งรายการ",
+  "One sender id per line": "ใส่ id ผู้ส่งบรรทัดละหนึ่งรายการ",
+  "Anyone": "ทุกคน",
+  "Every user who can reach this channel.": "ผู้ใช้ทุกคนที่เข้าถึงช่องทางนี้ได้",
+  "No one": "ไม่รับใครเลย",
+  "The channel accepts nothing — it will look unresponsive.": "ช่องทางนี้จะไม่รับข้อความใดๆ และจะดูเหมือนไม่ตอบสนอง",
+  "Anyone who finds this channel can use it, billed to your API key. They reach the partner's mounted tools and its memory — review the Tools tab before leaving this on.": "ใครก็ตามที่พบช่องทางนี้จะใช้งานได้ โดยคิดค่าใช้จ่ายกับ API key ของคุณ และเข้าถึงเครื่องมือที่พาร์ทเนอร์เปิดไว้รวมถึงหน่วยความจำได้ — ตรวจแท็บเครื่องมือก่อนเปิดค้างไว้",
+  "No senders listed yet — the channel will reject every message.": "ยังไม่ได้ระบุผู้ส่ง — ช่องทางนี้จะปฏิเสธทุกข้อความ"
 }

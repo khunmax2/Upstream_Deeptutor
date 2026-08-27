@@ -3395,5 +3395,15 @@
   "visitor": "visitor",
   "whisper": "whisper",
   "you": "you",
-  "Session {{id}}": "Session {{id}}"
+  "Session {{id}}": "Session {{id}}",
+  "Who may talk to this partner": "Who may talk to this partner",
+  "Only these senders": "Only these senders",
+  "One sender id per line.": "One sender id per line.",
+  "One sender id per line": "One sender id per line",
+  "Anyone": "Anyone",
+  "Every user who can reach this channel.": "Every user who can reach this channel.",
+  "No one": "No one",
+  "The channel accepts nothing — it will look unresponsive.": "The channel accepts nothing — it will look unresponsive.",
+  "Anyone who finds this channel can use it, billed to your API key. They reach the partner's mounted tools and its memory — review the Tools tab before leaving this on.": "Anyone who finds this channel can use it, billed to your API key. They reach the partner's mounted tools and its memory — review the Tools tab before leaving this on.",
+  "No senders listed yet — the channel will reject every message.": "No senders listed yet — the channel will reject every message."
 }

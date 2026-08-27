@@ -176,6 +176,35 @@ Added full Thai language support across the whole stack. 5 commits, merged to
 - **Learning / quiz:** `deeptutor/learning/prompts/th.yaml`; quiz judge accepts `th`.
 - **Detail:** `REPORT_round1.md`–`REPORT_round4.md`, `REPORT_final_qa.md`.
 
+### 2026-08-26 — `allow_from` gets a purpose-built control instead of a raw list
+
+The schema-driven channel form renders `allow_from` as a bare "one value per
+line" textarea, which hides the meaning of its two special values and reads
+backwards: `[]` denies everyone (the channel goes silent — already a row in
+`docs/RUNBOOK_line_local.md`'s troubleshooting table, because intuition says an
+empty list means "no restriction"), and `["*"]` admits everyone who can reach
+the channel, on the owner's API key and with whatever tools the partner mounts.
+
+New `web/components/partners/AllowFromField.tsx` presents the three states as
+radio options — *Only these senders* / *Anyone* / *No one* — names the
+consequence of each, and shows a red warning under *Anyone* pointing at the
+Tools tab. The raw list stays editable for the case that needs it. Wired into
+`PartnerChannels.tsx` for the field named `allow_from` only; every other field
+still goes through the generic `SchemaField`, so this is a new file plus one
+branch in an upstream file (§3).
+
+Two behaviours are pinned by tests in `web/tests/allow-from-field.test.ts`
+because they mirror backend semantics: a wildcard mixed into a list still reads
+as *Anyone* (`is_allowed` in `channels/base.py` returns as soon as it sees
+`"*"`, so showing it as a restricted list would misrepresent who gets through),
+and switching back to a list strips the wildcard rather than leaving it in
+place. Listed senders survive a round trip through *Anyone*, so toggling does
+not discard them. Ten new UI strings added to `en` / `th` / `zh` at parity
+(3376 → 3386 keys each).
+
+Note upstream defaults `allow_from` to `[]` — deny-by-default — so `["*"]` is
+always a deliberate local widening, not an inherited setting.
+
 ### 2026-08-26 — Thai added to the partner "Reply language" picker
 
 The backend has accepted `th` since the localization work above

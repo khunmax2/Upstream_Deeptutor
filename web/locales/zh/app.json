@@ -3395,5 +3395,15 @@
   "visitor": "来访者",
   "whisper": "密语",
   "you": "你",
-  "Session {{id}}": "会话 {{id}}"
+  "Session {{id}}": "会话 {{id}}",
+  "Who may talk to this partner": "谁可以与该伙伴对话",
+  "Only these senders": "仅限指定发送者",
+  "One sender id per line.": "每行一个发送者 ID。",
+  "One sender id per line": "每行一个发送者 ID",
+  "Anyone": "任何人",
+  "Every user who can reach this channel.": "所有能够访问该渠道的用户。",
+  "No one": "不接受任何人",
+  "The channel accepts nothing — it will look unresponsive.": "该渠道将不接收任何消息，看起来像是没有响应。",
+  "Anyone who finds this channel can use it, billed to your API key. They reach the partner's mounted tools and its memory — review the Tools tab before leaving this on.": "任何找到该渠道的人都可以使用它，费用计入你的 API key，并可访问该伙伴已挂载的工具及其记忆 —— 保持开启前请检查工具标签页。",
+  "No senders listed yet — the channel will reject every message.": "尚未列出任何发送者 —— 该渠道将拒绝所有消息。"
 }

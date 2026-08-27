@@ -20,6 +20,7 @@ import {
   type JsonSchema,
 } from "@/components/partners/schema-form";
 import ChannelIcon from "@/components/partners/ChannelIcon";
+import AllowFromField from "@/components/partners/AllowFromField";
 
 const LEGACY_GLOBAL_DELIVERY_KEYS = new Set([
   "send_progress",
@@ -278,21 +279,39 @@ export default function PartnerChannels({
                   )}
                   {Object.entries(
                     (activeEntry.json_schema as JsonSchema).properties ?? {},
-                  ).map(([k, child]) => (
-                    <SchemaField
-                      key={k}
-                      fieldKey={k}
-                      schema={child}
-                      value={activeValue[k] ?? defaultFor(child)}
-                      onChange={(next) =>
-                        setActiveChannelConfig({ ...activeValue, [k]: next })
-                      }
-                      secretFields={activeSecretSet}
-                      path={k}
-                      showSecretFor={revealed}
-                      toggleSecret={toggleSecret}
-                    />
-                  ))}
+                  ).map(([k, child]) =>
+                    // The sender allow-list gets a purpose-built control: its
+                    // two special values ([] = deny all, ["*"] = allow all) are
+                    // invisible in a plain string-list textarea, and [] reads
+                    // backwards to most people.
+                    k === "allow_from" ? (
+                      <AllowFromField
+                        key={k}
+                        value={
+                          Array.isArray(activeValue[k])
+                            ? (activeValue[k] as unknown[]).map(String)
+                            : []
+                        }
+                        onChange={(next) =>
+                          setActiveChannelConfig({ ...activeValue, [k]: next })
+                        }
+                      />
+                    ) : (
+                      <SchemaField
+                        key={k}
+                        fieldKey={k}
+                        schema={child}
+                        value={activeValue[k] ?? defaultFor(child)}
+                        onChange={(next) =>
+                          setActiveChannelConfig({ ...activeValue, [k]: next })
+                        }
+                        secretFields={activeSecretSet}
+                        path={k}
+                        showSecretFor={revealed}
+                        toggleSecret={toggleSecret}
+                      />
+                    ),
+                  )}
                 </>
               )}
             </>
