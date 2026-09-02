@@ -113,7 +113,12 @@ export default function AppearanceSettingsPage() {
           )}
           control={
             <div className="flex gap-0.5 rounded-lg bg-[var(--muted)] p-0.5">
-              {(["en", "zh"] as const).map((value) => (
+              {/* th belongs here as much as in the interface picker above: the
+                  backend accepts it (UISettings.response_language) and the
+                  prompt layer emits a Thai directive for it, so leaving it out
+                  made Thai the one interface language you could not also get
+                  answers in. */}
+              {(["en", "zh", "th"] as const).map((value) => (
                 <button
                   key={value}
                   onClick={() => updateResponseLanguage(value)}
@@ -125,7 +130,9 @@ export default function AppearanceSettingsPage() {
                 >
                   {value === "en"
                     ? t("language.english")
-                    : t("language.chinese")}
+                    : value === "zh"
+                      ? t("language.chinese")
+                      : t("language.thai")}
                 </button>
               ))}
             </div>

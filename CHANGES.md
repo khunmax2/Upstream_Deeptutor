@@ -2839,6 +2839,15 @@ hand. `backtest.sh` also stopped reporting every worktree failure as
 "not reachable"; it now prints the real cause (a full disk sent the last run
 hunting for a missing commit that was never missing).
 
+A fourth gap turned up in the same e2e pass, this one only visible by looking at
+the running settings page: the **model-output language picker offered English and
+中文 only**, so Thai was the one interface language you could not also get answers
+in. The backend has accepted `response_language: "th"` since this sync and the
+prompt layer emits a Thai directive for it — only the three buttons were missing
+one. Added, and confirmed end to end in the browser: clicking ไทย persists `th`
+to `/api/settings/ui` and to local storage, and clicking English puts it back.
+Same shape as the partner reply-language picker fixed on 2026-08-26.
+
 ### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
 
 Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync
