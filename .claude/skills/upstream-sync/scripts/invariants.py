@@ -201,9 +201,55 @@ def seams_at_risk(before_ref: str, target_ref: str, merge_base: str) -> list[dic
     return sorted(out, key=lambda d: (not d["both"], -d["changed"]))
 
 
+# A language *comparison* that enumerates zh and en and forgets th. This is a
+# different shape from a Lang object literal and the two earlier checks miss it
+# entirely — v1.6.3's app-shell bootstrap shipped
+# ``if (payload.language !== "zh" && payload.language !== "en") return;``, so a
+# Thai account fell back to an English UI on any browser with no stored choice.
+# Silent by construction: the guard just returns, nothing logs, nothing throws.
+# Found by driving the running app, not by any gate — hence this check.
+TS_LANG_CMP = re.compile(
+    r'(?:[\w.]+\s*[!=]==\s*"(?:zh|en)"[^;\n]{0,120}?[!=]==\s*"(?:zh|en)")',
+)
+
+
+def ts_lang_comparison_missing_th(paths: list[str]) -> list[dict]:
+    """Comparisons that gate on zh/en without admitting th."""
+    out = []
+    for p in paths:
+        if not p.endswith((".ts", ".tsx")) or TS_SKIP.search(p):
+            continue
+        text = _read(p)
+        if text is None:
+            continue
+        if unresolved(text):
+            out.append(
+                {"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"}
+            )
+            continue
+        for m in TS_LANG_CMP.finditer(text):
+            frag = m.group(0)
+            # a nearby "th" in the same expression means it was handled
+            window = text[m.start() : m.end() + 120]
+            if '"th"' in window:
+                continue
+            out.append(
+                {
+                    "file": p,
+                    "line": text[: m.start()].count("\n") + 1,
+                    "snippet": " ".join(frag.split())[:70],
+                }
+            )
+    return out
+
+
 CHECKS = {
     "th-ts": ("TypeScript Lang objects missing `th`", ts_missing_th),
     "th-py": ('Python language Literal missing "th" (silent 422)', py_missing_th),
+    "th-cmp": (
+        "TypeScript zh/en comparisons that forget `th` (silent English fallback)",
+        ts_lang_comparison_missing_th,
+    ),
 }
 
 

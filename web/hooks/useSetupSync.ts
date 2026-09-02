@@ -64,7 +64,13 @@ export function useSetupSync(
           theme?: unknown;
         };
         if (cancelled) return;
-        if (payload.language === "zh" || payload.language === "en") {
+        // th belongs here too — without it the server-side Thai preference is
+        // read and then silently discarded, same shape as the app-shell bootstrap.
+        if (
+          payload.language === "zh" ||
+          payload.language === "en" ||
+          payload.language === "th"
+        ) {
           writeStoredLanguage(payload.language);
           writeStoredResponseLanguage(
             resolveResponseLanguage(

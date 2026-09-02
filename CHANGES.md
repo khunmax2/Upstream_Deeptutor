@@ -2812,6 +2812,33 @@ i18n parity OK at 4,688 ×3, `ruff check`/`format` clean, pytest **6,909 passed 
 
 > Next sync merge-base = `6e6e56ae`.
 
+#### e2e follow-up — three `th` guards the gates could not see
+
+Driving the merged app end-to-end (backend + frontend + a real chat turn) found
+a user-visible regression that every static gate passed: **a Thai account got an
+English interface.** `/api/settings/ui` correctly returned `language: "th"`, but
+`web/context/AppShellContext.tsx` bootstrapped with
+
+    if (payload.language !== "zh" && payload.language !== "en") return;
+
+so `th` fell through the guard and the bootstrap returned without ever applying
+it — silently, on any browser with no stored choice yet. Two more of the same
+shape were sitting next to it: `resolveResponseLanguage` in
+`context/app-shell-storage.ts` and the settings sync in `hooks/useSetupSync.ts`,
+which read the server's Thai preference and discarded it.
+
+All three fixed and confirmed in the running app: `<html lang>` becomes `th`,
+both storage keys persist `th`, and the sidebar renders the Thai names.
+
+`invariants.py` gained a third check, **`th-cmp`**, for exactly this shape — a
+language *comparison* enumerating zh and en without th, which neither the
+`Lang`-object check nor the Python-`Literal` check can see. Backtested the
+honest way: it flags all three on the pre-fix code and is silent after, and it
+**found the third occurrence on its own** — the one that had been missed by
+hand. `backtest.sh` also stopped reporting every worktree failure as
+"not reachable"; it now prints the real cause (a full disk sent the last run
+hunting for a missing commit that was never missing).
+
 ### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
 
 Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync

@@ -79,7 +79,7 @@ export function resolveResponseLanguage(
   value: string | null | undefined,
   legacyLanguage: string | null | undefined = "en",
 ): AppLanguage {
-  return value === "zh" || value === "en"
+  return value === "zh" || value === "en" || value === "th"
     ? value
     : normalizeLanguage(legacyLanguage);
 }

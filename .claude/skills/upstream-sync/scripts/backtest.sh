@@ -23,8 +23,17 @@ run_case() { # label before target expect_conflicts expect_grep
   printf '\n## %s  (%s..%s)\n' "$label" "${before:0:8}" "${target:0:8}"
   local wt="/tmp/backtest-${before:0:8}"
   rm -rf "$wt"
-  if ! git -C "$REPO" worktree add -q --detach "$wt" "$before" 2>/dev/null; then
-    printf '  SKIP  %s not reachable\n' "$before"; return
+  local err
+  if ! err=$(git -C "$REPO" worktree add -q --detach "$wt" "$before" 2>&1); then
+    # Report why, not a guess: this used to print "not reachable" for every
+    # failure, which sent a reader hunting for a missing commit when the real
+    # cause was a full disk (a checkout of ~1,600 files needs room).
+    if ! git -C "$REPO" cat-file -e "$before^{commit}" 2>/dev/null; then
+      printf '  SKIP  %s not reachable (commit missing — fetch or unshallow)\n' "$before"
+    else
+      printf '  SKIP  %s worktree add failed: %s\n' "$before" "$(echo "$err" | head -1)"
+    fi
+    return
   fi
 
   ( cd "$wt" && git merge --no-commit --no-ff "$target" >/dev/null 2>&1 )

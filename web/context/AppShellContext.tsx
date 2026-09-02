@@ -134,7 +134,15 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
           language?: unknown;
           response_language?: unknown;
         };
-        if (payload.language !== "zh" && payload.language !== "en") return;
+        // `th` belongs here too: the server stores it, and dropping it made a
+        // Thai account fall back to English UI on any browser that had not
+        // stored a choice yet — silently, because the bootstrap just returns.
+        if (
+          payload.language !== "zh" &&
+          payload.language !== "en" &&
+          payload.language !== "th"
+        )
+          return;
         writeStoredLanguage(payload.language);
         // A backend that predates the split sends no response_language;
         // resolveResponseLanguage inherits the interface locale, matching what
