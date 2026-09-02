@@ -1005,7 +1005,9 @@ a[href^="#dt-locator-"]:hover {
 }
 
 .dt-tooltip-content {
-  @apply absolute z-50 rounded-lg bg-[var(--popover)] px-3 py-1.5 text-xs shadow-md text-[var(--popover-foreground)] pointer-events-none;
+  @apply absolute z-50 w-max rounded-lg bg-[var(--popover)] px-3 py-1.5 text-xs shadow-md text-[var(--popover-foreground)] pointer-events-none;
+  /* w-max: the description wraps now, so without an intrinsic width the box
+     would shrink to its min-content (one character per line). */
   animation: dt-tooltip-fade-in 150ms ease-out;
 }
 
@@ -1014,11 +1016,18 @@ a[href^="#dt-locator-"]:hover {
 }
 
 .dt-tooltip-desc {
-  @apply mt-0.5 text-[11px] text-[var(--muted-foreground)] truncate;
+  @apply mt-0.5 text-[11px] leading-snug text-[var(--muted-foreground)];
+  /* Was `truncate`: a one-line clamp cut every description mid-word.
+     Thai has no word spaces, so wrap on the segmenter and cap at 3 lines. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .dt-tooltip-content[data-side="right"] {
-  @apply left-full top-1/2 -translate-y-1/2 ml-2 max-w-[200px];
+  @apply left-full top-1/2 -translate-y-1/2 ml-2 max-w-[240px];
 }
 
 .dt-tooltip-content[data-side="bottom"] {

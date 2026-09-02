@@ -135,7 +135,11 @@ const GROUPS: DashboardGroup[] = [
         key: "mastery_path",
         href: "/space/learning",
         icon: GraduationCap,
-        title: { zh: "精通之路", en: "Mastery Path", th: "เส้นทางสู่ความเชี่ยวชาญ" },
+        title: {
+          zh: "精通之路",
+          en: "Mastery Path",
+          th: "เส้นทางสู่ความเชี่ยวชาญ",
+        },
         blurb: {
           zh: "掌握式学习：硬门槛与间隔复习。",
           en: "Mastery-based learning: hard gate and spaced review.",
@@ -238,7 +242,8 @@ export default function SpaceDashboard() {
   const { i18n } = useTranslation();
   const lang = i18n.language?.toLowerCase() ?? "en";
   const tr = useCallback(
-    (l: Lang) => (lang.startsWith("zh") ? l.zh : lang.startsWith("th") ? l.th : l.en),
+    (l: Lang) =>
+      lang.startsWith("zh") ? l.zh : lang.startsWith("th") ? l.th : l.en,
     [lang],
   );
 
@@ -268,7 +273,7 @@ export default function SpaceDashboard() {
     <div>
       <header className="mb-8">
         <h1 className="font-serif text-[24px] font-semibold leading-tight tracking-tight text-[var(--foreground)]">
-          {tr({ zh: "学习空间", en: "Learning Space", th: "พื้นที่การเรียนรู้" })}
+          {tr({ zh: "学习空间", en: "Learning Space", th: "คลังการเรียนรู้" })}
         </h1>
         <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-[var(--muted-foreground)]">
           {tr({

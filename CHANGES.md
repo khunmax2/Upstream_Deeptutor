@@ -232,6 +232,59 @@ Picking `th` explicitly is what makes it deterministic. Closes the "โหมด
 ตอบตามภาษา user ยังเป็นงานค้าง" note in `docs/RUNBOOK_line_local.md` by making
 the language an explicit choice rather than an implicit one.
 
+### 2026-09-01 — sidebar labels renamed after what each feature actually does
+
+The Thai sidebar was a set of transliterations and generic nouns that did not
+say what the destination is for. Renamed against the upstream feature docs
+(`docs.deeptutor.info/explore/*`), plus the translation bugs found on the way.
+Locale values only, except the four code changes noted below.
+
+| Item | Was | Now | Why |
+| --- | --- | --- | --- |
+| Home | หน้าหลัก | ห้องแชต | It is the agent-loop chat workspace, not a landing page. |
+| Partners | พาร์ทเนอร์ | คู่หู AI | "พาร์ทเนอร์" reads as a *business* partner. The feature is a persistent companion with its own soul, library, memory, and IM channels. Also keeps it distinct from เอเจนต์ (My Agents) and ผู้ช่วย (the assistant itself). |
+| My Agents | เอเจนต์ของฉัน | *(unchanged)* | Correct already; it got the tooltip it never had. |
+| Co-Writer | *(untranslated)* | ผู้ช่วยเขียนเอกสาร | It is a Markdown drafting workspace with AI rewrite/expand/shorten. |
+| Book | หนังสือ | สร้างหนังสือเรียน | "หนังสือ" reads as a shelf of books to open. You *compile* a book here out of KBs, notebooks, question banks, or chat history. |
+| Learning Space | พื้นที่การเรียนรู้ | คลังการเรียนรู้ | It is a store of saved material and presets, not a place you work in. |
+| Memory | หน่วยความจำ | ความจำ | หน่วยความจำ is RAM. See the key collision below. |
+| Recents | รายการล่าสุด | แชตล่าสุด | The list holds chat sessions specifically. |
+
+Learner Anima (เพื่อนเรียนรู้), Knowledge Center (ศูนย์ความรู้) and Settings
+(การตั้งค่า) already said what they do and are unchanged. The `พาร์ทเนอร์` →
+`คู่หู AI` and `หน่วยความจำ` → `ความจำ` renames were swept through all 41 / 28
+affected `web/locales/th/app.json` strings so body copy matches the nav, and
+through the inline `tr()` fallback in `web/components/space/SpaceDashboard.tsx`.
+
+Four bugs fixed along the way:
+
+- **`"Memory"` was one key for two different things.** The sidebar / memory
+  console (the tutor's long-term memory) and the settings status strip (process
+  RSS, in bytes) both called `t("Memory")`, so no single translation could be
+  right. `web/components/settings/MemoryUsageItem.tsx` now uses a new `"RAM"`
+  key (th: `หน่วยความจำ (RAM)`), which frees `"Memory"` to mean the feature.
+- **`en.Partners tooltip` was the literal placeholder string
+  `"Partners tooltip"`**, and `th` was just the label repeated; `Agents tooltip`
+  did not exist in any locale (the nav referenced a missing key); th
+  `Memory tooltip` was `คำแนะนำหน่วยความจำ` — a translation of the *key name*;
+  and `Knowledge tooltip` described the Personas tile ("Manage learning
+  personas.") rather than the KB console. All rewritten in en/th, with the
+  missing keys added to zh for parity.
+- **Every tooltip description was clamped to one line.** `.dt-tooltip-desc` in
+  `web/app/globals.css` was `truncate`, so anything past ~190px was cut
+  mid-word in all three locales — the descriptions were unreadable, which is
+  presumably why nobody noticed the placeholder text above. Now wraps at up to
+  three lines (`-webkit-line-clamp`), with `w-max` on `.dt-tooltip-content` so
+  the box keeps an intrinsic width once the text wraps, and `max-w` on the
+  right-side variant raised 200px → 240px.
+- The Book nav entry uses a new `"Book nav"` key rather than the shared
+  `"Book"`, which is also the short type badge on a context chip
+  (`Book · 3 chapters`) where a descriptive nav label does not fit.
+
+Verified in the running app at 220px: every Thai label renders on one line with
+no truncation (widest is `ผู้ช่วยเขียนเอกสาร` at 101px of ~162px available), and
+the collapsed-rail tooltips wrap to two lines unclipped.
+
 ## Branding
 
 - **2026-07-20 — Swapped the primary logo art for the "DeepWitya" brand.**

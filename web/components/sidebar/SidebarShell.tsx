@@ -76,8 +76,11 @@ const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
+    // "Book nav", not the generic "Book" key: the sidebar label says what you
+    // do here (compile your own material into a book), while "Book" stays the
+    // short type badge used on context chips.
     href: "/book",
-    label: "Book",
+    label: "Book nav",
     icon: Library,
     tooltipKey: "Book tooltip",
     requires: "llm",
