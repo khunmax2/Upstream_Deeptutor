@@ -2878,6 +2878,22 @@ not running. Both were real, and the root cause was the same: the web job runs
 `precheck.sh` now runs `npm run check` itself, so the local gate and the CI gate
 are the same eight steps.
 
+Two more CI failures came straight from upstream and were fixed here rather than
+carried red, because a permanently-red CI stops being a signal at all. **Both are
+one-line upstream-PR candidates** (see `REPORT_sync_v1.6.3.md` §8):
+
+- **`import-check` on windows-latest** crashed with `UnicodeEncodeError` printing
+  a `✅` to a cp1252 console — every module imported cleanly and the step then
+  failed on its own output. Not cosmetic: `python-tests` declares
+  `needs: import-check`, so **upstream's entire Python matrix was skipped for
+  v1.6.3** and the release shipped with no Python signal. Fixed with
+  `PYTHONIOENCODING: utf-8` on that step.
+- **`book-reader-sequential.audit.ts`** asserted `toHaveURL(/page=page-2/)`
+  two lines after navigating to `/books/sequential-fixture/pages/page-2`. The
+  assertion was left behind by v1.6.3's own canonical-routes rename — the app
+  goes to the right page and the old query-string pattern can never match again.
+  Corrected to the path form.
+
 ### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
 
 Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync

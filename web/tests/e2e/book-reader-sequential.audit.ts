@@ -134,7 +134,12 @@ test("book arrows read the current chapter before turning chapters", async ({
   // A hidden reader (for example when the mobile chapter sidebar is expanded)
   // must not turn the page and skip unread content.
   await page.keyboard.press("ArrowRight");
-  await expect(page).toHaveURL(/page=page-2/);
+  // The assertion, not the app, was left behind by v1.6.3's canonical routes:
+  // the reader used to be addressed as `?page=<id>` and is now
+  // `/books/<bookId>/pages/<pageId>`. The two lines above already navigate to
+  // the path form, so the old pattern could never match again — it is what
+  // upstream's own CI has been failing on.
+  await expect(page).toHaveURL(/\/pages\/page-2$/);
 
   await page.getByRole("button", { name: "Collapse chapters" }).click();
   await expect(

@@ -208,6 +208,14 @@ jobs:
           python -c "from deeptutor.logging import configure_logging, bind_log_context, capture_process_logs, ProcessLogEvent; print('✅ Logging imports OK')"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          # The success lines above print a ✅. On windows-latest Python writes
+          # stdout as cp1252, which cannot encode U+2705, so every one of these
+          # imports raised UnicodeEncodeError *after* importing cleanly — the
+          # check failed on its own output. Not cosmetic: python-tests declares
+          # `needs: import-check`, so the whole test matrix was skipped and
+          # v1.6.3 shipped with no Python signal at all. UTF-8 stdout fixes it
+          # without touching the messages.
+          PYTHONIOENCODING: utf-8
 
   python-tests:
     name: Python Tests (Python ${{ matrix.python-version }})
