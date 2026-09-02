@@ -3,8 +3,8 @@ import { Geist, Lora } from "next/font/google";
 import "./globals.css";
 import ThemeScript from "@/components/ThemeScript";
 import ToastViewport from "@/components/common/ToastViewport";
-import VoiceCallWidget from "@/components/voice/VoiceCallWidget";
 import { AppShellProvider } from "@/context/AppShellContext";
+import VoiceCallWidgetMount from "@/components/voice/VoiceCallWidgetMount";
 import { I18nClientBridge } from "@/i18n/I18nClientBridge";
 
 // Geist matches the public site (deeptutor.info) and stays crisp at the
@@ -55,7 +55,7 @@ export default function RootLayout({
         <AppShellProvider>
           <I18nClientBridge>{children}</I18nClientBridge>
           <ToastViewport />
-          <VoiceCallWidget />
+          <VoiceCallWidgetMount />
         </AppShellProvider>
       </body>
     </html>

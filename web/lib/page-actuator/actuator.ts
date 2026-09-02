@@ -6,9 +6,9 @@
 // Mirrors the seam page-agent proved with PageController: LLM-free, so it can
 // be driven from the devtools console (window.pageActuator when attached).
 
-import domTreeEngine from '@/components/voice/dom_tree/engine'
-import type { FlatDomTree } from '@/components/voice/dom_tree/type'
-import { glowBox } from '@/components/voice/simulatorCursor'
+import domTreeEngine from '@/lib/dom-tree/engine'
+import type { FlatDomTree } from '@/lib/dom-tree/type'
+import { glowBox } from '@/lib/simulator-cursor'
 
 // The vendored engine is @ts-nocheck'd (kept byte-identical); typed face here,
 // same pattern as pageInventory.ts.

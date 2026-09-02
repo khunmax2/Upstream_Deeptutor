@@ -17,7 +17,7 @@
  * toggle wraps the hit-test.
  */
 
-import { clickPulse, pointAt } from '@/components/voice/simulatorCursor'
+import { clickPulse, pointAt } from '@/lib/simulator-cursor'
 import { withPassThrough } from './runMask'
 
 const sleep = (s: number) => new Promise<void>(resolve => setTimeout(resolve, s * 1000))

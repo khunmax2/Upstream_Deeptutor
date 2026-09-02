@@ -2,7 +2,7 @@
 # รันสิ่งที่ CI (.github/workflows/tests.yml) รัน — ก่อน push
 #
 #   ./scripts/precheck.sh          # ตรวจครบ
-#   ./scripts/precheck.sh --fast   # ข้าม node tests (เร็วขึ้นมาก)
+#   ./scripts/precheck.sh --fast   # ข้ามงานฝั่ง web (เร็วขึ้นมาก)
 #
 # เขียวหมด = push ได้ค่อนข้างมั่นใจ. ข้อจำกัดที่ปิดไม่ได้ในเครื่อง อ่านท้ายไฟล์
 #
@@ -63,10 +63,14 @@ run "pytest"            env DEEPTUTOR_HOME="$CI_HOME" "$VENV_BIN/pytest" -q test
 
 # ── Frontend (job: web-tests) ───────────────────────────────────
 if [[ $FAST -eq 0 ]]; then
-  run "node tests"      bash -c 'cd web && npm run test:node'
-  run "eslint"          bash -c 'cd web && npx eslint .'
+  # `npm run check` is exactly what the web job runs, and it is eight steps, not
+  # two: contracts:check, architecture:check, typecheck, test:node, test:unit,
+  # lint, i18n:check, then build and perf:check. Running only test:node + eslint
+  # here is what let the v1.6.3 sync land with five dependency-cruiser violations
+  # and a blown route budget — both caught by CI minutes after a "green" precheck.
+  run "web check"       bash -c 'cd web && npm run check'
 else
-  echo -e "\n   ⏭  ข้าม node tests + eslint (--fast)"
+  echo -e "\n   ⏭  ข้าม web check (--fast)"
 fi
 
 # ── สรุป ────────────────────────────────────────────────────────
@@ -87,6 +91,7 @@ exit 1
 #    (โค้ดที่พังเฉพาะเวอร์ชันเก่ากว่าจะหลุดไป)
 # 2. CI รัน `npm ci --legacy-peer-deps` จาก lockfile สะอาด — เครื่องคุณใช้
 #    node_modules ที่มีอยู่ (dependency drift จะไม่ถูกจับ)
+#    ส่วนขั้นตอนอื่นในงาน web ตอนนี้ตรงกับ CI แล้ว เพราะเรียก `npm run check` ตัวเดียวกัน
 # 3. job "import-check" ติดตั้งแค่ requirements/server.txt แล้วลอง import
 #    — จับ import ที่เผลอพึ่ง optional dep ซึ่งเครื่องคุณมีครบอยู่แล้ว
 # 4. workflow "Repository Hygiene" (scripts/check_repo_hygiene.py) ไม่ได้รันที่นี่

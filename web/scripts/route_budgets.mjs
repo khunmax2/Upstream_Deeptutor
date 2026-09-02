@@ -28,7 +28,16 @@ const ROUTE_TARGETS = [
   },
 ];
 
-const ROOT_SHELL_BUDGET_KB = 390;
+// 390 upstream, 410 here. The gap is measured, not guessed: `locales/en/app.json`
+// is the one locale imported eagerly (i18n/init.ts; zh and th are dynamic), and
+// this fork's own features add ~100 English strings to it — 8KB of the shell,
+// which is the whole overage. Deferring `en` too would trade a fixed 8KB for a
+// flash of untranslated UI on every first paint, a worse deal.
+//
+// Raise this only for the same reason — a fork feature's strings. Code weight
+// belongs behind `next/dynamic` instead: that is how the voice widget and action
+// bridge got out of the shell (514KB → 396KB) rather than by moving this line.
+const ROOT_SHELL_BUDGET_KB = 410;
 const SERVER_TIMEOUT_MS = 20_000;
 
 function assertBuildPresent() {

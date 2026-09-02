@@ -21,7 +21,7 @@ import type {
   ElementDomNode,
   FlatDomTree,
   TextDomNode,
-} from '../../components/voice/dom_tree/type'
+} from '../dom-tree/type'
 
 // Attributes that carry meaning for an LLM choosing an element (their list).
 const DEFAULT_INCLUDE_ATTRIBUTES = [

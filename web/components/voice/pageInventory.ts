@@ -1,5 +1,5 @@
 // The collector's "eyes" upgrade: interactive-element discovery via the
-// vendored browser-use/page-agent dom_tree engine (./dom_tree/engine.ts)
+// vendored browser-use/page-agent dom_tree engine (@/lib/dom-tree/engine.ts)
 // instead of a fixed CSS-selector list. The engine walks the whole DOM and
 // marks elements interactive from *behavioral* signals — cursor:pointer,
 // event handlers, tabindex, contenteditable, ARIA roles — so div-based
@@ -10,8 +10,8 @@
 // caller falls back to the legacy CSS-selector path — a broken snapshot must
 // never break the call (same contract as collectPageContext).
 
-import domTreeEngine from './dom_tree/engine'
-import type { FlatDomTree } from './dom_tree/type'
+import domTreeEngine from '@/lib/dom-tree/engine'
+import type { FlatDomTree } from '@/lib/dom-tree/type'
 
 // The vendored engine is @ts-nocheck'd (kept byte-identical); give it a
 // typed face here instead of annotating third-party code.

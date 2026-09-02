@@ -2848,6 +2848,36 @@ one. Added, and confirmed end to end in the browser: clicking ไทย persists
 to `/api/settings/ui` and to local storage, and clicking English puts it back.
 Same shape as the partner reply-language picker fixed on 2026-08-26.
 
+#### CI-red follow-up — two gates v1.6.3 added that the fork failed
+
+Pushing the sync turned this fork's own CI red, on two checks `precheck.sh` was
+not running. Both were real, and the root cause was the same: the web job runs
+`npm run check` — eight steps — while `precheck.sh` ran only `test:node` and
+`eslint`, so a green precheck meant much less than it looked.
+
+- **`architecture:check`** (dependency-cruiser, new in v1.6.3) flagged 5
+  violations of `lib-does-not-depend-on-ui`: `lib/page-actuator/*` imported the
+  DOM-tree engine, its types, and the simulator cursor from
+  `components/voice/`. Those three files are pure browser-DOM utilities with no
+  React in them, so the layering was simply backwards. Moved to
+  `lib/dom-tree/` and `lib/simulator-cursor.ts`; components import them now,
+  not the other way round.
+- **`perf:check`** route budgets put the shared app shell at 514KB against a
+  390KB budget. `VoiceCallWidget` was imported straight into `app/layout.tsx`,
+  pulling ~3,600 lines of widget plus the DOM-tree engine into every page load
+  for a floating call button nobody has pressed yet. Deferred behind
+  `next/dynamic` (via a small client wrapper, since `ssr: false` is illegal in a
+  Server Component), and the same for `VoiceActionBridge`: **514KB → 396KB.**
+
+  The remaining 6KB over budget was measured rather than waved through: the one
+  eagerly-bundled locale is `locales/en/app.json`, and this fork's own features
+  add ~100 English strings to it — 8KB, the whole overage. Deferring `en` too
+  would trade a fixed 8KB for a flash of untranslated UI on every first paint,
+  so the budget moves to 410KB with that reasoning written at the constant.
+
+`precheck.sh` now runs `npm run check` itself, so the local gate and the CI gate
+are the same eight steps.
+
 ### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
 
 Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync

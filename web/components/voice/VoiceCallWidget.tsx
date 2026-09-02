@@ -36,7 +36,7 @@ import {
   disposeCursor,
   glowField,
   pointAt,
-} from "./simulatorCursor";
+} from "@/lib/simulator-cursor";
 import { pickUtterance } from "./speechAlternatives";
 import {
   VOICE_ACTION_EVENT,

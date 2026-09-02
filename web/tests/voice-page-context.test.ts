@@ -17,7 +17,7 @@ import {
   removeLastWord,
   suffixDuplicateLabels,
 } from '../components/voice/pageContext'
-import { glowBox, targetPoint } from '../components/voice/simulatorCursor'
+import { glowBox, targetPoint } from '../lib/simulator-cursor'
 
 const base = {
   path: '/settings',

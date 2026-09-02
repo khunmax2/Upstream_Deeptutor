@@ -6,7 +6,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import type { FlatDomTree } from '../components/voice/dom_tree/type'
+import type { FlatDomTree } from '../lib/dom-tree/type'
 import {
   TRUNCATION_NOTICE,
   buildHeaderFooter,
