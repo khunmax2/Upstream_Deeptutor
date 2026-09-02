@@ -2724,6 +2724,94 @@ to a quote style the repo does not use).
 
 _Record each upstream version merged into this fork here._
 
+### v1.6.3 (`6e6e56ae`) — merged 2026-09-02
+
+369 upstream commits from v1.5.16. **776 source files, +85k / −8k.** The largest
+and most structural sync so far: v1.6.3 is a backend/frontend "stabilization"
+release that moved `deeptutor/core/agentic/` → `runtime/agentic/`,
+`core/i18n.py` → `services/i18n.py`, `core/stream_bus.py` → `runtime/stream_bus.py`,
+folded every WebSocket onto one canonical `/ws`, rebuilt settings as one
+anchored page under `web/features/settings/`, and renamed the workspace routes
+(`/home`→`/chat`, `/book`→`/books`, `/knowledge`→`/knowledge-bases`,
+`/notebook`→`/notebooks`). New surface includes guardian/learner accounts,
+source-grounded reading extensions, video-learning transcript notes and
+MarginNote 4.
+
+**Merged onto a red upstream CI, deliberately and with the maintainer's explicit
+authorisation**, against the skill's standing "never sync onto red" rule. The red
+was investigated first rather than waived: `Lint` failed on one unformatted file,
+the Windows leg of `import-check` dies printing a `✅` to a cp1252 console, and
+because `python-tests` is gated on that job **upstream's Python suite never ran at
+all** for this release. Running it here on a pristine `upstream/main` gave 6,252
+passed / 4 failed, so the backend is sound; what was missing was a signal, not a
+passing grade.
+
+**22 conflicts** — the same count as v1.5.16 despite 2.4× the commits.
+
+- `runtime/agentic/messages.py` — **the Gemini `thought_signature` fix was
+  orphaned for the third time.** Upstream inlined the tool-call list as a
+  comprehension and dropped the provider-extras echo. Restored on their
+  structure, with a comment saying why the loop form is deliberate. Its sibling
+  `tool_call_stream.py` moved unchanged, so the accumulator half survived.
+- `api/routers/chat.py` — **deleted upstream.** The fork's stake was 2 lines (the
+  `th` arm of a language ternary), and it turned out to be redundant rather than
+  orphaned: `agentic_pipeline` already normalises through
+  `normalize_agent_language`, which handles `th`. Accepted the deletion.
+- `web/components/settings/{SettingsHub,SettingsBreadcrumb,SettingsSectionGrid}.tsx`
+  — deleted upstream, replaced by `web/features/settings/`. The fork's changes
+  there were all `th` arms, re-added in the new structure and driven by
+  `invariants.py` rather than by hand.
+- `settings-nav.ts` (moved and ~50% rewritten, 18 hunks) — took upstream's file
+  whole; the fork had no entries of its own, only translations.
+- `SidebarShell.tsx` — upstream extracted the nav into `nav-entries.ts`. Ported
+  the fork's `/anima` entry and the `Book nav` label there; kept the DeepWitya
+  wordmark dimensions in the shell.
+- `SpaceDashboard.tsx` — dropped the fork-translated Mastery Path tile: upstream
+  promoted it to a top-level `/mastery` page (same call as `/space/agents` in
+  v1.4.8 and `/settings/mcp` in v1.5.8).
+- `MemoryUsageItem.tsx` — upstream independently fixed the ambiguous `"Memory"`
+  key the fork had split as `"RAM"` the day before, naming theirs
+  `"System memory"`. Took theirs; `"RAM"` fell out as an orphan key.
+- `zh."Procedure"` — both sides added the key with different Chinese. Took
+  upstream's `过程`: the fork does not own that locale.
+
+**Route grounding kept its precision.** Collapsing every `/settings/*` onto
+`/settings` would have made the hard-grounding check unable to tell the search
+screen from the tools screen — exactly the confusion it exists to catch
+(issue-01). Instead `landed_path` now keeps the URL fragment and `path_satisfies`
+treats `#` as nesting the way `/` does, so `/settings#search` and
+`/settings#tools` stay distinct while the bare `/settings` hub still accepts
+both. The voice manifests, the widget's `open_path` guard and the parity tests
+were all made anchor-aware to match.
+
+**Thai delta: +1,309 keys, −10 → exact parity at 4,688** across en/th/zh. Seeded
+with English text (see below), except 39 strings recovered from existing
+translations and the Thai `topic.system` / `topic.user` learning prompts, which
+were written properly because prompt text drives model behaviour.
+
+**Shipped in en-fallback mode, deliberately.** Translating 1,309 keys by hand is
+~13 hours and the maintainer had a Friday deadline; seeding the new keys with
+their English text satisfies parity and keeps CI meaningful, at the cost of new
+v1.6.3 features reading in English until the Thai pass lands. **The 3,286 keys
+that were already Thai are untouched.** This is a tracked follow-up, not a
+finished state.
+
+**Upstream tests quarantined, not adopted red** —
+`tests/conftest_upstream_quarantine.py` marks 7 tests non-strict `xfail`, each
+verified to fail identically on a pristine `upstream/main`: two route-surface
+tests that assume every `app.route` exposes `.path` (untrue on current FastAPI,
+which `requirements/server.txt` leaves unpinned above 0.100.0), four capability-
+registry tests that leak state across `tests/api`, and one async race in the
+multi-worker waiter. Non-strict so an upstream fix reports XPASS instead of
+failing — that is the signal to delete the entry.
+
+Verification: `npm run build` OK, node tests **1,018/1,018**, eslint 0 errors,
+i18n parity OK at 4,688 ×3, `ruff check`/`format` clean, pytest **6,909 passed /
+1 failed** — that one being the local sandbox-runner baseline that also fails on
+`main` and passes in CI. Live Thai chat replied in fluent Thai.
+
+> Next sync merge-base = `6e6e56ae`.
+
 ### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
 
 Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync
