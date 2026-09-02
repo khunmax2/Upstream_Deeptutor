@@ -374,6 +374,19 @@ the collapsed-rail tooltips wrap to two lines unclipped.
   instead of a clean `npm ci`, and skips both the `import-check` job (which
   proves nothing imports an optional dep) and the Repository Hygiene workflow.
 
+  **2026-09-02 follow-up — the script only worked inside an activated venv.**
+  It invoked `ruff` and `pytest` off `PATH`, so from a plain shell `ruff` was
+  not found at all and `pytest` resolved to the system interpreter, which has
+  none of the project's dependencies. The result was a report that `ruff check`,
+  `ruff format` and `pytest` had all failed on code that was in fact clean — a
+  gate that cries wolf, which is worse than no gate. It now resolves
+  `$VIRTUAL_ENV` (falling back to `./.venv`), calls those binaries from there
+  directly, and exits 1 with an install hint if neither has them rather than
+  silently running the wrong tools. Calling them directly is not sufficient on
+  its own: `tests/services/sandbox` spawns children that look up `python` on
+  `PATH` themselves and died with exit 127 whenever the venv was not activated,
+  so the venv's `bin` is also prepended to `PATH` for the run.
+
 - **2026-07-14 — Configured Matt Pocock engineering skills for this fork.**
   Added the `## Agent skills` consumer block to `CLAUDE.md` and created
   `docs/agents/` configuration for the installed mattpocock/skills workflows:

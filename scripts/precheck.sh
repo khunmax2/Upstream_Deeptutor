@@ -5,8 +5,31 @@
 #   ./scripts/precheck.sh --fast   # ข้าม node tests (เร็วขึ้นมาก)
 #
 # เขียวหมด = push ได้ค่อนข้างมั่นใจ. ข้อจำกัดที่ปิดไม่ได้ในเครื่อง อ่านท้ายไฟล์
+#
+# ไม่ต้อง activate venv ก่อน — สคริปต์เรียก .venv/bin/ ตรง ๆ ให้เอง
 set -uo pipefail
 cd "$(dirname "$0")/.."
+
+# เรียกเครื่องมือ Python จาก venv ตรง ๆ แทนที่จะพึ่ง PATH: shell ที่ยังไม่ได้
+# activate จะไม่เจอ ruff เลย (command not found) และจะไปเจอ pytest ของ system
+# Python แทน ซึ่งไม่มี deps ของโปรเจกต์ — ผลคือสคริปต์รายงานว่า ruff/pytest ล้ม
+# ทั้งที่โค้ดไม่ได้พัง เป็นสัญญาณลวงที่แย่กว่าไม่มี gate เลย.
+# เคารพ VIRTUAL_ENV ถ้ามี (เผื่อใครใช้ venv คนละที่) ไม่งั้น default เป็น .venv
+VENV_BIN="${VIRTUAL_ENV:-$PWD/.venv}/bin"
+for _tool in ruff pytest; do
+  if [[ ! -x "$VENV_BIN/$_tool" ]]; then
+    printf '\033[31m❌ ไม่พบ %s ใน %s\033[0m\n' "$_tool" "$VENV_BIN"
+    printf 'สคริปต์นี้ต้องใช้ venv ของโปรเจกต์. สร้าง/ติดตั้งด้วย:\n'
+    printf '  python -m venv .venv && .venv/bin/pip install -e ".[all]"\n'
+    exit 1
+  fi
+done
+
+# ...และวาง venv ไว้หน้า PATH ด้วย: การเรียก binary ตรง ๆ คุมได้แค่โพรเซสที่เรา
+# สั่งเอง แต่เทสต์บางตัว (tests/services/sandbox) spawn โพรเซสลูกที่ต้องหา
+# `python` จาก PATH เอง — ถ้าไม่ทำ ลูกจะตายด้วย exit 127 (command not found)
+# เฉพาะตอนที่ยังไม่ได้ activate ซึ่งก็เป็นสัญญาณลวงอีกแบบ
+export PATH="$VENV_BIN:$PATH"
 
 FAST=0; [[ "${1:-}" == "--fast" ]] && FAST=1
 FAILED=()
@@ -34,9 +57,9 @@ YAML
 cp tests/fixtures/ci_model_catalog.json "$CI_HOME/data/user/settings/model_catalog.json"
 
 # ── Python (job: lint + python-tests) ───────────────────────────
-run "ruff check"        ruff check .
-run "ruff format"       ruff format --check .
-run "pytest"            env DEEPTUTOR_HOME="$CI_HOME" pytest -q tests deeptutor/learning/tests
+run "ruff check"        "$VENV_BIN/ruff" check .
+run "ruff format"       "$VENV_BIN/ruff" format --check .
+run "pytest"            env DEEPTUTOR_HOME="$CI_HOME" "$VENV_BIN/pytest" -q tests deeptutor/learning/tests
 
 # ── Frontend (job: web-tests) ───────────────────────────────────
 if [[ $FAST -eq 0 ]]; then
