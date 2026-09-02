@@ -2724,6 +2724,44 @@ to a quote style the repo does not use).
 
 _Record each upstream version merged into this fork here._
 
+### 2026-09-02 — sync playbook: `rerere`, and a trigger for sending fixes back
+
+Two changes to `.claude/skills/upstream-sync/`, from comparing this fork's sync
+routine against ordinary fork-maintenance practice.
+
+- **`git rerere` is now a checked precondition.** The playbook merges the same
+  merge twice — once in a throwaway worktree to size it up, once for real on the
+  sync branch — so without rerere every conflict is resolved by hand twice
+  (v1.5.16: 22 of them). `rr-cache` lives in the common git dir that all
+  worktrees share, so a resolution recorded during the dry run replays on the
+  real merge. It is repo-local config that does not travel with a clone, so
+  `sync_state.sh` now reports whether it is on and prints the command if not,
+  rather than assuming. Enabled here with `rerere.enabled` + `rerere.autoUpdate`.
+  Scoped honestly in the docs: it does *not* reliably carry across different
+  syncs, since upstream's side of the hunk has moved by then.
+- **Stage 7 now opens by asking what should go back upstream.** Contributing a
+  fix upstream is the only lever that permanently shrinks the fork — the file
+  stops being a touchpoint and can never be orphaned again. PR #813 (the MCP
+  credential-reload and timeout-masking fixes) was merged into HKUDS on
+  2026-08-11, and by v1.5.16 `deeptutor/services/mcp/manager.py` was
+  byte-identical to upstream. The counter-example is in the same sync:
+  `channels/manager.py`'s empty-`allowFrom` guard was flagged as a PR candidate
+  in June and never sent, so upstream wrote the same fix independently — the
+  divergence closed on their schedule while the fork carried a redundant method
+  and its tests until v1.5.16 deleted them. The stage now states what makes a
+  candidate (a general bug fix rather than a fork preference, separable against
+  a clean upstream checkout, and confirmed not already upstream) and keeps
+  opening the PR as the maintainer's call.
+
+A cadence rule was considered and **deliberately rejected**. The cost data says
+smaller syncs are disproportionately cheaper (v1.5.9: 11 commits, 0 conflicts,
+~1 hour vs v1.5.8: 157 commits, 8 conflicts, ~1 day), but that only measures the
+sync itself. It ignores what a sync costs work already in flight: when v1.5.8
+landed mid-build on `feat/anima-habitat`, catching that branch up meant absorbing
+521 files and 52k lines of someone else's change, plus a follow-up merge and a
+py3.11 race to debug — none of it the feature being built. Timing a sync is the
+maintainer's call, and the safe window is between features, not on a schedule.
+
 ### v1.5.16 (`8515dfdb`) — merged 2026-08-24
 
 154 upstream commits from the previous fork point v1.5.9 (`37c3db6d`). **776

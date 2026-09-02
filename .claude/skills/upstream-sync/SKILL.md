@@ -90,6 +90,18 @@ python3 <skill>/scripts/invariants.py --seams main upstream/main
 
 Clean up with `git merge --abort` and `git worktree remove --force`.
 
+**Resolve during the dry run, not after it — `rerere` makes it free.** This
+playbook merges the same merge twice: once here to size it up, once for real in
+Stage 4. With `rerere.enabled` (preflight checks it; `autoUpdate` also stages
+what it replays) every resolution recorded in the throwaway worktree is replayed
+automatically on the real merge, because `rr-cache` lives in the common git dir
+that all worktrees share. Without it you hand-resolve everything twice — v1.5.16
+was 22 conflicts, so that is the whole difference between one pass and two.
+
+Do not expect it to carry across *different* syncs: upstream's side of the hunk
+has moved by then, so a v1.5.17 conflict rarely matches the v1.5.16 recording
+byte-for-byte. The guaranteed win is within one sync.
+
 **Deciding.** Conflict count alone is a poor signal — v1.4.15 had 210 changed
 files and zero conflicts, while a much smaller release needed two hand-merges.
 Weigh instead: are Tier-1 language pillars involved (`core/i18n.py`,
@@ -177,6 +189,37 @@ changed, and a local-only note was silently lost on a re-branch once already.
 
 ## Stage 7 — feed back what you learned
 
+**First, ask what should go the other way.** The cheapest fork is a smaller
+fork, and this is the one lever that actually shrinks it: a fix that lands
+upstream stops being a touchpoint forever and can never be orphaned again. It
+has already worked here — PR #813 (MCP credential-reload + transport errors
+masked as timeouts) was merged into HKUDS on 2026-08-11, and by v1.5.16
+`services/mcp/manager.py` was byte-identical to upstream, dropping out of
+`FORK_TOUCHPOINTS.txt`.
+
+The counter-example is `channels/manager.py`: the fork's empty-`allowFrom` guard
+was flagged as an upstream-PR candidate back in June and never sent. Upstream
+wrote the same fix independently by v1.5.16, so the divergence closed anyway —
+but on their schedule, not ours, and the fork carried a redundant method plus its
+tests until this sync deleted them. Converging by luck costs more than
+converging on purpose.
+
+So at the end of every sync, run through the fork's own diff and ask which
+pieces are candidates. A candidate is:
+
+- a **bug fix, not a fork preference** — it would help any DeepTutor user, and
+  is not about Thai, LINE, the pet or the voice stack;
+- **separable** into a small diff against a clean upstream checkout;
+- **not already upstream** — check first, since upstream sometimes writes the
+  same fix independently (this sync found exactly that in `mcp/manager.py`).
+
+Prepare it as its own branch off `upstream/main` (the existing convention is
+`upstream-pr/<topic>`), never as a slice of a fork merge commit. `CHANGES.md`
+keeps an "Upstream bug fixes" section for these, written so each stays
+cherry-pickable. **Opening the PR is the user's call** — outward-facing, same
+rule as pushing.
+
+**Then fold back what this sync taught the skill.**
 If this sync surfaced a failure mode none of the checks covered, that is the most
 valuable output of the whole exercise. Add it to `references/decisions.md` and,
 when it is mechanically checkable, to `invariants.py`. The three checks that

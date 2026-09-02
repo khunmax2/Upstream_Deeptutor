@@ -43,6 +43,20 @@ if [ "$dirty" != "0" ]; then
   git status --porcelain | grep -v '^??' | sed 's/^/   /'
 fi
 
+hdr "rerere (replays conflict resolutions)"
+# This workflow merges the SAME merge twice — once to size it up in a throwaway
+# worktree, once for real on the sync branch — so without rerere every conflict
+# is resolved by hand twice. rr-cache lives in the common git dir, which every
+# worktree shares, so a resolution recorded during the dry run replays on the
+# real merge. It is repo-local config and does NOT travel with a clone, hence
+# this check rather than an assumption.
+if [ "$(git config --get rerere.enabled 2>/dev/null)" = "true" ]; then
+  say "  enabled ($(ls "$(git rev-parse --git-common-dir)/rr-cache" 2>/dev/null | wc -l | tr -d ' ') recorded resolution(s))"
+else
+  say "  !! OFF — resolve-twice ahead. Turn it on before the dry-merge:"
+  say "     git config rerere.enabled true && git config rerere.autoUpdate true"
+fi
+
 hdr "ours vs origin (must be in sync before syncing)"
 if git rev-parse -q --verify "origin/$OURS" >/dev/null 2>&1; then
   counts=$(git rev-list --left-right --count "$OURS...origin/$OURS")
