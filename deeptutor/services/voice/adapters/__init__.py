@@ -12,6 +12,10 @@ from deeptutor.services.voice.adapters.bespoke import (
     BotnoiTTSAdapter,
     ElevenLabsTTSAdapter,
 )
+from deeptutor.services.voice.adapters.dashscope import (
+    DashScopeSTTAdapter,
+    DashScopeTTSAdapter,
+)
 from deeptutor.services.voice.adapters.openai_compat import (
     OpenAICompatSTTAdapter,
     OpenAICompatTTSAdapter,
@@ -24,10 +28,12 @@ TTS_ADAPTERS: dict[str, BaseTTSAdapter] = {
     "openrouter_tts": OpenRouterTTSAdapter(),
     "elevenlabs": ElevenLabsTTSAdapter(),
     "botnoi": BotnoiTTSAdapter(),
+    "dashscope": DashScopeTTSAdapter(),
 }
 
 STT_ADAPTERS: dict[str, BaseSTTAdapter] = {
     "openai_compat": OpenAICompatSTTAdapter(),
+    "dashscope": DashScopeSTTAdapter(),
 }
 
 
@@ -50,4 +56,6 @@ __all__ = [
     "STT_ADAPTERS",
     "get_tts_adapter",
     "get_stt_adapter",
+    "DashScopeSTTAdapter",
+    "DashScopeTTSAdapter",
 ]

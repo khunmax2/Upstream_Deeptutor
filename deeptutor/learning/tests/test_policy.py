@@ -18,6 +18,7 @@ from deeptutor.learning.models import (
     ErrorType,
     KnowledgePoint,
     KnowledgeType,
+    LearnerMasteryOverride,
     LearningModule,
     LearningProgress,
     PendingQuestion,
@@ -82,6 +83,28 @@ def test_objective_status_new_learning_mastered():
     assert policy.objective_status(progress, kp) == "learning"
     progress.mastery_levels["kp1"] = 0.95
     assert policy.objective_status(progress, kp) == "mastered"
+
+
+def test_learner_override_advances_without_faking_assessed_mastery():
+    kp1, kp2 = _kp("kp1", KnowledgeType.MEMORY), _kp("kp2", KnowledgeType.MEMORY)
+    progress = _progress(kp1, kp2)
+    progress.mastery_levels["kp1"] = 0.2
+    progress.learner_mastery_overrides["kp1"] = LearnerMasteryOverride(
+        knowledge_point_id="kp1",
+        note="Covered this in class",
+    )
+
+    assert policy.is_assessed_mastered(progress, kp1) is False
+    assert policy.is_mastered(progress, kp1) is True
+    assert policy.mastery_source(progress, kp1) == "learner"
+    assert policy.next_objective(progress).knowledge_point_id == "kp2"
+
+    summary = policy.map_summary(progress)
+    first = summary["modules"][0]["knowledge_points"][0]
+    assert first["status"] == "mastered"
+    assert first["mastery_source"] == "learner"
+    assert first["mastery"] == 0.2
+    assert first["override_note"] == "Covered this in class"
 
 
 # ── next_objective: gate is the cursor, mastered objectives are skipped ─────
@@ -295,3 +318,35 @@ def test_objective_report_carries_qualitative_evidence():
 
 def test_objective_report_is_none_for_an_unknown_objective():
     assert policy.objective_report(_progress(_kp("kp1", KnowledgeType.MEMORY)), "nope") is None
+
+
+# ── path_display_name ──────────────────────────────────────────────────────
+
+
+def test_path_display_name_prefers_the_paths_own_name():
+    progress = _progress(_kp("kp1", KnowledgeType.MEMORY))
+    progress.name = "一元二次方程基础"
+    assert policy.path_display_name(progress) == "一元二次方程基础"
+
+
+def test_path_display_name_falls_back_to_the_first_module():
+    """How every unnamed path was named before paths had names."""
+    progress = _progress(_kp("kp1", KnowledgeType.MEMORY))
+    assert policy.path_display_name(progress) == "M1"
+
+
+def test_path_display_name_falls_back_to_the_id_with_no_modules():
+    assert policy.path_display_name(LearningProgress(book_id="b1")) == "b1"
+
+
+def test_path_display_name_ignores_a_blank_name():
+    progress = _progress(_kp("kp1", KnowledgeType.MEMORY))
+    progress.name = "   "
+    assert policy.path_display_name(progress) == "M1"
+
+
+def test_map_summary_carries_the_display_name():
+    """So the dashboard and the composer strip read it instead of deriving it."""
+    progress = _progress(_kp("kp1", KnowledgeType.MEMORY))
+    progress.name = "Quadratics"
+    assert policy.map_summary(progress)["name"] == "Quadratics"

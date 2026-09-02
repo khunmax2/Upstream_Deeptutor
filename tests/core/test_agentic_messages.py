@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from deeptutor.core.agentic.messages import assistant_message_with_tool_calls
+from deeptutor.runtime.agentic.messages import assistant_message_with_tool_calls
 
 
 def test_assistant_message_with_tool_calls_normalizes_empty_values() -> None:
@@ -37,3 +37,18 @@ def test_assistant_message_with_tool_calls_preserves_order_and_arguments() -> No
         "name": "read",
         "arguments": '{"id":2}',
     }
+
+
+def test_assistant_message_with_tool_calls_replays_reasoning_content() -> None:
+    message = assistant_message_with_tool_calls(
+        content="",
+        tool_calls=[{"id": "call-1", "name": "search"}],
+        reasoning_content="Need to look this up.",
+    )
+
+    assert message["reasoning_content"] == "Need to look this up."
+    assert "reasoning_content" not in assistant_message_with_tool_calls(
+        content="hi",
+        tool_calls=[{"id": "call-1", "name": "search"}],
+        reasoning_content="",
+    )

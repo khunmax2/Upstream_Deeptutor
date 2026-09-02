@@ -12,7 +12,7 @@
  *     + encodeURIComponent  %25E0%25B9%2580%25E0%25B8%259E-...
  *     backend decodes once  %E0%B9%80%E0%B8%9E-...     → 404
  *
- * Observed as a 404 on `/api/v1/partners/%25E0%25B9%2580…` for a partner whose
+ * Observed as a 404 on the partners endpoint with `%25E0%25B9%2580…` for a partner whose
  * id was minted before ids were forced to ASCII: its detail page could not be
  * opened, so it could not be edited or deleted from the UI either. Pure-ASCII
  * ids are unaffected — they encode to themselves, so the second pass is a

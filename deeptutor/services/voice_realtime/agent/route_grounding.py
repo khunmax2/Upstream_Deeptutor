@@ -117,19 +117,26 @@ def resolve_target_route(task: str) -> str | None:
 
 
 def landed_path(url: str) -> str:
-    """The pathname of a landed URL — origin, query, and hash stripped.
+    """The destination of a landed URL — origin and query stripped, hash kept.
 
     Accepts a full href (``location.href``, what the actuator reports) or an
     already-bare path. Trailing slashes are trimmed (except root) so
     ``/settings/`` and ``/settings`` compare equal.
+
+    The fragment is **kept** because since upstream v1.6.3 every settings screen
+    is served from one page and addressed by anchor. Dropping it would collapse
+    ``/settings#search`` and ``/settings#tools`` into the same destination, which
+    is exactly the confusion hard grounding exists to catch (issue-01: the loop
+    lands on the tools screen and reports the search one).
     """
     if not url:
         return ""
     # urlsplit puts a scheme-less "/settings/x" entirely in .path already.
-    path = urlsplit(url).path or ""
+    parts = urlsplit(url)
+    path = parts.path or ""
     if len(path) > 1:
         path = path.rstrip("/")
-    return path
+    return f"{path}#{parts.fragment}" if parts.fragment else path
 
 
 def path_satisfies(target: str, landed: str) -> bool:
@@ -142,7 +149,9 @@ def path_satisfies(target: str, landed: str) -> bool:
     """
     want = target.rstrip("/") or "/"
     got = landed.rstrip("/") or "/"
-    return got == want or got.startswith(want + "/")
+    # "#" nests the same way "/" does: the /settings hub accepts /settings#search,
+    # while the /settings#search leaf still rejects its /settings#tools sibling.
+    return got == want or got.startswith(want + "/") or got.startswith(want + "#")
 
 
 __all__ = [

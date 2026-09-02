@@ -34,7 +34,7 @@ GRAPH = {
     "nodes": [
         {
             "id": "settings_appearance",
-            "path": "/settings/appearance",
+            "path": "/settings#appearance",
             "label": "หน้าธีม",
             "controls": [
                 {
@@ -104,7 +104,7 @@ def test_find_graph_control_resolves_aliases_and_garbles() -> None:
     outcome, node, control = ui_graph.find_graph_control("โหมดมืด", GRAPH)
     assert outcome == "hit" and control is not None
     assert control["capability"] == "theme_dark"
-    assert node is not None and node["path"] == "/settings/appearance"
+    assert node is not None and node["path"] == "/settings#appearance"
     # Click text itself works too, cross-script tolerant like the screen.
     assert ui_graph.find_graph_control("ธีมครีม", GRAPH)[0] == "hit"
     assert ui_graph.find_graph_control("ไม่มีจริง", GRAPH) == ("missing", None, None)
@@ -155,20 +155,20 @@ def test_plan_cross_page_navigates_then_acts() -> None:
         "type": "ui_action",
         "action": "navigate",
         "target": "open_path",
-        "argument": "/settings/appearance",
+        "argument": "/settings#appearance",
     }
     assert action["target"] == "click_element" and action["argument"] == "Dark"
 
 
 def test_plan_same_page_skips_navigation() -> None:
     node, control = _dark()
-    navigate, action = ui_graph.plan_graph_step(node, control, "/settings/appearance")
+    navigate, action = ui_graph.plan_graph_step(node, control, "/settings#appearance")
     assert navigate is None
     assert action["argument"] == "Dark"
 
 
 def test_plan_field_kind_focuses_instead_of_clicking() -> None:
-    node = {"id": "kb", "path": "/knowledge", "label": "x", "controls": []}
+    node = {"id": "kb", "path": "/knowledge-bases", "label": "x", "controls": []}
     control = {"capability": "kb_search", "click": "ค้นหา", "kind": "field", "aliases": []}
     _, action = ui_graph.plan_graph_step(node, control, "/home")
     assert action == {
@@ -187,7 +187,7 @@ def test_pending_step_fires_once_on_verified_arrival() -> None:
     node, control = _dark()
     _, action = ui_graph.plan_graph_step(node, control, "/home")
     nav_state = {"pending_graph_step": ui_graph.make_pending_step(node, action)}
-    ok = {"target": "open_path", "argument": "/settings/appearance", "ok": True, "detail": ""}
+    ok = {"target": "open_path", "argument": "/settings#appearance", "ok": True, "detail": ""}
     assert ui_graph.take_pending_step(nav_state, ok) == action
     assert "pending_graph_step" not in nav_state  # consumed
     assert ui_graph.take_pending_step(nav_state, ok) is None  # fires once
@@ -197,7 +197,7 @@ def test_pending_step_dropped_on_failed_or_wrong_navigation() -> None:
     node, control = _dark()
     _, action = ui_graph.plan_graph_step(node, control, "/home")
     for result in (
-        {"target": "open_path", "argument": "/settings/appearance", "ok": False, "detail": "x"},
+        {"target": "open_path", "argument": "/settings#appearance", "ok": False, "detail": "x"},
         {"target": "open_path", "argument": "/notebook", "ok": True, "detail": ""},
     ):
         nav_state = {"pending_graph_step": ui_graph.make_pending_step(node, action)}
@@ -220,7 +220,7 @@ def test_pending_step_expires() -> None:
     pending = ui_graph.make_pending_step(node, action)
     pending["expires_at"] = time.time() - 1
     nav_state = {"pending_graph_step": pending}
-    ok = {"target": "open_path", "argument": "/settings/appearance", "ok": True, "detail": ""}
+    ok = {"target": "open_path", "argument": "/settings#appearance", "ok": True, "detail": ""}
     assert ui_graph.take_pending_step(nav_state, ok) is None
 
 
@@ -257,11 +257,11 @@ async def test_goal_phrasing_plans_cross_page_without_llm(
             "type": "ui_action",
             "action": "navigate",
             "target": "open_path",
-            "argument": "/settings/appearance",
+            "argument": "/settings#appearance",
         }
     ]
     pending = nav_state["pending_graph_step"]
-    assert pending["page_path"] == "/settings/appearance"
+    assert pending["page_path"] == "/settings#appearance"
     assert pending["action"]["target"] == "click_element"
     assert pending["action"]["argument"] == "Dark"
 
@@ -305,7 +305,7 @@ async def test_language_switch_plans_cross_page(monkeypatch: pytest.MonkeyPatch)
 
     actions = [m for m in emitter.json if m.get("type") == "ui_action"]
     assert [a["target"] for a in actions] == ["open_path"]
-    assert actions[0]["argument"] == "/settings/appearance"
+    assert actions[0]["argument"] == "/settings#appearance"
     assert nav_state["pending_graph_step"]["action"]["argument"] == "ภาษาไทย"
 
 
@@ -327,7 +327,7 @@ async def test_create_kb_plans_cross_page(monkeypatch: pytest.MonkeyPatch) -> No
 
     actions = [m for m in emitter.json if m.get("type") == "ui_action"]
     assert [a["target"] for a in actions] == ["open_path"]
-    assert actions[0]["argument"] == "/knowledge"
+    assert actions[0]["argument"] == "/knowledge-bases"
     assert nav_state["pending_graph_step"]["action"]["argument"] == "Knowledge Base ใหม่"
 
 
@@ -343,7 +343,7 @@ async def test_graph_same_page_clicks_directly(monkeypatch: pytest.MonkeyPatch) 
         "เปลี่ยนธีมเป็นโหมดมืด",
         [],
         session_id="voice:test",
-        ui_context={"path": "/settings/appearance", "summary": "x"},
+        ui_context={"path": "/settings#appearance", "summary": "x"},
         nav_state=nav_state,
     )
 

@@ -25,19 +25,22 @@ class LLMClient:
     Prefer using factory functions (complete, stream) directly for new code.
     """
 
-    def __init__(self, config: LLMConfig | None = None) -> None:
+    def __init__(self, config: LLMConfig | None = None, *, configure_env: bool = True) -> None:
         """
         Initialize LLM client.
 
         Args:
             config: LLM configuration. If None, loads from environment.
+            configure_env: Keep true for the legacy singleton facade; isolated
+                override clients should not mutate process-wide SDK settings.
         """
 
         self.config = config or get_llm_config()
         self.logger = logging.getLogger(__name__)
 
         # Keep OPENAI_* env vars aligned for libraries that still read from env.
-        self._setup_openai_env_vars()
+        if configure_env:
+            self._setup_openai_env_vars()
 
     def _setup_openai_env_vars(self) -> None:
         """
@@ -49,8 +52,8 @@ class LLMClient:
 
         # Only set env vars for OpenAI-compatible bindings
         if binding in ("openai", "azure_openai", "gemini"):
-            if self.config.api_key:
-                os.environ["OPENAI_API_KEY"] = self.config.api_key
+            if api_key := self.config.get_api_key():
+                os.environ["OPENAI_API_KEY"] = api_key
                 self.logger.debug("Set OPENAI_API_KEY env var")
 
             if self.config.base_url:
@@ -244,7 +247,7 @@ def reset_llm_client() -> None:
 
     reset_runtime_provider_pool()
     try:
-        from deeptutor.core.agentic.client import reset_agentic_client_pool
+        from deeptutor.runtime.agentic.client import reset_agentic_client_pool
 
         reset_agentic_client_pool()
     except ImportError:

@@ -267,6 +267,7 @@ set -e
 
 BACKEND_PORT=${BACKEND_PORT:-8001}
 BACKEND_HOST=${BACKEND_HOST:-0.0.0.0}
+BACKEND_WORKERS=${BACKEND_WORKERS:-1}
 
 echo "[Backend]  🚀 Starting FastAPI backend on ${BACKEND_HOST}:${BACKEND_PORT}..."
 
@@ -289,7 +290,7 @@ echo "[Backend]  🚀 Starting FastAPI backend on ${BACKEND_HOST}:${BACKEND_PORT
 # reaper so the client is the only side retiring idle connections.
 WS_MAX_SIZE=$(python -c "from deeptutor.services.config import get_ws_max_size; print(get_ws_max_size())" 2>/dev/null || echo 16777216)
 KEEP_ALIVE=$(python -c "from deeptutor.services.config import HTTP_KEEP_ALIVE_TIMEOUT; print(HTTP_KEEP_ALIVE_TIMEOUT)" 2>/dev/null || echo 300)
-exec python -m uvicorn deeptutor.api.main:app --host ${BACKEND_HOST} --port ${BACKEND_PORT} --no-access-log --ws-max-size ${WS_MAX_SIZE} --timeout-keep-alive ${KEEP_ALIVE}
+exec python -m uvicorn deeptutor.api.main:app --host ${BACKEND_HOST} --port ${BACKEND_PORT} --workers ${BACKEND_WORKERS} --no-access-log --ws-max-size ${WS_MAX_SIZE} --timeout-keep-alive ${KEEP_ALIVE}
 EOF
 
 RUN sed -i 's/\r$//' /app/start-backend.sh && chmod +x /app/start-backend.sh
@@ -330,6 +331,8 @@ export DEEPTUTOR_IGNORE_PROCESS_ENV_OVERRIDES=1
 # data/user/settings/*.json below.
 for key in \
     BACKEND_PORT \
+    BACKEND_WORKERS \
+    DEEPTUTOR_BACKEND_WORKERS \
     FRONTEND_PORT \
     NEXT_PUBLIC_API_BASE_EXTERNAL \
     NEXT_PUBLIC_API_BASE \
@@ -365,6 +368,42 @@ init_user_directories(Path('/app'))
 # Idempotent: re-chown /app/data so the unprivileged `deeptutor` user (UID 1000)
 # owns it. Cheap on no-op; the only first-start cost is one stat per file.
 chown -R deeptutor:deeptutor /app/data 2>/dev/null || true
+
+# Optional dependencies (#762). A container is disposable, so anything
+# `docker exec … pip install`ed into a running one is gone at the next
+# `compose down`. Declare them on the deployment instead and every container
+# started from it has them:
+#
+#   environment:
+#     DEEPTUTOR_EXTRAS: "math-animator,partners"
+#     DEEPTUTOR_APT_PACKAGES: "ffmpeg"
+#
+# Both steps are idempotent — a warm container only pays a check — and neither
+# is allowed to be fatal: a missing wheel leaves that one feature unavailable,
+# exactly as it was before, rather than taking the whole deployment down.
+# The pip cache lives on the data volume so a rebuild reuses the downloads it
+# already paid for instead of fetching them again.
+export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/app/data/.cache/pip}"
+mkdir -p "$PIP_CACHE_DIR" 2>/dev/null || true
+
+if [ -n "${DEEPTUTOR_APT_PACKAGES:-}" ]; then
+    echo "🔧 Ensuring system packages: ${DEEPTUTOR_APT_PACKAGES}"
+    apt_missing=""
+    for pkg in $(echo "${DEEPTUTOR_APT_PACKAGES}" | tr ',' ' '); do
+        dpkg -s "$pkg" >/dev/null 2>&1 || apt_missing="$apt_missing $pkg"
+    done
+    if [ -z "$apt_missing" ]; then
+        echo "   ✅ System packages already present"
+    elif ! (apt-get update -qq && apt-get install -y --no-install-recommends $apt_missing); then
+        echo "   ⚠️ apt-get failed; these packages stay unavailable:$apt_missing"
+    fi
+fi
+
+if [ -n "${DEEPTUTOR_EXTRAS:-}" ]; then
+    echo "🔧 Ensuring Python extras: ${DEEPTUTOR_EXTRAS}"
+    python /app/scripts/install_extras.py "${DEEPTUTOR_EXTRAS}" || true
+    chown -R deeptutor:deeptutor "$PIP_CACHE_DIR" 2>/dev/null || true
+fi
 
 echo "⚙️  Loading runtime JSON settings..."
 eval "$(python - <<'PY'
@@ -424,7 +463,7 @@ try:
 except Exception:
     pass
 
-urllib.request.urlopen(f"http://localhost:{port}/", timeout=5).close()
+urllib.request.urlopen(f"http://localhost:{port}/health/ready", timeout=5).close()
 EOF
 
 # Expose ports

@@ -17,7 +17,12 @@ import re
 from typing import TYPE_CHECKING, TypedDict
 
 from deeptutor.services.config import resolve_llm_runtime_config
-from deeptutor.services.provider_registry import canonical_provider_name, find_by_name
+from deeptutor.services.keypool import primary_api_key
+from deeptutor.services.provider_registry import (
+    canonical_provider_name,
+    find_by_name,
+    wire_api_for_provider,
+)
 
 from .exceptions import LLMConfigError
 
@@ -29,7 +34,7 @@ class LLMConfigUpdate(TypedDict, total=False):
     """Fields allowed when cloning an LLMConfig instance."""
 
     model: str
-    api_key: str
+    api_key: str | list[str]
     base_url: str | None
     effective_url: str | None
     binding: str
@@ -37,6 +42,7 @@ class LLMConfigUpdate(TypedDict, total=False):
     provider_mode: str
     api_version: str | None
     extra_headers: dict[str, str]
+    wire_api: str
     reasoning_effort: str | None
     context_window: int | None
     max_tokens: int
@@ -59,9 +65,12 @@ def _is_openai_compatible_binding(binding: str | None) -> bool:
     return spec.backend in {"openai_compat", "azure_openai"}
 
 
-def _set_openai_env_vars(api_key: str | None, base_url: str | None, *, source: str) -> None:
-    if api_key:
-        os.environ["OPENAI_API_KEY"] = api_key
+def _set_openai_env_vars(
+    api_key: str | list[str] | None, base_url: str | None, *, source: str
+) -> None:
+    primary_key = primary_api_key(api_key)
+    if primary_key:
+        os.environ["OPENAI_API_KEY"] = primary_key
         logger.debug("Set OPENAI_API_KEY env var (%s)", source)
 
     if base_url:
@@ -97,7 +106,7 @@ class LLMConfig:
     """LLM configuration dataclass."""
 
     model: str
-    api_key: str
+    api_key: str | list[str]
     base_url: str | None = None
     effective_url: str | None = None
     binding: str = "openai"
@@ -105,6 +114,7 @@ class LLMConfig:
     provider_mode: str = "standard"
     api_version: str | None = None
     extra_headers: dict[str, str] | None = None
+    wire_api: str = "auto"
     reasoning_effort: str | None = None
     context_window: int | None = None
     max_tokens: int = 4096
@@ -116,14 +126,20 @@ class LLMConfig:
     def __post_init__(self) -> None:
         if self.effective_url is None:
             self.effective_url = self.base_url
+        spec = find_by_name(self.provider_name) or find_by_name(self.binding)
+        self.wire_api = wire_api_for_provider(self.wire_api, spec)
 
     def model_copy(self, update: LLMConfigUpdate | None = None) -> "LLMConfig":
         """Return a copy of the config with optional updates."""
         return replace(self, **(update or {}))
 
     def get_api_key(self) -> str:
-        """Return the API key string for provider consumers."""
-        return self.api_key
+        """Return the API key string for provider consumers.
+
+        The empty string, not ``None``, because callers here test it for
+        truthiness and pass it straight into a provider argument.
+        """
+        return primary_api_key(self.api_key) or ""
 
 
 _LLM_CONFIG_CACHE: LLMConfig | None = None
@@ -190,6 +206,7 @@ def _get_llm_config_from_resolver() -> LLMConfig:
         provider_mode=resolved.provider_mode,
         api_version=resolved.api_version,
         extra_headers=resolved.extra_headers,
+        wire_api=resolved.wire_api,
         reasoning_effort=resolved.reasoning_effort,
         context_window=resolved.context_window,
     )

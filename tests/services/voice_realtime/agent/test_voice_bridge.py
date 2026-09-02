@@ -24,7 +24,7 @@ def make_bridge(think, states=None):
         spoken.append(text)
 
     actuator = FixtureActuator(
-        states or [BrowserState(url="http://x/home", content="[0]<a >ศูนย์ความรู้ />")]
+        states or [BrowserState(url="http://x/chat", content="[0]<a >ศูนย์ความรู้ />")]
     )
     bridge = AgentVoiceBridge(send, speak, actuator=actuator, think=think)
     # step_delay=0 for tests — reach into the loop deliberately.
@@ -43,13 +43,13 @@ async def test_progress_is_a_silent_note_and_only_the_ending_speaks():
             step("arrived", "", {"done": {"text": "เปิดให้แล้วครับ", "success": True}}),
         ]
     )
-    # The click must actually land on /knowledge — the destination the task
+    # The click must actually land on /knowledge-bases — the destination the task
     # named — or hard grounding (issue 01) rightly downgrades the success.
     bridge, actuator, sent, spoken = make_bridge(
         think,
         states=[
-            BrowserState(url="http://x/home", content="[0]<a >ศูนย์ความรู้ />"),
-            BrowserState(url="http://x/knowledge", content="ศูนย์ความรู้"),
+            BrowserState(url="http://x/chat", content="[0]<a >ศูนย์ความรู้ />"),
+            BrowserState(url="http://x/knowledge-bases", content="ศูนย์ความรู้"),
         ],
     )
 
@@ -176,7 +176,7 @@ async def test_notify_failure_never_breaks_the_run():
     async def speak(text: str) -> None:
         return None
 
-    actuator = FixtureActuator([BrowserState(url="http://x/home", content="[0]<a >ศูนย์ความรู้ />")])
+    actuator = FixtureActuator([BrowserState(url="http://x/chat", content="[0]<a >ศูนย์ความรู้ />")])
     bridge = AgentVoiceBridge(dying_send, speak, actuator=actuator, think=think)
     bridge._loop._step_delay_s = 0  # noqa: SLF001
 

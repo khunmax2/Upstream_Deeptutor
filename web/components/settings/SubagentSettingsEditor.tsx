@@ -63,8 +63,8 @@ const DEFAULTS: Required<
 /**
  * Which knobs each backend kind actually honors — the editor renders from this
  * table instead of per-kind branches. Mirrors what the Python backend reads:
- * e.g. only Claude Code / Gemini use `permission_mode`, only Codex has its
- * sandbox family, kimi/opencode/mimo take the `auto_approve` reply switch.
+ * e.g. only Claude Code / Antigravity use `permission_mode`, only Codex has its
+ * sandbox family, kimi/hermes/opencode/mimo take the `auto_approve` switch.
  */
 type KindFeatures = {
   effort: boolean;
@@ -95,14 +95,16 @@ const KIND_FEATURES: Record<string, KindFeatures> = {
     thinking: false,
     forwardImages: true,
   },
-  gemini: {
-    effort: false, // no reasoning-effort flag
+  antigravity: {
+    effort: true, // --effort low|medium|high
     systemPrompt: true,
-    permissionMode: true, // canonical values map onto --approval-mode
+    permissionMode: true, // permissive modes map onto --dangerously-skip-permissions
     codexSandbox: false,
     autoApprove: false,
     thinking: false,
-    forwardImages: true, // @path syntax
+    // Headless `agy` documents no attachment flag; images are named as paths
+    // in the prompt for the agent's own file-reading tools instead.
+    forwardImages: false,
   },
   kimi: {
     effort: false,
@@ -131,6 +133,33 @@ const KIND_FEATURES: Record<string, KindFeatures> = {
     thinking: false,
     forwardImages: true,
   },
+  hermes: {
+    effort: true,
+    systemPrompt: true,
+    permissionMode: false,
+    codexSandbox: false,
+    autoApprove: true, // --yolo
+    thinking: false,
+    forwardImages: true, // --image
+  },
+  openclaw: {
+    effort: true, // --thinking
+    systemPrompt: true,
+    permissionMode: false,
+    codexSandbox: false,
+    autoApprove: false,
+    thinking: false,
+    forwardImages: true, // local paths are named in the prompt
+  },
+  deepseek_harness: {
+    effort: true, // SDK reasoning_effort
+    systemPrompt: true,
+    permissionMode: false,
+    codexSandbox: false,
+    autoApprove: false,
+    thinking: false,
+    forwardImages: true, // local paths are named in the prompt
+  },
 };
 
 const FALLBACK_FEATURES: KindFeatures = KIND_FEATURES.claude_code;
@@ -138,10 +167,12 @@ const FALLBACK_FEATURES: KindFeatures = KIND_FEATURES.claude_code;
 const DISPLAY_NAMES: Record<string, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
-  gemini: "Gemini CLI",
   kimi: "Kimi CLI",
   opencode: "opencode",
   mimo: "MiMo Code",
+  hermes: "Hermes Agent",
+  openclaw: "OpenClaw",
+  deepseek_harness: "DeepSeek Harness",
 };
 
 // Per-kind flavor for the system-prompt section: how the instruction reaches
@@ -151,11 +182,6 @@ const SYSTEM_PROMPT_HINT: Record<string, Lang> = {
     zh: "追加到该智能体的系统提示（--append-system-prompt）。",
     en: "Appended to the agent's system prompt (--append-system-prompt).",
     th: "ต่อท้ายพรอมป์ตระบบของเอเจนต์ (--append-system-prompt)",
-  },
-  gemini: {
-    zh: "Gemini CLI 没有系统提示 flag——该指令会前缀在每个新会话的第一条消息上。",
-    en: "Gemini CLI has no system-prompt flag — the instruction is prefixed to each new session's first message.",
-    th: "Gemini CLI ไม่มี flag สำหรับพรอมป์ตระบบ — คำสั่งจะถูกใส่นำหน้าข้อความแรกของทุกเซสชันใหม่",
   },
   kimi: {
     zh: "Kimi CLI 没有系统提示 flag——该指令会前缀在每个新会话的第一条消息上。",
@@ -171,6 +197,21 @@ const SYSTEM_PROMPT_HINT: Record<string, Lang> = {
     zh: "通过服务器 API 的 system 字段注入到每个新会话。",
     en: "Injected into each new session via the server API's system field.",
     th: "แทรกเข้าไปในทุกเซสชันใหม่ผ่านฟิลด์ system ของ server API",
+  },
+  hermes: {
+    zh: "Hermes 没有系统提示 flag——该指令会前缀在每个新会话的第一条消息上。",
+    en: "Hermes has no system-prompt flag — the instruction is prefixed to each new session's first message.",
+    th: "Hermes has no system-prompt flag — the instruction is prefixed to each new session's first message.",
+  },
+  openclaw: {
+    zh: "该指令会前缀在每个新 OpenClaw session key 的第一条消息上。",
+    en: "The instruction is prefixed to the first message for each new OpenClaw session key.",
+    th: "The instruction is prefixed to the first message for each new OpenClaw session key.",
+  },
+  deepseek_harness: {
+    zh: "该指令会前缀在每个新 DeepSeek Harness 会话的第一条消息上。",
+    en: "The instruction is prefixed to the first message in each new DeepSeek Harness session.",
+    th: "The instruction is prefixed to the first message in each new DeepSeek Harness session.",
   },
 };
 
@@ -243,43 +284,6 @@ const APPROVALS: { value: string; label: Lang }[] = [
       zh: "不可信命令时询问",
       en: "Untrusted commands",
       th: "เมื่อเป็นคำสั่งที่ไม่น่าเชื่อถือ",
-    },
-  },
-];
-
-// Gemini stores the same canonical permission values (the two CLIs' modes are
-// semantically parallel); the labels name its native --approval-mode spellings.
-const GEMINI_PERMISSION_MODES: { value: string; label: Lang }[] = [
-  {
-    value: "bypassPermissions",
-    label: {
-      zh: "YOLO · 全自主（推荐）",
-      en: "YOLO · autonomous (recommended)",
-      th: "YOLO · อัตโนมัติเต็มรูปแบบ (แนะนำ)",
-    },
-  },
-  {
-    value: "acceptEdits",
-    label: {
-      zh: "自动接受编辑（auto_edit）",
-      en: "Auto-accept edits (auto_edit)",
-      th: "ยอมรับการแก้ไขอัตโนมัติ (auto_edit)",
-    },
-  },
-  {
-    value: "default",
-    label: {
-      zh: "默认 · 无人值守下改动会被拒绝",
-      en: "Default · mutating tools are denied headless",
-      th: "ค่าเริ่มต้น · เครื่องมือที่แก้ไขข้อมูลจะถูกปฏิเสธเมื่อรันแบบไม่มีคนดูแล",
-    },
-  },
-  {
-    value: "plan",
-    label: {
-      zh: "计划模式 · 只读",
-      en: "Plan mode · read-only",
-      th: "โหมดวางแผน · อ่านอย่างเดียว",
     },
   },
 ];
@@ -664,10 +668,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                       void save({ permission_mode: e.target.value })
                     }
                   >
-                    {(kind === "gemini"
-                      ? GEMINI_PERMISSION_MODES
-                      : PERMISSION_MODES
-                    ).map((o) => (
+                    {PERMISSION_MODES.map((o) => (
                       <option key={o.value} value={o.value}>
                         {tr(o.label)}
                       </option>

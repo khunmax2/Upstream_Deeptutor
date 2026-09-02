@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any, TypedDict
 
 from deeptutor.config.settings import settings
+from deeptutor.services.keypool import primary_api_key
 from deeptutor.services.provider_registry import (
     PROVIDERS,
     canonical_provider_name,
@@ -79,14 +80,14 @@ def _resolve_provider_spec(
     *,
     binding: str | None,
     model: str,
-    api_key: str,
+    api_key: str | list[str],
     base_url: str | None,
     fallback: str | None,
 ):
     explicit = find_by_name(binding)
     gateway = find_gateway(
         provider_name=explicit.name if explicit else None,
-        api_key=api_key or None,
+        api_key=primary_api_key(api_key),
         api_base=base_url or None,
     )
     if explicit and gateway and explicit.name == "openai":
@@ -126,7 +127,7 @@ def _binding_matches_current(binding: str | None, current: LLMConfig) -> bool:
 def _matching_current_config(
     *,
     model: str,
-    api_key: str,
+    api_key: str | list[str],
     base_url: str | None,
     api_version: str | None,
     binding: str | None,
@@ -154,7 +155,7 @@ def _matching_current_config(
 def _resolve_call_config(
     *,
     model: str | None,
-    api_key: str | None,
+    api_key: str | list[str] | None,
     base_url: str | None,
     api_version: str | None,
     binding: str | None,
@@ -202,6 +203,7 @@ def _resolve_call_config(
             provider_mode=provider_mode,
             api_version=api_version,
             extra_headers=merged_headers,
+            wire_api=current.wire_api if current is not None else "auto",
             reasoning_effort=resolved_reasoning_effort,
         )
         return config, provider_spec
@@ -239,6 +241,7 @@ def _resolve_call_config(
             "provider_mode": provider_mode,
             "api_version": resolved_api_version,
             "extra_headers": merged_headers,
+            "wire_api": current.wire_api,
             "reasoning_effort": (
                 reasoning_effort if reasoning_effort is not None else current.reasoning_effort
             ),
@@ -339,7 +342,7 @@ async def complete(
     prompt: str,
     system_prompt: str = "You are a helpful assistant.",
     model: str | None = None,
-    api_key: str | None = None,
+    api_key: str | list[str] | None = None,
     base_url: str | None = None,
     api_version: str | None = None,
     binding: str | None = None,
@@ -482,7 +485,7 @@ async def stream(
     prompt: str,
     system_prompt: str = "You are a helpful assistant.",
     model: str | None = None,
-    api_key: str | None = None,
+    api_key: str | list[str] | None = None,
     base_url: str | None = None,
     api_version: str | None = None,
     binding: str | None = None,

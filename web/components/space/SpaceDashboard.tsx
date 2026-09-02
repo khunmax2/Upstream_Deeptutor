@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { useCapabilityFilter } from "@/features/capabilities/useCapabilityCatalog";
 import {
   ArrowUpRight,
   ClipboardList,
   Ear,
   Github,
-  GraduationCap,
   History,
   NotebookPen,
   Plug,
@@ -24,7 +24,6 @@ import { listSessions } from "@/lib/session-api";
 import { listNotebooks, listNotebookEntries } from "@/lib/notebook-api";
 import { listPersonas } from "@/lib/personas-api";
 import { listSkills } from "@/lib/skills-api";
-import { fetchAllProgress } from "@/lib/learning-api";
 
 /**
  * Learning Space dashboard — the hub of `/space`.
@@ -45,7 +44,6 @@ type DashKey =
   | "skills"
   | "mcp"
   | "cli_apps"
-  | "mastery_path"
   | "whisper";
 
 interface DashboardItem {
@@ -69,6 +67,13 @@ interface DashboardItem {
   load?: () => Promise<number>;
   /** GitHub handle of the contributor this surface came from. */
   credit?: string;
+  /**
+   * Turn capability this surface needs, when it is not served by this
+   * repository. The tile is withheld unless the backend registry actually
+   * holds the name, so a stock install never offers a room whose capability
+   * was never installed (#963).
+   */
+  requiresCapability?: string;
 }
 
 interface DashboardGroup {
@@ -100,7 +105,7 @@ const GROUPS: DashboardGroup[] = [
       },
       {
         key: "notebooks",
-        href: "/notebook",
+        href: "/notebooks",
         icon: NotebookPen,
         title: { zh: "笔记本", en: "Notebooks", th: "สมุดบันทึก" },
         blurb: {
@@ -131,26 +136,6 @@ const GROUPS: DashboardGroup[] = [
   {
     label: { zh: "个性化", en: "Personalization", th: "การปรับแต่งเฉพาะตัว" },
     items: [
-      {
-        key: "mastery_path",
-        href: "/space/learning",
-        icon: GraduationCap,
-        title: {
-          zh: "精通之路",
-          en: "Mastery Path",
-          th: "เส้นทางสู่ความเชี่ยวชาญ",
-        },
-        blurb: {
-          zh: "掌握式学习：硬门槛与间隔复习。",
-          en: "Mastery-based learning: hard gate and spaced review.",
-          th: "การเรียนแบบเน้นความเชี่ยวชาญ: ด่านบังคับและการทบทวนแบบเว้นช่วง",
-        },
-        unit: { zh: "条路径", en: "paths", th: "เส้นทาง" },
-        tile: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-        load: async () =>
-          (await fetchAllProgress()).summaries.filter((s) => s.kp_count > 0)
-            .length,
-      },
       {
         key: "personas",
         href: "/space/personas",
@@ -231,12 +216,41 @@ const GROUPS: DashboardGroup[] = [
         },
         tile: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
         credit: "alanguan73",
+        // Served by the out-of-tree psych-academy plugin, not by this repo.
+        requiresCapability: "whisper_visitor",
       },
     ],
   },
 ];
 
 const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
+
+/**
+ * The groups to render, given what the backend can actually serve.
+ *
+ * `isAvailable` is null while the probe is in flight: gated tiles stay hidden
+ * until then, so a surface whose capability was never installed does not flash
+ * into view and out again — an ungated tile is never affected. A group left
+ * with no tiles is dropped along with its heading, or "More Projects" would
+ * render as a title over nothing (#963).
+ */
+export function visibleGroups(
+  groups: DashboardGroup[],
+  isAvailable: ((name: string) => boolean) | null,
+): DashboardGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          !item.requiresCapability ||
+          (isAvailable?.(item.requiresCapability) ?? false),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+export { GROUPS as DASHBOARD_GROUPS };
 
 export default function SpaceDashboard() {
   const { i18n } = useTranslation();
@@ -248,6 +262,12 @@ export default function SpaceDashboard() {
   );
 
   const [counts, setCounts] = useState<Partial<Record<DashKey, number>>>({});
+
+  const capabilityAvailable = useCapabilityFilter();
+  const groups = useMemo(
+    () => visibleGroups(GROUPS, capabilityAvailable),
+    [capabilityAvailable],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -285,7 +305,7 @@ export default function SpaceDashboard() {
       </header>
 
       <div className="space-y-9">
-        {GROUPS.map((group) => (
+        {groups.map((group) => (
           <section key={group.label.en}>
             <h2 className="mb-3 px-0.5 font-serif text-[16px] font-semibold tracking-tight text-[var(--foreground)]">
               {tr(group.label)}

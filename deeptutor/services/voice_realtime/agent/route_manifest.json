@@ -2,7 +2,7 @@
   "_note": "Hard-grounding route manifest — the INDEPENDENT source of truth the loop uses to verify a navigation task landed where it was asked (issue 01). It is deliberately SEPARATE from ui_graph.json (which is the open_path navigation whitelist): a route may be grounded here without being voice-steerable. Aliases are curated DESTINATION phrasings (nouns / 'หน้า…' / page names) — NOT imperative action verbs: 'สร้างหนังสือ'/'สร้างรูปภาพ'/'อ่านออกเสียง' are action tasks, not navigations, and must NOT resolve a route (that would hard-gate an action on a URL it never promised). Keep aliases SPECIFIC — a phrase that could match two routes must be the LONGER/more-specific alias of the intended one, because the resolver breaks contains-ties by matched-alias length. Paths are parity-tested against real page.tsx (web/tests/voice-route-manifest-parity.test.ts). th/en/zh labels seeded from web/lib/settings-nav.ts + UI_PAGES (web/components/voice/VoiceCallWidget.tsx).",
   "routes": [
     {
-      "path": "/settings/search",
+      "path": "/settings#search",
       "aliases": [
         "ตั้งค่าการค้นหา",
         "ตั้งค่าค้นหา",
@@ -16,7 +16,7 @@
       ]
     },
     {
-      "path": "/settings/tools",
+      "path": "/settings#tools",
       "aliases": [
         "ตั้งค่าเครื่องมือ",
         "เครื่องมือในตัว",
@@ -27,7 +27,7 @@
       ]
     },
     {
-      "path": "/settings/capabilities",
+      "path": "/settings#capabilities",
       "aliases": [
         "ตั้งค่าความสามารถ",
         "ความสามารถ",
@@ -36,7 +36,7 @@
       ]
     },
     {
-      "path": "/settings/mcp",
+      "path": "/settings#mcp",
       "aliases": [
         "เซิร์ฟเวอร์ mcp",
         "ตั้งค่า mcp",
@@ -45,7 +45,7 @@
       ]
     },
     {
-      "path": "/settings/llm",
+      "path": "/settings#llm",
       "aliases": [
         "ตั้งค่าโมเดลภาษา",
         "โมเดลภาษา",
@@ -54,7 +54,7 @@
       ]
     },
     {
-      "path": "/settings/embedding",
+      "path": "/settings#embedding",
       "aliases": [
         "ตั้งค่า embedding",
         "โมเดล embedding",
@@ -63,7 +63,7 @@
       ]
     },
     {
-      "path": "/settings/tts",
+      "path": "/settings#tts",
       "aliases": [
         "แปลงข้อความเป็นเสียง",
         "ตั้งค่าเสียงพูด",
@@ -73,7 +73,7 @@
       ]
     },
     {
-      "path": "/settings/stt",
+      "path": "/settings#stt",
       "aliases": [
         "แปลงเสียงเป็นข้อความ",
         "ถอดเสียงเป็นข้อความ",
@@ -82,7 +82,7 @@
       ]
     },
     {
-      "path": "/settings/image",
+      "path": "/settings#imagegen",
       "aliases": [
         "ตั้งค่าการสร้างภาพ",
         "การสร้างภาพ",
@@ -91,7 +91,7 @@
       ]
     },
     {
-      "path": "/settings/video",
+      "path": "/settings#videogen",
       "aliases": [
         "ตั้งค่าการสร้างวิดีโอ",
         "การสร้างวิดีโอ",
@@ -100,7 +100,7 @@
       ]
     },
     {
-      "path": "/settings/document-parsing",
+      "path": "/settings#document-parsing",
       "aliases": [
         "แยกวิเคราะห์เอกสาร",
         "เอนจินแยกวิเคราะห์เอกสาร",
@@ -110,7 +110,7 @@
       ]
     },
     {
-      "path": "/settings/memory",
+      "path": "/settings#memory",
       "aliases": [
         "ตั้งค่าความจำ",
         "หน่วยความจำ",
@@ -120,7 +120,7 @@
       ]
     },
     {
-      "path": "/settings/network",
+      "path": "/settings#network",
       "aliases": [
         "ตั้งค่าเครือข่าย",
         "เครือข่าย",
@@ -129,7 +129,7 @@
       ]
     },
     {
-      "path": "/settings/appearance",
+      "path": "/settings#appearance",
       "aliases": [
         "ตั้งค่ารูปลักษณ์",
         "ธีมและภาษา",
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "path": "/settings/agents",
+      "path": "/settings#agent-claude-code",
       "aliases": [
         "พาร์ทเนอร์และเอเจนต์",
         "ตั้งค่าเอเจนต์",
@@ -149,7 +149,7 @@
       ]
     },
     {
-      "path": "/settings/models",
+      "path": "/settings#models",
       "aliases": [
         "ตั้งค่าโมเดล",
         "หน้าโมเดล",
@@ -167,7 +167,7 @@
       ]
     },
     {
-      "path": "/knowledge",
+      "path": "/knowledge-bases",
       "aliases": [
         "คลังความรู้",
         "ฐานความรู้",
@@ -177,7 +177,7 @@
       ]
     },
     {
-      "path": "/notebook",
+      "path": "/notebooks",
       "aliases": [
         "สมุดโน้ต",
         "หน้าโน้ต",
@@ -201,7 +201,7 @@
       ]
     },
     {
-      "path": "/book",
+      "path": "/books",
       "aliases": [
         "หน้าสร้างหนังสือ",
         "หน้าหนังสือ",
@@ -224,7 +224,7 @@
       ]
     },
     {
-      "path": "/home",
+      "path": "/chat",
       "aliases": [
         "หน้าแชทหลัก",
         "หน้าหลัก",

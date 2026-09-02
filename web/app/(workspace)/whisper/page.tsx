@@ -6,11 +6,12 @@ import { Ear, Loader2 } from "lucide-react";
 import WhisperComposer from "@/components/whisper/WhisperComposer";
 import WhisperMessageList from "@/components/whisper/WhisperMessageList";
 import WhisperRoomChip from "@/components/whisper/WhisperRoomChip";
-import {
-  UnifiedWSClient,
-  type StartTurnMessage,
-  type StreamEvent,
-} from "@/lib/unified-ws";
+import { useCapabilityFilter } from "@/features/capabilities/useCapabilityCatalog";
+import type {
+  StartTurnMessage,
+  StreamEvent,
+} from "@/features/chat/model/protocol";
+import { UnifiedTurnClient } from "@/features/chat/transport/UnifiedTurnClient";
 import {
   filterMessagesForSeat,
   looksLikeCrisisRedirect,
@@ -49,7 +50,7 @@ export default function WhisperPage() {
   const [connected, setConnected] = useState(false);
   const [everConnected, setEverConnected] = useState(false);
 
-  const clientRef = useRef<UnifiedWSClient | null>(null);
+  const clientRef = useRef<UnifiedTurnClient | null>(null);
   const seatRef = useRef<WhisperSeat>(seat);
   const roomIdRef = useRef<string | null>(roomId);
   const sessionBySeatRef = useRef<Record<WhisperSeat, string | null>>({
@@ -136,7 +137,7 @@ export default function WhisperPage() {
   }, []);
 
   useEffect(() => {
-    const client = new UnifiedWSClient(handleEvent, () => {
+    const client = new UnifiedTurnClient(handleEvent, () => {
       setBusy(false);
       setConnected(false);
     });
@@ -146,7 +147,7 @@ export default function WhisperPage() {
     // cascaded a render.
     client.connect();
 
-    // Poll readyState until open (UnifiedWSClient has no onOpen hook).
+    // Poll the adapter state until the validated v2 runtime is connected.
     const poll = window.setInterval(() => {
       if (client.connected) {
         setConnected(true);
@@ -280,6 +281,33 @@ export default function WhisperPage() {
   }
 
   const canNewRoom = Boolean(roomId || roomClosed || crisisHit);
+
+  // Whisper's seats are served by the out-of-tree psych-academy capability, not
+  // by this repository. Where it was never installed every send comes back as
+  // `Unknown capability: whisper_visitor` (#963), so say so here rather than
+  // letting the learner find out one message in. Still loading (`null`) renders
+  // the room as usual, so an install that does have the plugin never waits.
+  const capabilityAvailable = useCapabilityFilter();
+  if (capabilityAvailable && !capabilityAvailable("whisper_visitor")) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <Ear
+            className="mx-auto h-6 w-6 text-[var(--muted-foreground)]"
+            aria-hidden
+          />
+          <h1 className="mt-3 text-sm font-medium text-[var(--foreground)]">
+            {t("Whisper is not installed on this server")}
+          </h1>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--muted-foreground)]">
+            {t(
+              "The practice room runs on a separate capability plugin that this deployment does not have. Ask your administrator to install it to use this page.",
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">

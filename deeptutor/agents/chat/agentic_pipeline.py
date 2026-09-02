@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from typing import Any
 
 from deeptutor.agents._shared.tool_composition import (
@@ -18,24 +19,13 @@ from deeptutor.agents.chat.agent_loop import AgentLoop
 from deeptutor.agents.chat.context_budget import LLMRequestSnapshot, build_context_budget
 from deeptutor.agents.chat.prompt_blocks import ChatPromptAssembler
 from deeptutor.capabilities import (
-    LoopCapability,
+    LoopExtension,
     PromptBlock,
     active_loop_capabilities,
     any_exclusive_capability_active,
 )
 from deeptutor.capabilities.protocol import END_LOOP
-from deeptutor.core.agentic import (
-    DispatchOutcome,
-    LLMClientConfig,
-    UsageTracker,
-    build_completion_kwargs,
-    build_openai_client,
-    can_use_native_tool_calling,
-    dispatch_tool_calls,
-)
-from deeptutor.core.agentic.tool_dispatch import MAX_PARALLEL_TOOL_CALLS
 from deeptutor.core.context import UnifiedContext
-from deeptutor.core.stream_bus import StreamBus
 from deeptutor.core.tool_protocol import ToolLookup
 from deeptutor.core.trace import (
     build_trace_metadata,
@@ -44,10 +34,21 @@ from deeptutor.core.trace import (
     new_call_id,
 )
 from deeptutor.knowledge.manifest import KbManifest, render_manifest_note
+from deeptutor.runtime.agentic import (
+    DispatchOutcome,
+    LLMClientConfig,
+    UsageTracker,
+    build_completion_kwargs,
+    build_openai_client,
+    can_use_native_tool_calling,
+    dispatch_tool_calls,
+)
+from deeptutor.runtime.agentic.tool_dispatch import MAX_PARALLEL_TOOL_CALLS
 from deeptutor.runtime.providers import ToolScope
 from deeptutor.runtime.providers.view import ProviderToolView, build_tool_view
 from deeptutor.runtime.registry.deferred_tools import DeferredToolLoader
 from deeptutor.runtime.registry.tool_registry import get_tool_registry
+from deeptutor.runtime.stream_bus import StreamBus
 from deeptutor.services.cli_apps.models import TOOL_PREFIX as CLI_APP_TOOL_PREFIX
 from deeptutor.services.config import get_chat_params
 from deeptutor.services.llm import (
@@ -195,6 +196,10 @@ class AgenticChatPipeline:
         max_rounds: int | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        initial_tool_choice: str | None = None,
+        event_source: str = "chat",
+        event_stage: str = "responding",
+        emit_result: bool = True,
     ) -> None:
         self.language = normalize_agent_language(language)
         self.llm_config = get_llm_config()
@@ -214,9 +219,19 @@ class AgenticChatPipeline:
         self._deferred_pool: list[Any] = []
         self._exec_enabled = False
         self._kb_manifests: list[KbManifest] = []
+        # A selected capability may require one specific tool on the first
+        # internal loop round. Later rounds return to model-directed selection.
+        self.initial_tool_choice = (initial_tool_choice or "").strip() or None
         # The blocks the turn's system prompt was rendered from, kept for the
         # context-budget breakdown (see ``measure_context_budget``).
         self._last_prompt_blocks: list[PromptBlock] = []
+        # The loop engine is capability-neutral. Chat keeps these defaults;
+        # capabilities such as visualize can reuse the exact loop while owning
+        # their stream namespace and final result envelope.
+        self.event_source = str(event_source or "chat")
+        self.event_stage = str(event_stage or "responding")
+        self.emit_result = bool(emit_result)
+        self.last_result: dict[str, Any] | None = None
 
         try:
             chat_cfg = get_chat_params()
@@ -268,6 +283,7 @@ class AgenticChatPipeline:
             api_version=self.api_version,
             extra_headers=self.extra_headers or None,
             reasoning_effort=self.reasoning_effort,
+            wire_api=getattr(self.llm_config, "wire_api", None) or "auto",
         )
 
     @property
@@ -297,12 +313,12 @@ class AgenticChatPipeline:
 
         A capability that needs guaranteed loop headroom — the subagent
         capability, which must allow its full consult budget plus a finishing
-        round — sets ``context.metadata["_min_loop_rounds"]``; the loop honours
+        round — sets ``context.runtime.min_loop_rounds``; the loop honours
         the larger of that and the configured budget. A generic seam (like
         solve's ``solve_max_replans``) so the loop stays capability-agnostic.
         """
         try:
-            floor = int(context.metadata.get("_min_loop_rounds") or 0)
+            floor = int(context.runtime.min_loop_rounds or 0)
         except (TypeError, ValueError):
             floor = 0
         return max(self.max_rounds, floor)
@@ -326,7 +342,7 @@ class AgenticChatPipeline:
         """
         return self.respond_max_tokens
 
-    async def run(self, context: UnifiedContext, stream: StreamBus) -> None:
+    async def run(self, context: UnifiedContext, stream: StreamBus) -> dict[str, Any]:
         await self._prepare_deferred_tools(context)
         await self._prepare_kb_manifests(context)
         self._exec_enabled = await self._exec_allowed(context)
@@ -346,7 +362,8 @@ class AgenticChatPipeline:
             enabled_tools=enabled_tools if use_native_tools else [],
             tool_schemas=tool_schemas,
         )
-        await loop.run()
+        self.last_result = await loop.run()
+        return self.last_result
 
     # ---- prompt assembly -------------------------------------------------
 
@@ -403,7 +420,10 @@ class AgenticChatPipeline:
             role = item.get("role")
             content = item.get("content")
             if role in {"user", "assistant"} and isinstance(content, (str, list)):
-                messages.append({"role": role, "content": content})
+                message: dict[str, Any] = {"role": role, "content": content}
+                if role == "assistant" and isinstance(item.get("_provider_response_state"), dict):
+                    message["_provider_response_state"] = item["_provider_response_state"]
+                messages.append(message)
             elif role == "system" and isinstance(content, str) and content.strip():
                 # ContextBuilder emits the compressed-history summary as a
                 # leading system message; deliver it right after the system
@@ -649,7 +669,7 @@ class AgenticChatPipeline:
         )
         return _drop_unconfigured_generation_tools(composed)
 
-    def _active_loop_capabilities(self, context: UnifiedContext) -> tuple[LoopCapability, ...]:
+    def _active_loop_capabilities(self, context: UnifiedContext) -> tuple[LoopExtension, ...]:
         return active_loop_capabilities(context)
 
     @staticmethod
@@ -668,6 +688,19 @@ class AgenticChatPipeline:
         for cap in self._active_loop_capabilities(context):
             names.extend(cap.owned_tools)
         return tuple(names)
+
+    def _capability_rebinding_tools(self, context: UnifiedContext) -> frozenset[str]:
+        """Tools that repoint the rest of the round at a different target.
+
+        Optional, like ``pre_loop``: a capability declares the tools whose
+        effect the round's other calls must see (``mastery_switch`` moves the
+        turn onto another path), and the dispatcher runs them first and
+        re-binds the rest against the result.
+        """
+        names: list[str] = []
+        for cap in self._active_loop_capabilities(context):
+            names.extend(getattr(cap, "rebinding_tools", ()) or ())
+        return frozenset(names)
 
     def _capability_system_blocks(self, context: UnifiedContext):
         blocks = []
@@ -689,6 +722,85 @@ class AgenticChatPipeline:
         ]
         return "\n\n".join(seed for seed in seeds if seed)
 
+    def _capability_finish_instruction(self, context: UnifiedContext, final_text: str) -> str:
+        """Let an active capability reject a narrow tool-less finish once.
+
+        This is a protocol guard, not a content generator: capabilities return
+        a short instruction only when their own state proves that required tool
+        work remains. A guard failure must not sink the learner's answer.
+        """
+        for cap in self._active_loop_capabilities(context):
+            hook = getattr(cap, "finish_instruction", None)
+            if not callable(hook):
+                continue
+            try:
+                instruction = hook(context, final_text)
+            except Exception:
+                logger.warning(
+                    "finish guard failed for capability %s",
+                    getattr(cap, "name", "?"),
+                    exc_info=True,
+                )
+                continue
+            content = str(instruction or "").strip()
+            if content:
+                return content
+        return ""
+
+    def _capability_tool_round_output_policy(
+        self,
+        context: UnifiedContext,
+        final_text: str,
+        tool_names: tuple[str, ...],
+    ) -> str:
+        """Let a finish-guard capability classify a tool round's prose."""
+        for cap in self._active_loop_capabilities(context):
+            hook = getattr(cap, "tool_round_output_policy", None)
+            if not callable(hook):
+                continue
+            try:
+                policy = str(hook(context, final_text, tool_names) or "").strip()
+            except Exception:
+                logger.warning(
+                    "tool-round policy failed for capability %s",
+                    getattr(cap, "name", "?"),
+                    exc_info=True,
+                )
+                continue
+            if policy in {"publish", "discard"}:
+                return policy
+        return ""
+
+    def _capability_final_text_override(
+        self,
+        context: UnifiedContext,
+        final_text: str,
+    ) -> str | None:
+        """Return a capability-owned canonical answer after private protocol work."""
+        for cap in self._active_loop_capabilities(context):
+            hook = getattr(cap, "final_text_override", None)
+            if not callable(hook):
+                continue
+            try:
+                override = hook(context, final_text)
+            except Exception:
+                logger.warning(
+                    "final-text override failed for capability %s",
+                    getattr(cap, "name", "?"),
+                    exc_info=True,
+                )
+                continue
+            if override is not None:
+                return str(override).strip()
+        return None
+
+    def _has_capability_finish_guard(self, context: UnifiedContext) -> bool:
+        """Whether a capability may need to inspect a tool-less finish first."""
+        return any(
+            callable(getattr(cap, "finish_instruction", None))
+            for cap in self._active_loop_capabilities(context)
+        )
+
     async def _capability_pre_loop_briefings(
         self,
         context: UnifiedContext,
@@ -699,7 +811,7 @@ class AgenticChatPipeline:
 
         The hook is optional (read via ``getattr`` so plain capabilities are
         unaffected) and runs once before the answer loop's first LLM call —
-        see the ``pre_loop`` note on :class:`LoopCapability`. Failures are
+        see the ``pre_loop`` note on :class:`LoopExtension`. Failures are
         swallowed: a pre-pass is best-effort grounding and must never sink the
         turn.
         """
@@ -826,7 +938,7 @@ class AgenticChatPipeline:
         stream: StreamBus | None = None,
         retrieve_meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        from deeptutor.core.agentic import execute_tool_call
+        from deeptutor.runtime.agentic import execute_tool_call
 
         stream = stream or StreamBus()
         return await execute_tool_call(
@@ -834,8 +946,8 @@ class AgenticChatPipeline:
             tool_name=tool_name,
             tool_args=tool_args,
             stream=stream,
-            source="chat",
-            stage="responding",
+            source=self.event_source,
+            stage=self.event_stage,
             retrieve_meta=retrieve_meta,
             empty_tool_result_message=self._t("notices.empty_tool_result"),
             start_retrieval_message=self._t(
@@ -869,11 +981,12 @@ class AgenticChatPipeline:
             tool_calls=tool_calls,
             context=context,
             stream=stream,
-            source="chat",
+            source=self.event_source,
             stage=stage,
             iteration_index=iteration_index,
             registry=self.tool_lookup,
             kwarg_augmenter=self._augment_tool_kwargs,
+            rebinding_tools=self._capability_rebinding_tools(context),
             retrieve_meta_factory=lambda meta, tn, ta: self._retrieve_trace_metadata(
                 meta, context=context, tool_name=tn, tool_args=ta
             ),
@@ -889,7 +1002,7 @@ class AgenticChatPipeline:
                 tool=tn,
                 default=f"An unknown error occurred while executing {tn}.",
             ),
-            trace_id_prefix="chat-loop",
+            trace_id_prefix=f"{self.event_source}-loop",
         )
 
     async def _notify_pause_hooks(
@@ -930,7 +1043,7 @@ class AgenticChatPipeline:
     ) -> bool:
         ask_user = (dispatch.pause_payload or {}).get("ask_user") or {}
         await self._notify_pause_hooks(context, "on_user_pause", context, ask_user)
-        waiter = context.metadata.get("wait_for_user_reply")
+        waiter = context.runtime.wait_for_user_reply
         if not callable(waiter):
             await self._emit_terminator_final_response(
                 stream,
@@ -964,12 +1077,17 @@ class AgenticChatPipeline:
         }
         if answers:
             meta["answers"] = list(answers)
-        await stream.progress("", source="chat", stage="responding", metadata=meta)
+        await stream.progress(
+            "",
+            source=self.event_source,
+            stage=self.event_stage,
+            metadata=meta,
+        )
 
         # Neutral stop signal for loop plugins (e.g. a crisis redirect): the
         # outer capability owns the final message, so skip further LLM rounds.
         # Everything below only exists to feed the answer back to the model.
-        if context.metadata.get(END_LOOP):
+        if context.interaction.end_loop or context.metadata.get(END_LOOP):
             return False
 
         body_text = _format_user_reply_body(
@@ -1030,7 +1148,7 @@ class AgenticChatPipeline:
             # A CLI app runs like exec, and for the same reason gets its workdir
             # from here rather than choosing one: one directory per turn shared by
             # every app, so the model can render with one and post-process with
-            # another, and the files land where /api/outputs will serve them
+            # another, and the files land where /files/outputs will serve them
             # (``PathService.is_public_output_path`` has the matching branch).
             from deeptutor.services.sandbox import Mount
 
@@ -1055,7 +1173,7 @@ class AgenticChatPipeline:
                 )
         elif tool_name in ("imagegen", "videogen"):
             # Generated media lands in the turn's public workspace so it
-            # surfaces as a download card via /api/outputs (same convention as
+            # surfaces as a download card via /files/outputs (same convention as
             # exec/code_execution artifacts).
             media_dir = task_dir / "media" if task_dir is not None else None
             if media_dir is not None:
@@ -1194,7 +1312,10 @@ class AgenticChatPipeline:
             return ""
         if sources:
             await stream.sources(
-                sources, source="chat", stage="responding", metadata={"trace_kind": "sources"}
+                sources,
+                source=self.event_source,
+                stage=self.event_stage,
+                metadata={"trace_kind": "sources"},
             )
         header = self._t(
             "knowledge_base_seed.header",
@@ -1211,10 +1332,10 @@ class AgenticChatPipeline:
         query: str,
         stream: StreamBus,
     ) -> tuple[str, list[dict[str, Any]]] | None:
-        call_id = new_call_id("chat-kb-seed")
+        call_id = new_call_id(f"{self.event_source}-kb-seed")
         retrieve_meta = build_trace_metadata(
             call_id=call_id,
-            phase="responding",
+            phase=self.event_stage,
             label=self._t("labels.retrieve", default="Retrieve"),
             call_kind="rag_retrieval",
             trace_id=call_id,
@@ -1252,8 +1373,8 @@ class AgenticChatPipeline:
             return
         await stream.content(
             text,
-            source="chat",
-            stage="responding",
+            source=self.event_source,
+            stage=self.event_stage,
             metadata=merge_trace_metadata(final_meta, {"trace_kind": "llm_output"}),
         )
 
@@ -1263,11 +1384,11 @@ class AgenticChatPipeline:
         content: str,
     ) -> None:
         final_meta = build_trace_metadata(
-            call_id=new_call_id("chat-final-response"),
-            phase="responding",
+            call_id=new_call_id(f"{self.event_source}-final-response"),
+            phase=self.event_stage,
             label=self._t("labels.final_response", default="Final response"),
             call_kind="llm_final_response",
-            trace_id="chat-final-response",
+            trace_id=f"{self.event_source}-final-response",
             trace_role="response",
             trace_group="stage",
             fallback=True,
@@ -1285,11 +1406,11 @@ class AgenticChatPipeline:
         if not content:
             return
         final_meta = build_trace_metadata(
-            call_id=new_call_id("chat-final-response"),
-            phase="responding",
+            call_id=new_call_id(f"{self.event_source}-final-response"),
+            phase=self.event_stage,
             label=self._t("labels.final_response", default="Final response"),
             call_kind="llm_final_response",
-            trace_id="chat-final-response",
+            trace_id=f"{self.event_source}-final-response",
             trace_role="response",
             trace_group="stage",
             terminator_tool=str(payload.get("tool_name") or ""),
@@ -1300,8 +1421,8 @@ class AgenticChatPipeline:
             merged["tool_metadata"] = dict(tool_metadata)
         await stream.content(
             content,
-            source="chat",
-            stage="responding",
+            source=self.event_source,
+            stage=self.event_stage,
             metadata=merge_trace_metadata(final_meta, merged),
         )
 
@@ -1337,8 +1458,8 @@ class AgenticChatPipeline:
         if snipped:
             await stream.progress(
                 self._t("notices.context_window_guard"),
-                source="chat",
-                stage="responding",
+                source=self.event_source,
+                stage=self.event_stage,
                 metadata={"trace_kind": "warning"},
             )
 
@@ -1608,33 +1729,92 @@ class AgenticChatPipeline:
             )
         except Exception:
             return ""
+
+        # Only the "how do I get a script into a file" clause depends on the
+        # host shell; everything else in the note is identical, so vary that
+        # one clause rather than duplicating the whole paragraph per platform.
+        is_windows = sys.platform == "win32"
         if self.language == "zh":
+            how_to_write = (
+                (
+                    "当前 shell 是 Windows PowerShell。列目录使用 Get-ChildItem，限制输出使用 "
+                    "Select-Object -First；连续命令使用分号。`python` 与 `python -m pip` 均指向 "
+                    "DeepTutor 自己的运行环境。通过 exec 使用 PowerShell here-string 将脚本写入文件再运行，例如：\n"
+                    "  @'\n...Python 脚本内容...\n'@ | Set-Content -Encoding utf8 gen.py\n"
+                    "  python gen.py\n"
+                    "本地路径经 Test-Path 或 Get-Item 验证存在后，直接读取，不要要求用户重复上传。"
+                    "命令失败时先根据 STDERR 与退出码修正命令或依赖；只有工具明确返回拒绝访问时，"
+                    "才能判断为权限问题。不要把命令语法或依赖错误说成沙箱无权访问。"
+                )
+                if is_windows
+                else (
+                    "直接通过 exec 写入并运行脚本（如 heredoc：python - <<'PY' … PY，"
+                    "或 cat > gen.py <<'EOF' … EOF 后再运行）。"
+                )
+            )
             return (
                 "[本轮工作区]\n"
                 f"脚本和临时文件应写入：{exec_dir}\n"
                 "相对路径会解析到这个目录。需要创建 PDF、图片、表格或其他下载文件时，"
-                "直接通过 exec 写入并运行脚本（如 heredoc：python - <<'PY' … PY，"
-                "或 cat > gen.py <<'EOF' … EOF 后再运行）。生成的文件会自动以可下载"
-                "卡片呈现给用户——在回答里描述你做了什么即可，不要粘贴原始 URL。"
+                f"{how_to_write}"
+                "生成的文件会自动以可下载卡片呈现给用户——在回答里描述你做了什么即可，"
+                "不要粘贴原始 URL。"
             )
         if self.language == "th":
+            how_to_write_th = (
+                (
+                    "เชลล์ปัจจุบันคือ Windows PowerShell ใช้ Get-ChildItem เพื่อดูรายการไฟล์, "
+                    "Select-Object -First เพื่อจำกัดผลลัพธ์ และคั่นหลายคำสั่งด้วยเซมิโคลอน "
+                    "ทั้ง `python` และ `python -m pip` ชี้ไปที่รันไทม์ของ DeepTutor เอง "
+                    "ให้เขียนสคริปต์ลงไฟล์ผ่าน exec ด้วย here-string ของ PowerShell แล้วค่อยรัน เช่น:\n"
+                    "  @'\n...เนื้อหาสคริปต์ Python...\n'@ | Set-Content -Encoding utf8 gen.py\n"
+                    "  python gen.py\n"
+                    "เมื่อ Test-Path หรือ Get-Item ยืนยันว่าพาธในเครื่องมีอยู่จริงแล้ว ให้อ่านไฟล์นั้นตรง ๆ "
+                    "อย่าขอให้ผู้ใช้อัปโหลดซ้ำ เวลาคำสั่งล้มเหลวให้แก้คำสั่งหรือ dependency จาก STDERR "
+                    "และ exit code ก่อน อย่าสรุปว่าเป็นปัญหาสิทธิ์แซนด์บ็อกซ์ นอกจากเครื่องมือจะแจ้ง "
+                    "access denied มาชัดเจน "
+                )
+                if is_windows
+                else (
+                    "ให้เขียนและรันสคริปต์ผ่าน exec โดยตรง (เช่น heredoc: python - <<'PY' … PY "
+                    "หรือ cat > gen.py <<'EOF' … EOF แล้วรัน) "
+                )
+            )
             return (
                 "[เวิร์กสเปซของเทิร์นนี้]\n"
                 f"สคริปต์และไฟล์ชั่วคราวควรเขียนไว้ใต้: {exec_dir}\n"
                 "พาธสัมพัทธ์จะถูกแปลงไปยังไดเรกทอรีนี้ เมื่อต้องสร้างไฟล์ PDF, รูปภาพ, "
-                "สเปรดชีต หรือไฟล์ดาวน์โหลดอื่นๆ ให้เขียนและรันสคริปต์ผ่าน exec โดยตรง "
-                "(เช่น heredoc: python - <<'PY' … PY หรือ cat > gen.py <<'EOF' … EOF "
-                "แล้วรัน) ไฟล์ที่สร้างจะแสดงให้ผู้ใช้เป็นการ์ดดาวน์โหลดอัตโนมัติ — "
+                f"สเปรดชีต หรือไฟล์ดาวน์โหลดอื่นๆ {how_to_write_th}"
+                "ไฟล์ที่สร้างจะแสดงให้ผู้ใช้เป็นการ์ดดาวน์โหลดอัตโนมัติ — "
                 "อธิบายสิ่งที่คุณทำในคำตอบก็พอ ไม่ต้องวาง URL ดิบ"
             )
+        how_to_write = (
+            (
+                "the current shell is Windows PowerShell. Use Get-ChildItem to list files, "
+                "Select-Object -First to limit output, and semicolons between commands. "
+                "Both `python` and `python -m pip` resolve to DeepTutor's runtime. "
+                "Write the script to a file through exec with a PowerShell "
+                "here-string, then run it, for example:\n"
+                "  @'\n...Python script contents...\n'@ | Set-Content -Encoding utf8 gen.py\n"
+                "  python gen.py\n"
+                "After Test-Path or Get-Item confirms a local path, read it directly instead "
+                "of asking the user to upload it again. Correct the command or dependency from "
+                "STDERR and the exit code first. Do not describe a syntax or dependency failure "
+                "as denied sandbox access unless the tool explicitly reports access denied. "
+            )
+            if is_windows
+            else (
+                "write and run scripts directly through exec (e.g. a heredoc: "
+                "python - <<'PY' … PY, or cat > gen.py <<'EOF' … EOF then run it). "
+            )
+        )
         return (
             "[Turn workspace]\n"
             f"Scripts and temporary files should be written under: {exec_dir}\n"
             "Relative paths resolve to this directory. When creating PDFs, images, "
-            "spreadsheets, or other downloadable files, write and run scripts directly "
-            "through exec (e.g. a heredoc: python - <<'PY' … PY, or cat > gen.py <<'EOF' "
-            "… EOF then run it). Generated files are shown to the user automatically as "
-            "downloadable cards — describe what you made, do not paste raw URLs."
+            f"spreadsheets, or other downloadable files, {how_to_write}"
+            "Generated files are shown to the user automatically as downloadable "
+            "cards — describe what you made, do not paste raw URLs."
         )
 
     def _t(self, key: str, default: str = "", **kwargs: Any) -> str:

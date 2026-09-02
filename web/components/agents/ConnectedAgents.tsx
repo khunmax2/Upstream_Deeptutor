@@ -20,8 +20,8 @@ import {
 
 /**
  * Connected agents — live agents the chat composer can select and consult in
- * real time: Claude Code / Codex on the user's machine, or one of their
- * partners. Distinct from the imported-history agents below it: those replay
+ * real time: a supported local agent harness, or one of the user's partners.
+ * Distinct from the imported-history agents below it: those replay
  * past transcripts, these drive the live agent now. CLI detection is
  * machine-global (is the CLI installed here); partners come from the user's
  * partner list. Consulting a partner opens a fresh session on it — every
@@ -35,12 +35,15 @@ type Lang = { zh: string; en: string; th: string };
 function backendLabel(kind: string, tr: (l: Lang) => string): string {
   if (kind === "claude_code") return "Claude Code";
   if (kind === "codex") return "Codex";
-  if (kind === "gemini") return "Gemini CLI";
+  if (kind === "antigravity") return "Antigravity CLI";
   if (kind === "kimi") return "Kimi CLI";
   if (kind === "opencode") return "opencode";
   if (kind === "mimo") return "MiMo Code";
+  if (kind === "hermes") return "Hermes Agent";
+  if (kind === "openclaw") return "OpenClaw";
+  if (kind === "deepseek_harness") return "DeepSeek Harness";
   if (kind === PARTNER_KIND)
-    return tr({ zh: "伙伴", en: "Partner", th: "พาร์ทเนอร์" });
+    return tr({ zh: "伙伴", en: "Partner", th: "คู่หู AI" });
   return kind;
 }
 
@@ -125,9 +128,9 @@ export default function ConnectedAgents() {
           th: "เอเจนต์ที่เชื่อมต่อ",
         })}
         description={tr({
-          zh: "把本机的 Claude Code、Codex、Gemini CLI、Kimi CLI、opencode、MiMo Code 或你的伙伴接进来，在对话中选中后直接向它提问 —— 它的完整运行过程会实时展示。",
-          en: "Bring in the Claude Code, Codex, Gemini CLI, Kimi CLI, opencode, or MiMo Code on this machine, or one of your partners — select one in chat to consult it directly, with its full run shown live.",
-          th: "นำ Claude Code, Codex, Gemini CLI, Kimi CLI, opencode หรือ MiMo Code ในเครื่องนี้ หรือพาร์ทเนอร์ของคุณเข้ามา — เลือกในแชตเพื่อปรึกษาได้โดยตรง พร้อมแสดงกระบวนการทำงานทั้งหมดแบบเรียลไทม์",
+          zh: "把本机的 Claude Code、Codex、Antigravity CLI、Kimi CLI、opencode、MiMo Code、Hermes Agent、OpenClaw、DeepSeek Harness 或你的伙伴接进来，在对话中选中后直接向它提问 —— 它的运行过程会实时展示。",
+          en: "Bring in a supported local harness — including Claude Code, Codex, Hermes Agent, OpenClaw, and DeepSeek Harness — or one of your partners. Select it in chat to consult it directly and see its run live.",
+          th: "นำ harness ในเครื่องที่รองรับเข้ามา — เช่น Claude Code, Codex, Hermes Agent, OpenClaw และ DeepSeek Harness — หรือคู่หู AI ของคุณ เลือกในแชตเพื่อปรึกษาได้โดยตรง พร้อมดูการทำงานแบบเรียลไทม์",
         })}
         action={
           canConnect ? (
@@ -151,9 +154,9 @@ export default function ConnectedAgents() {
       ) : !canConnect ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)]/40 px-4 py-5 text-[12.5px] leading-relaxed text-[var(--muted-foreground)]">
           {tr({
-            zh: "未在本机检测到可用的智能体 CLI（Claude Code、Codex、Gemini CLI、Kimi CLI、opencode、MiMo Code），也还没有任何伙伴。安装并登录其中任一 CLI，或在「伙伴」里新建一个，即可连接。",
-            en: "No agent CLI detected on this machine (Claude Code, Codex, Gemini CLI, Kimi CLI, opencode, MiMo Code), and no partners yet. Install and log in to any of them, or create a partner, to connect one.",
-            th: "ไม่พบเอเจนต์ CLI ในเครื่องนี้ (Claude Code, Codex, Gemini CLI, Kimi CLI, opencode, MiMo Code) และยังไม่มีพาร์ทเนอร์ ติดตั้งและล็อกอินตัวใดตัวหนึ่ง หรือสร้างพาร์ทเนอร์ เพื่อเชื่อมต่อ",
+            zh: "未在本机检测到受支持的智能体 CLI（包括 Hermes Agent、OpenClaw、DeepSeek Harness），也还没有任何伙伴。安装并登录其中任一 CLI，或在「伙伴」里新建一个，即可连接。",
+            en: "No supported agent CLI was detected on this machine (including Hermes Agent, OpenClaw, and DeepSeek Harness), and there are no partners yet. Install and log in to one, or create a partner, to connect it.",
+            th: "ไม่พบเอเจนต์ CLI ที่รองรับในเครื่องนี้ (รวมถึง Hermes Agent, OpenClaw และ DeepSeek Harness) และยังไม่มีคู่หู AI ติดตั้งและล็อกอินตัวใดตัวหนึ่ง หรือสร้างคู่หู AI เพื่อเชื่อมต่อ",
           })}
         </div>
       ) : connections.length === 0 ? (
@@ -366,7 +369,7 @@ function ConnectModal({
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
               {tr({ zh: "智能体", en: "Agent", th: "เอเจนต์" })}
             </label>
-            {/* Two per row — up to six CLIs plus Partner can be on offer. */}
+            {/* Two per row; the detected backend list is registry-driven. */}
             <div className="grid grid-cols-2 gap-2">
               {options.map((opt) => {
                 const Glyph = agentGlyph(opt.kind);

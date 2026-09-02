@@ -10,7 +10,7 @@ Order matters — it controls match priority and fallback. Gateways first.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic.alias_generators import to_snake
 
@@ -44,6 +44,8 @@ class ProviderSpec:
     supports_prompt_caching: bool = False
     supports_stream_options: bool = True
     model_overrides: tuple[tuple[str, dict[str, Any]], ...] = ()
+    # Bare model ids too short or generic for substring-based vendor detection.
+    exact_model_ids: tuple[str, ...] = ()
     is_oauth: bool = False
     is_direct: bool = False
     thinking_style: str = ""
@@ -52,6 +54,10 @@ class ProviderSpec:
     # explicit reasoning_effort, the provider auto-injects "high" so the
     # thinking_style flag (e.g. extra_body.thinking.type=enabled) is sent.
     reasoning_model_patterns: tuple[str, ...] = ()
+    # Exact model ids whose Responses API executes `web_search` server-side.
+    # Exact matching is intentional: providers often expose Responses only on
+    # one model even when sibling models share the same family prefix.
+    native_web_search_models: tuple[str, ...] = ()
 
     @property
     def mode(self) -> str:
@@ -68,6 +74,11 @@ class ProviderSpec:
     @property
     def auth_mode(self) -> str:
         return "oauth" if self.is_oauth else "api_key"
+
+    @property
+    def supports_wire_api_selection(self) -> bool:
+        """Whether profiles may select an OpenAI wire protocol explicitly."""
+        return self.backend == "openai_compat" and not self.is_oauth
 
     @property
     def label(self) -> str:
@@ -324,6 +335,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         default_api_base="https://api.deepseek.com",
         thinking_style="thinking_type",
         reasoning_model_patterns=("deepseek-v4-pro", "deepseek-reasoner"),
+        native_web_search_models=("deepseek-v4-flash", "deepseek-v4-pro"),
     ),
     ProviderSpec(
         name="gemini",
@@ -364,8 +376,14 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         # this model"). Dropping the parameter (value None) lets the API apply
         # the correct fixed value per model and per thinking/non-thinking mode —
         # Moonshot's own recommendation. The tunable moonshot-v1-* series does
-        # not contain "kimi" and keeps the caller's temperature.
-        model_overrides=(("kimi", {"temperature": None}),),
+        # not contain "kimi" and keeps the caller's temperature. The Kimi
+        # coding endpoint (api.kimi.com/coding/v1) addresses these models by
+        # bare ids ("k3", ...) without the "kimi-" prefix, so match those too.
+        model_overrides=(
+            ("kimi", {"temperature": None}),
+            ("=k3", {"temperature": None}),
+        ),
+        exact_model_ids=("k3",),
     ),
     # MiniMax runs two separate platforms: global (platform.minimax.io /
     # api.minimax.io) and mainland China (platform.minimaxi.com /
@@ -507,6 +525,9 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
 
 NANOBOT_LLM_PROVIDERS: tuple[str, ...] = tuple(spec.name for spec in PROVIDERS)
 
+WireAPI = Literal["auto", "responses", "chat_completions"]
+WIRE_API_VALUES: frozenset[str] = frozenset({"auto", "responses", "chat_completions"})
+
 
 def find_by_name(name: str | None) -> ProviderSpec | None:
     canonical = canonical_provider_name(name)
@@ -516,6 +537,23 @@ def find_by_name(name: str | None) -> ProviderSpec | None:
         if spec.name == canonical:
             return spec
     return None
+
+
+def normalize_wire_api(value: Any) -> WireAPI:
+    """Normalize untrusted catalog values to a supported wire protocol."""
+    normalized = str(value or "auto").strip().lower()
+    return normalized if normalized in WIRE_API_VALUES else "auto"  # type: ignore[return-value]
+
+
+def wire_api_for_provider(
+    value: Any,
+    provider: ProviderSpec | str | None,
+) -> WireAPI:
+    """Return a protocol override only for OpenAI-compatible backends."""
+    spec = find_by_name(provider) if isinstance(provider, str) else provider
+    if spec is None or not spec.supports_wire_api_selection:
+        return "auto"
+    return normalize_wire_api(value)
 
 
 def find_by_model(model: str | None) -> ProviderSpec | None:
@@ -531,6 +569,9 @@ def find_by_model(model: str | None) -> ProviderSpec | None:
         if model_prefix and normalized_prefix == spec.name:
             return spec
     for spec in standard_specs:
+        if model_lower in spec.exact_model_ids:
+            return spec
+    for spec in standard_specs:
         if any(
             kw in model_lower or kw.replace("-", "_") in model_normalized for kw in spec.keywords
         ):
@@ -540,7 +581,12 @@ def find_by_model(model: str | None) -> ProviderSpec | None:
 
 def _matching_overrides(spec: ProviderSpec, model_lower: str) -> dict[str, Any]:
     for pattern, overrides in spec.model_overrides:
-        if pattern in model_lower:
+        # ``=name`` is an exact bare model id. Most historical patterns are
+        # vendor-family substrings, but a short id such as ``k3`` must not also
+        # match unrelated ids like ``sk3`` or ``k30``.
+        if (pattern.startswith("=") and model_lower == pattern[1:]) or (
+            not pattern.startswith("=") and pattern in model_lower
+        ):
             return dict(overrides)
     return {}
 
@@ -611,9 +657,13 @@ __all__ = [
     "PROVIDERS",
     "NANOBOT_LLM_PROVIDERS",
     "PROVIDER_ALIASES",
+    "WIRE_API_VALUES",
+    "WireAPI",
     "canonical_provider_name",
     "find_by_name",
     "find_by_model",
     "find_gateway",
+    "normalize_wire_api",
     "strip_provider_prefix",
+    "wire_api_for_provider",
 ]

@@ -14,7 +14,22 @@ const config = [
     },
   },
   {
-    ignores: ["node_modules/**", ".next/**", ".next-deeptutor/**", "dist/**", "out/**"],
+    // ``.next-*`` covers every build output, including the throwaway dist dirs
+    // a second dev server needs (DEEPTUTOR_NEXT_DIST_DIR, see next.config.js):
+    // without it, running one turns `npx eslint .` — a CI gate — red with
+    // hundreds of errors from generated code.
+    ignores: [
+      "node_modules/**",
+      ".next/**",
+      ".next-*/**",
+      "dist/**",
+      "out/**",
+      "tmp/**",
+      "coverage/**",
+      "playwright-report/**",
+      "test-results/**",
+      "contracts/generated/.tmp/**",
+    ],
   },
 ];
 

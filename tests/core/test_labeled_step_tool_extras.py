@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from deeptutor.core.agentic.labeled_step import run_labeled_step
-from deeptutor.core.stream_bus import StreamBus
+from deeptutor.runtime.agentic.labeled_step import run_labeled_step
+from deeptutor.runtime.stream_bus import StreamBus
 
 SIGNATURE = {"extra_content": {"google": {"thought_signature": "sig-xyz789"}}}
 
@@ -126,7 +126,7 @@ def test_assistant_message_echoes_provider_extras() -> None:
     replayed assistant turn through ``messages.assistant_message_with_tool_calls``
     so the signature must survive there, not merely in a helper.
     """
-    from deeptutor.core.agentic.messages import assistant_message_with_tool_calls
+    from deeptutor.runtime.agentic.messages import assistant_message_with_tool_calls
 
     message = assistant_message_with_tool_calls(
         "", [{"id": "call_1", "name": "rag", "arguments": "{}", "extra": SIGNATURE}]

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { browserStorage } from "@/shared/storage";
 import { useTranslation } from "react-i18next";
 import {
   PawPrint,
@@ -34,7 +35,7 @@ import {
  * Learner Anima — the companion's own top-level dashboard.
  *
  * One pet per user, fed by ALL their mastery paths. The server is authoritative:
- * this page polls ONE aggregate endpoint (`/api/v1/pet/dashboard`) and renders it.
+ * this page polls ONE aggregate endpoint (the pet dashboard) and renders it.
  * Every card is a real learning signal — the mastery profile reuses the tutor's
  * own gate, growth reads mastery levels / error records / next-objective, activity
  * is quiz-only, reviews are due-driven. Nothing here invents a metric or economy.
@@ -52,8 +53,8 @@ const AXIS_COLOR: Record<string, string> = {
 };
 
 const NAV = {
-  learn: "/home",
-  book: "/book",
+  learn: "/chat",
+  book: "/books",
   coWriter: "/co-writer",
   partners: "/partners",
 } as const;
@@ -96,7 +97,7 @@ export default function AnimaPage() {
   // Open the tour on first visit (deferred a frame so it runs after paint, not
   // synchronously in the effect). The header's "Take a tour" button reopens it.
   useEffect(() => {
-    if (localStorage.getItem("anima_tour_seen_v1")) return;
+    if (browserStorage.readRaw("local", "anima_tour_seen_v1")) return;
     const id = window.requestAnimationFrame(() => setTourOpen(true));
     return () => window.cancelAnimationFrame(id);
   }, []);
@@ -104,7 +105,7 @@ export default function AnimaPage() {
   const closeTour = useCallback(() => {
     setTourOpen(false);
     try {
-      localStorage.setItem("anima_tour_seen_v1", "1");
+      browserStorage.writeRaw("local", "anima_tour_seen_v1", "1");
     } catch {
       /* ignore storage errors */
     }

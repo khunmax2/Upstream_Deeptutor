@@ -94,14 +94,43 @@ async def test_exec_tool_reports_generated_public_artifacts(
     # raw download URL is delivered out-of-band (sources/metadata), never in the
     # model-facing text, so the model can't paste it.
     assert "clickable link" in result.content
-    assert "/api/outputs/" not in result.content
+    assert "/files/outputs/" not in result.content
     assert "build_pdf.py" not in result.content
     assert result.metadata["artifacts"][0]["filename"] == "report.pdf"
     assert (
         result.metadata["artifacts"][0]["url"]
-        == "/api/outputs/workspace/chat/chat/turn_1/exec/report.pdf"
+        == "/files/outputs/workspace/chat/chat/turn_1/exec/report.pdf"
     )
     assert result.sources[0]["url"].endswith("/report.pdf")
+
+
+@pytest.mark.asyncio
+async def test_exec_tool_reports_missing_artifacts_after_success(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path_service = PathService(workspace_root=tmp_path / "data")
+    workdir = path_service.get_task_workspace("chat", "turn_1") / "exec"
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    class FakeSandboxService:
+        async def run(self, request, *, user_id: str):
+            return ExecResult(stdout="done\n", exit_code=0)
+
+    import deeptutor.services.sandbox as sandbox_pkg
+    import deeptutor.services.sandbox.artifacts as sandbox_artifacts
+
+    monkeypatch.setattr(sandbox_pkg, "get_sandbox_service", lambda: FakeSandboxService())
+    monkeypatch.setattr(sandbox_artifacts, "get_path_service", lambda: path_service)
+
+    result = await ExecTool().execute(
+        command="python build_pdf.py",
+        _sandbox_user_id="user-1",
+        _sandbox_workdir=str(workdir),
+    )
+
+    assert result.success is True
+    assert "No generated artifacts were found in the workspace." in result.content
+    assert result.metadata["artifacts"] == []
 
 
 @pytest.mark.asyncio
@@ -270,6 +299,36 @@ async def test_code_execution_tool_runs_python_via_sandbox(
 
 
 @pytest.mark.asyncio
+async def test_code_execution_tool_warns_when_no_artifacts_are_generated(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path_service = PathService(workspace_root=tmp_path / "data")
+    workdir = path_service.get_task_workspace("chat", "turn_1") / "code_runs"
+
+    class FakeSandboxService:
+        async def run(self, request, *, user_id: str):
+            return ExecResult(stdout="PDF created\n", exit_code=0)
+
+    import deeptutor.services.sandbox as sandbox_pkg
+    import deeptutor.services.sandbox.artifacts as sandbox_artifacts
+
+    monkeypatch.setattr(sandbox_pkg, "get_sandbox_service", lambda: FakeSandboxService())
+    monkeypatch.setattr(sandbox_artifacts, "get_path_service", lambda: path_service)
+
+    result = await CodeExecutionTool().execute(
+        language="python",
+        code="print('PDF created')",
+        _sandbox_user_id="user-1",
+        _sandbox_workdir=str(workdir),
+    )
+
+    assert result.success is True
+    assert "No generated artifacts were found in the workspace." in result.content
+    assert result.metadata["artifacts"] == []
+    assert result.sources == []
+
+
+@pytest.mark.asyncio
 async def test_code_execution_tool_compiles_cpp(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from pathlib import Path
 
@@ -299,6 +358,18 @@ async def test_code_execution_tool_compiles_cpp(tmp_path, monkeypatch: pytest.Mo
 
     assert result.success is True
     assert captured["command"] == "c++ -std=c++17 -O2 main.cpp -o prog && ./prog"
+
+
+def test_code_execution_tool_uses_windows_shell_syntax(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deeptutor.tools.builtin as builtin
+
+    monkeypatch.setattr(builtin.sys, "platform", "win32")
+
+    assert CodeExecutionTool._command_for_platform("python", has_stdin=False) == "python main.py"
+    assert (
+        CodeExecutionTool._command_for_platform("cpp", has_stdin=True)
+        == "$stdinText = Get-Content -Raw stdin.txt; g++ -std=c++17 -O2 main.cpp -o prog.exe; if ($LASTEXITCODE -eq 0) { $stdinText | .\\prog.exe }"
+    )
 
 
 @pytest.mark.asyncio

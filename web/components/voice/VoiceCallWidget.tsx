@@ -55,17 +55,17 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
   {
     id: "chat",
     label: "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepTutor)",
-    path: "/home",
+    path: "/chat",
   },
   {
     id: "knowledge",
     label: "หน้า Knowledge Base (คลังความรู้/ศูนย์ความรู้/เอกสาร)",
-    path: "/knowledge",
+    path: "/knowledge-bases",
   },
-  { id: "notebook", label: "หน้าสมุดโน้ต", path: "/notebook" },
+  { id: "notebook", label: "หน้าสมุดโน้ต", path: "/notebooks" },
   { id: "memory", label: "หน้าความจำ / หน่วยความจำ (memory)", path: "/memory" },
   { id: "agents", label: "หน้าเอเจนต์ของฉัน", path: "/agents" },
-  { id: "book", label: "หน้าสร้างหนังสือ (book)", path: "/book" },
+  { id: "book", label: "หน้าสร้างหนังสือ (book)", path: "/books" },
   {
     id: "co_writer",
     label: "หน้าเขียนงานร่วมกัน (co-writer)",
@@ -83,10 +83,16 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
     path: "/partners",
   },
   {
-    id: "playground",
-    label: "หน้า playground (สนามทดลอง)",
-    path: "/playground",
+    id: "mastery",
+    label: "หน้าเส้นทางสู่ความเชี่ยวชาญ (mastery path)",
+    path: "/mastery",
   },
+  {
+    id: "reading",
+    label: "หน้าอ่านแบบดื่มด่ำ (immersive reading)",
+    path: "/reading",
+  },
+  { id: "courses", label: "หน้าคอร์ส", path: "/courses" },
   { id: "settings", label: "หน้าตั้งค่า (settings)", path: "/settings" },
   { id: "profile", label: "หน้าโปรไฟล์ผู้ใช้", path: "/profile" },
 ];
@@ -97,7 +103,11 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
 // /whisper is a live, crisis-sensitive dual-seat counseling room (see
 // app/whisper/page.tsx) — steering a voice agent into it is out of scope
 // for the general navigation manifest, same reasoning as the auth pages.
-export const VOICE_MANIFEST_EXCLUDED_ROUTES = ["/login", "/register", "/whisper"];
+export const VOICE_MANIFEST_EXCLUDED_ROUTES = [
+  "/login",
+  "/register",
+  "/whisper",
+];
 export { UI_PAGES };
 
 // In-page actions the voice may trigger — the first rung beyond navigation.
@@ -829,7 +839,11 @@ export default function VoiceCallWidget() {
           // /settings/appearance) instead of a page id. Whitelist discipline
           // holds — only paths under a declared UI_PAGES page are honoured.
           const allowed = UI_PAGES.some(
-            (p) => argument === p.path || argument.startsWith(p.path + "/"),
+            (p) =>
+              argument === p.path ||
+              argument.startsWith(p.path + "/") ||
+              // one page, many anchored screens (settings since v1.6.3)
+              argument.startsWith(p.path + "#"),
           );
           if (!allowed || !argument.startsWith("/")) {
             addMsg("sys", `⚠ เส้นทางไม่อยู่ในรายการ: ${argument}`);
@@ -1080,7 +1094,7 @@ export default function VoiceCallWidget() {
               "sys",
               "⚠ พิมพ์ได้เฉพาะหน้าแชท — กำลังพาไปหน้าแชท พูดใหม่อีกครั้งครับ",
             );
-            router.push("/home");
+            router.push("/chat");
           }
           return;
         }
@@ -1097,7 +1111,7 @@ export default function VoiceCallWidget() {
           };
           window.dispatchEvent(new CustomEvent(VOICE_ACTION_EVENT, { detail }));
           addMsg("sys", "🖱 สร้างแชทใหม่");
-          if (!handled) router.push("/home");
+          if (!handled) router.push("/chat");
           return;
         }
         default:
@@ -1419,9 +1433,9 @@ export default function VoiceCallWidget() {
         const on = m.mode === "secretary";
         setSecretary(on);
         // Dictation lands in the chat — make sure the caller is looking at it.
-        if (on && !window.location.pathname.startsWith("/home")) {
+        if (on && !window.location.pathname.startsWith("/chat")) {
           addMsg("sys", "🖱 ไปหน้าแชท (โหมดเลขาพิมพ์ลงแชท)");
-          router.push("/home");
+          router.push("/chat");
         }
       } else if (m.type === "error") addMsg("sys", `⚠ ${m.message}`);
     };
@@ -1686,7 +1700,9 @@ export default function VoiceCallWidget() {
           <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
             <button
               onClick={() => setChatOpen((v) => !v)}
-              aria-label={chatOpen ? "ซ่อนช่องแชท" : "เปิดช่องแชทเพื่อพิมพ์สั่ง"}
+              aria-label={
+                chatOpen ? "ซ่อนช่องแชท" : "เปิดช่องแชทเพื่อพิมพ์สั่ง"
+              }
               aria-pressed={chatOpen}
               title={
                 chatOpen

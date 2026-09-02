@@ -4,7 +4,7 @@
 //
 // The call widget lives in the ROOT layout (so a live call survives
 // navigation) — but some actions belong to providers mounted deeper, e.g.
-// "new chat" must reset UnifiedChatContext, not just change the URL. The
+// "new chat" must reset the chat runtime, not just change the URL. The
 // widget therefore dispatches a window CustomEvent for in-page actions and
 // this bridge, mounted inside the workspace provider tree, executes them
 // with the real store functions.
@@ -19,7 +19,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useUnifiedChat } from "@/context/UnifiedChatContext";
+import { useChatStateAdapter } from "@/features/chat/ChatStateAdapter";
 
 export const VOICE_ACTION_EVENT = "deeptutor:voice-action";
 
@@ -31,7 +31,8 @@ export interface VoiceActionDetail {
 
 export default function VoiceActionBridge() {
   const router = useRouter();
-  const { newSession, cancelStreamingTurn, sendMessage } = useUnifiedChat();
+  const { newSession, cancelStreamingTurn, sendMessage } =
+    useChatStateAdapter();
 
   useEffect(() => {
     const onAction = (ev: Event) => {
@@ -43,7 +44,7 @@ export default function VoiceActionBridge() {
         // still-running turn, then a fresh draft session on /home.
         cancelStreamingTurn();
         newSession();
-        router.push("/home");
+        router.push("/chat");
       } else if (detail.target === "type_in_chat") {
         // Secretary mode: the dictated utterance becomes a real chat turn in
         // the current session — full on-screen answer, persisted history.
@@ -51,7 +52,7 @@ export default function VoiceActionBridge() {
         if (!text) return;
         detail.handled?.();
         sendMessage(text);
-        router.push("/home"); // make sure the caller sees what was typed
+        router.push("/chat"); // make sure the caller sees what was typed
       }
     };
     window.addEventListener(VOICE_ACTION_EVENT, onAction);
