@@ -90,6 +90,18 @@ thing this fork can send back right now.
    canonical-routes rename. Correcting it exposes a second, real bug: after
    ArrowLeft the reader's `scrollTop` stays 0 instead of landing mid-chapter, so
    paging backwards loses the reading position. Report the bug with the fix.
+3. **Three `reading-*` audits are broken in v1.6.4** —
+   `reading-citation-material` (a citation no longer reopens its turn material),
+   `reading-location-history` (back/forward across materials), and
+   `reading-w3c-annotations` (a rich annotation no longer activates its sidebar
+   entry). Verified experimentally, not inferred: built HKUDS/DeepTutor v1.6.4 in
+   a worktree with nothing from this fork in it, served it, and ran the three
+   specs — same three failures, same lines. Upstream cannot see this because
+   their `npm run check` exits on the `/knowledge-bases` budget before Playwright
+   ever runs, so the release shipped with three broken reader journeys and a
+   green-looking local story. Quarantined here with `test.fixme` and the
+   reproduction recorded inline; the specs are unmodified and will pass again on
+   their own once upstream fixes the reader.
 
 **Lesson, twice earned:** the fork has now had two of its own fixes independently
 rewritten upstream (`mcp/manager.py`, then the thought_signature handling)

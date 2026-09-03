@@ -2787,6 +2787,17 @@ An earlier count of "32 regressions" was an artifact of comparing a worktree run
 against the real checkout, whose local `model_catalog.json` has an active model.
 Re-running the baseline in an identical worktree cut it to the three real ones.
 
+**Three upstream reader journeys are broken in v1.6.4.** After the merge landed,
+`reading-citation-material`, `reading-location-history` and
+`reading-w3c-annotations` failed twice in a row — reproducible, not the runner
+flakiness seen earlier. Rather than guess, upstream v1.6.4 was built clean in a
+worktree with nothing from this fork in it and the three specs run against it:
+identical failures, identical lines. So the merge did not break them; upstream
+shipped them broken, and cannot see it because their `npm run check` exits on the
+`/knowledge-bases` budget before Playwright runs at all. Quarantined with
+`test.fixme` and the reproduction recorded inline, keeping the other 39 audits a
+live gate. Added to the upstream-PR list.
+
 ### v1.6.3 (`6e6e56ae`) — merged 2026-09-02
 
 369 upstream commits from v1.5.16. **776 source files, +85k / −8k.** The largest
