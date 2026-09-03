@@ -23,6 +23,24 @@ export interface NavEntry {
   tooltipKey?: string;
   /** Model capability this feature needs; locked when the user lacks it. */
   requires?: Capability;
+  /**
+   * Learning surface this feature's APIs sit behind, mirroring
+   * `_learning_surface_for_path` in `deeptutor/api/routers/auth.py`.
+   *
+   * A learning account is default-deny: `require_learning_surface` answers 403
+   * for anything outside its `allowed_surfaces`. Entries left undeclared are
+   * treated as restricted, so a new feature is hidden from restricted learners
+   * until someone decides which surface it belongs to — the safe direction.
+   * `undefined` on an *unrestricted* account changes nothing.
+   *
+   * `"unrestricted"` marks an entry whose APIs are *not* behind that guard —
+   * Settings is the case that matters: `/api/settings/ui` answers 200 for a
+   * restricted learner, and hiding it would strand them with no way to change
+   * their own language or theme. Verified against the running server rather
+   * than assumed, because the guard is applied router by router in
+   * `api/main.py` and the list is not obvious from the route path alone.
+   */
+  surface?: "chat" | "reading" | "unrestricted";
 }
 
 /**
@@ -37,6 +55,7 @@ export interface NavEntry {
 export const PRIMARY_NAV: NavEntry[] = [
   {
     href: "/chat",
+    surface: "chat",
     label: "Home",
     icon: House,
     tooltipKey: "Home tooltip",
@@ -87,6 +106,7 @@ export const PRIMARY_NAV: NavEntry[] = [
   },
   {
     href: "/reading",
+    surface: "reading",
     label: "Immersive Reading",
     icon: BookText,
     tooltipKey: "Immersive Reading tooltip",
@@ -130,7 +150,12 @@ export const SECONDARY_NAV: NavEntry[] = [
     icon: BookOpen,
     tooltipKey: "Knowledge tooltip",
   },
-  { href: "/settings", label: "Settings", icon: Settings },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: Settings,
+    surface: "unrestricted",
+  },
 ];
 
 export const PRIMARY_NAV_HREFS = PRIMARY_NAV.map((entry) => entry.href);
@@ -147,4 +172,24 @@ export function isNavActive(pathname: string, href: string) {
     );
   }
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Keep only the entries a learning account can actually reach.
+ *
+ * `allowedSurfaces` is null for an ordinary account and returns the list
+ * untouched. An entry with no declared `surface` is treated as restricted: its
+ * router sits behind `require_learning_surface`, which default-denies anything
+ * it cannot map, so showing it would just produce a 403 on click.
+ */
+export function filterNavBySurfaces<
+  T extends { href: string; surface?: string },
+>(entries: readonly T[], allowedSurfaces: readonly string[] | null): T[] {
+  if (!allowedSurfaces) return [...entries];
+  const allowed = new Set(allowedSurfaces);
+  return entries.filter(
+    (entry) =>
+      entry.surface === "unrestricted" ||
+      (entry.surface !== undefined && allowed.has(entry.surface)),
+  );
 }

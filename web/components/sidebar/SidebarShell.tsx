@@ -27,7 +27,12 @@ import type { MasteryTopicLabel } from "@/lib/learning-api";
 import type { ReadingCollectionLabel } from "@/lib/reading-workspace-api";
 import type { StudyCourse } from "@/lib/courses-api";
 import { SidebarNav } from "@/components/sidebar/SidebarNav";
-import { SECONDARY_NAV, isNavActive } from "@/components/sidebar/nav-entries";
+import {
+  SECONDARY_NAV,
+  filterNavBySurfaces,
+  isNavActive,
+} from "@/components/sidebar/nav-entries";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 import {
   mergeManualOrder,
   readSessionOrder,
@@ -82,6 +87,11 @@ export function SidebarShell({
   footerSlot,
 }: SidebarShellProps) {
   const pathname = usePathname();
+  // Memory and Knowledge Center sit behind the same server guard as the primary
+  // features (/api/memory and /api/knowledge-bases both answer 403 for a
+  // restricted learner), so they get the same filter.
+  const { allowedSurfaces } = useAuthStatus();
+  const secondaryNav = filterNavBySurfaces(SECONDARY_NAV, allowedSurfaces);
   const router = useRouter();
   const { t } = useTranslation();
   const { sidebarCollapsed, setSidebarCollapsed: setCollapsed } = useAppShell();
@@ -197,7 +207,7 @@ export function SidebarShell({
         {/* Secondary nav + footer */}
         <div className="flex w-full flex-col items-center gap-1 px-1.5">
           <div className="my-1 h-px w-7 bg-[var(--border)]/40" />
-          {SECONDARY_NAV.map((item) => {
+          {secondaryNav.map((item) => {
             const active = isNavActive(pathname, item.href);
             return (
               <Link
@@ -355,7 +365,7 @@ export function SidebarShell({
 
       {/* Secondary nav + footer */}
       <div className="border-t border-[var(--border)]/40 px-2 py-2">
-        {SECONDARY_NAV.map((item) => {
+        {secondaryNav.map((item) => {
           const active = isNavActive(pathname, item.href);
           return (
             <Link

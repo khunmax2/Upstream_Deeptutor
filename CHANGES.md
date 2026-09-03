@@ -2895,6 +2895,54 @@ on the pre-fix tree, silent after — and it skips doc comments, so describing t
 bad shape in a comment does not trip it. `th-ts` proves a `Lang` object *has*
 `th`; `th-read` proves something *reads* it. All four checks are green.
 
+### Learning-policy navigation (2026-09-03)
+
+Reported from two browsers side by side: an admin enabled a learning policy on
+`standard@example.com` ("Teacher persona; Chat and Immersive Reading only") and
+the learner's session immediately failed with
+
+    Request failed (403): {"detail":"This learning account cannot use the
+    requested server surface."}
+
+The backend was right. A learning account is default-deny — `require_learning_
+surface` guards the co_writer, book, mastery-paths, knowledge, memory, notebook,
+dashboard, imports, question and multi-user routers, and answers 403 for
+anything outside its `allowed_surfaces`.
+
+**The frontend had never learned about it.** `/api/auth/status` has always
+returned `learning_policy` with `allowed_surfaces`, `lib/auth.ts` has always
+typed it — and nothing in the app read it; `useAuthStatus` dropped the field on
+the floor. So the learner was still offered Co-Writer, Books, Mastery Path,
+Partners, My Agents, Learner Anima, Learning Space, Memory and Knowledge Center,
+and met the restriction only as a raw error after clicking one.
+
+Now `useAuthStatus` carries `allowedSurfaces`, nav entries declare which surface
+they sit behind, and both the primary nav and the secondary consoles filter
+through one `filterNavBySurfaces`. An entry with no declared surface is treated
+as restricted — a new feature stays hidden from restricted learners until
+someone decides where it belongs, which is the safe direction.
+
+Settings is the exception, and it was **measured rather than assumed**:
+`/api/settings/ui` answers 200 for a restricted learner while `/api/settings`
+answers 403, so the account can still change its own language and theme. Hiding
+Settings would have stranded a learner with no way to do either, so it is marked
+`"unrestricted"`. Memory and Knowledge Center were checked the same way —
+`/api/memory/overview` and `/api/knowledge-bases` both 403 — and stay hidden.
+
+Verified end to end on the reported account (Attapon signed in; Claude never
+handled the credentials): the sidebar now shows **ห้องแชต · การอ่านแบบดื่มด่ำ ·
+การตั้งค่า** and nothing else, Immersive Reading works, and an admin account is
+untouched — all twelve entries still render.
+
+`co-writer-api` also stopped dumping the response envelope: reaching the page by
+URL now reads as the sentence, not `Request failed (403): {"detail":…}`.
+
+**Two things this surfaced that are not fixed here.** The chat page fires a dozen
+background requests that 403 for a restricted learner (`/api/courses`,
+`/api/tools`, `/api/capabilities/registered`, `/api/settings/llm-options` …) —
+harmless but noisy, and pre-existing. And the settings page shows a "Settings
+fetch failed: HTTP 403" banner for the same reason, above controls that work.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

@@ -16,6 +16,16 @@ export interface AuthStatusState {
   statusAvailable: boolean;
   /** True until the first status fetch resolves. */
   loading: boolean;
+  /**
+   * Server surfaces this account may use, or null when it is unrestricted.
+   *
+   * `/api/auth/status` has always carried the learning policy and nothing read
+   * it, so a restricted learner was still offered Co-Writer, Books, Mastery
+   * Path and the rest — every one of them behind `require_learning_surface`,
+   * which answers 403. The restriction only became visible as an error after
+   * the learner clicked. Surfacing it here lets the navigation reflect it.
+   */
+  allowedSurfaces: string[] | null;
 }
 
 const INITIAL: AuthStatusState = {
@@ -25,7 +35,40 @@ const INITIAL: AuthStatusState = {
   userId: null,
   statusAvailable: false,
   loading: true,
+  allowedSurfaces: null,
 };
+
+/**
+ * Map a raw `/api/auth/status` payload to the state the UI consumes.
+ *
+ * Exported for tests: the `learning_policy` branch below decides whether the
+ * navigation hides surfaces the account cannot reach, and that decision is
+ * worth pinning down without standing up a browser and a restricted account.
+ */
+export function toAuthStatusState(
+  status: Awaited<ReturnType<typeof fetchAuthStatus>>,
+): AuthStatusState {
+  return {
+    enabled: Boolean(status?.enabled),
+    authenticated: Boolean(status?.authenticated),
+    isAdmin: status?.role === "admin",
+    userId:
+      typeof status?.user_id === "string" && status.user_id.trim()
+        ? status.user_id
+        : null,
+    statusAvailable: status !== null,
+    loading: false,
+    // Absent policy means an ordinary account: no surface restriction at all.
+    // An empty list is still a restriction, so distinguish it from null.
+    allowedSurfaces: status?.learning_policy
+      ? (status.learning_policy.allowed_surfaces ?? ["chat", "reading"])
+      : null,
+  };
+}
+
+function loadAuthStatus(): Promise<AuthStatusState> {
+  return fetchAuthStatus().then(toAuthStatusState);
+}
 
 /**
  * Resolve auth state at runtime from the backend (`/api/auth/status`).
@@ -37,20 +80,6 @@ const INITIAL: AuthStatusState = {
  * constant, so it works identically on Docker (read-only rootfs), the PyPI
  * `deeptutor start` launcher, and source dev.
  */
-function loadAuthStatus(): Promise<AuthStatusState> {
-  return fetchAuthStatus().then((status) => ({
-    enabled: Boolean(status?.enabled),
-    authenticated: Boolean(status?.authenticated),
-    isAdmin: status?.role === "admin",
-    userId:
-      typeof status?.user_id === "string" && status.user_id.trim()
-        ? status.user_id
-        : null,
-    statusAvailable: status !== null,
-    loading: false,
-  }));
-}
-
 export function useAuthStatus(): AuthStatusState {
   const [state, setState] = useState<AuthStatusState>(INITIAL);
 

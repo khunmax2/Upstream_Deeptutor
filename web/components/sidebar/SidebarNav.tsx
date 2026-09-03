@@ -38,11 +38,14 @@ import { useTranslation } from "react-i18next";
 
 import { useCapabilityAccess } from "@/components/access/CapabilityAccessContext";
 import {
+  PRIMARY_NAV,
+  filterNavBySurfaces,
   NAV_BY_HREF,
   PRIMARY_NAV_HREFS,
   isNavActive,
 } from "@/components/sidebar/nav-entries";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useDragSort, type DragSort } from "@/hooks/useDragSort";
 import { placeMenu, type FloatingMenuPosition } from "@/lib/floating-menu";
 import {
@@ -104,9 +107,22 @@ export function SidebarNav({
     setMoreExpanded(browserStorage.readRaw("local", MORE_EXPANDED_KEY) === "1");
   }, []);
 
+  // A learning account is default-deny server-side: every router outside its
+  // allowed surfaces answers 403 (`require_learning_surface`). Offering those
+  // features anyway turned the restriction into an error the learner only met
+  // after clicking — the raw 403 body, in English, on a page that then had
+  // nothing to show. Filter the navigation to what the account can actually
+  // reach; `allowedSurfaces` is null for ordinary accounts, which changes
+  // nothing for them.
+  const { allowedSurfaces } = useAuthStatus();
+  const permittedHrefs = useMemo(
+    () => filterNavBySurfaces(PRIMARY_NAV, allowedSurfaces).map((e) => e.href),
+    [allowedSurfaces],
+  );
+
   const resolved = useMemo(
-    () => resolveNavLayout(PRIMARY_NAV_HREFS, layout),
-    [layout],
+    () => resolveNavLayout(permittedHrefs, layout),
+    [permittedHrefs, layout],
   );
   /** Always edit the resolved order: the stored one may still be empty. */
   const editable = useMemo<SidebarNavLayout>(

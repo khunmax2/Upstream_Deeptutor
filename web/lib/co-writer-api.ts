@@ -18,13 +18,32 @@ export interface CoWriterDocument {
   updated_at: number;
 }
 
-async function jsonOrThrow<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(
-      `Request failed (${res.status}): ${text || res.statusText}`,
-    );
+/**
+ * Pull the human sentence out of a FastAPI error body.
+ *
+ * These errors reach the page verbatim, so dumping the raw body printed
+ * `Request failed (403): {"detail":"This learning account cannot use the
+ * requested server surface."}` — the envelope and the status code drowning the
+ * one part a reader needs. A restricted learner should no longer reach
+ * Co-Writer at all now that the navigation honours the policy, but a 403 can
+ * still arrive from a policy changed mid-session, and it should read like a
+ * sentence when it does.
+ */
+async function errorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  if (text) {
+    try {
+      const detail = (JSON.parse(text) as { detail?: unknown }).detail;
+      if (typeof detail === "string" && detail.trim()) return detail;
+    } catch {
+      // not JSON — fall through to the raw body
+    }
   }
+  return text || res.statusText || `Request failed (${res.status})`;
+}
+
+async function jsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) throw new Error(await errorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -118,11 +137,6 @@ export async function exportCoWriterDocx(payload: {
       content: payload.content ?? "",
     }),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(
-      `Request failed (${res.status}): ${text || res.statusText}`,
-    );
-  }
+  if (!res.ok) throw new Error(await errorMessage(res));
   return res.blob();
 }
