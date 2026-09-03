@@ -23,6 +23,31 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — A generated session title is written in the interface language,
+  not just Chinese or English.** `_maybe_generate_session_title()` in
+  `deeptutor/services/session/turns/title_service.py` branched on
+  `ui_language.startswith("zh")` and sent *everything else* — Thai, Japanese,
+  Korean, French — the English instruction *"You generate a concise, descriptive
+  title… Keep it 4-8 words."* Nothing named the target language, so a title's
+  language was decided by whatever the model happened to pick up from the
+  conversation. That is why the stored memory labels drifted: 19 of 62 were
+  English on a Thai interface, one of them reading *"Greeting and assistance in
+  Thai language"* — an English label describing a Thai conversation. The
+  non-`zh` branch now names the resolved language via `language_label()` and
+  appends the project's own `language_directive()`, so every locale is covered
+  rather than adding a third hardcoded branch.
+
+  A/B on identical input (`deeptutor run chat "What is the derivative of
+  tan(x)?…" -l th`, an English question on a Thai turn) — old code:
+  *"Derivative of the Tangent Function Explained"*; new code:
+  *"การหาอนุพันธ์ของฟังก์ชันตรีโกณมิติ tan x"*. An English turn still gets an
+  English title, so the fix follows the request rather than the content.
+  Covered by `tests/services/session/test_session_title_language.py`.
+
+  Note the fix is forward-looking: the 19 English labels already stored in
+  `data/memory/snapshot/chat/state.json` were written before it and are not
+  rewritten.
+
 - **2026-09-04 — Capability turns retry transient provider errors at all.** This
   is the root cause behind the `course_study` turn that died ~5 s after a 429 in
   the UAT sweep with no sign of a retry. Every Level-2 capability reaches the
