@@ -2720,6 +2720,50 @@ model" pattern was recreated as `DEEPTUTOR_AGENT_*` in
 Keep for experiments; do not merge as-is (it also reformats `web/app/layout.tsx`
 to a quote style the repo does not use).
 
+### Immersive Reading translates to Thai (2026-09-03)
+
+`deeptutor/reading/translation.py` offered English and Chinese only — the last
+`th-py` invariant finding, and the one that was a missing feature rather than a
+bug. A Thai reader could get a passage rendered into two languages that were not
+theirs.
+
+Added `translate_th` end to end: a Thai system prompt mirroring the en/zh ones,
+`th` in both language `Literal`s, the action in the extension manifest, the
+button label in `ReadingExtensionBar`, and the `Translate to Thai` key in all
+three locales.
+
+The two-way branches came out with it. `_SYSTEM_ZH if target == "zh" else
+_SYSTEM_EN` and `is_zh` ternaries for the card copy are a two-language shape:
+they compile fine with a third language and silently render it as English —
+exactly how a half-added `th` reaches a user. Both are now keyed lookups
+(`_SYSTEM_BY_LANGUAGE`, `_CARD_COPY`), so a fourth language fails loudly at the
+dict instead of quietly falling back.
+
+**All three `invariants.py` checks are now clean for the first time.**
+
+### Thai coverage measured (2026-09-03)
+
+With v1.6.3 and v1.6.4 merged, `th/app.json` is at exact key parity (4,825) but
+parity is not translation: **1,489 keys still hold the English string verbatim —
+68.8% translated.** Counted by comparing values rather than keys, excluding
+tokens that should stay identical (`PDF`, `API`, numbers, short symbols).
+
+Where the gap sits, by feature:
+
+| area | untranslated |
+|---|---|
+| `features/settings/sections` | 168 |
+| `components/space/learning` | 127 |
+| `components/reading/workspace` | 101 |
+| `components/reading/library` | 60 |
+| `app/(workspace)/books` | 53 |
+| `components/partners/group` | 50 |
+| everything else | ~930 |
+
+Roughly 270 of the 1,489 are not reachable from a `t()` literal in the source
+tree, so they are either dead keys or reached dynamically — worth a pass before
+translating them.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
