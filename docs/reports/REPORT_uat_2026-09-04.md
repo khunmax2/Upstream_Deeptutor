@@ -26,23 +26,34 @@
 ข้อความ "ค้นข่าว AI ล่าสุดให้หน่อย" ได้คำตอบที่ประกาศว่า *"กำลังค้นหาข่าวสารล่าสุดเกี่ยวกับ AI..."* แล้วส่ง "สรุปข่าวสาร AI ล่าสุด (ข้อมูล ณ วันที่ 4 กันยายน 2026)" กลับมา
 หลักฐานว่าไม่ได้ค้นจริง 3 ชั้น: (ก) 48 event ในเทิร์นนั้นไม่มี tool event เลย (ข) ไม่มี HTTP request ไป Tavily ใน backend log (ค) `sources` ที่แนบมาคือ PDF หลักสูตรแกนกลางฯ หน้า 31-32
 เครื่องมือไม่ได้เสีย — สั่งตรงด้วย `-t web_search` เรียก Tavily ได้ปกติ ทั้งที่ `web_search` อยู่ใน `enabled_tools` ของ partner `lineme` อยู่แล้ว
-*ยังไม่ได้แยก*: เส้นทาง partner ไม่ส่ง tool เข้าเทิร์น หรือ โมเดลไม่เรียกเอง
+**แยกสาเหตุได้แล้ว (2026-09-04, หลังเขียนรายงานฉบับแรก)**: เครื่องมือ**ถูกส่งเข้าเทิร์นครบ** —
+`_resolved_enabled_tools()` เอา `enabled_tools` ของ partner ไป intersect กับ toggle ระดับแอดมิน
+แล้วไม่ถูกตัดสักตัว (`web_search` อยู่ครบ) และ round budget เป็น 8 ไม่ใช่ 1
+สรุปคือ **โมเดลมีเครื่องมืออยู่ในมือแต่เลือกไม่เรียก แล้วบรรยายว่าเรียกแทน** — ไม่ใช่บั๊กการต่อสาย
+แต่เป็นเรื่องพฤติกรรม/พรอมต์ การแก้เป็นการตัดสินใจเชิงผลิตภัณฑ์ จึงยังไม่แก้
 
 ### ปานกลาง
 
 **2. ไม่มี retry เมื่อโดน 429** — provider ส่ง `retryDelay: 21s` กลับมา และโค้ดมี `LLMRateLimitError` / `retry_after_seconds` พร้อมใช้ที่ `deeptutor/services/llm/error_mapping.py:59` แต่มีผู้เรียกใช้ที่เดียวคือ LightRAG pipeline — เส้นทาง capability/chat ไม่จับเลย เทิร์นตายทันที
 
-**3. RAG ลืม `await` — event การค้นคืนถูกทิ้งทั้งหมด** — `deeptutor/services/rag/service.py:232` ฟังก์ชัน `emit()` เป็น sync แต่ `return self._emit_tool_event(...)` ซึ่งเป็น `async def` โดยไม่ await (อีก 4 จุดที่บรรทัด 108/118/138/154 await ถูกต้อง) ผลคือขึ้น `RuntimeWarning: coroutine ... was never awaited` ทุกครั้งที่ค้น และผู้ใช้ไม่เห็นร่องรอยการค้นคืนในแผงกิจกรรม
+**3. event การค้นคืนถูกทิ้งเมื่อ log มาจาก worker thread** — ✅ **แก้แล้ว** (`fcee5039`)
+*แก้คำรายงานฉบับแรก*: ตอนแรกระบุว่าอยู่ที่ `deeptutor/services/rag/service.py:232` ซึ่งไม่ถูก — จุดนั้นจัดการ awaitable ถูกต้องแล้ว
+จุดที่ทิ้ง coroutine จริงคือ `ProcessLogHandler.emit()` ใน `deeptutor/logging/process_stream.py` มันเรียก `asyncio.get_running_loop()`
+แล้วถ้า `RuntimeError` ก็ `return` ทิ้ง coroutine ไปเฉย ๆ ซึ่งเกิดตลอดเพราะ retrieval/embedding รันใน executor thread ที่ไม่มี loop
+ผลคือขึ้น `RuntimeWarning: coroutine ... was never awaited` ทุกครั้งที่ค้น และผู้ใช้ไม่เห็นร่องรอยการค้นคืนในแผงกิจกรรม
+**แก้โดย**: จำ loop ที่ติดตั้ง handler ไว้ แล้ว fallback ไป `run_coroutine_threadsafe` สำหรับ record ที่มาจากนอก loop
+(วิธีเดียวกับที่ `_capture_raw_logs()` ใน `rag/service.py` ใช้กับ handler ของตัวเองอยู่แล้ว) และปิด coroutine เมื่อไม่มีอะไรรันได้จริง ๆ
+*ยืนยัน*: เทิร์น `--kb LAWs_thai` ที่เคยเตือน ตอนนี้เตือน 0 ครั้ง และยังค้นคืนได้ปกติ
 
-**4. `deeptutor run` คืน exit 0 ทั้งที่ capability ล้มระหว่างเทิร์น** — `deeptutor_cli/common.py:141` stream แล้ว return ไม่ raise ต่อ (คืน exit 1 ถูกต้องเฉพาะกรณี config ไม่ผ่าน validation ก่อนเริ่มเทิร์น) สคริปต์/CI ตรวจจับความล้มเหลวไม่ได้
+**4. `deeptutor run` คืน exit 0 ทั้งที่ capability ล้มระหว่างเทิร์น** — ✅ **แก้แล้ว** (`c2bb4c03`, ยืนยันสองทาง: ล้ม→rc=1, สำเร็จ→rc=0) — `deeptutor_cli/common.py:141` stream แล้ว return ไม่ raise ต่อ (คืน exit 1 ถูกต้องเฉพาะกรณี config ไม่ผ่าน validation ก่อนเริ่มเทิร์น) สคริปต์/CI ตรวจจับความล้มเหลวไม่ได้
 
-**5. i18n ไทยตกหล่นในหน้า Settings และ audit ตรวจไม่เจอ** — `web/features/settings/navigation/settings-nav.ts` มีตารางแปลฝังในไฟล์ แยกจาก `locales/` จาก 30 ก้อนมี 15 ก้อนที่ช่อง `th` เป็นอังกฤษ และ 7 ก้อนในนั้นจีนแปลแล้วแต่ไทยไม่แปล: Connections · Task models · Embedding · Video Learning · Learner profile · Guardian · About (บวก Backend, Dark ที่พบตอนเรนเดอร์จริง)
+**5. i18n ไทยตกหล่นในหน้า Settings และ audit ตรวจไม่เจอ** — ✅ **แก้คำแปล 6 จุดแล้ว** (`90832a52`); จุดบอดของ audit ยังเปิดอยู่ — `web/features/settings/navigation/settings-nav.ts` มีตารางแปลฝังในไฟล์ แยกจาก `locales/` จาก 30 ก้อนมี 15 ก้อนที่ช่อง `th` เป็นอังกฤษ และ 7 ก้อนในนั้นจีนแปลแล้วแต่ไทยไม่แปล: Connections · Task models · Embedding · Video Learning · Learner profile · Guardian · About (บวก Backend, Dark ที่พบตอนเรนเดอร์จริง)
 คำอธิบายของ Task models ช่อง `th` เป็นประโยคอังกฤษเต็ม: `"The model behind the calls DeepTutor makes on its own."`
 ทั้งที่ `locales/th/app.json` มีคำแปลไทยอยู่แล้ว → `npm run i18n:check` ผ่านเพราะตรวจแค่ `locales/` **นี่คือจุดบอดของ audit**
 
 **6. หน้าเว็บยิง API ที่บัญชีตัวเองเข้าไม่ได้** — บัญชี learner โหลดหน้า `/chat` หนึ่งครั้งได้ 403 จำนวน 11 ครั้งจาก 8 endpoint (`/api/settings`, `/api/courses`, `/api/tools`, `/api/knowledge-bases`, `/api/capabilities/registered`, `/api/mastery-paths/topics/index`, `/api/settings/chat-attachments`, `/api/subagents/settings`) เซิร์ฟเวอร์ตัดสินถูก แต่ฝั่งหน้าเว็บไม่กรองก่อนยิง
 
-**7. `deep_research` ผ่าน CLI แล้วเงียบสนิท** — คืน `outline_preview: true` พร้อมหัวข้อย่อยภาษาไทยที่ดี รอยืนยัน outline ตามดีไซน์ แต่ `content` และ `response` เป็นสตริงว่าง (outline อยู่ใน `metadata` เท่านั้น) ตัวเรนเดอร์ CLI จึงพิมพ์ความว่างเปล่า
+**7. `deep_research` ผ่าน CLI แล้วเงียบสนิท** — ✅ **แก้แล้ว** (`c2bb4c03`) ตอนนี้พิมพ์ outline พร้อมคำสั่งที่ใช้ยืนยัน — คืน `outline_preview: true` พร้อมหัวข้อย่อยภาษาไทยที่ดี รอยืนยัน outline ตามดีไซน์ แต่ `content` และ `response` เป็นสตริงว่าง (outline อยู่ใน `metadata` เท่านั้น) ตัวเรนเดอร์ CLI จึงพิมพ์ความว่างเปล่า
 *ยังไม่ได้ตรวจ*: ฝั่ง Web UI แสดง outline ให้ยืนยันถูกต้องหรือไม่
 
 ### เล็กน้อย / ความสะอาดของข้อมูล
@@ -85,3 +96,21 @@
 ## หมายเหตุเรื่องโควตา
 
 ระหว่างทดสอบพบว่า key เดิมเป็น Gemini free tier จำกัด **15 requests/นาที** ทำให้ `course_study` ล้มด้วย 429 หนึ่งเทิร์นของ capability ใช้หลาย request (`mastery_path` ใช้ rounds=3) รันติดกัน 5-6 เทิร์นก็ชนเพดาน หลังสลับเป็น key เครดิตแล้ว `course_study` ผ่านทันที — ยืนยันว่าล้มเพราะโควตาล้วน ๆ ไม่ใช่บั๊ก
+
+
+## สถานะการแก้ไข (2026-09-04)
+
+| ข้อ | สถานะ | commit |
+|---|---|---|
+| 3 event ค้นคืนถูกทิ้ง | ✅ แก้แล้ว ยืนยันแล้ว | `fcee5039` |
+| 4 exit code | ✅ แก้แล้ว ยืนยันสองทาง | `c2bb4c03` |
+| 7 deep_research เงียบ | ✅ แก้แล้ว ยืนยันแล้ว | `c2bb4c03` |
+| 5 คำแปลไทย 6 จุด | ✅ แก้แล้ว (จุดบอด audit ยังเปิด) | `90832a52` |
+| 1 บอทเล่าว่าค้นเว็บ | 🔴 เปิดอยู่ — แยกสาเหตุได้แล้ว ต้องตัดสินใจเชิงผลิตภัณฑ์ | — |
+| 2 retry 429 | เปิดอยู่ — เป็นการเพิ่มพฤติกรรมใหม่ ต้องออกแบบก่อน | — |
+| 6 frontend ยิง 403 | เปิดอยู่ — ขอบเขตฝั่ง frontend | — |
+| 8 MCP ตาย · 11 grant ค้าง · 12 grant กำพร้า | เปิดอยู่ — เป็นข้อมูลรันไทม์ ต้องเจ้าของตัดสิน | — |
+| 9 RAG ค้นซ้ำ · 10 โหลดซ้ำ · 13 label ปนภาษา | เปิดอยู่ | — |
+
+ยืนยันความปลอดภัยของการแก้: `./scripts/precheck.sh` — ruff ✅ · ruff format ✅ ·
+pytest 7013 ผ่าน เหลือล้มเฉพาะ flake เดิมของ macOS ที่มีมาก่อนแก้ · web check ✅
