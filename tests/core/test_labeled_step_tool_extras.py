@@ -2,7 +2,7 @@
 ``thought_signature`` through a tool round, exactly like the chat agent loop does.
 
 Gemini 3 rides a mandatory ``thought_signature`` in ``extra_content`` on each
-streamed tool-call delta (OpenAI-compat endpoint, via pydantic ``model_extra``)
+streamed tool-call delta (OpenAI-compat endpoint)
 and 400s any follow-up request whose replayed assistant message drops it
 ("missing a thought_signature in functionCall parts"). ``deep_question`` /
 ``deep_research`` run on ``core.agentic`` (``labeled_step`` + ``loop``), so the
@@ -22,12 +22,12 @@ import pytest
 from deeptutor.runtime.agentic.labeled_step import run_labeled_step
 from deeptutor.runtime.stream_bus import StreamBus
 
-SIGNATURE = {"extra_content": {"google": {"thought_signature": "sig-xyz789"}}}
+EXTRA_CONTENT = {"google": {"thought_signature": "sig-xyz789"}}
 
 
 def _tool_chunk() -> SimpleNamespace:
     """A single streamed chunk: the TOOL label plus one tool call whose delta
-    carries the Gemini ``model_extra`` (thought_signature)."""
+    carries Gemini's ``extra_content`` (thought_signature)."""
     delta = SimpleNamespace(
         content="``TOOL``",
         tool_calls=[
@@ -35,9 +35,9 @@ def _tool_chunk() -> SimpleNamespace:
                 index=0,
                 id="call_1",
                 function=SimpleNamespace(name="rag", arguments='{"q":"x"}'),
-                # Unrecognized provider fields ride pydantic's model_extra on the
-                # real SDK objects (Gemini 3's extra_content lives here).
-                model_extra=SIGNATURE,
+                # The OpenAI SDK keeps this unknown response field on the model,
+                # which is where upstream's reader looks for it.
+                extra_content=EXTRA_CONTENT,
             )
         ],
     )
@@ -114,8 +114,8 @@ async def test_labeled_step_preserves_gemini_thought_signature() -> None:
     result = await _run_step()
     assert result.label == "TOOL"
     assert result.tool_calls and result.tool_calls[0]["name"] == "rag"
-    assert result.tool_calls[0].get("extra") == SIGNATURE, (
-        "thought_signature (model_extra) was dropped during accumulation"
+    assert result.tool_calls[0].get("extra_content") == EXTRA_CONTENT, (
+        "thought_signature was dropped during accumulation"
     )
 
 
@@ -129,8 +129,16 @@ def test_assistant_message_echoes_provider_extras() -> None:
     from deeptutor.runtime.agentic.messages import assistant_message_with_tool_calls
 
     message = assistant_message_with_tool_calls(
-        "", [{"id": "call_1", "name": "rag", "arguments": "{}", "extra": SIGNATURE}]
+        "",
+        [
+            {
+                "id": "call_1",
+                "name": "rag",
+                "arguments": "{}",
+                "extra_content": EXTRA_CONTENT,
+            }
+        ],
     )
     entries = message["tool_calls"]
     assert entries[0]["function"]["name"] == "rag"
-    assert entries[0]["extra_content"] == SIGNATURE["extra_content"]
+    assert entries[0]["extra_content"] == EXTRA_CONTENT

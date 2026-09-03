@@ -7,11 +7,9 @@ each field is stated here once instead of being restated per site:
 * ``id`` and ``name`` arrive **complete** on whichever delta carries them.
   A provider may repeat them on every subsequent chunk. Assign, never append.
 * ``arguments`` arrives as **fragments** that must be concatenated.
-* provider extras (pydantic ``model_extra``) are merged as they arrive. Gemini 3
-  rides its REQUIRED ``thought_signature`` in ``extra_content`` on the tool-call
-  delta; dropping it makes every follow-up round fail with HTTP 400 ("missing a
-  thought_signature"). ``messages.build_assistant_tool_call_message`` echoes
-  whatever lands in ``extra`` straight back to the provider.
+* Provider extensions attached to the call arrive **complete** and must be
+  preserved. Gemini thinking models put the opaque signature required by the
+  next tool round in ``extra_content.google.thought_signature`` (#1181).
 
 Appending a complete field is issue #937: a router that re-sent ``id`` on
 every chunk grew it to 47241 characters, far past the 64-character limit the
@@ -53,12 +51,14 @@ class ToolCallAccumulator:
         if tcid:
             part["id"] = str(tcid)
 
-        # Merged before the ``function is None`` return below: a provider may
-        # ride extras on a delta that carries no function payload at all. Added
-        # lazily so a call without extras keeps the plain three-key shape.
-        tc_extra = getattr(tc_delta, "model_extra", None)
-        if tc_extra:
-            part.setdefault("extra", {}).update(tc_extra)
+        # Gemini's OpenAI-compatible endpoint adds ``extra_content`` to the
+        # tool-call delta. The OpenAI SDK keeps unknown response fields on the
+        # model, so preserve the extension as an opaque object and replay it on
+        # the assistant tool-call message. Assign rather than merge: like the
+        # id/name fields, the provider sends this metadata as a complete value.
+        extra_content = getattr(tc_delta, "extra_content", None)
+        if isinstance(extra_content, dict) and extra_content:
+            part["extra_content"] = extra_content
 
         fn = getattr(tc_delta, "function", None)
         if fn is None:
@@ -85,13 +85,17 @@ class ToolCallAccumulator:
         A provider that streams arguments but never an ``id`` still needs one
         to correlate the result message, hence the positional fallback.
         """
-        return [
-            {
+        calls: list[dict[str, Any]] = []
+        for index, part in sorted(self._parts.items()):
+            if not part.get("name"):
+                continue
+            call: dict[str, Any] = {
                 "id": part.get("id") or f"call_{index}",
                 "name": part.get("name", ""),
                 "arguments": part.get("arguments") or "{}",
-                **({"extra": part["extra"]} if part.get("extra") else {}),
             }
-            for index, part in sorted(self._parts.items())
-            if part.get("name")
-        ]
+            extra_content = part.get("extra_content")
+            if isinstance(extra_content, dict) and extra_content:
+                call["extra_content"] = extra_content
+            calls.append(call)
+        return calls

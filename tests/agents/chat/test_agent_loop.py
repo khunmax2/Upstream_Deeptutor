@@ -50,13 +50,11 @@ def _llm_chunk(
             SimpleNamespace(
                 index=tc.get("index", i),
                 id=tc.get("id"),
+                extra_content=tc.get("extra_content"),
                 function=SimpleNamespace(
                     name=tc.get("name"),
                     arguments=tc.get("arguments"),
                 ),
-                # Unrecognized provider fields ride pydantic's model_extra on
-                # the real SDK objects (e.g. Gemini 3's extra_content).
-                model_extra=tc.get("model_extra"),
             )
             for i, tc in enumerate(tool_calls)
         ]
@@ -592,15 +590,16 @@ async def test_tool_round_then_finish(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_call_provider_extras_survive_the_replay(
+async def test_gemini_tool_round_replays_thought_signature(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Gemini 3 attaches a REQUIRED thought_signature to each tool call
-    (`extra_content` on the delta, via pydantic model_extra) and rejects the
-    next round with a 400 if the replayed assistant message lacks it. The
-    live symptom: every multi-round voice turn degraded to a forced finish
-    that claimed success for actions that never ran."""
-    signature = {"extra_content": {"google": {"thought_signature": "sig-abc123"}}}
+    """The second request must echo Gemini's signature on the assistant
+    function call, otherwise the compatibility endpoint returns HTTP 400.
+
+    How this fork hit it, kept from the pre-v1.6.4 version of this test: every
+    multi-round voice turn degraded to a forced finish that claimed success for
+    actions that never ran, because the 400 arrived after the model had already
+    reported the tool call."""
     registry = _Registry()
     client = _ScriptedChatClient(
         [
@@ -608,15 +607,17 @@ async def test_tool_call_provider_extras_survive_the_replay(
                 _llm_chunk(
                     tool_calls=[
                         {
-                            "id": "call-1",
+                            "id": "function-call-1",
                             "name": "web_search",
-                            "arguments": json.dumps({"query": "q"}),
-                            "model_extra": signature,
+                            "arguments": json.dumps({"query": "Fourier transform"}),
+                            "extra_content": {
+                                "google": {"thought_signature": "signature-from-gemini"}
+                            },
                         }
                     ]
-                ),
+                )
             ],
-            [_llm_chunk(content="done.")],
+            [_llm_chunk(content="Found it.")],
         ]
     )
     pipeline = AgenticChatPipeline(language="en")
@@ -626,16 +627,21 @@ async def test_tool_call_provider_extras_survive_the_replay(
 
     await _run(
         pipeline,
-        UnifiedContext(session_id="s1", user_message="find q", enabled_tools=["web_search"]),
+        UnifiedContext(
+            session_id="s1",
+            user_message="Look up Fourier",
+            enabled_tools=["web_search"],
+        ),
     )
 
     second_round = client.calls[1]["messages"]
-    assistant_tc = [m for m in second_round if m.get("role") == "assistant" and m.get("tool_calls")]
-    assert assistant_tc, "round 2 must replay the assistant tool-call message"
-    entry = assistant_tc[0]["tool_calls"][0]
-    # The provider extra rides back verbatim, next to the OpenAI-shape keys.
-    assert entry["extra_content"] == {"google": {"thought_signature": "sig-abc123"}}
-    assert entry["function"]["name"] == "web_search"
+    assistant_message = next(message for message in second_round if message.get("tool_calls"))
+    assistant_call = assistant_message["tool_calls"][0]
+    assert assistant_call["extra_content"] == {
+        "google": {"thought_signature": "signature-from-gemini"}
+    }
+    # The extension rides back beside the standard keys, not instead of them.
+    assert assistant_call["function"]["name"] == "web_search"
 
 
 @pytest.mark.asyncio

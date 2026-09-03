@@ -107,6 +107,12 @@ export const VOICE_MANIFEST_EXCLUDED_ROUTES = [
   "/login",
   "/register",
   "/whisper",
+  // Arrived with upstream v1.6.4 and says so in its own first line: a
+  // TEMPORARY harness for eyeballing session-avatar states, to be deleted once
+  // signed off. Not a page anyone navigates to by voice. Drop this entry when
+  // upstream removes the harness — the parity test will then flag it as a stale
+  // exclusion rather than let it rot here.
+  "/avatar-preview",
 ];
 export { UI_PAGES };
 

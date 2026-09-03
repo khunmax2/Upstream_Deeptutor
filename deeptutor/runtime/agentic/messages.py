@@ -17,18 +17,10 @@ def assistant_message_with_tool_calls(
     requires the prior round's reasoning to be echoed on the assistant turn
     that issued the tool calls (#1058). Responses-API replay is handled
     separately via ``_responses_output_items``.
-
-    Provider extras captured from the stream are echoed back verbatim. Gemini 3
-    rides a REQUIRED ``thought_signature`` in ``extra_content`` on each tool-call
-    delta (``run_labeled_step`` accumulates it into ``tool_call["extra"]``); the
-    provider 400s any follow-up round whose replayed function call omits it, and
-    the turn degrades to a forced finish. Absent extras are a no-op, so this
-    stays provider-agnostic. The entries are built in a loop rather than a
-    comprehension precisely so the extras can be folded in per call.
     """
-    entries: list[dict[str, Any]] = []
+    serialized_calls: list[dict[str, Any]] = []
     for tool_call in tool_calls:
-        entry: dict[str, Any] = {
+        serialized: dict[str, Any] = {
             "id": tool_call["id"],
             "type": "function",
             "function": {
@@ -36,13 +28,18 @@ def assistant_message_with_tool_calls(
                 "arguments": tool_call.get("arguments") or "{}",
             },
         }
-        for key, value in (tool_call.get("extra") or {}).items():
-            entry.setdefault(key, value)
-        entries.append(entry)
+        # Gemini's OpenAI-compatible endpoint requires the exact opaque
+        # thought signature from each function call to be sent back on the
+        # next round (#1181). Other providers simply omit this extension.
+        extra_content = tool_call.get("extra_content")
+        if isinstance(extra_content, dict) and extra_content:
+            serialized["extra_content"] = extra_content
+        serialized_calls.append(serialized)
+
     message: dict[str, Any] = {
         "role": "assistant",
         "content": content or None,
-        "tool_calls": entries,
+        "tool_calls": serialized_calls,
     }
     if reasoning_content:
         message["reasoning_content"] = reasoning_content
