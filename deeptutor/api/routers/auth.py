@@ -409,6 +409,24 @@ def _learning_surface_for_path(path: str) -> str:
         ("/api/question", "chat"),
         ("/api/question-notebook", "chat"),
         ("/api/sessions", "chat"),
+        # Choosing which model answers a chat turn is part of the chat surface.
+        # Without this the settings router's guard denied it, so an account with
+        # a learning policy could never see a model — including the `learner`
+        # preset, which always carries a policy and cannot have it removed. An
+        # admin could assign an LLM to a learner and the learner would not see
+        # it, which left that preset unable to hold a conversation at all.
+        #
+        # Safe by construction, and by upstream's own design: `get_llm_options`
+        # already returns `allowed_llm_options()` — grant-filtered — to every
+        # non-admin, and `GET /api/settings` carries a non-admin branch whose
+        # comment says model choices come from exactly this route. That code was
+        # unreachable for learning accounts; the guard was broader than the
+        # handlers it fronts.
+        #
+        # Deliberately the full path, never the "/api/settings" prefix: the loop
+        # matches on prefix, so a shorter entry would open every settings write
+        # on the same router.
+        ("/api/settings/llm-options", "chat"),
     ):
         if normalized == root or normalized.startswith(f"{root}/"):
             return surface

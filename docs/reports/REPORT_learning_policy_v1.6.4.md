@@ -82,10 +82,33 @@ The line is byte-identical to upstream's. This fork changed nothing in it.
 policy, and cannot have it removed — is the one preset that can never select a
 model. An admin can assign an LLM to a learner and the learner will not see it.
 
-The fix belongs upstream and is a judgement call they should make: either expose
-a learner-safe read of the assigned model (a second public route, mirroring what
-`/api/settings/ui` already does), or add `settings` to the surfaces a learning
-policy allows. Both are small; picking between them is theirs.
+**Fixed here** by mapping the one route to the surface it belongs to, in
+`_learning_surface_for_path`:
+
+    ("/api/settings/llm-options", "chat"),
+
+Choosing which model answers a chat turn *is* part of the chat surface. Safe by
+construction and by upstream's own design — `get_llm_options` already returns
+the grant-filtered `allowed_llm_options()` to every non-admin, so a learner sees
+only what was assigned to it. Deliberately the full path: that loop matches on
+prefix, so an `/api/settings` entry would open every settings write sharing the
+router. Two tests cover it, and both fail when the line is removed.
+
+Two alternatives were rejected. Moving the route to `settings.public_router`
+loses the user context `allowed_llm_options()` needs — that router exists for
+pre-session bootstrap. Adding `settings` to `allowed_surfaces` opens the whole
+router, including admin writes.
+
+### Upstream's own issues confirm the intent
+
+`#1111` (closed, shipped as this feature) states the design outright: *"Expose
+the effective public policy through auth status **so clients can render the
+learner experience** without trusting client-side restrictions."* The policy was
+exposed; no client ever read it. Every frontend fix above implements upstream's
+stated design rather than inventing a new one.
+
+No open issue reports any of this. `#992`, the umbrella for the learner work,
+is still open with no comments.
 
 ## Upstream-PR candidates after this work
 

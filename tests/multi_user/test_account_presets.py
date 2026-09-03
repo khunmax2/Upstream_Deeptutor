@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
@@ -39,6 +39,27 @@ def test_learning_surface_routing_matches_complete_path_segments():
     assert _learning_surface_for_path("/api/question-notebook/entries") == "chat"
     assert _learning_surface_for_path("/api/reading-private") == ""
     assert _learning_surface_for_path("/api/questions") == ""
+
+
+def test_llm_options_belongs_to_the_chat_surface():
+    """A learning account must be able to see the models assigned to it.
+
+    `/api/settings/llm-options` sits on the guarded settings router, so before
+    this mapping an account with a learning policy got a 403 and no model at
+    all — including the `learner` preset, which always carries a policy and
+    cannot have it removed, leaving that preset unable to hold a conversation.
+
+    The route is safe to expose: `get_llm_options` already returns the
+    grant-filtered `allowed_llm_options()` to every non-admin.
+    """
+    from deeptutor.api.routers.auth import _learning_surface_for_path
+
+    assert _learning_surface_for_path("/api/settings/llm-options") == "chat"
+    # Only that route. The map matches on prefix, so an "/api/settings" entry
+    # would open every settings write sharing the router.
+    assert _learning_surface_for_path("/api/settings") == ""
+    assert _learning_surface_for_path("/api/settings/catalog") == ""
+    assert _learning_surface_for_path("/api/settings/llm-options-extra") == ""
 
 
 @pytest.mark.parametrize("preset", ["standard", "custom"])
@@ -238,3 +259,48 @@ def test_assigning_a_material_copies_the_admin_material_once(
     ).get_workspace_feature_dir("reading")
     staged = user_root / material.material_id
     assert staged.is_dir()
+
+
+def test_a_learning_account_may_read_its_assigned_models(mu_isolated_root, monkeypatch):
+    """The guard must let a learning account reach its own model list.
+
+    End-to-end over the real dependency: `require_learning_surface` is what
+    denied this, and a mapping test alone would not prove the guard now lets the
+    request through. Before the mapping this raised 403, which is why the
+    `learner` preset could never pick a model.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import deeptutor.api.routers.auth as auth_router
+    from deeptutor.multi_user.grants import learner_grant, save_grant
+    from deeptutor.multi_user.identity import save_user
+    from deeptutor.services.auth import TokenPayload
+
+    # The first account in an empty store becomes the admin, so seed one first.
+    save_user("owner", "$2b$12$placeholder", role="admin")
+    learner = save_user("kid", "$2b$12$placeholder", role="user", preset="learner")
+    save_grant(learner["id"], learner_grant(learner["id"]))
+    token = TokenPayload(username="kid", role="user", user_id=learner["id"])
+    monkeypatch.setattr(auth_router, "AUTH_ENABLED", True)
+    monkeypatch.setattr(auth_router, "decode_token", lambda _t: token)
+
+    app = FastAPI()
+
+    @app.get(
+        "/api/settings/llm-options", dependencies=[Depends(auth_router.require_learning_surface)]
+    )
+    async def _options() -> dict[str, str]:
+        return {"ok": "reached"}
+
+    @app.get("/api/settings", dependencies=[Depends(auth_router.require_learning_surface)])
+    async def _settings() -> dict[str, str]:
+        return {"ok": "reached"}
+
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer any"}
+
+    assert client.get("/api/settings/llm-options", headers=headers).status_code == 200
+    # The rest of the settings router stays denied — the mapping is one route,
+    # not the prefix.
+    assert client.get("/api/settings", headers=headers).status_code == 403
