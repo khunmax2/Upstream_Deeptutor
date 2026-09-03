@@ -23,6 +23,29 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — Capability turns retry transient provider errors at all.** This
+  is the root cause behind the `course_study` turn that died ~5 s after a 429 in
+  the UAT sweep with no sign of a retry. Every Level-2 capability reaches the
+  model through `deeptutor/runtime/agentic/client.py`'s OpenAI facade, not
+  through `services.llm.factory`; the facade called `provider.chat()` and
+  `provider.chat_stream()` raw, so the retry loop the factory path relies on — 8
+  attempts with backoff, with `"429"`, `"rate limit"`, 5xx and timeouts already
+  in `_TRANSIENT_ERROR_MARKERS` — never ran for a capability turn. The identical
+  request issued through the factory was retried; issued through a capability it
+  died on the first error. Both call sites now go through
+  `chat_with_retry` / `chat_stream_with_retry`. Providers reaching this facade
+  are duck-typed (native adapters and test doubles included), so
+  `_retrying_call()` falls back to the bare method when the wrapper is absent,
+  and `allow_image_fallback=False` keeps the change to retries alone — the bare
+  path never degraded images and still does not.
+  `tests/services/llm/test_agentic_adapter_retry.py` covers retry-then-succeed,
+  give-up-and-surface, and the streaming path; all three fail against the
+  previous code, the streaming one reproducing the original symptom exactly —
+  a raw 429 escaping after a single call.
+
+  Together with the Retry-After fix below, a rate-limited capability turn now
+  retries, and waits the window the provider actually named.
+
 - **2026-09-04 — A rate-limited retry now waits as long as the provider asked,
   instead of guessing.** `retry_after_seconds()` in
   `deeptutor/services/llm/error_mapping.py` has always been able to read a

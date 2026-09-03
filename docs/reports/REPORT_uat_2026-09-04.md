@@ -64,9 +64,23 @@ Gemini free tier ส่ง `retryDelay: 21s` กลับมา แต่ตา�
 และอ่านใหม่ทุกรอบไม่ให้ค่าเก่ารั่วไปรอบถัดไป ถ้าไม่มีค่ามาก็ใช้ตารางเดิม
 คุมด้วยเทสต์ 4 เคสที่ `tests/services/llm/test_provider_core_retry_after.py`
 
-**ยังค้างอยู่**: ทำไมเทิร์น `course_study` ที่เจอครั้งแรกถึงตายใน ~5 วินาทีโดยไม่เห็นการ retry
-— อธิบายด้วยช่องว่างข้างบนไม่ได้ และ log ที่มี frame ชั้นในถูกเขียนทับตอนรันซ้ำสำเร็จไปแล้ว
-จึงยังไม่รู้ว่า call site ไหนข้ามลูป retry **ต้องบังคับให้เกิด 429 ใหม่เพื่อไล่ต่อ**
+**ปมที่ค้างไว้ — ไล่จบแล้ว** ✅ (`581e988e`) และมันใหญ่กว่าที่ประเมินไว้มาก
+
+`deeptutor/runtime/agentic/client.py` เรียก `provider.chat()` (บรรทัด 420) และ `provider.chat_stream()`
+(บรรทัด 507) **ดิบ ๆ** ไม่ผ่าน `chat_with_retry` เลย และ **capability ระดับ 2 ทุกตัว**วิ่งผ่าน facade นี้
+ไม่ได้ผ่าน `services.llm.factory` — `agents/chat/agentic_pipeline.py`, `agents/research/pipeline.py`,
+`agents/question/pipeline.py`, `capabilities/explore_context/explorer.py` import จากที่เดียวกันหมด
+
+แปลว่า **เทิร์นของ capability ไม่มี retry เลยสักชนิด** ไม่ใช่แค่ 429 — 500/502/503/504, timeout,
+connection ขาด ก็ตายรอบเดียวหมด ทั้งที่ marker เหล่านั้นถูกจัดเป็น transient อยู่แล้วในลูปที่ไม่เคยถูกเรียก
+คำขอเดียวกันถ้ายิงผ่าน factory จะถูก retry แต่ยิงผ่าน capability ตายทันที
+
+**พิสูจน์แล้วด้วยเทสต์**: เขียนเทสต์ 3 ตัวที่ `tests/services/llm/test_agentic_adapter_retry.py`
+รันกับโค้ดเดิม **ล้มทั้ง 3** โดยเคส streaming จำลองอาการเดิมเป๊ะ — 429 ดิบหลุดออกมาหลังเรียกครั้งเดียว
+
+**แก้โดย** ให้ทั้งสอง call site ใช้ `chat_with_retry` / `chat_stream_with_retry` เมื่อ provider มีให้
+โดย `_retrying_call()` fallback ไปเมธอดดิบถ้าไม่มี (provider ตรงนี้เป็น duck-typed รวมถึง adapter และ
+test double) และตั้ง `allow_image_fallback=False` เพื่อจำกัดการเปลี่ยนแปลงไว้ที่ retry อย่างเดียว
 
 **3. event การค้นคืนถูกทิ้งเมื่อ log มาจาก worker thread** — ✅ **แก้แล้ว** (`fcee5039`)
 *แก้คำรายงานฉบับแรก*: ตอนแรกระบุว่าอยู่ที่ `deeptutor/services/rag/service.py:232` ซึ่งไม่ถูก — จุดนั้นจัดการ awaitable ถูกต้องแล้ว
@@ -142,7 +156,8 @@ ERROR ที่ขึ้นทุกเทิร์นเกิดเพรา�
 | 7 deep_research เงียบ | ✅ แก้แล้ว ยืนยันแล้ว | `c2bb4c03` |
 | 5 คำแปลไทย 6 จุด | ✅ แก้แล้ว (จุดบอด audit ยังเปิด) | `90832a52` |
 | 1 บอทเล่าว่าค้นเว็บ | ✅ แก้แล้ว ยืนยันสองทาง | `dda70258` |
-| 2 retry ไม่ฟัง Retry-After | ✅ แก้แล้ว + เทสต์ 4 เคส (เหลือปม course_study) | `bb8f2099` |
+| 2a retry ไม่ฟัง Retry-After | ✅ แก้แล้ว + เทสต์ 4 เคส | `bb8f2099` |
+| 2b capability path ไม่มี retry เลย | ✅ แก้แล้ว + เทสต์ 3 เคส (รากของปม course_study) | `581e988e` |
 | 6 frontend ยิง 403 | เปิดอยู่ — ขอบเขตฝั่ง frontend | — |
 | 8 MCP resolve ไม่ได้ | ✅ ปิด — ไม่ใช่ปัญหา (tunnel ไม่ได้เปิด) เจ้าของยืนยัน | — |
 | 11 grant ค้าง · 12 grant กำพร้า | เปิดอยู่ — เป็นข้อมูลรันไทม์ ต้องเจ้าของตัดสิน | — |
