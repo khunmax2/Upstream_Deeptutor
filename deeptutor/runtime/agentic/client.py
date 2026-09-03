@@ -379,6 +379,25 @@ def _build_native_provider_adapter(
     return builder(config, spec) if builder else None
 
 
+def _retrying_call(provider: Any, method: str) -> tuple[Any, dict[str, Any]]:
+    """Pick ``<method>_with_retry`` when the provider offers it.
+
+    Every Level-2 capability reaches the model through this facade rather than
+    ``services.llm.factory``, so calling the bare method meant a capability turn
+    got no retry at all — a 429 killed it on the first error while the identical
+    request through the factory would have been retried. Providers here are
+    duck-typed (adapters and test doubles included), so fall back to the bare
+    method when the retry wrapper is not there.
+
+    ``allow_image_fallback=False`` keeps this to retries alone: the bare path
+    never degraded images and still does not.
+    """
+    wrapper = getattr(provider, f"{method}_with_retry", None)
+    if callable(wrapper):
+        return wrapper, {"retry_delays": None, "allow_image_fallback": False}
+    return getattr(provider, method), {}
+
+
 class _ProviderOpenAIAdapter:
     """OpenAI chat-completions facade backed by a native provider."""
 
@@ -417,7 +436,14 @@ class _ProviderOpenAIAdapter:
                 extra_kwargs=kwargs,
             )
 
-        response = await self._provider.chat(
+        # Retry transient provider failures — 429, 5xx, timeouts. Every Level-2
+        # capability runs through this facade rather than services.llm.factory,
+        # so calling ``chat()`` raw meant a rate-limited capability turn died on
+        # the first error while the same request through the factory would have
+        # been retried. ``allow_image_fallback=False`` keeps this change to
+        # retries alone: the raw path never degraded images and still does not.
+        call, retry_kwargs = _retrying_call(self._provider, "chat")
+        response = await call(
             messages=messages,
             tools=tools,
             model=model,
@@ -425,6 +451,7 @@ class _ProviderOpenAIAdapter:
             temperature=temperature,
             reasoning_effort=reasoning_effort,
             tool_choice=tool_choice,
+            **retry_kwargs,
             **kwargs,
         )
         return SimpleNamespace(
@@ -504,7 +531,13 @@ class _ProviderOpenAIStream:
                 await self._queue.put(_openai_stream_chunk(content=text))
 
         try:
-            response = await self._provider.chat_stream(
+            # Same retry gap as the non-streaming path above. A rate limit is
+            # rejected before any token is emitted, so the retry replaces a dead
+            # turn rather than duplicating text; a failure *after* content has
+            # streamed is the pre-existing limitation of the shared retry loop,
+            # which the factory's streaming path already lives with.
+            call, retry_kwargs = _retrying_call(self._provider, "chat_stream")
+            response = await call(
                 messages=self._messages,
                 tools=self._tools,
                 model=self._model,
@@ -513,6 +546,7 @@ class _ProviderOpenAIStream:
                 reasoning_effort=self._reasoning_effort,
                 tool_choice=self._tool_choice,
                 on_content_delta=_on_content_delta,
+                **retry_kwargs,
                 **self._extra_kwargs,
             )
             if response.content and not self._emitted_content:
