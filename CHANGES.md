@@ -23,6 +23,37 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — The assistant no longer describes tool actions it did not
+  perform.** The 2026-09-04 UAT sweep caught the LINE bot answering "ค้นข่าว AI
+  ล่าสุด" (find the latest AI news) by writing *"I will search external sources
+  right now"*, then *"searching for the latest AI news…"*, then a four-item
+  **"Latest AI news summary (as of 4 September 2026)"** — with zero tool events,
+  zero Tavily requests, and the `sources` block pointing at an unrelated
+  school-curriculum PDF. The content came from model memory and was presented as
+  freshly retrieved, dated news; a LINE user has no way to tell. Diagnosis ruled
+  out wiring: `_resolved_enabled_tools()` intersects the partner's tools with the
+  admin toggles and cut nothing (`web_search` was available), and the round
+  budget was 8, so the model had the tool in hand and narrated a search instead
+  of calling it.
+
+  `runtime_policy` in `deeptutor/agents/chat/prompts/{en,zh}/agentic_chat.yaml`
+  now forbids it outright: only a tool actually called this turn may be reported
+  as done and only from what it returned; no narrating progress on a call that
+  was never made; no presenting recalled material as freshly retrieved, with no
+  invented retrieval dates, source lists or "as of today" framing. When no tool
+  is available or a call fails, say so and answer from general knowledge with
+  that limit stated. `runtime_policy` is added to every turn including partner
+  turns, and `partner_turn_policy` already states the Soul cannot override tool
+  truthfulness, so a partner persona cannot opt out. The one sentence in
+  `loop.system` that permitted announcing an imminent tool call is now bounded to
+  the round that actually makes it.
+
+  Verified both directions on the same question that failed: with `web_search`
+  unavailable the model reports plainly that it cannot look it up and says the
+  attached KB does not cover the topic (no fabricated news); with `web_search`
+  available it calls the tool — a real `[tavily] Searching:` request — and no
+  "searching now" phrasing appears anywhere in the transcript.
+
 - **2026-09-04 — Process-log events emitted from a worker thread are no longer
   dropped, and no longer leave an un-awaited coroutine behind.**
   `ProcessLogHandler.emit()` in `deeptutor/logging/process_stream.py` called the
