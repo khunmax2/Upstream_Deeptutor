@@ -824,6 +824,41 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
   /**
+   * Fetch the backend status strip.
+   *
+   * Extracted so the scoped-account path reaches it too: it used to sit inline
+   * after the settings block, and returning early for a 403 skipped it, leaving
+   * the Backend indicator stuck on "checking" for exactly the accounts the 403
+   * branch was added to help.
+   */
+  const loadSystemStatus = useCallback(
+    async (settingsLoaded: boolean) => {
+      try {
+        const statusResponse = await apiFetch(apiUrl("/api/system/status"));
+        if (statusResponse.ok) {
+          setStatus((await statusResponse.json()) as SystemStatus);
+        }
+      } catch (err) {
+        console.error("Failed to load system status:", err);
+        // Only surface this when settings itself loaded; otherwise the
+        // settings-fetch error already explains the disconnect.
+        if (settingsLoaded) {
+          setSettingsError(
+            (current) =>
+              current ??
+              (err instanceof Error
+                ? t("System status unavailable: {{message}}", {
+                    message: err.message,
+                  })
+                : t("System status unavailable.")),
+          );
+        }
+      }
+    },
+    [t],
+  );
+
+  /**
    * Load only what a scoped account can read: its own UI preferences.
    *
    * Mirrors the fields loadSettings takes from the full payload's `ui` block,
@@ -853,8 +888,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         // /api/settings/ui answers 200. Treating the 403 as a failure put a red
         // "Settings fetch failed: HTTP 403" banner above controls that work,
         // which reads as breakage when it is really a narrower surface.
+        //
+        // Scoped to the catalog block on purpose. An earlier version returned
+        // from the whole function here and silently skipped the system-status
+        // fetch below it, leaving the Backend indicator stuck on "checking".
         await loadUiSettingsOnly();
         settingsLoaded = true;
+        await loadSystemStatus(true);
         return;
       }
       if (!settingsResponse.ok) {
@@ -918,28 +958,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       // of staying in an infinite skeleton state.
       setCatalogEditable((current) => (current === null ? false : current));
     }
-    try {
-      const statusResponse = await apiFetch(apiUrl("/api/system/status"));
-      if (statusResponse.ok) {
-        setStatus((await statusResponse.json()) as SystemStatus);
-      }
-    } catch (err) {
-      console.error("Failed to load system status:", err);
-      // Only surface this when settings itself loaded; otherwise the
-      // settings-fetch error already explains the disconnect.
-      if (settingsLoaded) {
-        setSettingsError(
-          (current) =>
-            current ??
-            (err instanceof Error
-              ? t("System status unavailable: {{message}}", {
-                  message: err.message,
-                })
-              : t("System status unavailable.")),
-        );
-      }
-    }
-  }, [syncPendingKeys, t]);
+    await loadSystemStatus(settingsLoaded);
+  }, [loadUiSettingsOnly, loadSystemStatus, syncPendingKeys, t]);
 
   // Load settings + status once on mount. Subsequent navigations between
   // settings sub-pages share this state via the layout-level provider.
