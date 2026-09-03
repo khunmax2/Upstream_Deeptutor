@@ -49,6 +49,7 @@ Concretely:
 
 ## Field: Describe the bug
 
+```markdown
 Enabling a learning policy on an account (or creating a `learner` preset) leaves
 the UI in a state where most of what it offers answers 403. The backend guard is
 correct and consistent; the frontend was never taught that "denied" is a normal
@@ -170,3 +171,75 @@ a different direction. Several of these areas have PRs in flight (#1110, #1112,
 #1124), so I did not want to send patches that collide with work in progress.
 
 Related: #992, #1111, #1112.
+```
+
+## Field: Configuration Used
+
+```
+DeepTutor v1.6.4 (upstream `93df3d48`), source install, Python 3.13, macOS.
+Nothing from a fork — reproduced again on a second machine running a clean
+upstream checkout.
+
+data/user/settings/auth.json
+  enabled: true          # multi-user mode
+
+Account under test: an ordinary `user` created from /admin/users, either
+- preset `learner`, or
+- preset `standard` with "Enable learning policy" ticked in the grant editor.
+
+Both resolve to the same effective policy, straight from GET /api/auth/status:
+
+{
+  "age_band": "13-15",
+  "locked_persona": "teacher",
+  "allowed_capabilities": ["chat", "immersive_reading"],
+  "default_capability": "immersive_reading",
+  "allowed_surfaces": ["chat", "reading"],
+  "reading": { "allow_upload": false, "material_ids": [], "extensions": [] }
+}
+
+One LLM model assigned to the account through the grant editor.
+```
+
+## Field: Logs and screenshots
+
+```
+**The settings page unmounting (symptom 4).** Scrolling /settings to any anchor
+below Memory replaces the page with Next's "This page couldn't load":
+
+Uncaught TypeError: Cannot read properties of undefined (reading 'l2_budget')
+
+Preceded by the 403 whose body was cast to the DTO:
+
+GET /api/memory/settings 403 (Forbidden)
+{"detail":"This learning account cannot use the requested server surface."}
+
+**What the account can and cannot reach.** Probed from the signed-in browser:
+
+  /api/settings/ui               200
+  /api/sessions                  200
+  /api/reading/workspaces        200
+  /api/settings                  403
+  /api/settings/llm-options      403   <-- no model can ever be selected
+  /api/tools                     403
+  /api/knowledge-bases           403
+  /api/memory/overview           403
+  /api/multi-user/me/guardianships  403
+  /api/system/status             403
+  /api/courses                   403   <-- discards the loaded session list
+
+**The conversation list (symptom 6).** With one session on the server, the
+sidebar shows "No conversations yet" and the console logs:
+
+Failed to load sessions  Error: Request failed: 403
+
+**CI blind spots.** Your own Tests run for v1.6.4 (`93df3d48`):
+
+  failure   Import Check (Python 3.14, windows-latest)
+  skipped   Python Tests (Python ${{ matrix.python-version }})
+  failure   Web Node Tests
+  skipped   Four-worker browser acceptance
+  failure   Test Summary
+
+The skipped Python matrix is the `needs: import-check` chain described above.
+```
