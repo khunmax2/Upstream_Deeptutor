@@ -113,7 +113,14 @@ def run_capability(
         notebook_refs=notebook_ref,
         history_refs=history_ref,
     )
-    maybe_run(run_turn_and_render(app=DeepTutorApp(), request=request, fmt=fmt))
+    result = maybe_run(run_turn_and_render(app=DeepTutorApp(), request=request, fmt=fmt))
+    # A capability that fails mid-turn reports the failure on the stream, not as
+    # an exception — without this the command exited 0 and no script could tell
+    # a failed run from a good one.
+    if isinstance(result, tuple) and len(result) == 2:
+        _session, turn = result
+        if isinstance(turn, dict) and turn.get("failed"):
+            raise typer.Exit(code=1)
 
 
 @app.command()

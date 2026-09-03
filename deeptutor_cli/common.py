@@ -135,15 +135,16 @@ async def run_turn_and_render(
     session, turn = await app.start_turn(request)
 
     if fmt == "json":
-        await stream_turn_as_json(app=app, turn_id=turn["id"])
-        return session, turn
+        failed = await stream_turn_as_json(app=app, turn_id=turn["id"])
+        return session, {**turn, "failed": failed}
 
-    summary = await render_turn_stream(app=app, turn_id=turn["id"])
+    summary, failed = await render_turn_stream(app=app, turn_id=turn["id"])
     console.print(
         f"[dim]session={session['id']} turn={turn['id']} "
         f"capability={request.capability}{summary}[/]",
         highlight=False,
     )
+    turn = {**turn, "failed": failed}
     return session, turn
 
 
@@ -173,22 +174,27 @@ async def regenerate_and_render(
         await stream_turn_as_json(app=app, turn_id=turn["id"])
         return session, turn
 
-    summary = await render_turn_stream(app=app, turn_id=turn["id"])
+    summary, failed = await render_turn_stream(app=app, turn_id=turn["id"])
     console.print(
         f"[dim]session={session['id']} turn={turn['id']} "
         f"capability={capability}{summary} (regenerated)[/]",
         highlight=False,
     )
+    turn = {**turn, "failed": failed}
     return session, turn
 
 
-async def stream_turn_as_json(*, app: DeepTutorApp, turn_id: str) -> None:
+async def stream_turn_as_json(*, app: DeepTutorApp, turn_id: str) -> bool:
     """NDJSON passthrough for ``--format json``.
 
     ``ask_user`` pauses are auto-resolved with an empty reply so headless
     runs cannot hang on a question no one will answer — the model sees
     "(empty reply)" as the tool result and must proceed on its own.
+
+    Returns whether the turn failed, so ``--format json`` exits non-zero for the
+    same reason the rich renderer does.
     """
+    failed = False
     async for item in app.stream_turn(turn_id):
         # One event per line: rich wraps long lines at terminal width and
         # interprets ``[...]`` as markup, both of which corrupt NDJSON.
@@ -198,13 +204,17 @@ async def stream_turn_as_json(*, app: DeepTutorApp, turn_id: str) -> None:
             markup=False,
             highlight=False,
         )
+        if item.get("type") == "error" or (item.get("metadata") or {}).get("status") == "failed":
+            failed = True
         if _ask_user_payload(item) is not None:
             await app.submit_user_reply(turn_id, text="")
+    return failed
 
 
-async def render_turn_stream(*, app: DeepTutorApp, turn_id: str) -> str:
+async def render_turn_stream(*, app: DeepTutorApp, turn_id: str) -> tuple[str, bool]:
     """Render a turn's event stream; returns a ``key=value`` summary suffix
-    (rounds / tools / tokens / cost) for the caller's session line.
+    (rounds / tools / tokens / cost) for the caller's session line, together
+    with whether the turn failed.
 
     Ctrl-C while the turn is streaming cancels the turn server-side and
     returns control to the caller (the REPL keeps running) instead of
@@ -246,7 +256,7 @@ async def render_turn_stream(*, app: DeepTutorApp, turn_id: str) -> str:
     finally:
         sigint.suspend()
         renderer.close()
-    return renderer.summary_suffix()
+    return renderer.summary_suffix(), renderer.failed
 
 
 async def _cancel_interrupted_turn(
@@ -347,6 +357,10 @@ class TurnStreamRenderer:
         self._status: Status | None = None
         self._sources: list[dict[str, Any]] = []
         self._result_meta: dict[str, Any] = {}
+        #: True once the turn reported an error or finished with status=failed.
+        #: ``deeptutor run`` turns this into a non-zero exit code so a script
+        #: can tell a failed capability from a successful one.
+        self.failed = False
 
     async def handle(self, item: dict[str, Any]) -> None:
         handler = getattr(self, f"_on_{str(item.get('type', ''))}", None)
@@ -482,6 +496,7 @@ class TurnStreamRenderer:
 
     async def _on_error(self, item: dict[str, Any]) -> None:
         self._status_stop()
+        self.failed = True
         console.print(f"[bold red]Error:[/] {escape(str(item.get('content', '') or ''))}")
 
     async def _on_sources(self, item: dict[str, Any]) -> None:
@@ -495,9 +510,42 @@ class TurnStreamRenderer:
             self._result_meta = metadata
 
     async def _on_done(self, item: dict[str, Any]) -> None:
+        if (item.get("metadata") or {}).get("status") == "failed":
+            self.failed = True
         self._flush_pending()
         self._status_stop()
+        self._print_outline_preview()
         self._print_sources()
+
+    def _print_outline_preview(self) -> None:
+        """Render an outline a capability is waiting on confirmation for.
+
+        ``deep_research`` answers its first turn with an outline and empty
+        ``content`` — the outline lives in the result metadata, so the terminal
+        showed nothing at all and the run looked like it had silently died.
+        """
+        meta = self._result_meta
+        if not meta.get("outline_preview"):
+            return
+        sub_topics = meta.get("sub_topics")
+        if not isinstance(sub_topics, list) or not sub_topics:
+            return
+        topic = str(meta.get("topic") or "").strip()
+        console.print()
+        console.print(f"[bold]Outline[/]{f' — {escape(topic)}' if topic else ''}")
+        for index, entry in enumerate(sub_topics, start=1):
+            if not isinstance(entry, dict):
+                continue
+            title = escape(str(entry.get("title") or "").strip())
+            console.print(f"  [bold]{index}.[/] {title}")
+            overview = str(entry.get("overview") or "").strip()
+            if overview:
+                console.print(f"     [dim]{escape(overview)}[/]")
+        console.print(
+            "\n[dim]Outline only — confirm it to run the research stages, e.g.\n"
+            '  --config-json \'{"mode":"notes","depth":"quick",'
+            '"confirmed_outline":true}\'[/]'
+        )
 
     async def _on_wait_for_input(self, item: dict[str, Any]) -> None:
         """Legacy in-band input request (``StreamBus.wait_for_input``)."""
