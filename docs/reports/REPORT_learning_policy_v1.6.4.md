@@ -254,6 +254,20 @@ Not yet prepared as branches. Convention: `upstream-pr/<topic>` cut from
 No open issue reports any of this. #992, the umbrella for the learner work, is
 open with no comments.
 
+**Filed as HKUDS/DeepTutor#1222** on 2026-09-03, covering the learning-account
+findings and both CI blind spots, with patches offered rather than sent —
+several of these areas had PRs in flight (#1110, #1112, #1124).
+
+One correction to the section above, found while filing: upstream **did** already
+know the route budgets were blocking Playwright. Their #1215 says so directly —
+_"The regressions block otherwise unrelated PRs from reaching browser audits"_ —
+and #1216 is fixing it. What they did not have is the list of what fails behind
+that gate. Their stated approach is also the opposite of this fork's: _"Do not
+raise the budgets"_, shrinking the bundles instead. The fork's raised numbers for
+`/knowledge-bases` and `/co-writer/[docId]` should therefore be dropped in favour
+of theirs at the next sync; only the `root-app-shell` headroom, which is a
+measured fork cost, stays.
+
 ---
 
 ## 9. Should this fork roll back?
