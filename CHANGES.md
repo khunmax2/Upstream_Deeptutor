@@ -2791,6 +2791,24 @@ Vendor, protocol and product names (`API format`, `Embedding`, `Docling`,
 
 Coverage: **4,825 → 4,621 keys, 68.8% → 77.3% translated**, parity still exact.
 
+A second batch covered the two largest remaining areas, `components/space/learning`
+and `components/reading/workspace` — **204 keys**, the Mastery Path builder and the
+reading companion.
+
+Domain nouns follow what the fork had already settled elsewhere in the same file
+rather than inventing new ones: knowledge point = จุดความรู้, module = โมดูล,
+Mastery Path = เส้นทางสู่ความเชี่ยวชาญ, Notebook = สมุดบันทึก. Two keys were left
+in English on purpose: `Transcript` (already English in `th` before this pass, and
+the term the video UI is built around) and `p. {{page}}`.
+
+One inconsistency fixed while passing through: `Material` was translated but its
+plural `Materials` was not, and the same for `Bookmark` / `Bookmarks`. Both plurals
+now match their singular.
+
+Coverage after both batches: **81.7% translated, 847 keys left.** The remainder is
+spread across `components/reading` (94), `components/partners` (91),
+`app/(workspace)` (89) and `components/courses` (79).
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
