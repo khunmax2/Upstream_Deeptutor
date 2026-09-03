@@ -73,6 +73,8 @@ class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     _CHAT_RETRY_DELAYS = (1, 2, 4)
+    #: Ceiling for a single retry sleep, including one the server asked for.
+    _MAX_RETRY_DELAY_SECONDS = 120.0
     _TRANSIENT_ERROR_MARKERS = (
         "429",
         "rate limit",
@@ -294,9 +296,11 @@ class LLMProvider(ABC):
 
         delays = self._normalize_retry_delays(retry_delays)
         attempt = 0
+        server_retry_after: float | None = None
 
         while True:
             attempt += 1
+            server_retry_after = None
             try:
                 response = await call(
                     messages=messages,
@@ -311,6 +315,13 @@ class LLMProvider(ABC):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                # Keep the server's own Retry-After before the exception is
+                # flattened into a string: a 429 usually says exactly how long
+                # to wait, and guessing a fixed backoff instead either hammers
+                # the provider early or idles far past the window.
+                from deeptutor.services.llm.error_mapping import retry_after_seconds
+
+                server_retry_after = retry_after_seconds(exc)
                 response = LLMResponse(
                     content=f"Error calling LLM: {exc}",
                     finish_reason="error",
@@ -348,11 +359,16 @@ class LLMProvider(ABC):
                 return response
 
             delay = delays[attempt - 1]
+            if server_retry_after is not None:
+                # Honour the server over our schedule, but never sleep longer
+                # than the schedule's own ceiling.
+                delay = min(max(server_retry_after, 0.0), self._MAX_RETRY_DELAY_SECONDS)
             logger.warning(
-                "LLM transient error (attempt {}/{}), retrying in {}s: {}",
+                "LLM transient error (attempt {}/{}), retrying in {}s{}: {}",
                 attempt,
                 len(delays) + 1,
                 delay,
+                " (server Retry-After)" if server_retry_after is not None else "",
                 (response.content or "")[:120].lower(),
             )
             await asyncio.sleep(delay)
