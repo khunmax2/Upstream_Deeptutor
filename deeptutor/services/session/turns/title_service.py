@@ -77,6 +77,14 @@ class SessionTitleService:
         try:
             from deeptutor.services.llm import stream as llm_stream
 
+            # The title must be written in the user's interface language.
+            # This used to branch zh / everything-else, so a Thai (or Japanese,
+            # or any non-en/zh) interface got an English instruction and the
+            # title's language was left to whatever the model happened to pick
+            # from the conversation — which is why a Thai chat could end up
+            # labelled "Greeting and assistance in Thai language".
+            from deeptutor.services.prompt.language import language_directive, language_label
+
             zh = str(ui_language or "").lower().startswith("zh")
             if zh:
                 sys_prompt = (
@@ -93,9 +101,10 @@ class SessionTitleService:
             else:
                 sys_prompt = (
                     "You generate a concise, descriptive title for a "
-                    "conversation. Output only the title as plain text "
+                    f"conversation, written in {language_label(ui_language)}. "
+                    "Output only the title as plain text "
                     "— no quotes, no markdown, no trailing punctuation, "
-                    'no "Title:" prefix. Keep it 4-8 words.'
+                    'no "Title:" prefix. Keep it 4-8 words.' + language_directive(ui_language)
                 )
                 user_prompt = (
                     "Generate a title for this conversation:\n\n"
