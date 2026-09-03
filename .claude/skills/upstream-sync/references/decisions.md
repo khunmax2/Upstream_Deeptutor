@@ -148,3 +148,35 @@ nothing about whether the environment the user actually runs matches what was
 verified. Stage 6 now runs `npm ci --legacy-peer-deps` on the real checkout
 as part of landing, not as an afterthought triggered by the user hitting the
 error.
+
+## v1.6.4 — a clean sync, and two method corrections
+
+370 files, six conflicts, nothing fork-owned deleted. The merge was easy; the two
+things worth keeping are both about *how the checks were read*, not what they found.
+
+**A worktree baseline is not the real checkout.** The first regression count came
+back at 32 and was wrong. `pytest` ran the merge in a throwaway worktree — whose
+`data/user/settings/model_catalog.json` is the git-tracked one, with no active
+model — and the baseline in the user's real checkout, which has a configured
+catalog. 29 of the 32 were `LLMConfigError`, i.e. the environment differing, not
+the code. Re-running the baseline **in an identical worktree at `main`** left
+three real regressions. The playbook already said to prove a regression this way;
+this is the sync that shows what happens when you don't. Treat any failure
+mentioning configuration, credentials or an active model as environment-suspect
+until the like-for-like run says otherwise.
+
+**A fix's scope should anticipate upstream's next edit.** v1.6.3's follow-up put
+`PYTHONIOENCODING` on the one workflow step that printed a `✅`. v1.6.4 added
+*another* step printing two more, in the same job, which would have reproduced the
+Windows failure exactly. The fix was correct and still nearly useless one release
+later. When patching a shared upstream file, ask where upstream will plausibly add
+the next line and place the fix so it is covered — job scope over step scope, the
+loader over the call site.
+
+**Converging by luck, again.** The fork's Gemini `thought_signature` passthrough
+was independently rewritten by upstream (#1181) and deleted here — the second
+time after `mcp/manager.py` in v1.5.16. Both had been flagged as upstream-PR
+candidates and never sent. The cost is not the deletion, it is everything carried
+in between: the mechanism, its tests, and its share of every merge conflict until
+upstream's version lands. Stage 7 is not paperwork.
+

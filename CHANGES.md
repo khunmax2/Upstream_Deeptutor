@@ -2724,6 +2724,69 @@ to a quote style the repo does not use).
 
 _Record each upstream version merged into this fork here._
 
+### v1.6.4 (`93df3d48`) — merged 2026-09-03
+
+One upstream release commit on top of v1.6.3. **370 files, +17.5k / −9.8k**, but
+only **six conflicts** — the calm after v1.6.3's 776-file restructure. Nothing the
+fork owns was deleted or renamed, which is the signal that matters most; the
+preflight's highest-severity check came back empty.
+
+**Synced onto a red upstream CI, deliberately.** The skill says stop when the
+target is red, and v1.6.4 is: `Import Check (windows-latest)` still dies printing
+a `✅` to a cp1252 console — so **upstream's entire Python matrix was skipped for
+a second consecutive release** — and their own `/knowledge-bases` route ships
+541KB against their own 540KB budget. The rule exists so a sync never inherits an
+unexplained breakage; here all three causes were identified before merging and
+none is ours, so the merge proceeded with them written down instead.
+
+Conflicts worth naming:
+
+- **`co_writer.py`** — upstream moved `clean_thinking_tags` and `is_pageindex_kb`
+  to lazy in-function imports and deleted the top-level block. Taking their side
+  wholesale would have left `append_language_directive` — fork Thai plumbing,
+  still called at module scope — as a `NameError` on the first co-writer request.
+  Exactly the mis-aligned-hunk trap the playbook warns about, caught by reading
+  the function rather than the hunk.
+- **The Gemini `thought_signature` fix converged.** This fork carried a generic
+  `extra` passthrough merging everything pydantic parked in `model_extra`;
+  v1.6.4 ships upstream's own narrower implementation (#1181) reading
+  `extra_content` off the delta. Same bug, same wire shape, theirs is canonical —
+  so the fork's mechanism goes and another permanent touchpoint disappears. This
+  is the `mcp/manager.py` pattern again, and the second time upstream has
+  independently written a fix this fork was carrying.
+  `tests/core/test_labeled_step_tool_extras.py` was **kept and ported**, not
+  deleted: it is the only coverage of the `core.agentic` path used by
+  `deep_question` / `deep_research`, which upstream's chat-loop test never reaches.
+
+Four things the gates caught that reading would not have:
+
+- **`th.yaml` lost prompt parity.** v1.6.4 added `{module_limit}` to
+  `topic.system` and `{must_cover_block}` plus a `materials` field to
+  `topic.user`. Left alone, a Thai learning route silently ignores the learner's
+  own uploaded documents — no error, just a worse route.
+- **`PYTHONIOENCODING` moved from step to job scope.** It was added at the single
+  step that needed it during the v1.6.3 follow-up; v1.6.4 adds *another* step
+  printing `✅`, which would have reproduced the Windows crash exactly. Job scope
+  covers steps upstream has not written yet.
+- **`/avatar-preview` arrived unregistered** and the fork's voice-manifest parity
+  test flagged it. Its own first line calls it a temporary harness to delete once
+  signed off, so it is excluded rather than made voice-steerable.
+- **Route budgets** — `/knowledge-bases` at 542KB (upstream ships 541KB against
+  their own 540KB budget, red in their CI) and `/co-writer/[docId]` at 516KB
+  where upstream passes at 512KB, so that ~4KB really is fork weight. Both raised
+  narrowly with the measurements recorded at the constants rather than waved
+  through.
+
+Verified: **pytest 6,980 passed, zero regressions** against a like-for-like
+worktree baseline — the 30 failures are the uninstalled `[partners]` extra, the
+same set `main` produces. `npm run check` green end to end, i18n parity exact for
+`th` and `zh` at 4,824 keys, and a live Thai turn answered correctly through
+Gemini — the provider whose signature handling this merge just changed.
+
+An earlier count of "32 regressions" was an artifact of comparing a worktree run
+against the real checkout, whose local `model_catalog.json` has an active model.
+Re-running the baseline in an identical worktree cut it to the three real ones.
+
 ### v1.6.3 (`6e6e56ae`) — merged 2026-09-02
 
 369 upstream commits from v1.5.16. **776 source files, +85k / −8k.** The largest
