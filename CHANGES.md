@@ -23,6 +23,51 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — Process-log events emitted from a worker thread are no longer
+  dropped, and no longer leave an un-awaited coroutine behind.**
+  `ProcessLogHandler.emit()` in `deeptutor/logging/process_stream.py` called the
+  supplied `emit` callback and, when the result was awaitable, scheduled it with
+  `asyncio.ensure_future` — but only if the calling thread had a running loop.
+  Retrieval and embedding run in executors, so their log records arrive on a
+  worker thread with no loop: the handler took the `except RuntimeError` branch
+  and simply `return`ed, abandoning the coroutine. Two consequences, both
+  visible in the 2026-09-04 UAT sweep: the user-facing retrieval trace never
+  reached the stream (the activity panel showed no sign that a knowledge base
+  had been searched, although it had), and every RAG query printed
+  `RuntimeWarning: coroutine 'RAGService._emit_tool_event' was never awaited`,
+  which buried real warnings. The handler now remembers the loop it was
+  installed on and falls back to `asyncio.run_coroutine_threadsafe` for
+  off-loop records — the same fallback `_capture_raw_logs()` in
+  `deeptutor/services/rag/service.py` already used for its own handler — and
+  closes the coroutine when genuinely nothing can run it, so an abandoned
+  coroutine can never warn again. Verified: a `--kb LAWs_thai` chat turn that
+  previously warned now emits zero `never awaited` warnings and still retrieves.
+
+- **2026-09-04 — `deeptutor run` exits non-zero when a capability fails.**
+  `run_turn_and_render()` in `deeptutor_cli/common.py` streamed the turn and
+  returned; a capability that failed *mid-turn* reports the failure as an
+  `error` event plus a terminal `done` carrying `status: "failed"` (see
+  `deeptutor/runtime/orchestrator.py:135-165`), neither of which raised. The
+  command therefore exited 0 — `course_study` printed a full traceback under a
+  429 and the shell still saw `rc=0`, so no script, cron job or CI step could
+  tell a failed run from a good one. (Config-validation errors *before* the turn
+  starts already exited 1, which is what made the gap easy to miss.)
+  `TurnStreamRenderer` now records `failed`, `render_turn_stream()` and
+  `stream_turn_as_json()` return it, and the `run` command raises
+  `typer.Exit(1)`. `--format json` exits non-zero for the same reason. Verified
+  both directions: a failing capability now exits 1, a successful one still
+  exits 0.
+
+- **2026-09-04 — `deep_research` no longer prints nothing on its first turn.**
+  The capability answers the first turn with an outline to confirm — it emits a
+  `result` whose `content` and `response` are empty strings and whose sub-topics
+  live in `metadata.sub_topics` alongside `outline_preview: true`. The CLI
+  renderer prints `content`, so the terminal showed the two stage headers and
+  then nothing at all, which reads as a silent crash rather than a capability
+  waiting for input. `TurnStreamRenderer._print_outline_preview()` in
+  `deeptutor_cli/common.py` now renders the outline and the exact
+  `--config-json` needed to confirm it and run the research stages.
+
 - **2026-08-26 — Partners: a name mixing Thai (or any non-ASCII script) with an
   ASCII word or number no longer collapses onto a colliding id.**
   `_slugify_id()` in `deeptutor/services/partners/manager.py` replaces every
@@ -158,6 +203,32 @@ back to HKUDS; once merged upstream the divergence is removed.
   they must be formatted before the pre-commit prettier hook can be enabled.
 
 ## Thai (th) localization — 2026-06-17
+
+- **2026-09-04 — Settings navigation: six labels that were still English in the
+  `th` slot are now Thai, and the i18n audit's blind spot is recorded.**
+  `web/features/settings/navigation/settings-nav.ts` carries its own inline
+  `{zh, en, th}` translation table rather than reading `web/locales/`, so
+  `npm run i18n:check` — which compares locale files — never sees it. The
+  2026-09-04 UAT sweep found 15 of its 30 blocks with the English string sitting
+  in the `th` field, 7 of them already translated into Chinese, which is what
+  makes them oversights rather than deliberate: a Thai user saw an English
+  settings menu. Translated using the vocabulary `locales/th/app.json` already
+  established, so the nav label matches the page heading: Task models →
+  โมเดลสำหรับงานย่อย, Video Learning → การเรียนจากวิดีโอ, Learner profile →
+  โปรไฟล์ผู้เรียน, About → เกี่ยวกับ, Guardian → ผู้ปกครอง, plus the Task-models
+  blurb, whose `th` value was the untranslated English sentence *"The model
+  behind the calls DeepTutor makes on its own."*
+
+  **Deliberately left English:** the eight product names (LLM, Claude Code,
+  Codex, Kimi CLI, opencode, MiMo Code, Hermes Agent, OpenClaw), and
+  **Connections** and **Embedding** — those two are also untranslated in
+  `locales/th/app.json`, so translating them only in the nav would desync the
+  menu label from its own page heading. They need a vocabulary decision applied
+  in both places, not a one-sided edit.
+
+  The structural gap remains open: any inline translation table added to a
+  component is invisible to `i18n:check`. Extending the audit to catch them is
+  the real fix.
 
 Added full Thai language support across the whole stack. 5 commits, merged to
 `main` via merge commit `fb7a44f0`. ~59 source files changed (+ tests).
