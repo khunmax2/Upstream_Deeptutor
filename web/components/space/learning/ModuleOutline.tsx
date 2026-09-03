@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Language } from "@/lib/datetime";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -79,14 +80,14 @@ export function ModuleOutline({
   topic,
   revision,
   selectedId,
-  zh,
+  language,
   onSelect,
   onOverride,
 }: {
   topic: MasteryTopic;
   revision: number;
   selectedId: string | null;
-  zh: boolean;
+  language: Language;
   onSelect: (id: string | null) => void;
   onOverride: (
     objectiveId: string,
@@ -162,7 +163,7 @@ export function ModuleOutline({
                         pathId={topic.path_id}
                         objectiveId={point.id}
                         revision={revision}
-                        zh={zh}
+                        language={language}
                         onClose={() => onSelect(null)}
                         onOverride={onOverride}
                       />
@@ -182,14 +183,14 @@ function ObjectiveDrawer({
   pathId,
   objectiveId,
   revision,
-  zh,
+  language,
   onClose,
   onOverride,
 }: {
   pathId: string;
   objectiveId: string;
   revision: number;
-  zh: boolean;
+  language: Language;
   onClose: () => void;
   onOverride: (
     objectiveId: string,
@@ -256,7 +257,7 @@ function ObjectiveDrawer({
               {t("Collapse")}
             </button>
           </div>
-          <ObjectiveDetail report={report} zh={zh} />
+          <ObjectiveDetail report={report} language={language} />
 
           {!report.assessed_mastered && (
             <div className="mt-5 border-t border-[var(--border)] pt-4">

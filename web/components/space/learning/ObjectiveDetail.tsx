@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import type { Language } from "@/lib/datetime";
 import { useTranslation } from "react-i18next";
 
 import type { ObjectiveReport } from "@/lib/learning-api";
@@ -18,10 +19,10 @@ import { formatAbsolute, formatRelative, type Translate } from "./format";
  */
 export function ObjectiveDetail({
   report,
-  zh,
+  language,
 }: {
   report: ObjectiveReport;
-  zh: boolean;
+  language: Language;
 }) {
   const { t } = useTranslation();
   const qualitative = report.gate === "qualitative";
@@ -33,8 +34,8 @@ export function ObjectiveDetail({
         <Row label={t("Spaced review")}>
           {report.review.due_at
             ? t("Due {{relative}} · {{absolute}}", {
-                relative: formatRelative(report.review.due_at, zh),
-                absolute: formatAbsolute(report.review.due_at, zh),
+                relative: formatRelative(report.review.due_at, language),
+                absolute: formatAbsolute(report.review.due_at, language),
               })
             : t("Not scheduled")}
           <span className="ml-2 text-[var(--muted-foreground)]">
@@ -79,7 +80,7 @@ export function ObjectiveDetail({
                     {t("You said: ")}
                     {attempt.answer || t("(blank)")}
                     <span className="ml-2">
-                      {formatRelative(attempt.at, zh)}
+                      {formatRelative(attempt.at, language)}
                     </span>
                   </div>
                 </div>

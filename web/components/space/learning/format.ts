@@ -1,3 +1,5 @@
+import { getLocale, type Language } from "@/lib/datetime";
+
 /** Shared presentation helpers for the Mastery Path dashboard. */
 
 /** The `t` from `useTranslation()`, narrowed to what these helpers need. */
@@ -44,7 +46,10 @@ const DAY = 24 * HOUR;
  * "3 分钟前" / "in 2 days" — engine timestamps are epoch seconds and can point
  * either way (an attempt happened, a review is due).
  */
-export function formatRelative(epochSeconds: number, zh: boolean): string {
+export function formatRelative(
+  epochSeconds: number,
+  language: Language,
+): string {
   const deltaSeconds = epochSeconds - Date.now() / 1000;
   const past = deltaSeconds < 0;
   const abs = Math.abs(deltaSeconds);
@@ -58,14 +63,17 @@ export function formatRelative(epochSeconds: number, zh: boolean): string {
           ? [Math.round(abs / HOUR), "hour"]
           : [Math.round(abs / DAY), "day"];
 
-  return new Intl.RelativeTimeFormat(zh ? "zh-CN" : "en", {
+  return new Intl.RelativeTimeFormat(getLocale(language), {
     numeric: "auto",
   }).format(past ? -value : value, unit);
 }
 
 /** Calendar form, for when "in 3 days" is not precise enough. */
-export function formatAbsolute(epochSeconds: number, zh: boolean): string {
-  return new Date(epochSeconds * 1000).toLocaleString(zh ? "zh-CN" : "en", {
+export function formatAbsolute(
+  epochSeconds: number,
+  language: Language,
+): string {
+  return new Date(epochSeconds * 1000).toLocaleString(getLocale(language), {
     month: "short",
     day: "numeric",
     hour: "2-digit",

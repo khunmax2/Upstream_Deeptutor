@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { ActivityMark } from "@/components/activity";
 import { formatRelative } from "@/components/space/learning/format";
+import { resolveUiLanguage } from "@/lib/ui-language";
 import {
   masteryHandoffHref,
   type MasteryHandoffPayload,
@@ -99,7 +100,7 @@ const MasteryHandoff = memo(function MasteryHandoff({
   data: MasteryHandoffPayload;
 }) {
   const { t, i18n } = useTranslation();
-  const zh = Boolean(i18n.language?.toLowerCase().startsWith("zh"));
+  const uiLang = resolveUiLanguage(i18n.language);
   const router = useRouter();
   const [draft, setDraft] = useState(data.opening_message);
 
@@ -122,9 +123,7 @@ const MasteryHandoff = memo(function MasteryHandoff({
     data.objectives > 0
       ? `${data.mastered}/${data.objectives} ${t("mastered")}`
       : "",
-    data.due_reviews > 0
-      ? `${data.due_reviews} ${t("due for review")}`
-      : "",
+    data.due_reviews > 0 ? `${data.due_reviews} ${t("due for review")}` : "",
   ].filter(Boolean);
 
   return (
@@ -210,7 +209,7 @@ const MasteryHandoff = memo(function MasteryHandoff({
                   </span>
                 ) : data.session_updated_at > 0 ? (
                   <span className="shrink-0">
-                    {formatRelative(data.session_updated_at, zh)}
+                    {formatRelative(data.session_updated_at, uiLang)}
                   </span>
                 ) : null}
               </span>

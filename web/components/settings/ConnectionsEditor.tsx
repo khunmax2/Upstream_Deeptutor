@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { resolveUiLanguage } from "@/lib/ui-language";
 
 import ProviderIcon from "@/components/common/ProviderIcon";
 import { apiFetch, apiUrl } from "@/lib/api";
@@ -40,7 +41,10 @@ import { inputClass, selectClass, selectOptionClass } from "./shared";
  * who want a different key per service simply never make a connection.
  */
 
-const SERVICE_LABEL: Record<ServiceName, { en: string; zh: string; th: string }> = {
+const SERVICE_LABEL: Record<
+  ServiceName,
+  { en: string; zh: string; th: string }
+> = {
   llm: { en: "LLM", zh: "LLM", th: "LLM" },
   task: { en: "Task model", zh: "任务模型", th: "โมเดลสำหรับงานเบื้องหลัง" },
   embedding: { en: "Embedding", zh: "嵌入模型", th: "Embedding" },
@@ -82,7 +86,7 @@ function maskedKey(value: string): string {
 
 export function ConnectionsEditor() {
   const { t, i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
+  const uiLang = resolveUiLanguage(i18n.language);
   const {
     draft,
     catalogEditable,
@@ -151,8 +155,7 @@ export function ConnectionsEditor() {
     );
   }
 
-  const label = (service: ServiceName) =>
-    zh ? SERVICE_LABEL[service].zh : SERVICE_LABEL[service].en;
+  const label = (service: ServiceName) => SERVICE_LABEL[service][uiLang];
 
   return (
     <div>
@@ -202,7 +205,7 @@ export function ConnectionsEditor() {
                       "Configured {{count}} services — {{kept}} kept your existing choice.",
                       {
                         count: created.length,
-                        kept: kept.map(label).join(zh ? "、" : ", "),
+                        kept: kept.map(label).join(uiLang === "zh" ? "、" : ", "),
                       },
                     ),
             );
@@ -224,7 +227,7 @@ export function ConnectionsEditor() {
                 {
                   services: standaloneServices
                     .map(label)
-                    .join(zh ? "、" : ", "),
+                    .join(uiLang === "zh" ? "、" : ", "),
                 },
               )}
             </p>
@@ -503,7 +506,7 @@ function AddConnectionPanel({
   ) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
+  const uiLang = resolveUiLanguage(i18n.language);
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -519,8 +522,7 @@ function AddConnectionPanel({
     (service) => target?.services[service],
   );
 
-  const label = (service: ServiceName) =>
-    zh ? SERVICE_LABEL[service].zh : SERVICE_LABEL[service].en;
+  const label = (service: ServiceName) => SERVICE_LABEL[service][uiLang];
 
   const choose = (next: string) => {
     setProvider(next);

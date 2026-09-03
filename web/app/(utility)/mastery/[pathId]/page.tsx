@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
+import { resolveUiLanguage } from "@/lib/ui-language";
 import {
   ArrowLeft,
   ArrowRight,
@@ -44,47 +45,60 @@ const NEXT_LABELS: Record<string, { zh: string; en: string; th: string }> = {
   probe: {
     zh: "先用一道探查题看看你是否已经掌握",
     en: "Start with a probe and test out if you already know it",
-    th: "Start with a probe and test out if you already know it",
+    th: "เริ่มด้วยคำถามหยั่งเชิงเพื่อดูว่าคุณรู้อยู่แล้วหรือยัง",
   },
   practice: {
     zh: "继续练习，直到稳定越过掌握门槛",
     en: "Practice until you reliably clear the mastery gate",
-    th: "Practice until you reliably clear the mastery gate",
+    th: "ฝึกจนผ่านเกณฑ์ความเชี่ยวชาญได้อย่างสม่ำเสมอ",
   },
   assess: {
     zh: "用自己的话讲清楚这个概念",
     en: "Explain this clearly in your own words",
-    th: "Explain this clearly in your own words",
+    th: "อธิบายเรื่องนี้ให้ชัดด้วยคำพูดของคุณเอง",
   },
-  review: { zh: "复习这个记忆信标", en: "Revisit this memory beacon", th: "Revisit this memory beacon" },
+  review: {
+    zh: "复习这个记忆信标",
+    en: "Revisit this memory beacon",
+    th: "กลับมาทบทวนหมุดความจำนี้",
+  },
   answer_pending: {
     zh: "完成导师正在等待的回答",
     en: "Complete the answer your tutor is waiting for",
-    th: "Complete the answer your tutor is waiting for",
+    th: "ตอบคำถามที่ติวเตอร์รออยู่ให้เสร็จ",
   },
   complete: {
     zh: "整片疆域已经点亮",
     en: "The whole territory is illuminated",
-    th: "The whole territory is illuminated",
+    th: "ทั้งผืนแผ่นดินสว่างครบแล้ว",
   },
 };
 
-const NEXT_CTA_LABELS: Record<string, { zh: string; en: string; th: string }> = {
-  review: { zh: "开始本次复习", en: "Start this review", th: "Start this review" },
-  answer_pending: {
-    zh: "回到原会话作答",
-    en: "Answer in the original session",
-    th: "Answer in the original session",
-  },
-  complete: { zh: "继续自由探索", en: "Keep exploring", th: "Keep exploring" },
-};
+const NEXT_CTA_LABELS: Record<string, { zh: string; en: string; th: string }> =
+  {
+    review: {
+      zh: "开始本次复习",
+      en: "Start this review",
+      th: "Start this review",
+    },
+    answer_pending: {
+      zh: "回到原会话作答",
+      en: "Answer in the original session",
+      th: "Answer in the original session",
+    },
+    complete: {
+      zh: "继续自由探索",
+      en: "Keep exploring",
+      th: "Keep exploring",
+    },
+  };
 
 export default function MasteryTopicPage() {
   const params = useParams<{ pathId: string }>();
   const pathId = String(params.pathId || "");
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const zh = Boolean(i18n.language?.toLowerCase().startsWith("zh"));
+  const uiLang = resolveUiLanguage(i18n.language);
   const [topic, setTopic] = useState<MasteryTopic | null>(null);
   const [sessions, setSessions] = useState<TopicSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -385,9 +399,7 @@ export default function MasteryTopicPage() {
                   ? t(
                       "This migrated topic has no modules yet. Add at least one module and knowledge point to begin.",
                     )
-                  : zh
-                    ? nextCopy.zh
-                    : nextCopy.en}
+                  : nextCopy[uiLang]}
               </p>
             </div>
           </div>
@@ -411,9 +423,7 @@ export default function MasteryTopicPage() {
               className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 text-[13px] font-medium text-[var(--primary-foreground)] transition hover:opacity-90"
             >
               {nextCta
-                ? zh
-                  ? nextCta.zh
-                  : nextCta.en
+                ? nextCta[uiLang]
                 : topic.session_count > 0
                   ? t("Continue learning")
                   : t("Begin first waypoint")}
@@ -449,13 +459,13 @@ export default function MasteryTopicPage() {
                 topic={topic}
                 revision={Math.max(topic.path_revision, activity.revision)}
                 selectedId={selectedId}
-                zh={zh}
+                language={uiLang}
                 onSelect={setSelectedId}
                 onOverride={handleOverride}
               />
               <ReviewTrail
                 reviews={topic.reviews}
-                zh={zh}
+                language={uiLang}
                 onSelect={(objectiveId) => {
                   setSelectedId(objectiveId);
                   document
@@ -478,7 +488,7 @@ export default function MasteryTopicPage() {
               loading={sessionsLoading}
               stale={sessionsError}
               onRetry={() => void loadSessions()}
-              zh={zh}
+              language={uiLang}
             />
           </div>
         </div>

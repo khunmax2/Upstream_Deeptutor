@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, BellRing, CheckCircle2, Clock3 } from "lucide-react";
+import type { Language } from "@/lib/datetime";
 import { useTranslation } from "react-i18next";
 
 import type { TopicReview } from "@/lib/learning-api";
@@ -9,11 +10,11 @@ import { formatRelative, type Translate } from "./format";
 
 export function ReviewTrail({
   reviews,
-  zh,
+  language,
   onSelect,
 }: {
   reviews: TopicReview[];
-  zh: boolean;
+  language: Language;
   onSelect: (objectiveId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -56,7 +57,7 @@ export function ReviewTrail({
                 <span className="text-[10px] text-[var(--muted-foreground)]">
                   {review.due
                     ? t("Ready now")
-                    : formatRelative(review.due_at, zh)}
+                    : formatRelative(review.due_at, language)}
                 </span>
               </span>
               <ArrowRight className="h-3 w-3 text-[var(--muted-foreground)] transition-transform group-hover:translate-x-0.5" />

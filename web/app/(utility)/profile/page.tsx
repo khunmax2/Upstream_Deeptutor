@@ -24,6 +24,7 @@ import {
 } from "@/components/UserAvatar";
 import { parseAvatarMarker } from "@/lib/avatar";
 import { formatDate, type Language } from "@/lib/datetime";
+import { resolveUiLanguage } from "@/lib/ui-language";
 
 const AVATAR_OUTPUT_SIZE = 256;
 // Decoding a huge photo just to throw away most pixels wastes memory; the
@@ -198,7 +199,7 @@ export default function ProfilePage() {
         ? null
         : fallback.color;
   const isAdmin = profile?.role === "admin";
-  const lang: Language = i18n.language?.startsWith("zh") ? "zh" : "en";
+  const lang: Language = resolveUiLanguage(i18n.language);
   const joinedDate = profile?.created_at ? new Date(profile.created_at) : null;
   const joined =
     joinedDate && !Number.isNaN(joinedDate.getTime())

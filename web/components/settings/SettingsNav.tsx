@@ -132,12 +132,28 @@ function useGroups(access: SettingsAccess): Group[] {
  * one. A native select is the right control here: it groups, it is one tap,
  * and the platform renders it better than anything reimplemented.
  */
+/**
+ * Pick a `Lang` value for the active interface language.
+ *
+ * This replaced `const zh = i18n.language.startsWith("zh")` plus
+ * `zh ? value.zh : value.en`, a two-language shape that silently rendered the
+ * entire settings navigation in English for Thai accounts — every `Lang` object
+ * in settings-nav.ts already carried a `th` string, and nothing read it. The
+ * `th-ts` invariant checks that those objects *have* `th`; it cannot see a
+ * reader that ignores it, which is why this survived.
+ */
+function pickLang(value: Lang, language: string | undefined): string {
+  const code = language?.toLowerCase() ?? "";
+  if (code.startsWith("zh")) return value.zh;
+  if (code.startsWith("th")) return value.th;
+  return value.en;
+}
+
 export function SettingsNavCompact() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = (value: Lang) => (zh ? value.zh : value.en);
+  const tr = (value: Lang) => pickLang(value, i18n.language);
   const access = useSettingsAccess();
   const groups = useGroups(access);
   const { activeSection, setActiveSection } = useSettings();
@@ -185,8 +201,11 @@ export default function SettingsNav() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((value: Lang) => (zh ? value.zh : value.en), [zh]);
+  const language = i18n.language;
+  const tr = useCallback(
+    (value: Lang) => pickLang(value, language),
+    [language],
+  );
   const {
     catalog,
     catalogEditable,
@@ -206,8 +225,10 @@ export default function SettingsNav() {
       [
         row.leaf.label.en,
         row.leaf.label.zh,
+        row.leaf.label.th,
         row.leaf.blurb.en,
         row.leaf.blurb.zh,
+        row.leaf.blurb.th,
       ]
         .join(" ")
         .toLowerCase()

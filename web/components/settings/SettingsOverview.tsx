@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { resolveUiLanguage } from "@/lib/ui-language";
 
 import ProviderIcon from "@/components/common/ProviderIcon";
 import { apiFetch, apiUrl } from "@/lib/api";
@@ -34,8 +35,8 @@ import {
  */
 export default function SettingsOverview() {
   const { t, i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((value: Lang) => (zh ? value.zh : value.en), [zh]);
+  const uiLang = resolveUiLanguage(i18n.language);
+  const tr = useCallback((value: Lang) => value[uiLang], [uiLang]);
   const {
     catalog,
     catalogEditable,

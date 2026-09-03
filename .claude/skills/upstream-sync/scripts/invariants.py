@@ -243,9 +243,58 @@ def ts_lang_comparison_missing_th(paths: list[str]) -> list[dict]:
     return out
 
 
+# A *reader* that only knows two languages. `th-ts` proves a Lang object carries
+# `th`; it cannot see the code that then does `zh ? value.zh : value.en` and
+# renders Thai as English. The whole settings navigation shipped that way — every
+# label had its Thai string and nothing read it — plus the settings search, whose
+# haystack listed en and zh only, so searching in Thai matched nothing.
+TS_TWO_LANG = re.compile(
+    r"(?:\.startsWith\(\s*[\"']zh[\"']\s*\)\s*\?\s*[\"']zh[\"']\s*:\s*[\"']en[\"']"
+    r"|\bzh\s*\?\s*[\w.]+\.zh\s*:\s*[\w.]+\.en)"
+)
+
+
+def ts_two_language_reader(paths: list[str]) -> list[dict]:
+    """Readers that branch on zh and fall back to en, skipping th."""
+    out = []
+    for p in paths:
+        if not p.endswith((".ts", ".tsx")) or TS_SKIP.search(p):
+            continue
+        text = _read(p)
+        if text is None:
+            continue
+        if unresolved(text):
+            out.append(
+                {"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"}
+            )
+            continue
+        for m in TS_TWO_LANG.finditer(text):
+            line_start = text.rfind("\n", 0, m.start()) + 1
+            line = text[line_start : text.find("\n", m.start())].lstrip()
+            # a doc comment describing the bad shape is not the bad shape
+            if line.startswith(("*", "//", "/*")):
+                continue
+            window = text[max(0, m.start() - 200) : m.end() + 200]
+            # a nearby th arm means the ternary chain does handle it
+            if ".th" in window or '"th"' in window:
+                continue
+            out.append(
+                {
+                    "file": p,
+                    "line": text[: m.start()].count("\n") + 1,
+                    "snippet": " ".join(m.group(0).split())[:70],
+                }
+            )
+    return out
+
+
 CHECKS = {
     "th-ts": ("TypeScript Lang objects missing `th`", ts_missing_th),
     "th-py": ('Python language Literal missing "th" (silent 422)', py_missing_th),
+    "th-read": (
+        "TypeScript readers that branch zh/en and never reach `th`",
+        ts_two_language_reader,
+    ),
     "th-cmp": (
         "TypeScript zh/en comparisons that forget `th` (silent English fallback)",
         ts_lang_comparison_missing_th,

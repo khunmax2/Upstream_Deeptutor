@@ -2855,6 +2855,46 @@ and `components/watching` (31).
 Verified in the running app: `/partners`, `/courses` and `/chat` render Thai
 throughout, with the deliberate English terms intact.
 
+### The last 453, and the bug the sweep uncovered (2026-09-03)
+
+356 keys translated, closing the backlog. **97 keys stay English by intent** —
+vendor and protocol names (`Anthropic Messages`, `OpenAI Responses`, `Docling`,
+`Tika`, `Redis`, `Obsidian`, `MarginNote 4`), theme names (`Light`, `Dark`,
+`Glass`, `Snow`), unit abbreviations (`{{n}} dim`, `{{n}} ctx`), package and CLI
+strings, and the terms this file had already settled as English (`Course`,
+`Soul`, `Persona`, `Syllabus`, `Knowledge Base`, `Embedding`, `Transcript`).
+Thai coverage: **98.0%**.
+
+Checking that work in the running app found something bigger than a missing
+string: **the entire settings navigation rendered in English for Thai accounts.**
+`SettingsNav.tsx` resolved labels with
+
+    const zh = i18n.language.startsWith("zh");
+    const tr = (value: Lang) => (zh ? value.zh : value.en);
+
+Every entry in `settings-nav.ts` already carried its Thai string. Nothing read
+it. The settings **search** had the same hole from the other side: its haystack
+listed `label.en`, `label.zh`, `blurb.en`, `blurb.zh` and no `th`, so searching
+settings in Thai matched nothing at all.
+
+Seven sites shared that shape, found by grepping for it once the first was
+understood: `SettingsNav` (×2), `SettingsOverview`, `ConnectionsEditor` (×2),
+`profile`, `admin/users` and `mastery/[pathId]`. The date helpers underneath took
+`zh: boolean` too, so `formatRelative`/`formatAbsolute` could only ever produce
+Chinese or English — Thai relative dates were English everywhere they appeared.
+All of it now goes through one `lib/ui-language.ts` (`resolveUiLanguage`,
+`pickLang`), and the formatters take a `Language`.
+
+`mastery/[pathId]/page.tsx` also had six `NEXT_LABELS` entries whose `th` value
+was a **copy of the English string** — present, so `th-ts` passed, and useless.
+Translated.
+
+**New invariant `th-read`** covers the class: a reader that branches on zh and
+falls back to en without ever reaching th. Backtested the honest way — 7 findings
+on the pre-fix tree, silent after — and it skips doc comments, so describing the
+bad shape in a comment does not trip it. `th-ts` proves a `Lang` object *has*
+`th`; `th-read` proves something *reads* it. All four checks are green.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
