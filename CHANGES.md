@@ -2836,6 +2836,25 @@ noun stays English as the product term, the sentence shape becomes Thai.
 Coverage now: **4,738 keys, 84.4% translated, 740 left** — `components/partners`,
 `app/(workspace)`, `components/courses` and `components/chat` are the next piles.
 
+Those four piles are done: **287 more keys** across Partners, the workspace routes,
+Courses and Chat. Domain nouns again follow the file's own precedent —
+Partner = คู่หู AI, Chapter = บท, Co-Writer = ผู้ช่วยเขียนเอกสาร,
+Immersive Reading = การอ่านแบบดื่มด่ำ — while `Soul`, `Course`, `Persona`,
+`Syllabus`, `Groups`, `Members`, `Archive`, `Markdown` and `Reading` keep the
+English they already had.
+
+One near-miss worth recording: `contextBudget.usage` was about to be written with
+two placeholders when the real English string carries three
+(`{{used}} / {{total}}` plus `{{percent}}`). The placeholder check caught it before
+it landed — never infer a string's shape from its name.
+
+Coverage: **90.4% translated, 453 keys left**, spread thin now across
+`components/knowledge` (52), `app/(utility)` (35), `features/runtime-status` (34)
+and `components/watching` (31).
+
+Verified in the running app: `/partners`, `/courses` and `/chat` render Thai
+throughout, with the deliberate English terms intact.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
