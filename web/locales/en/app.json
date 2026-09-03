@@ -4736,5 +4736,6 @@
   "{{count}} sections": "{{count}} sections",
   "{{count}} session(s)": "{{count}} session(s)",
   "{{count}} sessions": "{{count}} sessions",
-  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.": "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library."
+  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.": "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.",
+  "Memory settings are not available for this account.": "Memory settings are not available for this account."
 }

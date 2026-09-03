@@ -34,8 +34,15 @@ export function settingsAccessFromAuthStatus(
     hideAdminOnly: Boolean(authStatus.enabled) && !authStatus.is_admin,
     showLearnerOnly:
       ordinaryAuthenticatedUser && authStatus.preset === "learner",
+    // The preset alone is not enough. A standard or custom account can also
+    // carry a learning policy, and `/api/multi-user/*` — everything the
+    // guardian panel reads — sits behind require_learning_surface and answers
+    // 403 for it. Showing the section then produced a settings page that could
+    // not load at all. A restricted account is the supervised side of a
+    // guardian relationship, never the supervising one.
     showGuardianOnly:
       ordinaryAuthenticatedUser &&
+      !authStatus.learning_policy &&
       (authStatus.preset === "standard" || authStatus.preset === "custom"),
   };
 }

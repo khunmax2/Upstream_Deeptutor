@@ -41,20 +41,33 @@ export default function MemorySettingsPage() {
   const [settings, setSettings] = useState<MemorySettingsDTO | null>(null);
   const [serverSnapshot, setServerSnapshot] =
     useState<MemorySettingsDTO | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void apiFetch(apiUrl(EXTENSION_ENDPOINTS.memory))
-      .then((res) => res.json() as Promise<MemorySettingsDTO>)
+      .then((res) => {
+        // Without this the error body was cast straight to MemorySettingsDTO —
+        // `as` hides that from the type checker — and the first read of
+        // `settings.update.l2_budget` threw, taking the whole settings page
+        // down to "This page couldn't load". A restricted learning account
+        // reaches this endpoint as a 403, so it happened on every visit.
+        if (!res.ok) throw new Error(`Memory settings: HTTP ${res.status}`);
+        return res.json() as Promise<MemorySettingsDTO>;
+      })
       .then((data) => {
         if (cancelled) return;
         // A pending edit outlives the page it was made on; the server value is
         // the baseline dirtiness is measured against either way.
         const pending = pendingExtensionPayload("memory") as
-          | MemorySettingsDTO
-          | undefined;
+          MemorySettingsDTO | undefined;
         setSettings(pending ?? data);
         setServerSnapshot(data);
+      })
+      .catch(() => {
+        // Reachable for any account the endpoint denies. Say so instead of
+        // spinning forever or rejecting unhandled.
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
@@ -96,6 +109,14 @@ export default function MemorySettingsPage() {
   ) {
     if (!settings) return;
     setSettings({ ...settings, [key]: { ...settings[key], ...value } });
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="grid h-[60vh] place-items-center px-6 text-center text-[13px] text-[var(--muted-foreground)]">
+        {t("Memory settings are not available for this account.")}
+      </div>
+    );
   }
 
   if (!settings) {

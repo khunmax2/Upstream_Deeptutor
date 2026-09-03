@@ -121,6 +121,34 @@ test("learner and guardian sections follow the resolved account type", () => {
   assert.equal(isSettingsCategoryVisible(guardian, learnerAccount), false);
   assert.equal(isSettingsCategoryVisible(agents, learnerAccount), false);
 
+  // A standard account can also carry a learning policy — the admin ticks
+  // "Enable learning policy" on it. Everything the guardian panel reads lives
+  // under /api/multi-user/*, which answers 403 for such an account, and
+  // rendering the section anyway took the whole settings page down with
+  // "This page couldn't load". The supervised side is never the supervising one.
+  const restrictedStandardAccount = settingsAccessFromAuthStatus({
+    enabled: true,
+    authenticated: true,
+    is_admin: false,
+    preset: "standard",
+    learning_policy: {
+      age_band: "13-15",
+      locked_persona: "teacher",
+      allowed_capabilities: ["chat", "immersive_reading"],
+      default_capability: "immersive_reading",
+      allowed_surfaces: ["chat", "reading"],
+      reading: { allow_upload: false, material_ids: [], extensions: [] },
+    },
+  });
+  assert.equal(
+    isSettingsCategoryVisible(guardian, restrictedStandardAccount),
+    false,
+  );
+  assert.equal(
+    isSettingsCategoryVisible(learner, restrictedStandardAccount),
+    false,
+  );
+
   const guardianAccount = settingsAccessFromAuthStatus({
     enabled: true,
     authenticated: true,

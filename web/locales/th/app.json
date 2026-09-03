@@ -4736,5 +4736,6 @@
   "{{count}} sections": "{{count}} ส่วน",
   "{{count}} session(s)": "{{count}} เซสชัน",
   "{{count}} sessions": "{{count}} เซสชัน",
-  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ ส่วนสื่อการเรียน {{count}} รายการในนั้นจะยังอยู่ในคลังความรู้ของคุณ"
+  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ ส่วนสื่อการเรียน {{count}} รายการในนั้นจะยังอยู่ในคลังความรู้ของคุณ",
+  "Memory settings are not available for this account.": "การตั้งค่าความจำใช้ไม่ได้กับบัญชีนี้"
 }

@@ -2975,6 +2975,38 @@ considered and rejected: the backend mounts guarded and unguarded routers on the
 same `/api` prefix, so a client-side path map would be guesswork that could block
 endpoints the account can legitimately reach.
 
+### `/settings#guardian` took the whole page down (2026-09-03)
+
+Reported while exploring the restricted account: scrolling settings to
+`#guardian` replaced the page with Next's "This page couldn't load".
+
+**The crash was not the guardian panel.** It was `MemorySettingsSection`:
+
+    .then((res) => res.json() as Promise<MemorySettingsDTO>)
+
+No `res.ok` check and no `.catch`. `/api/memory/settings` answers 403 for a
+learning account, so the error body `{"detail": …}` was parsed and **cast** to
+`MemorySettingsDTO` — the `as` hides that from the type checker — and the
+component's own `if (!settings)` guard passed, because the object is truthy. The
+first read of `settings.update.l2_budget` threw a TypeError out of render and
+React unmounted the tree. Upstream's file, unmodified by this fork.
+
+Fixed by checking the response, catching the failure, and rendering a sentence
+instead ("Memory settings are not available for this account", translated).
+
+A second, separate fault sat next to it: `settingsAccessFromAuthStatus` decided
+guardian visibility from the **preset alone**, and a standard or custom account
+can also carry a learning policy. Everything the panel reads is under
+`/api/multi-user/*`, which 403s for such an account, so the section was offered
+to an account that can never load it. A restricted account is the supervised
+side of a guardian relationship, never the supervising one. Regression test
+added to `guardian-management.test.ts`.
+
+**Which fix mattered was measured, not assumed.** Reverting the guardian change
+and keeping only the `res.ok` check: page loads, Memory shows its fallback,
+Guardian still visible. So the crash was the unchecked response; the guardian
+change is a separate correctness fix that stops offering a dead section.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
