@@ -2760,9 +2760,36 @@ Where the gap sits, by feature:
 | `components/partners/group` | 50 |
 | everything else | ~930 |
 
-Roughly 270 of the 1,489 are not reachable from a `t()` literal in the source
-tree, so they are either dead keys or reached dynamically — worth a pass before
-translating them.
+### Orphaned locale keys removed, settings translated (2026-09-03)
+
+The "roughly 270 unreachable" figure above did not survive contact. A first scan
+matched only quoted `t("…")` literals and flagged `updateJob.pending` and its
+siblings as dead — they are built by `t(\`updateJob.${status}\`)`, a template
+literal the regex never saw. Widening the scan to template prefixes and then to
+a full-text search over `web/` **and** `deeptutor/` cut the list to 204 keys that
+appear **nowhere but the three locale files**.
+
+204 removed from all three locales, with the full list kept at
+`docs/reports/orphaned-locale-keys-2026-09-03.json`. Two things made this safe to
+do rather than guess at:
+
+- The repo has **137 dynamic `t(variable)` call sites**, so "absent as a literal"
+  proves nothing on its own. But every one of these keys was *untranslated* —
+  `th` held the English string verbatim — so i18next falling back to the key
+  renders the identical text. Deleting them cannot change what a user sees.
+- `i18n:audit` counts `t()` literals with no locale entry. It read **118 before
+  and 118 after**: no live literal lost its entry.
+
+Then **234 settings keys translated to Thai**. Nine were deliberately left in
+English, following what the fork already does with `Knowledge Base`, `Dark` and
+`Voice`: `codex.oauth.title`, `language.english`, package names (`markitdown`,
+`youtube-transcript-api`), literal API hints (`quality (e.g. hd)`), and the unit
+abbreviations `{{n}} dim` and `{{n}} ctx` — a Thai rendering of an embedding
+dimension reads worse than the term every user of that screen already knows.
+Vendor, protocol and product names (`API format`, `Embedding`, `Docling`,
+`Invidious`, `Base URL`) keep their English form inside translated prose.
+
+Coverage: **4,825 → 4,621 keys, 68.8% → 77.3% translated**, parity still exact.
 
 ## Upstream syncs
 
