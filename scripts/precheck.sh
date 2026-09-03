@@ -59,7 +59,12 @@ cp tests/fixtures/ci_model_catalog.json "$CI_HOME/data/user/settings/model_catal
 # ── Python (job: lint + python-tests) ───────────────────────────
 run "ruff check"        "$VENV_BIN/ruff" check .
 run "ruff format"       "$VENV_BIN/ruff" format --check .
-run "pytest"            env DEEPTUTOR_HOME="$CI_HOME" "$VENV_BIN/pytest" -q tests deeptutor/learning/tests
+# PATH must carry the venv, not just its pytest. CI runs inside an activated
+# environment where a bare `python` resolves; here it did not, and the sandbox
+# test — which executes `python -c ...` as a subprocess — failed with exit 127
+# on a machine that only has `python3`. A real gate failing on the caller's PATH
+# is the false signal this script exists to avoid.
+run "pytest"            env DEEPTUTOR_HOME="$CI_HOME" PATH="$VENV_BIN:$PATH" "$VENV_BIN/pytest" -q tests deeptutor/learning/tests
 
 # ── Frontend (job: web-tests) ───────────────────────────────────
 if [[ $FAST -eq 0 ]]; then

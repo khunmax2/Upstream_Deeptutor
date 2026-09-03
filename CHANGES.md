@@ -3049,6 +3049,38 @@ agrees); model selector shows the assigned model; console no longer logs
 when `active` is removed), settings visibility extended for restricted vs.
 plain standard accounts.
 
+### `json-unchecked` invariant, and a precheck that failed on the caller's PATH (2026-09-03)
+
+**New invariant `json-unchecked`.** It flags a response body that is *cast*
+without the response being checked — `res.json() as Promise<T>` with no
+`res.ok`. That is the exact shape that unmounted the settings page for a
+restricted learner in v1.6.4: on a 403 the body is `{"detail": …}`, truthy, so
+the component's own `if (!data) return` guard passes and the first read of a
+nested field throws out of render. `tsc` cannot see it because the cast asserts
+the lie.
+
+Narrow on purpose. Plenty of code parses without checking and reads the result
+defensively, which is fine; a cast is the specific claim that cannot hold for an
+error body. On the current tree it flags nothing and passes over 12 sites that
+check first — a check that cries wolf gets ignored, and then it protects
+nothing. Backtested: one finding on the pre-fix tree
+(`MemorySettingsSection.tsx:48`), silent after.
+
+Two bugs in the check itself, both found by fixture rather than by reading:
+
+- A fixed 500-character lookback read `res.ok` from a *neighbouring* function —
+  they all name the parameter `res` — and called the dangerous call safe. Now it
+  looks back only to the enclosing function boundary.
+- The first version of that fix trimmed the window once per boundary candidate
+  instead of taking the nearest, which walked past the guard and reported two
+  already-correct call sites as unchecked.
+
+**`precheck.sh` now puts the venv on `PATH`.** It invoked `$VENV_BIN/pytest`
+without the venv on `PATH`, so the sandbox test — which executes `python -c …`
+as a subprocess — failed with exit 127 on a machine that has only `python3`. CI
+runs inside an activated environment and never saw it. A real gate failing on
+the caller's `PATH` is precisely the false signal that script exists to prevent.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

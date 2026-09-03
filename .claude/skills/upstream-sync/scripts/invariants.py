@@ -288,12 +288,82 @@ def ts_two_language_reader(paths: list[str]) -> list[dict]:
     return out
 
 
+# A parsed response body that is *cast* without the response being checked.
+#
+# `res.json() as Promise<T>` tells the type checker the body is a T. On a 403 it
+# is `{"detail": ...}` — truthy, so a component's own `if (!data) return` guard
+# passes, and the first read of a nested field throws out of render. That is how
+# v1.6.4's settings page unmounted itself for a restricted learner: one missing
+# `res.ok` in MemorySettingsSection, invisible to tsc because the cast asserted
+# the lie.
+#
+# Narrow on purpose. Plenty of code parses without checking and reads the result
+# defensively, which is fine; a *cast* is the specific claim that cannot be true
+# for an error body. On the tree this check was written against it flagged
+# nothing and passed over 12 sites that check first — a rule that cries wolf
+# gets ignored, and then it protects nothing.
+TS_UNCHECKED_CAST = re.compile(r"(\w+)\.json\(\)\s*as\s+(?:Promise<)?[A-Z]\w*")
+TS_JSON_GUARDED = re.compile(r"expectJson|jsonOrThrow|errorMessage\(|throwOn")
+
+
+def ts_unchecked_json_cast(paths: list[str]) -> list[dict]:
+    """Casts of a response body that never checked the response."""
+    out = []
+    for p in paths:
+        if not p.endswith((".ts", ".tsx")) or TS_SKIP.search(p):
+            continue
+        text = _read(p)
+        if text is None:
+            continue
+        if unresolved(text):
+            out.append(
+                {"file": p, "line": 0, "snippet": "UNRESOLVED CONFLICT — rerun after resolving"}
+            )
+            continue
+        for m in TS_UNCHECKED_CAST.finditer(text):
+            var = m.group(1)
+            # Look back only to the start of the enclosing function. A fixed
+            # character window reads `res.ok` from a *neighbouring* function —
+            # they all name the parameter `res` — and calls the dangerous one
+            # safe. Caught by putting a checked and an unchecked call in one
+            # fixture file and watching the check stay silent.
+            head = text[max(0, m.start() - 1200) : m.start()]
+            # The *nearest* boundary, not each in turn: trimming three times in
+            # sequence walked past the guard and reported two already-correct
+            # call sites as unchecked.
+            boundary = max(
+                head.rfind("function "),
+                head.rfind("=> {"),
+                head.rfind(".then("),
+            )
+            if boundary != -1:
+                head = head[boundary:]
+            window = head + text[m.start() : m.end() + 200]
+            # the same response object checked nearby, or a helper that throws
+            if re.search(rf"\b{re.escape(var)}\.(?:ok|status)\b", window):
+                continue
+            if TS_JSON_GUARDED.search(window):
+                continue
+            out.append(
+                {
+                    "file": p,
+                    "line": text[: m.start()].count("\n") + 1,
+                    "snippet": " ".join(m.group(0).split())[:70],
+                }
+            )
+    return out
+
+
 CHECKS = {
     "th-ts": ("TypeScript Lang objects missing `th`", ts_missing_th),
     "th-py": ('Python language Literal missing "th" (silent 422)', py_missing_th),
     "th-read": (
         "TypeScript readers that branch zh/en and never reach `th`",
         ts_two_language_reader,
+    ),
+    "json-unchecked": (
+        "Response body cast without checking the response (403 body becomes data)",
+        ts_unchecked_json_cast,
     ),
     "th-cmp": (
         "TypeScript zh/en comparisons that forget `th` (silent English fallback)",
