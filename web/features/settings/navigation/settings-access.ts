@@ -9,6 +9,15 @@ export interface SettingsAccess {
   showLearnerOnly: boolean;
   /** Ordinary standard/custom accounts may act as authorized guardians. */
   showGuardianOnly: boolean;
+  /**
+   * The account carries a learning policy. Every settings router except the
+   * UI-preferences read is behind `require_learning_surface`, so a category not
+   * marked `learningSafe` would render, fetch, and 403. Visibility had three
+   * dimensions (admin / learner / guardian) and no way to say "this account is
+   * restricted" — which is how Network, Models, Knowledge Base, Chat and Memory
+   * were all offered to a learner and all failed.
+   */
+  restricted: boolean;
 }
 
 export const PENDING_SETTINGS_ACCESS: SettingsAccess = {
@@ -16,6 +25,7 @@ export const PENDING_SETTINGS_ACCESS: SettingsAccess = {
   hideAdminOnly: true,
   showLearnerOnly: false,
   showGuardianOnly: false,
+  restricted: false,
 };
 
 /** Convert the backend's account identity into the settings visibility model. */
@@ -44,5 +54,6 @@ export function settingsAccessFromAuthStatus(
       ordinaryAuthenticatedUser &&
       !authStatus.learning_policy &&
       (authStatus.preset === "standard" || authStatus.preset === "custom"),
+    restricted: Boolean(authStatus.learning_policy),
   };
 }

@@ -9,6 +9,7 @@ import { resolveUiLanguage } from "@/lib/ui-language";
 import ProviderIcon from "@/components/common/ProviderIcon";
 import { apiFetch, apiUrl } from "@/lib/api";
 import SettingsStatusPanel from "@/components/settings/SettingsStatusPanel";
+import { useSettingsAccess } from "@/features/settings/navigation/SettingsAccessProvider";
 import { setPendingPrompt } from "@/lib/pending-prompt";
 import {
   SETTINGS_CATEGORIES,
@@ -45,6 +46,7 @@ export default function SettingsOverview() {
     storedDraft,
     startTour,
   } = useSettings();
+  const access = useSettingsAccess();
 
   const modelLeaves = useMemo(
     () =>
@@ -186,7 +188,10 @@ export default function SettingsOverview() {
         </button>
       </header>
 
-      <SettingsStatusPanel />
+      {/* The strip reads /api/system/status, which the learning guard denies, so
+          a restricted account saw "Checking" forever. Server health is not a
+          learner's concern; drop the strip rather than paint a dead one. */}
+      {!access.restricted && <SettingsStatusPanel />}
 
       {catalogEditable === true && (
         <>

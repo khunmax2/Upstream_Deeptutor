@@ -116,10 +116,29 @@ def redacted_model_access(user_id: str | None = None) -> dict[str, list[dict[str
     return result
 
 
+def default_llm_selection_for_user(user_id: str) -> dict[str, Any] | None:
+    """The model a turn uses when an ordinary user has not picked one.
+
+    One rule, one place. `request_preparer` pinned "the first granted-and-
+    available model" inline, while `allowed_llm_options()` told the browser
+    there was no active model at all. The two disagreed, so a learner with one
+    assigned LLM saw an empty "Select model" control even though every turn
+    would have used that model. The selector now shows what the turn will do.
+    """
+    for item in redacted_model_access(user_id).get("llm", []):
+        if item.get("available"):
+            return {
+                "profile_id": item.get("profile_id"),
+                "model_id": item.get("model_id"),
+            }
+    return None
+
+
 def allowed_llm_options() -> dict[str, Any]:
     user = get_current_user()
     if user.is_admin:
         return list_llm_options(admin_catalog())
+    active = default_llm_selection_for_user(user.id)
     options = [
         {
             "profile_id": item.get("profile_id"),
@@ -130,12 +149,16 @@ def allowed_llm_options() -> dict[str, Any]:
             "model": item.get("model") or "",
             "provider": "",
             "source": item.get("source") or "admin",
-            "is_active_default": False,
+            "is_active_default": bool(
+                active
+                and item.get("profile_id") == active["profile_id"]
+                and item.get("model_id") == active["model_id"]
+            ),
         }
         for item in redacted_model_access(user.id).get("llm", [])
         if item.get("available")
     ]
-    return {"active": None, "options": options}
+    return {"active": active, "options": options}
 
 
 def has_capability_access(capability: str, user_id: str | None = None) -> bool:

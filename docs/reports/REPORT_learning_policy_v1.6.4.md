@@ -11,7 +11,7 @@ upstream behaviour unless stated otherwise.
 
 v1.6.4's backend enforces learning-account restrictions correctly and
 consistently. Its frontend was never taught that "denied" is a normal state, so
-every surface that meets a 403 fails as if something were broken. Six separate
+every surface that meets a 403 fails as if something were broken. Nine separate
 defects, all in upstream files.
 
 `/api/auth/status` has always returned `learning_policy` with `allowed_surfaces`,
@@ -38,6 +38,9 @@ Attapon observed.
 | 4 | Guardian visibility keyed off preset only | A section whose every endpoint 403s was offered |
 | 5 | `co-writer-api` dumped the response envelope | `Request failed (403): {"detail":…}` instead of a sentence |
 | 6 | Two background fetches for denied routers | Noise; 21 requests per chat load → 17 |
+| 7 | Settings had no "restricted" dimension | Network / Models / Knowledge / Chat / Memory offered to a learner; each 403'd with a banner |
+| 8 | `Promise.all` in both sidebars had no `.catch` on courses | One 403 discarded the loaded sessions — "No conversations yet" with a full history |
+| 9 | `allowed_llm_options()` returned `active: null` | Selector showed "Select model" while every turn silently used the assigned one |
 
 Defect 3 was the reported crash. Which fix mattered was **measured**: reverting
 4 and keeping only 3 leaves the page loading. Defect 3 is the sharpest of the

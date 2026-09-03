@@ -3007,6 +3007,48 @@ and keeping only the `res.ok` check: page loads, Memory shows its fallback,
 Guardian still visible. So the crash was the unchecked response; the guardian
 change is a separate correctness fix that stops offering a dead section.
 
+### Learning accounts, round three: settings, sessions, and the model that was never shown (2026-09-03)
+
+Attapon re-enabled the policy and hit the next layer: `/settings` showed
+"Failed to load tools: HTTP 403" and "Couldn't load capability settings" — Chat →
+Tools and Capabilities rendered for an account that cannot read either.
+
+**Root cause, one layer.** Settings visibility had three dimensions (admin /
+learner / guardian) and no way to say *this account is restricted*. Every
+category whose router sits behind `require_learning_surface` — Network, Models,
+Knowledge Base, Chat, Memory — was offered, fetched, and 403'd. Fixed at that
+one layer: `settings-access.ts` gains `restricted` (from `learning_policy`),
+categories gain `learningSafe`, and `isSettingsCategoryVisible` hides
+everything else for a restricted account. `page.tsx` uses the same predicate to
+decide which sections *mount*, so nav and content agree. Appearance, Learner
+profile and About opt in — each checked against the running server, not
+assumed. About skips its update check (it 403s and the account could not
+install one); the Overview status strip is dropped rather than left on
+"Checking" forever.
+
+**Two more, found while verifying.**
+
+- `WorkspaceSidebar` and `UtilitySidebar` load the session list with
+  `Promise.all([listSessions, listCourses, …])`. `/api/courses` answers 403 for a
+  restricted account, and one rejection discarded the sessions that had loaded
+  fine — **the learner saw "No conversations yet" with a full history on the
+  server.** Upstream had already wrapped the mastery-topic fetch in `.catch`;
+  courses and reading collections now get the same treatment.
+- The assigned model was there and never shown. `request_preparer` pins "the
+  first granted-and-available model" for a turn with no selection, while
+  `allowed_llm_options()` told the browser `active: null` — so the selector
+  showed "Select model" even though every turn would have used that model. The
+  two now read one helper, `default_llm_selection_for_user`, and the selector
+  renders exactly what the turn will do. Measured: label went from the
+  placeholder to `gemini-3.1-flash-lite`.
+
+Verified on the restricted account: settings renders only overview /
+appearance / about with no banners; sessions list populated (API 1, sidebar
+agrees); model selector shows the assigned model; console no longer logs
+"Failed to load sessions". Tests: two for the default-model rule (both fail
+when `active` is removed), settings visibility extended for restricted vs.
+plain standard accounts.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

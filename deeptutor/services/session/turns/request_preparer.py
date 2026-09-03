@@ -282,8 +282,8 @@ class TurnRequestPreparer:
             # (None llm_selection → default config from admin scope).
             from deeptutor.multi_user.context import get_current_user
             from deeptutor.multi_user.model_access import (
+                default_llm_selection_for_user,
                 has_capability_access,
-                redacted_model_access,
             )
 
             current_user = get_current_user()
@@ -295,16 +295,9 @@ class TurnRequestPreparer:
                     raise RuntimeError(
                         "No LLM model is assigned to your account. Please contact an administrator."
                     )
-                # Pin the first granted-and-available model as the selection.
-                assigned_llms = [
-                    item
-                    for item in redacted_model_access(current_user.id).get("llm", [])
-                    if item.get("available")
-                ]
-                llm_selection = {
-                    "profile_id": assigned_llms[0].get("profile_id"),
-                    "model_id": assigned_llms[0].get("model_id"),
-                }
+                # Pin the same model the browser was told is active, so the
+                # selector and the turn never disagree about what runs.
+                llm_selection = default_llm_selection_for_user(current_user.id) or {}
         if llm_selection:
             from deeptutor.multi_user.personal_models import merge_personal_llm_profiles
             from deeptutor.services.config import get_model_catalog_service

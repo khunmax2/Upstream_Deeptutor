@@ -81,6 +81,16 @@ export interface SettingsCategory {
   children?: SettingsLeaf[];
   /** Shown only when the backend reports an active learner policy. */
   learnerOnly?: boolean;
+  /**
+   * Still usable by an account with a learning policy. Default is hidden for
+   * such accounts — the safe direction, so a new category stays out of a
+   * restricted learner's settings until someone checks its endpoints are not
+   * behind the learning guard. Measured against the running server, not
+   * assumed: Appearance reads only `/api/settings/ui`, Learner profile reads
+   * `/api/auth/profile/*`, About degrades to a sentence when its update check
+   * is denied.
+   */
+  learningSafe?: boolean;
   /** Shown only to authenticated standard users who may act as guardians. */
   guardianOnly?: boolean;
 }
@@ -98,6 +108,7 @@ export function isSettingsCategoryVisible(
 ): boolean {
   if (category.learnerOnly && !access.showLearnerOnly) return false;
   if (category.guardianOnly && !access.showGuardianOnly) return false;
+  if (access.restricted && !category.learningSafe) return false;
   return (
     !category.children ||
     category.children.some((leaf) => isSettingsLeafVisible(leaf, access))
@@ -169,7 +180,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
     key: "search",
     href: "/settings#search",
     label: { zh: "搜索", en: "Search", th: "ค้นหา" },
-    blurb: { zh: "联网搜索供应商。", en: "Web search providers.", th: "ผู้ให้บริการค้นหาเว็บ" },
+    blurb: {
+      zh: "联网搜索供应商。",
+      en: "Web search providers.",
+      th: "ผู้ให้บริการค้นหาเว็บ",
+    },
     icon: Search,
     tile: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     service: "search",
@@ -325,7 +340,11 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     // Gemini CLI's supported replacement.
     key: "agent-antigravity",
     href: "/settings#agent-antigravity",
-    label: { zh: "Antigravity CLI", en: "Antigravity CLI", th: "Antigravity CLI" },
+    label: {
+      zh: "Antigravity CLI",
+      en: "Antigravity CLI",
+      th: "Antigravity CLI",
+    },
     blurb: {
       zh: "DeepTutor 调用本机 Antigravity CLI 时的模型与运行参数。",
       en: "Model and run params for the local Antigravity CLI.",
@@ -403,7 +422,11 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
   {
     key: "agent-deepseek-harness",
     href: "/settings#agent-deepseek-harness",
-    label: { zh: "DeepSeek Harness", en: "DeepSeek Harness", th: "DeepSeek Harness" },
+    label: {
+      zh: "DeepSeek Harness",
+      en: "DeepSeek Harness",
+      th: "DeepSeek Harness",
+    },
     blurb: {
       zh: "DeepTutor 通过 Python SDK 或 headless CLI 调用 DeepSeek Harness。",
       en: "Python SDK or headless CLI settings for DeepSeek Harness.",
@@ -418,8 +441,13 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     key: "appearance",
+    learningSafe: true,
     label: { zh: "外观", en: "Appearance", th: "รูปลักษณ์" },
-    blurb: { zh: "视觉主题与界面语言", en: "Theme and interface language", th: "ธีมและภาษาของอินเทอร์เฟซ" },
+    blurb: {
+      zh: "视觉主题与界面语言",
+      en: "Theme and interface language",
+      th: "ธีมและภาษาของอินเทอร์เฟซ",
+    },
     icon: Palette,
     href: "/settings#appearance",
   },
@@ -449,7 +477,11 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     key: "knowledge",
     label: { zh: "知识库", en: "Knowledge Base", th: "ฐานความรู้" },
-    blurb: { zh: "文档解析引擎", en: "Document parsing engine", th: "เอนจินแยกวิเคราะห์เอกสาร" },
+    blurb: {
+      zh: "文档解析引擎",
+      en: "Document parsing engine",
+      th: "เอนจินแยกวิเคราะห์เอกสาร",
+    },
     icon: Library,
     href: "/settings#document-parsing",
   },
@@ -467,7 +499,11 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   },
   {
     key: "agents",
-    label: { zh: "伙伴和智能体", en: "Partners & Agents", th: "พาร์ทเนอร์และเอเจนต์" },
+    label: {
+      zh: "伙伴和智能体",
+      en: "Partners & Agents",
+      th: "พาร์ทเนอร์และเอเจนต์",
+    },
     blurb: {
       zh: "配置可在对话中调用的子智能体",
       en: "Configure the subagents you can call on in chat",
@@ -479,6 +515,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   },
   {
     key: "learner-profile",
+    learningSafe: true,
     learnerOnly: true,
     label: { zh: "学习档案", en: "Learner profile", th: "Learner profile" },
     blurb: {
@@ -514,6 +551,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   },
   {
     key: "about",
+    learningSafe: true,
     label: { zh: "关于", en: "About", th: "About" },
     blurb: {
       zh: "版本、更新与项目资源",

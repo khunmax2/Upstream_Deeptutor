@@ -50,9 +50,13 @@ export default function UtilitySidebar() {
       const [nextSessions, nextCourses, nextTopics, nextCollections] =
         await Promise.all([
           listSessions(50, 0, { force: true }),
-          listCourses({ force: true }),
+          // Same reasoning as the topic labels below, and it bit for real: a
+          // learning account gets 403 from /api/courses, and one rejection in
+          // Promise.all discarded the sessions that had loaded fine. The learner
+          // saw "No conversations yet" with a full history on the server.
+          listCourses({ force: true }).catch(() => [] as StudyCourse[]),
           fetchMasteryTopicIndex().catch(() => [] as MasteryTopicLabel[]),
-          fetchReadingCollectionIndex(),
+          fetchReadingCollectionIndex().catch(() => []),
         ]);
       setSessions(nextSessions);
       setCourses(nextCourses);

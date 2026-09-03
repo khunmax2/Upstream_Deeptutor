@@ -33,6 +33,7 @@ import {
   type UpdateJob,
   type UpdateJobStatus,
 } from "@/lib/app-update";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { normalizeVersionTag } from "@/lib/version";
 
 const POLL_INTERVAL_MS = 800;
@@ -79,9 +80,18 @@ export default function AboutSettingsPage() {
     }
   }, [t]);
 
+  const { allowedSurfaces, loading: authLoading } = useAuthStatus();
   useEffect(() => {
+    if (authLoading) return;
+    // /api/system/update is behind the learning guard. A restricted account
+    // could not install an update anyway, and the failed check painted its 403
+    // as an error banner above the version it can still read.
+    if (allowedSurfaces) {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, allowedSurfaces, authLoading]);
 
   const activeJob = Boolean(job && updateJobIsActive(job.status));
   useEffect(() => {

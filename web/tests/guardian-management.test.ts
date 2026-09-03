@@ -149,6 +149,41 @@ test("learner and guardian sections follow the resolved account type", () => {
     false,
   );
 
+  // A restricted account is offered only what it can load. Every router but the
+  // UI-preferences read is behind the learning guard, so Network, Models,
+  // Knowledge Base, Chat and Memory all rendered, fetched and 403'd — the
+  // screenshot with "Failed to load tools: HTTP 403" and "Couldn't load
+  // capability settings". Hidden by default; Appearance and About opt in.
+  const byKey = (key: string) =>
+    SETTINGS_CATEGORIES.find((c) => c.key === key)!;
+  for (const key of ["network", "models", "knowledge", "chat", "memory"]) {
+    assert.equal(
+      isSettingsCategoryVisible(byKey(key), restrictedStandardAccount),
+      false,
+      `${key} must be hidden from a restricted account`,
+    );
+  }
+  for (const key of ["appearance", "about"]) {
+    assert.equal(
+      isSettingsCategoryVisible(byKey(key), restrictedStandardAccount),
+      true,
+      `${key} must stay for a restricted account`,
+    );
+  }
+  // An unrestricted standard account is unchanged by the new dimension.
+  const plainStandardAccount = settingsAccessFromAuthStatus({
+    enabled: true,
+    authenticated: true,
+    is_admin: false,
+    preset: "standard",
+  });
+  for (const key of ["network", "models", "knowledge", "chat", "memory"]) {
+    assert.equal(
+      isSettingsCategoryVisible(byKey(key), plainStandardAccount),
+      true,
+    );
+  }
+
   const guardianAccount = settingsAccessFromAuthStatus({
     enabled: true,
     authenticated: true,
