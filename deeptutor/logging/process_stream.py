@@ -66,6 +66,15 @@ class ProcessLogHandler(logging.Handler):
         self._emit = emit
         self._task_id = task_id
         self._turn_id = turn_id
+        # A log record can be emitted from a worker thread (embedding and
+        # retrieval run in executors), where there is no running loop to
+        # schedule an async ``emit`` on. Remember the loop that installed the
+        # handler so those records can still reach it — without this the
+        # coroutine is dropped and the event never reaches the user.
+        try:
+            self._target_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            self._target_loop = None
         self.addFilter(ContextFilter())
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -79,13 +88,29 @@ class ProcessLogHandler(logging.Handler):
                 return
             result = self._emit(event)
             if inspect.isawaitable(result):
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    return
-                asyncio.ensure_future(result, loop=loop)
+                self._schedule(result)
         except Exception:
             self.handleError(record)
+
+    def _schedule(self, coro: Any) -> None:
+        """Run an awaitable ``emit`` result, from this thread or the handler's.
+
+        Closing the coroutine when nothing can run it is the point: an
+        abandoned coroutine raises ``RuntimeWarning: coroutine ... was never
+        awaited`` on every retrieval, which buried the real signal in the logs.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            target = self._target_loop
+            if target is not None and target.is_running():
+                asyncio.run_coroutine_threadsafe(coro, target)
+                return
+            close = getattr(coro, "close", None)
+            if callable(close):
+                close()
+            return
+        asyncio.ensure_future(coro, loop=loop)
 
 
 @contextmanager
