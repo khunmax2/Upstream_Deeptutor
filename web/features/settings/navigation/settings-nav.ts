@@ -154,11 +154,11 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
   {
     key: "task-models",
     href: "/settings#task-models",
-    label: { zh: "任务模型", en: "Task models", th: "Task models" },
+    label: { zh: "任务模型", en: "Task models", th: "โมเดลสำหรับงานย่อย" },
     blurb: {
       zh: "DeepTutor 自己发起的调用使用的模型。",
       en: "The model behind the calls DeepTutor makes on its own.",
-      th: "The model behind the calls DeepTutor makes on its own.",
+      th: "โมเดลที่ใช้กับคำสั่งที่ DeepTutor เรียกเอง",
     },
     icon: ListChecks,
     tile: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
@@ -247,7 +247,7 @@ const CHAT_CHILDREN: SettingsLeaf[] = [
   {
     key: "video-learning",
     href: "/settings#video-learning",
-    label: { zh: "视频学习", en: "Video Learning", th: "Video Learning" },
+    label: { zh: "视频学习", en: "Video Learning", th: "การเรียนจากวิดีโอ" },
     blurb: {
       zh: "原生 YouTube 与本地 Invidious 播放供应商。",
       en: "Native YouTube and local Invidious playback providers.",
@@ -517,7 +517,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: "learner-profile",
     learningSafe: true,
     learnerOnly: true,
-    label: { zh: "学习档案", en: "Learner profile", th: "Learner profile" },
+    label: { zh: "学习档案", en: "Learner profile", th: "โปรไฟล์ผู้เรียน" },
     blurb: {
       zh: "调整年龄、年级与讲解偏好。",
       en: "Adjust age, grade, and explanation preferences.",
@@ -529,7 +529,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     key: "guardian",
     guardianOnly: true,
-    label: { zh: "监护管理", en: "Guardian", th: "Guardian" },
+    label: { zh: "监护管理", en: "Guardian", th: "ผู้ปกครอง" },
     blurb: {
       zh: "查看已授权学习者与学习材料。",
       en: "Review authorized learners and learning materials.",
@@ -552,7 +552,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     key: "about",
     learningSafe: true,
-    label: { zh: "关于", en: "About", th: "About" },
+    label: { zh: "关于", en: "About", th: "เกี่ยวกับ" },
     blurb: {
       zh: "版本、更新与项目资源",
       en: "Version, updates, and project resources",
