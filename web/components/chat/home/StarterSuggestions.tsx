@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Sparkles } from "lucide-react";
 import { apiFetch, apiUrl } from "@/lib/api";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 
 interface Suggestion {
   /** The line the learner reads — names the specific thing worth doing next. */
@@ -101,7 +102,21 @@ export default function StarterSuggestions({
     [],
   );
 
+  const { allowedSurfaces, loading: authLoading } = useAuthStatus();
+
   useEffect(() => {
+    // Wait for the status probe before deciding: `allowedSurfaces` is null both
+    // for an unrestricted account and for one whose policy has not arrived yet,
+    // and firing on the second case defeats the point — measured, after the
+    // first attempt at this still sent the request twice.
+    if (authLoading) return;
+    // /api/dashboard/suggestions sits behind require_learning_surface, so a
+    // restricted account gets a 403 it can do nothing with. Ask for the control
+    // straight away instead of failing first.
+    if (allowedSurfaces) {
+      setView({ kind: "idle" });
+      return;
+    }
     const controller = new AbortController();
     void (async () => {
       const payload = await load(controller.signal);
@@ -139,7 +154,7 @@ export default function StarterSuggestions({
       controller.abort();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [load]);
+  }, [load, allowedSurfaces, authLoading]);
 
   const generate = useCallback(async () => {
     if (timerRef.current) clearTimeout(timerRef.current);

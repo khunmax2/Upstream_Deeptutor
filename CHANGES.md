@@ -2943,6 +2943,38 @@ background requests that 403 for a restricted learner (`/api/courses`,
 harmless but noisy, and pre-existing. And the settings page shows a "Settings
 fetch failed: HTTP 403" banner for the same reason, above controls that work.
 
+Both were then picked up.
+
+**The settings banner is gone.** `SettingsStore` treated the 403 from
+`/api/settings` as a hard failure, painting "Settings fetch failed: HTTP 403"
+above controls that work perfectly. A learning account is not in an error state
+there — it has a narrower surface: `/api/settings` answers 403 while
+`/api/settings/ui` answers 200 and carries the theme, both languages and the
+code-block preferences. The store now falls back to that instead of failing, so
+a restricted learner gets a clean page with the settings it is allowed to change.
+
+**Two of the pointless requests stopped being made.** `StarterSuggestions`
+(`/api/dashboard/suggestions`) and `VersionBadge` (`/api/system/update`) both
+render for a restricted learner and both ask a router it is denied — the second
+for an update it could not install anyway. Measured before and after on the
+reported account: **21 requests per chat load down to 17**, with those two at
+zero.
+
+The first attempt at that gate still fired: `allowedSurfaces` is null both for an
+unrestricted account *and* for one whose status has not arrived yet, so the
+effect ran before the policy landed. Fixed by waiting on the hook's `loading`
+flag — caught by measuring rather than by reading, which is the only reason it
+did not ship broken.
+
+The remaining ~9 come from the composer and the sidebar's session tree probing
+capabilities they handle failing (`/api/tools`, `/api/courses`,
+`/api/mastery-paths/topics/index`, `/api/settings/llm-options` …). Gating those
+means reaching into shared internals for console tidiness on a page that works,
+so they are left alone deliberately. A central path-based gate in `apiFetch` was
+considered and rejected: the backend mounts guarded and unguarded routers on the
+same `/api` prefix, so a client-side path map would be guesswork that could block
+endpoints the account can legitimately reach.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._

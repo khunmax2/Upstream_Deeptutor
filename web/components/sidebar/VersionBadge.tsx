@@ -10,6 +10,7 @@ import {
   subscribeAppUpdateStatus,
   type AppUpdateStatus,
 } from "@/lib/app-update";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { normalizeVersionTag } from "@/lib/version";
 import {
   requestSettingsSection,
@@ -27,7 +28,15 @@ export function VersionBadge({ collapsed = false }: VersionBadgeProps) {
   const [status, setStatus] = useState<AppUpdateStatus | null>(null);
   const [error, setError] = useState("");
 
+  const { allowedSurfaces, loading: authLoading } = useAuthStatus();
+
   useEffect(() => {
+    if (authLoading) return;
+    // /api/system/update is behind require_learning_surface, and a restricted
+    // account could not install an update even if the check succeeded. The
+    // badge still shows the running version — it just stops asking a question
+    // it is not allowed to ask.
+    if (allowedSurfaces) return;
     let active = true;
     const controller = new AbortController();
     const unsubscribe = subscribeAppUpdateStatus((signal) => {
@@ -48,7 +57,7 @@ export function VersionBadge({ collapsed = false }: VersionBadgeProps) {
       controller.abort();
       unsubscribe();
     };
-  }, []);
+  }, [allowedSurfaces, authLoading]);
 
   // Keep the collapsed sidebar entirely free of version chrome.
   if (collapsed) return null;

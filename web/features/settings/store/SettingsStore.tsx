@@ -55,7 +55,8 @@ export type ModelCapabilities = {
 };
 export type ModelCapabilityKey = keyof ModelCapabilities;
 
-export type ApiFormat = "auto" | "openai_chat" | "openai_responses" | "anthropic";
+export type ApiFormat =
+  "auto" | "openai_chat" | "openai_responses" | "anthropic";
 
 export type CatalogModel = {
   id: string;
@@ -281,10 +282,7 @@ export type DiagnosticsResult = {
 };
 
 export type ServiceReadiness =
-  | "not_configured"
-  | "untested"
-  | "passed"
-  | "failed";
+  "not_configured" | "untested" | "passed" | "failed";
 
 /**
  * Where the current settings state lives.
@@ -825,6 +823,23 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
+  /**
+   * Load only what a scoped account can read: its own UI preferences.
+   *
+   * Mirrors the fields loadSettings takes from the full payload's `ui` block,
+   * minus the catalog and providers it is not allowed to see.
+   */
+  const loadUiSettingsOnly = useCallback(async () => {
+    const res = await apiFetch(apiUrl("/api/settings/ui"));
+    if (!res.ok) throw new Error(`Settings fetch failed: HTTP ${res.status}`);
+    const ui = (await res.json()) as SettingsPayload["ui"];
+    setCatalogEditable(false);
+    setTheme(ui.theme);
+    setLanguage(ui.language);
+    setResponseLanguage(ui.response_language ?? ui.language);
+    syncLoadedCodeBlockSettingsToAppShell(ui);
+  }, []);
+
   // Single load step. Kept separate from the mount effect so a "Retry" action
   // can re-run it without remounting the provider.
   const loadSettings = useCallback(async () => {
@@ -832,6 +847,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     let settingsLoaded = false;
     try {
       const settingsResponse = await apiFetch(apiUrl("/api/settings"));
+      if (settingsResponse.status === 403) {
+        // A learning account is scoped out of the full settings payload but not
+        // out of its own UI preferences: /api/settings answers 403 while
+        // /api/settings/ui answers 200. Treating the 403 as a failure put a red
+        // "Settings fetch failed: HTTP 403" banner above controls that work,
+        // which reads as breakage when it is really a narrower surface.
+        await loadUiSettingsOnly();
+        settingsLoaded = true;
+        return;
+      }
       if (!settingsResponse.ok) {
         throw new Error(
           `Settings fetch failed: HTTP ${settingsResponse.status}`,
@@ -1047,7 +1072,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           api_version: "",
           extra_headers: service === "search" ? undefined : {},
           wire_api: service === "llm" ? "auto" : undefined,
-          api_format: service === "llm" || service === "task" ? "auto" : undefined,
+          api_format:
+            service === "llm" || service === "task" ? "auto" : undefined,
           proxy: service === "search" ? "" : undefined,
           models: [],
         };
