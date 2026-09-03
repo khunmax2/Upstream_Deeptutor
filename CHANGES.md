@@ -2809,6 +2809,33 @@ Coverage after both batches: **81.7% translated, 847 keys left.** The remainder 
 spread across `components/reading` (94), `components/partners` (91),
 `app/(workspace)` (89) and `components/courses` (79).
 
+Verifying that batch in the running app (Attapon signed in; Claude never handles
+the credentials) found three things no gate had:
+
+- **The extractor had a bug.** Its regex excluded apostrophes, so a double-quoted
+  `t("Work through each topic's knowledge points…")` was invisible to it — the
+  string was sitting untranslated at the top of `/mastery` the whole time. Fixed
+  and re-run, it found **121 more** keys in the same two feature areas; 118 were
+  translated (`Personas`, `Transcript` and `p. {{page}}` stay English).
+- **118 `t()` literals had no locale entry in *any* language**, including English —
+  they rendered as their raw key. `{{count}} modules` and `{{count}} sessions` were
+  two of them, which is why `/mastery` read "1 modules · 0 sessions" next to Thai.
+  All 118 added to the three locales, Thai translated; the audit line went from
+  118 to 0.
+- Adding them tripped a fork guard, correctly: `en/app.json` must not have a
+  namespace key whose value equals the key. `contextBudget.note.deferredTools`
+  turned out not to need adding at all — its `_one`/`_other` plural pair was
+  already translated and i18next resolves the base key through them — and
+  `personas.count.suffix` needed a real value. The audit now reports 1, and that
+  one is the plural-resolved key it cannot see through.
+
+Thai count strings were reshaped rather than translated word-for-word: Thai has no
+plural -s, so `{{count}} collections` became `collection {{count}} รายการ` — the
+noun stays English as the product term, the sentence shape becomes Thai.
+
+Coverage now: **4,738 keys, 84.4% translated, 740 left** — `components/partners`,
+`app/(workspace)`, `components/courses` and `components/chat` are the next piles.
+
 ## Upstream syncs
 
 _Record each upstream version merged into this fork here._
