@@ -23,6 +23,37 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — A rate-limited retry now waits as long as the provider asked,
+  instead of guessing.** `retry_after_seconds()` in
+  `deeptutor/services/llm/error_mapping.py` has always been able to read a
+  numeric or HTTP-date `Retry-After` off a provider error, and `_rate_limit_error`
+  puts it on `LLMRateLimitError.retry_after` — but nothing on the chat path ever
+  read it. `LLMProvider._call_with_retry()` in
+  `deeptutor/services/llm/provider_core/base.py` flattened the exception into
+  `LLMResponse(content=f"Error calling LLM: {exc}")` *before* anything could,
+  so the hint died with the exception object and the loop always slept its own
+  fixed schedule. On Gemini's free tier a 429 returns `retryDelay: 21s`, while
+  the configured schedule is 5 s doubling to a 120 s ceiling over 8 attempts:
+  the first wait is too short to clear the window and the later ones idle for
+  minutes past it, so one rate-limited turn could hang for ~10 minutes and still
+  fail. The retry-after is now captured before the exception is stringified and
+  used as that attempt's delay, capped by the same 120 s ceiling
+  (`_MAX_RETRY_DELAY_SECONDS`) and re-read per attempt so a stale hint cannot
+  leak into the next one; without a hint the schedule is unchanged. Covered by
+  `tests/services/llm/test_provider_core_retry_after.py` (override, fallback,
+  cap, per-attempt freshness).
+
+  **Correction to the UAT report's original finding 2**, which said the chat path
+  had no 429 retry at all: it does — `factory.complete()` and `factory.stream()`
+  both go through `chat_with_retry` / `chat_stream_with_retry` with 8 attempts of
+  exponential backoff, and "429" and "rate limit" are already in
+  `_TRANSIENT_ERROR_MARKERS`. The real gap was narrower: the server's own
+  Retry-After was ignored. Why the `course_study` turn that first exposed this
+  died in ~5 s without visibly retrying is *not* explained by that gap and
+  remains unresolved — the log with the inner frames was overwritten by the
+  successful re-run, so the call site that bypassed the retry loop was never
+  identified. Reproducing it needs a fresh forced 429.
+
 - **2026-09-04 — The assistant no longer describes tool actions it did not
   perform.** The 2026-09-04 UAT sweep caught the LINE bot answering "ค้นข่าว AI
   ล่าสุด" (find the latest AI news) by writing *"I will search external sources
