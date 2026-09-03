@@ -309,6 +309,32 @@ the collapsed-rail tooltips wrap to two lines unclipped.
 
 ## Documentation
 
+- **2026-09-04 — `docs/reports/REPORT_uat_2026-09-04.md`: first full-system UAT
+  sweep of the fork, and the 13 findings it produced.** Eight waves against build
+  `507b2ea8` / v1.6.4: CI gate, boot + auth across the four accounts, chat-turn
+  lifecycle on all three entry points (Web, CLI, WebSocket), all 11 registered
+  capabilities, KB/RAG grounding, permissions and cross-account isolation, the
+  LINE channel, and a cross-cutting i18n / mobile / dark-theme / console sweep.
+  Seven waves passed. Authentication throughout used locally minted `dt_token`
+  JWTs injected as cookies, so no password was handled at any point.
+
+  Headline result: **no cross-account data leak** — every admin-only route
+  returns 403 to a regular user, unassigned knowledge bases return 403 "not
+  assigned to you", assigned ones are read-only, and the learner preset is cut
+  down to four menu items in the UI, not just at the API. Retrieval is genuinely
+  grounded (`LAWs_thai`, 608 docs via bge-m3 on local Ollama, returned the
+  correct PDPA chapter). Layout held across six routes × desktop light/dark +
+  mobile with zero horizontal overflow and zero console errors.
+
+  One finding is release-blocking: the LINE bot answered a "search the latest AI
+  news" request by narrating a web search it never performed, returning a dated
+  news summary with zero tool events, zero Tavily requests, and `sources`
+  pointing at an unrelated school-curriculum PDF. The remaining twelve cover a
+  missing 429 retry path, a dropped-`await` bug in the RAG event emitter, a CLI
+  exit code that stays 0 when a capability fails, Thai labels left untranslated
+  in a settings nav table that the i18n audit does not read, and assorted data
+  hygiene. Each finding carries the evidence it was derived from.
+
 - **2026-08-26 — `docs/RUNBOOK_line_local.md`: why the tunnel exists, what
   changes in production, and three corrections.** The runbook covered *how* to
   start the LINE bot but not *why* cloudflared is in the loop, which left the

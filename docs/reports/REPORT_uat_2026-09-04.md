@@ -1,0 +1,87 @@
+# UAT — กวาดทั้งระบบ 2026-09-04
+
+**Build ที่ทดสอบ**: `507b2ea8` (main, working tree สะอาด) · แอปเวอร์ชัน v1.6.4
+**สภาพแวดล้อม**: macOS · Python 3.14.3 · Node v24.12.0 · backend :8002 · frontend :3000
+**โมเดล**: `gemini-3.1-flash-lite` (สลับจาก key free tier เป็น key เครดิตระหว่างทดสอบ)
+**วิธียืนยันตัวตน**: ออก JWT `dt_token` จาก secret ในเครื่องแล้วฉีดเป็นคุกกี้ — ไม่มีการใช้รหัสผ่านตลอดการทดสอบ
+
+## ผลรวมรายคลื่น
+
+| คลื่น | ขอบเขต | ผล |
+|---|---|---|
+| W0 | ruff + pytest + `npm run check` | ผ่าน (pytest ล้ม 1 ตัว = flake เฉพาะ macOS) |
+| W1 | บูต + ยืนยันตัวตน 4 บัญชี | ผ่าน |
+| W2 | วงจรชีวิตเทิร์นแชท (Web/CLI/WS) | ผ่าน |
+| W3 | 11 capability | 10 ผ่าน · `math_animator` ขาด optional deps |
+| W4 | KB + RAG grounding | ผ่าน — ค้นคืนจริง ยืนยันด้วย log |
+| W5 | สิทธิ์และการแยกข้อมูล (API + UI) | ผ่าน ไม่มีข้อมูลรั่ว |
+| W6 | LINE | วงจรครบ แต่พบปัญหาร้ายแรง 1 ข้อ |
+| W7 | i18n / มือถือ / ธีมมืด / console | ผ่านด้านเลย์เอาต์ · พบ i18n ตกหล่น |
+
+## ข้อค้นพบ 13 ข้อ
+
+### ร้ายแรง — ควรแก้ก่อนปล่อยใช้จริง
+
+**1. บอท LINE เล่าว่าค้นเว็บมา ทั้งที่ไม่ได้ค้น**
+ข้อความ "ค้นข่าว AI ล่าสุดให้หน่อย" ได้คำตอบที่ประกาศว่า *"กำลังค้นหาข่าวสารล่าสุดเกี่ยวกับ AI..."* แล้วส่ง "สรุปข่าวสาร AI ล่าสุด (ข้อมูล ณ วันที่ 4 กันยายน 2026)" กลับมา
+หลักฐานว่าไม่ได้ค้นจริง 3 ชั้น: (ก) 48 event ในเทิร์นนั้นไม่มี tool event เลย (ข) ไม่มี HTTP request ไป Tavily ใน backend log (ค) `sources` ที่แนบมาคือ PDF หลักสูตรแกนกลางฯ หน้า 31-32
+เครื่องมือไม่ได้เสีย — สั่งตรงด้วย `-t web_search` เรียก Tavily ได้ปกติ ทั้งที่ `web_search` อยู่ใน `enabled_tools` ของ partner `lineme` อยู่แล้ว
+*ยังไม่ได้แยก*: เส้นทาง partner ไม่ส่ง tool เข้าเทิร์น หรือ โมเดลไม่เรียกเอง
+
+### ปานกลาง
+
+**2. ไม่มี retry เมื่อโดน 429** — provider ส่ง `retryDelay: 21s` กลับมา และโค้ดมี `LLMRateLimitError` / `retry_after_seconds` พร้อมใช้ที่ `deeptutor/services/llm/error_mapping.py:59` แต่มีผู้เรียกใช้ที่เดียวคือ LightRAG pipeline — เส้นทาง capability/chat ไม่จับเลย เทิร์นตายทันที
+
+**3. RAG ลืม `await` — event การค้นคืนถูกทิ้งทั้งหมด** — `deeptutor/services/rag/service.py:232` ฟังก์ชัน `emit()` เป็น sync แต่ `return self._emit_tool_event(...)` ซึ่งเป็น `async def` โดยไม่ await (อีก 4 จุดที่บรรทัด 108/118/138/154 await ถูกต้อง) ผลคือขึ้น `RuntimeWarning: coroutine ... was never awaited` ทุกครั้งที่ค้น และผู้ใช้ไม่เห็นร่องรอยการค้นคืนในแผงกิจกรรม
+
+**4. `deeptutor run` คืน exit 0 ทั้งที่ capability ล้มระหว่างเทิร์น** — `deeptutor_cli/common.py:141` stream แล้ว return ไม่ raise ต่อ (คืน exit 1 ถูกต้องเฉพาะกรณี config ไม่ผ่าน validation ก่อนเริ่มเทิร์น) สคริปต์/CI ตรวจจับความล้มเหลวไม่ได้
+
+**5. i18n ไทยตกหล่นในหน้า Settings และ audit ตรวจไม่เจอ** — `web/features/settings/navigation/settings-nav.ts` มีตารางแปลฝังในไฟล์ แยกจาก `locales/` จาก 30 ก้อนมี 15 ก้อนที่ช่อง `th` เป็นอังกฤษ และ 7 ก้อนในนั้นจีนแปลแล้วแต่ไทยไม่แปล: Connections · Task models · Embedding · Video Learning · Learner profile · Guardian · About (บวก Backend, Dark ที่พบตอนเรนเดอร์จริง)
+คำอธิบายของ Task models ช่อง `th` เป็นประโยคอังกฤษเต็ม: `"The model behind the calls DeepTutor makes on its own."`
+ทั้งที่ `locales/th/app.json` มีคำแปลไทยอยู่แล้ว → `npm run i18n:check` ผ่านเพราะตรวจแค่ `locales/` **นี่คือจุดบอดของ audit**
+
+**6. หน้าเว็บยิง API ที่บัญชีตัวเองเข้าไม่ได้** — บัญชี learner โหลดหน้า `/chat` หนึ่งครั้งได้ 403 จำนวน 11 ครั้งจาก 8 endpoint (`/api/settings`, `/api/courses`, `/api/tools`, `/api/knowledge-bases`, `/api/capabilities/registered`, `/api/mastery-paths/topics/index`, `/api/settings/chat-attachments`, `/api/subagents/settings`) เซิร์ฟเวอร์ตัดสินถูก แต่ฝั่งหน้าเว็บไม่กรองก่อนยิง
+
+**7. `deep_research` ผ่าน CLI แล้วเงียบสนิท** — คืน `outline_preview: true` พร้อมหัวข้อย่อยภาษาไทยที่ดี รอยืนยัน outline ตามดีไซน์ แต่ `content` และ `response` เป็นสตริงว่าง (outline อยู่ใน `metadata` เท่านั้น) ตัวเรนเดอร์ CLI จึงพิมพ์ความว่างเปล่า
+*ยังไม่ได้ตรวจ*: ฝั่ง Web UI แสดง outline ให้ยืนยันถูกต้องหรือไม่
+
+### เล็กน้อย / ความสะอาดของข้อมูล
+
+**8. MCP server ตายค้างในคอนฟิก** — `DeepWityaExamhub` ชี้ไป `interference-capital-weblog-united.trycloudflare.com` ที่ resolve ไม่ได้ ขึ้น ERROR ทุกเทิร์น อยู่ใน `data/system/user-mcp/local-admin.json`
+
+**9. RAG ค้นซ้ำหลายรอบต่อคำถามเดียว** — คำถามเดียวเห็น `Searching KB 'LAWs_thai'` 4 ครั้ง, embed ไป Ollama 3 ครั้ง และค้นทุก KB ที่ผูกไว้เสมอไม่ว่าเกี่ยวหรือไม่
+
+**10. หน้าเว็บโหลด `/api/settings` ซ้ำ 6 ครั้งต่อการเปิดหนึ่งหน้า** (`/api/settings/network` 4 ครั้ง) — dev mode ยิงซ้ำ 2 เท่าเป็นปกติ แต่ 6 เกินนั้น *ยังไม่ได้ตรวจบน production build*
+
+**11. grant ชี้ไป profile ที่ถูกลบแล้ว** — `student@example.com` ถือ grant ที่อ้าง `llm-profile-1784115881845` ซึ่งไม่มีในแคตตาล็อกแล้ว ระบบ degrade ได้ดี (คืน 200 ปกติทุกบัญชี) ไม่กระทบการใช้งาน
+
+**12. ไฟล์ grant กำพร้า** — `data/system/grants/u_430e13b955d5431f9bf2ec96bbfa11b0.json` เป็นของ user id ที่ไม่มีใน `users.json` แล้ว
+
+**13. label ความจำปนภาษา** — 19 จาก 62 label เป็นอังกฤษบน UI ไทย รวมถึงอันที่บรรยายบทสนทนาไทยด้วยภาษาอังกฤษ ("Greeting and assistance in Thai language") snapshot refresh ล่าสุด 2026-07-20
+*ยังไม่ได้ตรวจ*: label ที่สร้างใหม่ตอนนี้ยังออกมาเป็นอังกฤษหรือไม่
+
+## สิ่งที่ผ่านและควรบันทึกไว้
+
+- **RAG grounding ใช้ได้จริง** — ค้น `LAWs_thai` (608 เอกสาร, bge-m3 ผ่าน Ollama) ได้ตัวบท PDPA ถูกหมวด คำตอบอ้างมาตรา 30-36 ตรงกับหมวด ๓ log ยืนยัน `Retrieved 2336 characters of grounded context`
+- **สิทธิ์และการแยกข้อมูลแน่นหนา** — เส้นทางแอดมินคืน 403 ให้ user ทุกเส้น, ขอข้อมูลบัญชีอื่นถูกปฏิเสธ, KB ที่ไม่ได้มอบสิทธิ์คืน 403 "not assigned to you", KB ที่มอบแล้วเป็น read-only
+- **บัญชี learner ถูกลดพื้นผิวจริงถึงระดับ UI** — เห็นเมนูแค่ ห้องแชต/การอ่านแบบดื่มด่ำ/การตั้งค่า/ออกจากระบบ เทียบกับ 12 เมนูของ admin
+- **เลย์เอาต์ไม่พังเลย** — 6 route × (desktop light/dark + mobile) ไม่มี horizontal overflow สักหน้า console error เป็นศูนย์ (ยกเว้น 404 จาก route ที่ผมเดา path ผิดเอง)
+- **หยุดกลางสตรีมได้จริง** — คำตอบค้างที่ 2,109 ตัวอักษร จบกลางประโยค ไม่มีแถบสรุป token/cost บันทึกไว้ครบหลัง reload
+- **คุกกี้ session เป็น HttpOnly** — JS อ่านไม่ได้ ตามที่ควรเป็น
+- **กู้ตัวเองได้** — `deep_question` เจอ protocol violation แล้ว retry สำเร็จ · `ask_user` เจอ stdin ไม่ interactive แล้วเดินต่อแทนที่จะค้าง
+
+## สิ่งที่ไม่ได้ทดสอบ (ไม่ใช่ว่าผ่าน)
+
+- **การสร้างวิดีโอ** — `videogen` ยังไม่ได้ตั้งค่า
+- **`math_animator`** — ขาด optional deps (`pip install 'deeptutor[math-animator]'`)
+- **เสียง (STT/TTS ครบวงจร)** — ไม่มีไฟล์เสียงตัวอย่างและไม่มีไมค์
+- **multi-worker / Redis** — `coordination_mode: memory`, `worker_count: 1`
+- **Docker / compose / PocketBase** — ไม่มี Docker บนเครื่อง
+- **หน้า login form + logout** — ทดสอบด้วยการล็อกอินมือของผู้ใช้ 1 ครั้ง (ผ่าน) ที่เหลือใช้ token
+- **การเขียนลง KB ที่ถูกมอบสิทธิ์** — ตรวจจากโค้ดและธงที่ API คืน ไม่ได้ยิงจริงเพราะเสี่ยงแก้ข้อมูลของ admin
+- **โหลดจริง / ผู้ใช้พร้อมกันจำนวนมาก / เจาะความปลอดภัย**
+- **คุณภาพเชิงการสอนและความเป็นธรรมชาติของภาษาไทย** — เป็นวิจารณญาณคน
+
+## หมายเหตุเรื่องโควตา
+
+ระหว่างทดสอบพบว่า key เดิมเป็น Gemini free tier จำกัด **15 requests/นาที** ทำให้ `course_study` ล้มด้วย 429 หนึ่งเทิร์นของ capability ใช้หลาย request (`mastery_path` ใช้ rounds=3) รันติดกัน 5-6 เทิร์นก็ชนเพดาน หลังสลับเป็น key เครดิตแล้ว `course_study` ผ่านทันที — ยืนยันว่าล้มเพราะโควตาล้วน ๆ ไม่ใช่บั๊ก
