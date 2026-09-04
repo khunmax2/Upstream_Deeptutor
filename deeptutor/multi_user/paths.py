@@ -100,8 +100,21 @@ def local_admin_user() -> CurrentUser:
 
 
 def scope_for_user(user_id: str, *, is_admin: bool) -> UserScope:
+    """The workspace *user_id* owns — never the workspace their role unlocks.
+
+    ``admin_scope()`` is the deployment tree, and exactly one account owns it
+    (see :mod:`deeptutor.multi_user.primary_admin`). Every other admin gets a
+    private workspace like anybody else: an admin promoted after the fact must
+    not inherit the first admin's chat history, and an account promoted to admin
+    must not lose its own. Nothing about their privileges changes — those are
+    carried by ``role``, and the shared deployment assets are addressed through
+    :func:`get_admin_path_service` rather than through whoever is current.
+    """
     if is_admin:
-        return admin_scope()
+        from .primary_admin import is_primary_admin
+
+        if is_primary_admin(user_id):
+            return admin_scope()
     migrate_legacy_multi_user_tree()
     return UserScope(kind="user", user_id=user_id, root=(USERS_ROOT / user_id).resolve())
 

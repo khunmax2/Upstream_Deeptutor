@@ -23,6 +23,62 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — A second admin was handed the first admin's entire workspace,
+  chat history included.** Create an account, promote it to admin, and it sees
+  every conversation belonging to admin #1. The cause is one line in
+  `deeptutor/multi_user/paths.py`:
+
+  ```python
+  def scope_for_user(user_id: str, *, is_admin: bool) -> UserScope:
+      if is_admin:
+          return admin_scope()   # hardcodes LOCAL_ADMIN_ID + data/
+  ```
+
+  Every admin resolved to the identical root with their user id rewritten to
+  `local-admin`, so they shared one `data/user/chat_history.db` — and reading,
+  notebooks, memory and per-owner secrets with it. `GET /api/sessions` has no
+  owner filter because, until now, there was nothing to filter by.
+
+  Upstream [#1230](https://github.com/HKUDS/DeepTutor/issues/1230) (filed the
+  same day, by a different operator) is the same defect from the demotion side:
+  their child's history is stranded inside the admin workspace and the account
+  cannot be demoted back onto its own. Promote leaks the first admin's data in;
+  demote strands the account's data behind. `update_user_role` performs no
+  workspace migration at all.
+
+  `admin_scope()` is a *place* — the deployment tree holding the shared model
+  catalog, personas, skills, knowledge bases, partners and cron — not a role.
+  Privileges have always come from `role`, and every shared asset is addressed
+  explicitly through `get_admin_path_service()`, so exactly one account needs to
+  own `data/`. New `deeptutor/multi_user/primary_admin.py` records which one:
+  elected once from the earliest-created admin in the account store, written to
+  `data/system/auth/primary_admin.json`, and thereafter **sticky**. Every other
+  admin gets a private workspace like anybody else, and an account promoted to
+  admin keeps the workspace — and history — it already had.
+
+  The election is deliberately not re-derived on later reads. Re-deriving would
+  mean that deleting or demoting the primary admin silently moves another
+  admin's workspace out from under them, which is the failure the module exists
+  to prevent; a marker naming an account that is gone leaves `data/` waiting for
+  it instead. The `local-admin` and `env-admin` sentinels always resolve to
+  `data/`, so `AUTH_ENABLED=false` single-user runs and the env bootstrap admin
+  are untouched.
+
+  Fix-forward only: nothing is moved, copied or deleted on disk. A deployment
+  that already ran a second admin inside `data/` will find that admin starting
+  on a clean workspace, with its previous work still in `data/` and still
+  reachable by the primary admin. Splitting an already-interleaved
+  `chat_history.db` needs a per-session owner column and is not attempted here;
+  that, and the demotion migration #1230 asks for, remain open.
+
+  Covered by `tests/multi_user/test_admin_workspace_isolation.py` (8 tests:
+  workspace and chat-history separation, promotion preserving the account's own
+  workspace, the election and its stickiness across a deleted primary, both
+  sentinels, and a token round-trip asserting the second admin is still an
+  admin). `scope.kind` is read in only two places, both in `paths.py`, so the
+  blast radius is the routing decision itself. Full suite before and after:
+  28 pre-existing failures either way, 7009 → 7017 passing.
+
 - **2026-09-04 — "Allow learner uploads" was permission to upload and nothing
   more, so the upload was invisible the moment it finished.** An administrator
   ticks the box in the learning policy, the learner picks a file in Immersive
