@@ -353,17 +353,91 @@ reaching a regex literal as a backspace; the scan is now routine.)
   sick pet from its first visit** — `admin@example.com`'s stored pet is already at
   `hunger 100 / happy 0`. The code calls this a demo tuning (`"demo: hungry"`);
   for a product aimed at children it is a product decision, not a bug. Changing it
-  is a few constants.
+  is a few constants. **§7.1 measures how far this has already gone on this
+  install** — the answer is every pet, all the way.
 - **Anima should probably never get its own assignable surface.** Recommendation
   given and accepted: **do not**. Anima is fed exclusively by mastery gates, and
   `/api/mastery-paths/*` is itself default-denied for every learning account — so
   granting the pet API alone ships a companion stuck at 0 forever. Correct order:
   make mastery assignable first; then map `/api/v1/pet` to whatever surface
-  mastery lands on — one line — and Anima follows for free.
+  mastery lands on — one line — and Anima follows for free. §7.1 confirms
+  "exclusively" is literal: there is exactly one input.
 - **The §5.1 banner trade-off**, above.
 - **`/admin/users` "Back" goes to `/`, not to `/admin`.** Small, untouched.
 - **Nav position.** Dashboard still sits where Learner Anima sat, after Immersive
   Reading. Promoting it is a one-line move in `nav-entries.ts`.
+
+### 7.1 Anima's wiring, audited
+
+Asked by the user after the round closed: *what is Anima actually bound to?* —
+prompted by noticing that Mastery Path used to be a capability you picked inside
+the chat workspace and is now a sidebar page instead. Traced through source and
+against the stored data on this install.
+
+**It has exactly one input.** `deeptutor/pet/service.py::_snapshot()` calls
+`LearningStore.list_all()` and counts objectives through
+`learning_policy.is_mastered(progress, kp)`. That store is a per-user SQLite file
+at `<workspace>/learning/mastery/mastery.sqlite3`. Nothing else feeds the pet.
+
+**It is a pull, not a push.** Nothing anywhere emits a pet event. Every read of
+`/api/v1/pet/state` or `/api/v1/pet/dashboard` re-snapshots the learning store,
+drains whatever newly passed the gate, integrates decay, persists, and returns —
+so the pet is a *projection* of mastery progress, recomputed on read.
+
+Three signals, per `deeptutor/pet/derive.py`:
+
+| signal | source |
+|---|---|
+| `LEARN_CONCEPT` | an objective newly clears **the tutor's own hard gate** — 0.9 recency-weighted accuracy for MEMORY/PROCEDURE, a qualitative `mastery_assess` pass for CONCEPT/DESIGN |
+| `QUIZ_PASS` / `QUIZ_FAIL` | each attempt's `is_correct` |
+| `REVIEW_DECAY` | wall-clock elapsed, integrated on read |
+
+`derive.py` states the design intent plainly: the pet reuses the tutor's gate
+rather than inventing a parallel threshold, so *"feeding the pet and clearing the
+tutor's gate are the same event … this IS the anti-cheese."* Worth preserving
+through any retuning of the constants in the first bullet above.
+
+**The vanished chat menu was upstream's doing, not the fork's.** Commit
+`b5cdb10f` (Bingxi Zhao, 2026-09-01, *"refactor(web): consume the canonical
+capability catalog"*) marked `mastery_path` as `legacy: true`, and
+`VISIBLE_CHAT_CAPABILITIES` in `web/features/capabilities/presentation.tsx`
+filters `legacy` out — so it left the composer's capability picker and became the
+`/mastery` sidebar page.
+
+**That move did not cut Anima off.** `/api/mastery-paths/*` writes to the same
+`LearningStore` the pet reads; the binding is through the store, not through the
+capability menu, so the new route feeds the companion exactly as the old one did.
+No fork change is needed here.
+
+**But the chain has never once run on this install.** Every mastery database is
+empty — **0 rows across all 8 tables**, for all three accounts that have one —
+and every stored pet shows it:
+
+| account | hunger | happy | exp | level | last_event |
+|---|---|---|---|---|---|
+| `admin@example.com` | 100.0 | 0.0 | 0.0 | 1 | `REVIEW_DECAY` |
+| `standard@example.com` | 100.0 | 0.0 | 0.0 | 1 | `REVIEW_DECAY` |
+| `custom@example.com` | 88.6 | 42.9 | 0.0 | 1 | `REVIEW_DECAY` |
+
+All three `sick: true`. Not one has ever received a signal other than decay.
+(`student@example.com` has no pet file at all — denied since before one could be
+created, which is consistent with the 403 and with §3.5.) So the wiring is sound
+by inspection but **unproven end to end**: nobody has yet built a mastery path
+and cleared an objective here. Proving it needs one real path on an unrestricted
+account, then watching `exp` move and `last_event` become `LEARN_CONCEPT` —
+which costs a real LLM run to generate the path.
+
+**Dead write path.** `POST /api/v1/pet/event` and `postPetEvent()` in
+`web/lib/pet-api.ts` have **no callers** anywhere — the panel imports only
+`fetchPetDashboard`, `PetHabitat` only `fetchPetState`. `service.py`'s docstring
+says the endpoint exists for *"canvas simulated buttons, tests, future push"*.
+Harmless, but it is not how the pet is fed, and reading it as such would mislead.
+
+**Related change made after this round:** the companion's *tab* is now hidden
+from accounts it is closed to, not merely locked — see the entry in `CHANGES.md`
+and `tests/learner-anima-access.test.ts`. That test also pins the rule this
+audit rests on: no `allowed_surfaces` combination opens Anima today, because
+`_learning_surface_for_path()` has no mapping for `/api/v1/pet` at all.
 
 ---
 
