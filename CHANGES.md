@@ -23,6 +23,49 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — Every generated hint is written in the learner's own language,
+  not just Chinese or English.** Third and last instance of the same defect, and
+  the one that was visible in Immersive Reading: the suggested-question panel
+  offered *"What are the essential development tools I need to install…"* beside
+  a Thai video on a Thai interface. Four generators shared the bug — the reading
+  openers and follow-up question (`deeptutor/services/reading_hints.py`), the
+  chat composer placeholder (`chat_hints.py`) and the question under a learning
+  path (`mastery_hints.py`). Each branched `zh` / everything-else and handed the
+  whole everything-else side an English brief that never named an output
+  language.
+
+  So the output language was decided by whatever the model picked up from the
+  material, which is why it looked intermittent rather than broken: a Thai
+  document carries enough Thai to pull the model along, but a YouTube video with
+  **no transcript** leaves nothing but a title and the English brief wins. That
+  is exactly the reported case. Reproduced against the real model on that
+  material: **0/3 Thai** before, **3/3 Thai** after, three runs each;
+  `language="en"` still returns English, so the fix follows the setting rather
+  than over-correcting. The single follow-up hint A/Bs the same way — *"How does
+  the interpreter actually translate my Python code…"* → *"ตัวแปลภาษาของ Python
+  ทำหน้าที่ต่างจากตัวแปลภาษาของภาษาโปรแกรมอื่นอย่างไรบ้างครับ?"*
+
+  All four now wrap the English brief in the project's existing
+  `append_language_directive()` — no new helper, and the upstream prompt
+  literals are appended to rather than edited, so they still merge cleanly. The
+  `zh` side keeps its own hand-written Chinese brief in each module.
+
+  The caches were the other half. All three keyed a hint by position only, so a
+  hint in the wrong language looked merely *stale* and was re-served for a full
+  TTL after a language change. The language is now part of every key —
+  `reading_hints._cache_key`, its in-process `_openers_cache` key (with
+  `_response_language()` moved above the cache lookup so it can take part),
+  `chat_hints._cache_key` and `mastery_hints._cache_key`. `mastery_hints` also
+  grew the `_response_language()` helper the other two already had, so its cache
+  key and its generator resolve the language the same way instead of reading the
+  setting inline. Covered by `tests/services/test_hint_prompt_language.py`.
+
+  Known gap, not fixed here: the quality filters that reject a hint which
+  answers itself or refers back to the tutor (`_META_EN`, `_ANSWER_EN`,
+  `_BACKREF_EN`, and the term-overlap half of `_repeats_last_answer`) are
+  English-word regexes, so Thai output passes through them unchecked. That was
+  true before this change too — it is just now reachable more often.
+
 - **2026-09-04 — Home-screen starting points are written in the learner's own
   language, not just Chinese or English.** Same shape of bug as the session-title
   fix below, one surface over. `_generate()` in

@@ -70,8 +70,14 @@ _cache = _hint_cache.values
 _inflight = _hint_cache.inflight
 
 
-def _cache_key(session_id: str, transcript_length: int) -> str:
-    return f"{session_id}\0{transcript_length}"
+def _cache_key(session_id: str, transcript_length: int, language: str) -> str:
+    """Key a placeholder to the conversation position *and* the language.
+
+    A hint in the wrong language is not stale, it is unusable: without the
+    language here, changing the response language keeps serving the old one
+    for a full TTL.
+    """
+    return f"{session_id}\0{transcript_length}\0{language}"
 
 
 # -- Material -----------------------------------------------------------------
@@ -243,6 +249,7 @@ def _response_language() -> str:
 async def _call_llm(material: _Material, language: str) -> str:
     from deeptutor.services.llm import complete
     from deeptutor.services.model_selection.tasks import task_llm_scope
+    from deeptutor.services.prompt.language import append_language_directive
 
     zh = _is_zh(language)
     # Same call class as titles and starter lines — short, frequent, and
@@ -251,7 +258,14 @@ async def _call_llm(material: _Material, language: str) -> str:
         return await asyncio.wait_for(
             complete(
                 prompt=_render(material, zh),
-                system_prompt=_SYSTEM_ZH if zh else _SYSTEM_EN,
+                # The English brief is the whole "not Chinese" branch --
+                # Thai included -- and never named an output language, so
+                # the placeholder came out in whatever the conversation
+                # pulled the model toward. Appending the shared directive
+                # leaves the upstream prompt literal untouched.
+                system_prompt=(
+                    _SYSTEM_ZH if zh else append_language_directive(_SYSTEM_EN, language)
+                ),
                 temperature=0.7,
                 max_tokens=120,
                 max_retries=0,
@@ -296,7 +310,7 @@ async def get_ask_hint(session_id: str) -> dict[str, Any]:
     if not material:
         return AskHint(hint="", session_id=session_id, generated_at=time.time()).to_dict()
 
-    key = _cache_key(session_id, material.transcript_length)
+    key = _cache_key(session_id, material.transcript_length, _response_language())
     try:
         value = await _hint_cache.get_or_create(
             key,
