@@ -178,3 +178,84 @@ def test_reading_extensions_and_actions_follow_the_policy(learner_client, as_use
     )
     assert denied.status_code == 403
     assert "not allowed" in denied.json()["detail"]
+
+
+def _save_learner_grant_with_upload(user_id: str, material_id: str):
+    from deeptutor.multi_user.grants import save_grant
+
+    save_grant(
+        user_id,
+        {
+            "enabled_tools": [],
+            "mcp_tools": [],
+            "cli_apps": [],
+            "exec_enabled": False,
+            "learning_policy": {
+                "age_band": "9-12",
+                "locked_persona": "teacher",
+                "allowed_capabilities": ["chat", "immersive_reading"],
+                "default_capability": "immersive_reading",
+                "allowed_surfaces": ["chat", "reading"],
+                "reading": {
+                    "allow_upload": True,
+                    "material_ids": [material_id],
+                    "extensions": ["read_aloud"],
+                },
+            },
+        },
+    )
+
+
+def test_allow_upload_makes_the_learner_own_upload_usable(learner_client, as_user):
+    """`allow_upload` has to survive the upload: 200 then 403 is not an upload."""
+    client, learner, current_user, tmp_path = learner_client
+    with as_user(current_user.id, username="student"):
+        from deeptutor.reading.catalog_store import ReadingCatalogStore
+
+        assigned = _seed_material(tmp_path, "assigned.txt", "Assigned passage.")
+        ReadingCatalogStore().register_manifest(assigned)
+        _save_learner_grant_with_upload(learner["id"], assigned.material_id)
+
+    uploaded = client.post(
+        "/api/reading/materials",
+        files={"file": ("mine.txt", b"my own material", "text/plain")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    own_id = uploaded.json()["material_id"]
+
+    # The learner can open, list and see what they just uploaded.
+    assert client.get(f"/api/reading/materials/{own_id}").status_code == 200
+    listed = {row["material_id"] for row in client.get("/api/reading/materials").json()}
+    assert listed == {assigned.material_id, own_id}
+    library = client.get("/api/reading/library/materials").json()
+    assert {row["material_id"] for row in library["materials"]} == {assigned.material_id, own_id}
+    assert library["counts"]["all"] == 2
+
+    # `allow_upload` is permission to add, never to remove the guardian's material.
+    denied = client.delete(f"/api/reading/materials/{assigned.material_id}")
+    assert denied.status_code == 403
+    assert "cannot modify" in denied.json()["detail"]
+    assert client.delete(f"/api/reading/materials/{own_id}").status_code == 200
+    assert client.get(f"/api/reading/materials/{own_id}").status_code == 403
+
+
+def test_revoking_upload_returns_the_account_to_the_assigned_list(learner_client, as_user):
+    client, learner, current_user, tmp_path = learner_client
+    with as_user(current_user.id, username="student"):
+        from deeptutor.reading.catalog_store import ReadingCatalogStore
+
+        assigned = _seed_material(tmp_path, "assigned.txt", "Assigned passage.")
+        ReadingCatalogStore().register_manifest(assigned)
+        _save_learner_grant_with_upload(learner["id"], assigned.material_id)
+
+    own_id = client.post(
+        "/api/reading/materials",
+        files={"file": ("mine.txt", b"my own material", "text/plain")},
+    ).json()["material_id"]
+    assert client.get(f"/api/reading/materials/{own_id}").status_code == 200
+
+    with as_user(current_user.id, username="student"):
+        _save_learner_grant(learner["id"], assigned.material_id)
+
+    assert client.get(f"/api/reading/materials/{own_id}").status_code == 403
+    assert client.get(f"/api/reading/materials/{assigned.material_id}").status_code == 200

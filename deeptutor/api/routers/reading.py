@@ -29,10 +29,11 @@ from fastapi.params import File
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
+from deeptutor.multi_user.learner_uploads import forget_self_upload, record_self_upload
 from deeptutor.multi_user.learning_access import (
+    accessible_material_ids,
     assert_learning_material,
     assert_learning_material_mutation,
-    current_learning_policy,
 )
 from deeptutor.reading import (
     ANNOTATION_COLORS,
@@ -128,15 +129,13 @@ def _http_error(exc: Exception) -> HTTPException:
 
 
 def _assigned_material_ids() -> set[str] | None:
-    """Return the account allowlist, or ``None`` for unrestricted accounts."""
-    policy = current_learning_policy()
-    if policy is None:
-        return None
-    reading = policy.get("reading")
-    if not isinstance(reading, dict):
-        return {"*"}
-    assigned = set(reading.get("material_ids") or [])
-    return None if "*" in assigned else assigned
+    """Return what this account may open, or ``None`` for unrestricted accounts.
+
+    Delegates to the policy layer so every reading surface — listing, library,
+    workspace tabs, and the per-material guards — agrees on one answer, learner
+    uploads included.
+    """
+    return accessible_material_ids()
 
 
 def _material_allowed(material_id: str) -> bool:
@@ -495,6 +494,7 @@ async def import_urls(
     service = _ingestion()
     try:
         materials = [service.queue_url(url) for url in payload.urls]
+        record_self_upload(*(row.material_id for row in materials))
         workspace_id = payload.workspace_id.strip()
         if workspace_id:
             for material in materials:
@@ -948,12 +948,14 @@ async def upload_material(
             record = await ReadingIngestionService(store, _catalog()).import_media(
                 tmp_path, filename=filename
             )
+            record_self_upload(record.material_id)
             manifest = store.manifest(record.material_id)
         else:
             manifest = store.ingest(tmp_path, filename=filename)
             catalog = _catalog()
             if reuse or catalog.get_material(manifest.material_id) is None:
                 catalog.register_manifest(manifest)
+                record_self_upload(manifest.material_id)
                 return _detail(store, manifest)
             # A separate material over the same extracted content: the bytes
             # are stored once, while annotations and reading position are kept
@@ -968,6 +970,7 @@ async def upload_material(
                 render_mode=manifest.render_mode,
                 status=IngestionStatus.READY,
             )
+            record_self_upload(record.material_id)
             return _detail(store, store.manifest(record.material_id))
     except HTTPException:
         raise
@@ -1058,6 +1061,7 @@ async def delete_material(material_id: str) -> dict[str, Any]:
         raise _http_error(exc) from exc
     if not removed:
         raise HTTPException(status_code=404, detail=f"material {material_id!r} not found")
+    forget_self_upload(material_id)
     return {
         "status": "ok",
         "deleted": True,

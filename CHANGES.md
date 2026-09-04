@@ -23,6 +23,48 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — "Allow learner uploads" was permission to upload and nothing
+  more, so the upload was invisible the moment it finished.** An administrator
+  ticks the box in the learning policy, the learner picks a file in Immersive
+  Reading, `POST /api/reading/materials` answers **200** — and every route that
+  would show the result answers **403 "This reading material is not assigned to
+  this learning account."** The learner reads that as "upload doesn't work",
+  which is the accurate description.
+
+  The cause is that one list did two jobs. `learning_policy.reading.material_ids`
+  is the *guardian's* allowlist — what an admin staged into the learner
+  workspace — and `assert_learning_material()` treated it as the complete set of
+  material the account may open. A learner's own upload is by definition not on
+  a list only an admin can write to, so it was filtered out of
+  `GET /materials`, out of `GET /library/materials` and its counts, out of the
+  workspace tabs (`_workspace_payload`), and refused by
+  `GET /materials/{id}` — the upload landed on disk in the learner's own
+  workspace and was unreachable from there.
+
+  Learner-owned uploads are now tracked separately, in
+  `deeptutor/multi_user/learner_uploads.py` (new file — a sidecar
+  `self_uploads.json` inside the learner's own `reading/` workspace, not a
+  column on upstream's catalog schema, and never a write to the account's own
+  grant). `learning_access.accessible_material_ids()` unions that set into the
+  allowlist while `allow_upload` stands, and every reading surface now asks that
+  one function — `reading.py::_assigned_material_ids()` delegates to it — so
+  listing, library, tabs and the per-material guards can no longer disagree.
+  Ids are recorded on all four ingest paths that pass the upload check (file,
+  deduplicated copy, media, and `library/import-urls`) and dropped on delete.
+
+  Revoking the permission returns the account to exactly the guardian's list
+  without deleting the learner's files; re-granting it brings them back.
+  `assert_learning_material_mutation()` was also honouring only half of its own
+  docstring: it promised to "protect administrator-assigned material from
+  learner-side deletion" but let a learner with `allow_upload` delete assigned
+  material, because assigned ids passed the check it delegated to. Deletion is
+  now restricted to what the learner uploaded themselves.
+
+  Covered by two tests in `tests/multi_user/test_learning_policy_http.py`
+  (upload round-trip and permission revocation); the existing
+  `allow_upload: False` test is unchanged, which is the point — the deny path
+  never moved.
+
 - **2026-09-04 — Every generated hint is written in the learner's own language,
   not just Chinese or English.** Third and last instance of the same defect, and
   the one that was visible in Immersive Reading: the suggested-question panel
