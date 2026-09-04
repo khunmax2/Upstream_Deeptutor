@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchAuthStatus, type AuthStatus } from "@/lib/auth";
 
@@ -42,10 +42,16 @@ export function useLearningPolicy(): LearningPolicyAccess {
     };
   }, []);
 
+  // Memoised on the status object, not recomputed per render: consumers put
+  // `allowsLearningSurface` in useCallback/useEffect dependency arrays, and a
+  // fresh closure every render makes the effect that loads the dashboard
+  // re-fire on its own result — a fetch loop that never leaves the skeleton.
+  const access = useMemo(() => learningPolicyAccessFor(status), [status]);
+
   return {
     policyResolved: resolved,
     authStatus: status,
-    ...learningPolicyAccessFor(status),
+    ...access,
   };
 }
 
