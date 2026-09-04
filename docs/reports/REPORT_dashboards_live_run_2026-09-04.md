@@ -72,7 +72,8 @@ The backend request log is the cheapest oracle in this workflow — it shows eve
 ## 3. Defects found and fixed
 
 Six, all confirmed live, all fixed and re-verified in the browser. No backend
-file and no upstream file was touched.
+file and no upstream file was touched. A seventh — the sidebar entry itself —
+was found by the user after this list closed; it is §4b.
 
 ### 3.1 `/dashboard` never rendered, and hammered the API at ~67 req/s
 
@@ -238,6 +239,50 @@ tools.
 
 (Requests appear twice in the trace — React StrictMode double-invocation in dev,
 not a regression.)
+
+---
+
+## 4b. §3.8 — the sidebar hid Dashboard from every account it was built for
+
+Found by the user immediately after §4 closed, by doing the obvious thing: they
+refreshed, and asked why there was no Dashboard entry in the sidebar on the
+custom account.
+
+`web/components/sidebar/nav-entries.ts`, `web/tests/learning-surface-nav.test.ts`
+
+The `/dashboard` entry declared **no `surface`**, and `filterNavBySurfaces()`
+treats an undeclared entry as restricted — deliberately, and correctly, as the
+safe direction for any feature nobody has classified yet (a new entry must not
+leak into a restricted account where its API would 403 anyway). `/dashboard`
+simply fell through that default.
+
+The result was self-defeating: the whole point of §3.6 and §3.7 was to make the
+**restricted** layout truthful, and the accounts that get that layout were the
+only ones who could not navigate to it. Confirmed live before the fix — the
+sidebar rendered `/chat`, `/reading`, `/settings` and nothing else.
+
+Fixed by marking it `"unrestricted"`, on the same evidence Settings carries. The
+justification is slightly different from Settings' and the code comment says so:
+Settings' API is simply not behind the guard, whereas the dashboard *does* call
+guarded APIs — but only optional ones, each of which now degrades to a stated
+denial, while its one required call (`/api/auth/status`) is never guarded.
+Verified, not assumed: the page had already been observed rendering in full for
+this exact account in §4.
+
+`learning-surface-nav.test.ts` updated to pin the new contract — the three
+`permittedHrefs` expectations, plus a dedicated case asserting Dashboard
+survives every surface combination **including an empty allow-list**, since it is
+the one page that explains the restriction itself to an account allowed nothing.
+
+Verified after the fix, same account, same session: the sidebar renders
+`/chat`, `/reading`, `/dashboard`, `/settings`, and the entry reads *แดชบอร์ด* on
+the Thai UI — which incidentally re-confirms the §3.6 locale-key work on a live
+page.
+
+**Lesson, and it is the same one as §1 in a new place:** round 1's gates were
+green, round 2's gates were green, and both rounds missed this because neither
+opened the sidebar with a restricted account and looked for the entry. The suite
+now covers it.
 
 ---
 

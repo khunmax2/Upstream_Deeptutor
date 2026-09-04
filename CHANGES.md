@@ -3104,6 +3104,20 @@ upstream file was touched.
   `NextSteps` and `ContinueCard` take `restricted: boolean`; `preset` survives
   only where it still means the preset, on the account badge.
 
+- **The sidebar hid Dashboard from every account it was built for.** Found by
+  the user on a refresh after the six above were fixed: the `/dashboard` nav
+  entry declared no `surface`, and `filterNavBySurfaces()` treats an undeclared
+  entry as restricted — the safe default for a feature nobody has classified.
+  So a policy-bound account saw Home, Immersive Reading and Settings, and could
+  reach the restricted dashboard this whole round was spent making truthful
+  **only by typing the URL**. Marked `"unrestricted"` on the same evidence
+  Settings carries: verified against the running server that a chat+reading
+  account renders it in full — its one required call (`/api/auth/status`) is
+  never guarded, and every optional one now degrades to a stated denial rather
+  than an error. `learning-surface-nav.test.ts` pins the new contract, including
+  that Dashboard survives even an empty allow-list, since it is the one page
+  that explains the restriction itself.
+
 **i18n:** 4 keys added to `en`, `th` and `zh`, plus `th`'s pre-existing
 `"Reading": "Reading"` translated to `"การอ่าน"` — a **shared key** with three
 other call sites (ChatComposer, CourseResources, ChatMessageList), flagged for
