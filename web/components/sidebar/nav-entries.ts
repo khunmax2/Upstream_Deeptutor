@@ -117,7 +117,17 @@ export const PRIMARY_NAV: NavEntry[] = [
     // page (/dashboard/anima). The companion kept its one-click reach while
     // giving up its own sidebar slot, so the two live behind one entry.
     // Ungated — both pages only read learning state, no model grant needed.
+    //
+    // Marked "unrestricted" for the same reason as Settings, and with the same
+    // evidence: verified against the running server that a chat+reading account
+    // renders the page in full. Unlike Settings this one *does* call guarded
+    // APIs — but only optional ones, and each degrades to a stated denial
+    // rather than an error, while its one required call (/api/auth/status) is
+    // never guarded. Leaving it undeclared hid the restricted layout from
+    // precisely the accounts it was built for: they could reach /dashboard only
+    // by typing the URL.
     href: "/dashboard",
+    surface: "unrestricted",
     label: "Dashboard",
     icon: LayoutDashboard,
     tooltipKey: "Dashboard tooltip",
