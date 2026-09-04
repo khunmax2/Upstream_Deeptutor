@@ -4741,6 +4741,7 @@
   "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library.": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ ส่วนสื่อการเรียน {{count}} รายการในนั้นจะยังอยู่ในคลังความรู้ของคุณ",
   "Memory settings are not available for this account.": "การตั้งค่าความจำใช้ไม่ได้กับบัญชีนี้",
   "Dashboard tooltip": "ดูความคืบหน้าการเรียนและกิจกรรมที่ใช้ได้",
+  "Learn through a living mastery map": "สร้างแผนที่หัวข้อที่อยากเรียน แล้วไล่เก็บทีละเป้าหมายจนผ่านเกณฑ์ความแม่นของระบบ",
   "Your learning space": "พื้นที่การเรียนของคุณ",
   "Welcome back, {{name}}": "ยินดีต้อนรับกลับมา {{name}}",
   "Continue your assigned learning and reading activities.": "เรียนและอ่านต่อจากกิจกรรมที่ได้รับมอบหมาย",

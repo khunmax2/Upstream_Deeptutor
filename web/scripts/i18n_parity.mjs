@@ -99,5 +99,48 @@ for (const locale of locales) {
   }
 }
 
+// ── sidebar labels and tooltips ────────────────────────────────────────────
+//
+// The audit pass only sees `t("a literal")` written in source. Every sidebar
+// entry renders its tooltip as `t(entry.tooltipKey)` — a *variable* — so the
+// audit is blind to the whole set, and three separate defects survived there
+// unnoticed: a tooltip key absent from all three locales (so `t()` returned the
+// key and Thai and Chinese readers were shown raw English), an `en` value that
+// was the key echoed back as a placeholder, and a `th` value that translated
+// the key's *name* instead of its content.
+//
+// The first two are machine-checkable, so they are checked here. The third is
+// not — only a reader can tell "tooltip for immersive reading" from a tooltip.
+const navEntriesPath = path.join(webRoot, "components", "sidebar", "nav-entries.ts");
+if (fs.existsSync(navEntriesPath)) {
+  const navSource = fs.readFileSync(navEntriesPath, "utf8");
+  const referenced = new Set();
+  for (const match of navSource.matchAll(/^\s*(?:label|tooltipKey):\s*"([^"]+)",/gm)) {
+    referenced.add(match[1]);
+  }
+
+  const enJson = loadJson(path.join(enRoot, "app.json"));
+  const missing = [...referenced].filter((key) => !(key in enJson)).sort();
+  const placeholders = [...referenced]
+    .filter((key) => enJson[key] === key && key.toLowerCase().includes("tooltip"))
+    .sort();
+
+  if (missing.length) {
+    ok = false;
+    console.error("[i18n:parity] Sidebar keys referenced by nav-entries.ts but absent from en/app.json:");
+    for (const key of missing) console.error(`  - ${key}`);
+    console.error("  (t() falls back to the key, so every non-en reader is shown English.)");
+  }
+  if (placeholders.length) {
+    ok = false;
+    console.error("[i18n:parity] Sidebar tooltips whose en value is just the key echoed back:");
+    for (const key of placeholders) console.error(`  - ${key}`);
+    console.error("  (Write the real sentence; the other locales may already have one.)");
+  }
+  if (!missing.length && !placeholders.length) {
+    console.log(`[i18n:parity] sidebar: ${referenced.size} label/tooltip keys resolve`);
+  }
+}
+
 if (!ok) process.exit(1);
 console.log(`[i18n:parity] OK (locales checked vs en: ${locales.join(", ")})`);

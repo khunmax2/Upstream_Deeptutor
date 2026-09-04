@@ -961,6 +961,37 @@ code is additive and isolated for mergeability.
   stay in place, and setting the variable brings the button straight back. File:
   `web/components/voice/VoiceCallWidgetMount.tsx`.
 
+- **2026-09-04 — Two more sidebar tooltips were broken the same way, and the
+  checker could not see any of them.** An audit of the remaining Thai nav labels
+  (asked for after the rename below) found the labels themselves in good shape —
+  the fork's Thai is behaviour-first throughout, and in places *corrects* the
+  English, e.g. Knowledge Center's `en` still reads "Manage learning personas."
+  while `th` describes the RAG store it actually is. But two sibling defects of
+  the same family turned up:
+
+  - **`/mastery`'s tooltip key existed in no locale at all.** `nav-entries.ts`
+    asks for `"Learn through a living mastery map"`, which is absent from `en`,
+    `th` and `zh` — so `t()` returned the key and **Thai and Chinese readers were
+    shown raw English**, while English readers saw a sentence and nobody noticed.
+    Written from the real behaviour in all three: map a topic, then work each
+    objective until it clears the tutor's mastery gate.
+  - **`"Partners tooltip"` in `en` was the key echoed back** — the exact mirror
+    of the Immersive Reading bug below: there, `th` was the placeholder and `en`
+    was fine; here `th` and `zh` carried real content and `en` showed the literal
+    string "Partners tooltip". Filled in from what the other two already said.
+
+  **Root cause, and the gap closed:** `i18n:audit` scans for `t("a literal")` in
+  source, but every sidebar tooltip renders as `t(entry.tooltipKey)` — a
+  *variable* — so the audit was blind to the whole set, which is how three
+  separate defects survived in it. `scripts/i18n_parity.mjs` now also reads
+  `components/sidebar/nav-entries.ts` and fails the build when a referenced
+  `label` / `tooltipKey` is missing from `en`, or when a tooltip's `en` value is
+  just its key. Proven by reinstating both defects and watching the gate exit 1;
+  it reports 23 sidebar keys resolving otherwise. The third failure mode — a
+  translated *key name*, as in the entry below — is not machine-checkable and is
+  called out as such in the script's comment. Files:
+  `web/scripts/i18n_parity.mjs`, `web/locales/{en,th,zh}/app.json`.
+
 - **2026-09-04 — Immersive Reading and Immersive Watching are named in Thai
   after what they do.** `"การอ่านแบบดื่มด่ำ"` was a literal calque of
   *immersive*: **ดื่มด่ำ** is the Thai for savouring something — music, scenery,
