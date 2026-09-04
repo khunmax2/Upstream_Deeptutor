@@ -3048,6 +3048,78 @@ were confirmed identical on a pristine `main` checkout — the known Windows
 path-separator contract failures, none introduced here. Not yet exercised against
 a live backend with Standard / Custom / Learner logins.
 
+**2026-09-04 — Live-backend run: six defects the green suite could not see.**
+Round 1 above passed typecheck, eslint, dependency-cruiser, i18n and vitest — and
+`/dashboard` still rendered **nothing** for every non-admin account. This round
+opened both dashboards in a browser under real `standard` / `custom` / `learner`
+logins against a running API, and fixed what that exposed. No backend file and no
+upstream file was touched.
+
+- **`/dashboard` never rendered, and hammered the API at ~67 req/s.**
+  `useLearningPolicy()` returned `{...learningPolicyAccessFor(status)}` computed
+  fresh on every render, so `allowsLearningSurface` was a new closure each time;
+  `UserDashboard`'s loader is a `useCallback` depending on it, and its `useEffect`
+  therefore re-fired on its own result. `loading` never cleared, the page stayed
+  on the skeleton, and the fan-out re-ran forever — **334 requests in 5 s**
+  measured before, **0 in 8 s** after. Fixed by memoising on the status object.
+  A pure-function unit test cannot catch this: the bug is closure identity across
+  renders, not the helper's output.
+- **`/admin` could not be scrolled — 64% of the page unreachable.**
+  `h-full` under a `min-h-screen` parent with no definite height collapses to
+  content height, so `overflow-y-auto` never engaged and the global
+  `body { overflow: hidden }` clipped at the viewport. Proven in the DOM
+  (`clientHeight === scrollHeight === 2989`, viewport 1069) and fixed to
+  `h-screen`, matching the sibling `admin/users/page.tsx` that had it right.
+- **`/admin` was a dead end**, and **an admin could not reach Learner Anima at
+  all** — the `(admin)` route group renders no sidebar, `UserDashboard` redirects
+  admins away from `/dashboard`, and this branch had already folded Anima's own
+  sidebar slot into that route. Added a `← Back` link and a *Learner Anima* card
+  in Quick actions pointing at `/dashboard/anima`, reusing existing keys.
+- **Anima showed a fabricated empty pet to accounts it was denied.**
+  `GET /api/v1/pet/dashboard` answers **403** for any learning account, and the
+  panel's "keep the last-good view" fallback painted a full pet UI at 0% hunger /
+  0% happiness — a sick pet, not a locked one — while re-polling the denial every
+  4 s forever. New `PetRequestError` (carrying `status`) lets the panel tell 403
+  from a hiccup, stop the interval, and show a plain locked notice.
+- **The learner dashboard reported numbers derived from denied requests.**
+  *"Available modes: 1"* under a caption reading *"Set by your learning plan"* —
+  while the plan said 2 on the same page — because it counted a 403'd capability
+  catalog; the mode chips dropped chat for the same reason. Both now derive from
+  `learning_policy.allowed_capabilities`, which is what the server enforces. The
+  partial-data banner said *"temporarily unavailable"* for a permanent policy
+  denial; `safeLoad` now records `denied` separately via a `failureStatus()`
+  helper that reads both `ApiError.status` and the `HTTP {status}` message
+  convention of `features/capabilities/api.ts` — deliberately *reading* that
+  upstream file's error shape rather than editing it. And eight English labels
+  survived on a fully Thai page because `formatCapabilityLabel()` returns a
+  **locale key**, not a finished label: it is now documented as such and all five
+  call sites pass it through `t()`.
+- **A policy-bound non-learner got the wide dashboard.** A `custom` account with
+  a learning policy was narrowed to two sidebar entries (the sidebar reads
+  `allowedSurfaces`) yet handed the full layout here (it read `preset`), firing
+  **seven denied API groups per load** and printing *"Assigned skills: 0"* — with
+  a footnote to ask an administrator — against a grant that assigns **five**.
+  Layout and fan-out now follow the policy the way the sidebar and the server
+  already do: `preset === "learner" || Boolean(status.learning_policy)`.
+  `NextSteps` and `ContinueCard` take `restricted: boolean`; `preset` survives
+  only where it still means the preset, on the account badge.
+
+**i18n:** 4 keys added to `en`, `th` and `zh`, plus `th`'s pre-existing
+`"Reading": "Reading"` translated to `"การอ่าน"` — a **shared key** with three
+other call sites (ChatComposer, CourseResources, ChatMessageList), flagged for
+review in case the English term was deliberate the way `"Knowledge Base"` is.
+
+**Verification:** every fix confirmed in a browser under the account that
+exhibited it, with the backend request log as the oracle. Gates re-run green:
+typecheck, eslint (0 errors), `i18n:parity` OK, vitest 22/22. Files:
+`web/features/dashboard/useLearningPolicy.ts`,
+`web/components/dashboard/{UserDashboard,LearnerAnimaPanel}.tsx`,
+`web/components/admin/AdminDashboard.tsx`, `web/lib/{pet-api,user-dashboard}.ts`
+and the three locales. A `.claude/launch.json` naming the frontend dev command
+was added for agent tooling but is **not committed** — `.gitignore:19` excludes
+`.claude/*`; the command it holds is written out in the report instead.
+Details in `docs/reports/REPORT_dashboards_live_run_2026-09-04.md`.
+
 
 ## Branches kept but not merged
 
