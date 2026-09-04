@@ -961,6 +961,32 @@ code is additive and isolated for mergeability.
   stay in place, and setting the variable brings the button straight back. File:
   `web/components/voice/VoiceCallWidgetMount.tsx`.
 
+- **2026-09-04 — Immersive Reading and Immersive Watching are named in Thai
+  after what they do.** `"การอ่านแบบดื่มด่ำ"` was a literal calque of
+  *immersive*: **ดื่มด่ำ** is the Thai for savouring something — music, scenery,
+  a novel read for pleasure — and it landed in the wrong register for a study
+  tool that a nine-year-old opens to be quizzed on a chemistry chapter. It was
+  also the last literal translation left in the sidebar, where every sibling is
+  already named for its behaviour (Home → **ห้องแชต**, Co-Writer →
+  **ผู้ช่วยเขียนเอกสาร**, Book → **สร้างหนังสือเรียน**).
+
+  Renamed to **"อ่านกับติวเตอร์"** — *read with a tutor* — chosen by the user
+  from four behaviour-derived candidates, with the sibling capability following
+  as **"ชมกับติวเตอร์"** so the อ่าน / ชม pair still reads as a pair. The name
+  states the one thing that actually distinguishes the feature: a tutor sits
+  with you and may speak only from the material you opened. 9 strings across the
+  file were re-fitted rather than string-substituted, since the new label is a
+  verb phrase where the old one was a noun.
+
+  **Fixed alongside it:** the Thai `"Immersive Reading tooltip"` read
+  `"คำแนะนำการอ่านแบบดื่มด่ำ"` — *"tooltip for immersive reading"*, i.e. someone
+  had translated the **key name** instead of the value, so a Thai learner
+  hovering the sidebar entry was told nothing at all. (`zh` had it right.) Now
+  the real sentence: *"อ่านเอกสาร หน้าเว็บ และสื่อเสียงหรือวิดีโอ
+  พร้อมติวเตอร์ AI ที่อ้างอิงเนื้อหาจริง"*. Verified live on the Thai UI —
+  sidebar label and hover card both. `en` and `zh` untouched; parity passes.
+  File: `web/locales/th/app.json` (10 values).
+
 - **2026-09-04 — Upstream's GitHub and documentation links are parked behind a
   flag (default off).** The sidebar footer carried two icon links beside the
   version badge, and Settings ▸ About carried a whole *Project* section — all
