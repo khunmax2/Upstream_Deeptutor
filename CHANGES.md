@@ -23,6 +23,38 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — Home-screen starting points are written in the learner's own
+  language, not just Chinese or English.** Same shape of bug as the session-title
+  fix below, one surface over. `_generate()` in
+  `deeptutor/services/suggestions.py` branched `zh` / everything-else and handed
+  the whole everything-else side `_SYSTEM_EN` — an English brief with nothing
+  naming a target language — so a Thai learner got three English lines under the
+  composer while every other word on the page was Thai. The non-`zh` branch now
+  appends `Write both fields in {language_label(language)}.` plus the project's
+  own `language_directive()`, and names the language in the closing line too.
+  Appending rather than editing the `_SYSTEM_EN` literal keeps that upstream
+  prompt untouched, so it still merges cleanly; the `zh` side keeps its own
+  fully-authored Chinese brief.
+
+  The cache made this worse than a one-off. `starters.json` records the language
+  that was *requested*, not the one actually written, so a set generated in
+  English under `"language": "th"` looked fresh and was re-served for the whole
+  6-hour TTL — and fixing the prompt would not have retired it, because the
+  fingerprint is computed from the material and the language, neither of which
+  moves when the prompt changes. Added `_PROMPT_VERSION` to the fingerprint
+  digest so a prompt fix invalidates every set cached under the old one.
+
+  A/B against the real model on the same material and `language="th"` — old:
+  *"How the chain rule enables differentiation of composite functions"*; new:
+  *"ความแตกต่างระหว่าง Chain Rule กับการหาอนุพันธ์ฟังก์ชันตรีโกณมิติ"*. Asking for
+  `language="en"` still returns English, so the fix follows the setting rather
+  than over-correcting. Covered by `tests/services/test_suggestions_language.py`.
+
+  Which setting decides: the *model response language*
+  (`response_language`), not the interface language — that is the module's own
+  documented intent, so the UI language cannot silently override what the
+  learner asked their model to answer in.
+
 - **2026-09-04 — A generated session title is written in the interface language,
   not just Chinese or English.** `_maybe_generate_session_title()` in
   `deeptutor/services/session/turns/title_service.py` branched on

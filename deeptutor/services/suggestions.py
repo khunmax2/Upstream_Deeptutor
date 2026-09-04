@@ -109,6 +109,15 @@ _PLACEHOLDER_LABELS = frozenset(
 _MAX_LABEL_CHARS = {"zh": 40, "en": 95}
 _MAX_PROMPT_CHARS = {"zh": 160, "en": 400}
 
+# Bumped whenever the generation prompt changes in a way that should retire
+# what is already cached. The fingerprint is the only thing that answers "is
+# the cached set still the right answer", and it is computed from the material
+# and the requested language — neither of which moves when the *prompt* is
+# fixed. Without this, a prompt fix stays invisible to every existing user
+# until their TTL happens to lapse, which for a wrong-language set is up to six
+# hours of the bug they just reported.
+_PROMPT_VERSION = 2
+
 # One in-flight regeneration per scope; a burst of page loads must not fan out
 # into a burst of LLM calls.
 _inflight: dict[str, asyncio.Task[Any]] = {}
@@ -399,6 +408,7 @@ def _collect_material(trace_count: int) -> _Material:
 
 def _fingerprint(material: _Material, language: str) -> str:
     digest = hashlib.sha1(usedforsecurity=False)
+    digest.update(f"v{_PROMPT_VERSION}\0".encode("utf-8"))
     digest.update(language.encode("utf-8"))
     digest.update(material.profile.encode("utf-8"))
     for topic in material.topics:
@@ -537,6 +547,8 @@ async def _generate(language: str, material: _Material) -> SuggestionSet:
         # to invent a learning history.
         return empty
 
+    from deeptutor.services.prompt.language import language_directive, language_label
+
     zh = _is_zh(language)
     sections: list[str] = []
     if material.profile:
@@ -549,9 +561,25 @@ async def _generate(language: str, material: _Material) -> SuggestionSet:
             ("# 最近的活动痕迹\n" if zh else "# Recent activity\n")
             + _render_topics(material.topics, zh)
         )
-    closing = (
-        "\n请提出那三个探索方向。" if zh else "\nPropose the three things worth exploring next."
-    )
+    if zh:
+        system_prompt = _SYSTEM_ZH
+        closing = "\n请提出那三个探索方向。"
+    else:
+        # ``_SYSTEM_EN`` is written in English, but the lines it produces are
+        # read by the learner and must be in *their* language. This branch used
+        # to be the whole of "not Chinese", so a Thai (or Japanese, Korean,
+        # French) reader got an English brief with nothing naming a target
+        # language — and the model answered in English. The cache records the
+        # language that was *asked for*, not the one actually written, so that
+        # English set then looked fresh for a whole TTL.
+        #
+        # Appending rather than editing ``_SYSTEM_EN`` keeps the upstream
+        # prompt literal untouched, so it still merges cleanly.
+        label = language_label(language)
+        system_prompt = (
+            _SYSTEM_EN + f"\n\nWrite both fields in {label}." + language_directive(language)
+        )
+        closing = f"\nPropose the three things worth exploring next, written in {label}."
     user_prompt = "\n\n".join(sections) + "\n" + closing
 
     try:
@@ -564,7 +592,7 @@ async def _generate(language: str, material: _Material) -> SuggestionSet:
             raw = await asyncio.wait_for(
                 complete(
                     prompt=user_prompt,
-                    system_prompt=_SYSTEM_ZH if zh else _SYSTEM_EN,
+                    system_prompt=system_prompt,
                     temperature=0.8,  # suggestions may vary; these are not facts
                     max_tokens=500,
                 ),
