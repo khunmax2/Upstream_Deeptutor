@@ -30,6 +30,7 @@ const EXCLUDED = new Set([
   "/register",
   "/whisper",
   "/avatar-preview",
+  "/admin",
 ]);
 
 function containsPage(dir: string): boolean {
@@ -89,9 +90,41 @@ test("every top-level page is voice-steerable or explicitly excluded", () => {
   );
 });
 
+/**
+ * Resolve a URL path to a page.tsx at any depth, skipping route groups.
+ *
+ * The coverage test above only enumerates top-level routes — that is what the
+ * manifest must *cover*. A declared path may still be deeper than that
+ * (Learner Anima is the Dashboard's second page), so staleness is checked
+ * against the file that would actually render, not against that top-level set.
+ */
+function routeExists(urlPath: string): boolean {
+  const wanted = urlPath.split("/").filter(Boolean);
+  const walk = (dir: string, segments: string[]): boolean => {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (statSync(full).isDirectory()) {
+        const isGroup = name.startsWith("(") && name.endsWith(")");
+        const next = isGroup ? segments : [...segments, name];
+        // Follow only branches that still match the path we are resolving.
+        if (next.every((s, i) => s === wanted[i]) && walk(full, next)) {
+          return true;
+        }
+      } else if (
+        name === "page.tsx" &&
+        segments.length === wanted.length &&
+        segments.every((s, i) => s === wanted[i])
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return walk(appRoot, []);
+}
+
 test("every manifest path points at a real page", () => {
-  const routes = new Set(collectTopLevelRoutes(appRoot));
-  const stale = manifestPaths().filter((p) => !routes.has(p));
+  const stale = manifestPaths().filter((p) => !routeExists(p));
   assert.deepEqual(
     stale,
     [],

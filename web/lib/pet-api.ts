@@ -90,7 +90,7 @@ export interface PetDashboard {
   paths: PathSummary[];
 }
 
-/** Aggregated pull for the whole /anima page (pet + all-path learning view). */
+/** Aggregated pull for the whole /dashboard/anima page (pet + all-path learning view). */
 export async function fetchPetDashboard(): Promise<PetDashboard> {
   const res = await apiFetch(apiUrl(`/api/v1/pet/dashboard`));
   if (!res.ok) throw new Error(`Failed to fetch pet dashboard: ${res.status}`);

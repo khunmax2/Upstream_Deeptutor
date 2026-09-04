@@ -32,7 +32,8 @@ import {
 } from "@/lib/pet-api";
 
 /**
- * Learner Anima — the companion's own top-level dashboard.
+ * Learner Anima — the companion panel, shown as the second page of the
+ * Dashboard (`/dashboard/anima`).
  *
  * One pet per user, fed by ALL their mastery paths. The server is authoritative:
  * this page polls ONE aggregate endpoint (the pet dashboard) and renders it.
@@ -59,7 +60,7 @@ const NAV = {
   partners: "/partners",
 } as const;
 
-export default function AnimaPage() {
+export default function LearnerAnimaPanel() {
   const { t } = useTranslation();
   const router = useRouter();
   const [dash, setDash] = useState<PetDashboard | null>(null);

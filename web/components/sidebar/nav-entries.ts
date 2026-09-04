@@ -5,9 +5,9 @@ import {
   Brain,
   HeartHandshake,
   House,
+  LayoutDashboard,
   LayoutGrid,
   Library,
-  PawPrint,
   PenLine,
   Route,
   Settings,
@@ -113,13 +113,14 @@ export const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
-    // Learner Anima: the learning-companion pet, pulled out to top level so it
-    // is one click from anywhere. One pet per user, fed by every mastery path.
-    // Ungated — it only reads learning state, no per-user model grant needed.
-    href: "/anima",
-    label: "Learner Anima",
-    icon: PawPrint,
-    tooltipKey: "Anima tooltip",
+    // Dashboard: the learner's own overview, with Learner Anima as its second
+    // page (/dashboard/anima). The companion kept its one-click reach while
+    // giving up its own sidebar slot, so the two live behind one entry.
+    // Ungated — both pages only read learning state, no model grant needed.
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    tooltipKey: "Dashboard tooltip",
   },
   {
     href: "/space",
