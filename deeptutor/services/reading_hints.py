@@ -68,9 +68,18 @@ def _cache_key(
     material_id: str,
     locator: int | None,
     transcript_length: int,
+    language: str,
 ) -> str:
-    """Key a hint to the learner's current reading and conversation position."""
-    return f"{workspace_id}\0{material_id}\0{_locator_bucket(locator)}\0{transcript_length}"
+    """Key a hint to the learner's current reading and conversation position.
+
+    The language is part of the key because a hint in the wrong language is not
+    stale, it is unusable: without it, changing the response language leaves the
+    old-language hint in place for a full TTL.
+    """
+    return (
+        f"{workspace_id}\0{material_id}\0{_locator_bucket(locator)}"
+        f"\0{transcript_length}\0{language}"
+    )
 
 
 # -- Material -----------------------------------------------------------------
@@ -419,13 +428,16 @@ def _response_language() -> str:
 async def _call_llm(material: _Material, language: str) -> str:
     from deeptutor.services.llm import complete
     from deeptutor.services.model_selection.tasks import task_llm_scope
+    from deeptutor.services.prompt.language import append_language_directive
 
     zh = _is_zh(language)
     with task_llm_scope():
         return await asyncio.wait_for(
             complete(
                 prompt=_render(material, zh),
-                system_prompt=_SYSTEM_ZH if zh else _SYSTEM_EN,
+                system_prompt=(
+                    _SYSTEM_ZH if zh else append_language_directive(_SYSTEM_EN, language)
+                ),
                 temperature=0.7,
                 max_tokens=120,
                 max_retries=0,
@@ -488,6 +500,7 @@ async def get_ask_hint(
         material.material_id,
         material.locator,
         material.transcript_length,
+        _response_language(),
     )
     try:
         value = await _hint_cache.get_or_create(
@@ -608,22 +621,30 @@ async def get_openers(workspace_id: str, locator: int | None = None) -> dict[str
     if not material:
         return {"suggestions": []}
 
-    key = f"{workspace_id}|{material.material_id}|{_locator_bucket(material.locator)}"
+    language = _response_language()
+    zh = _is_zh(language)
+    # The language is part of the key: a set in the wrong language is not stale,
+    # it is unusable, and leaving it out means a language change keeps serving
+    # the old one for a full TTL.
+    key = f"{workspace_id}|{material.material_id}|{_locator_bucket(material.locator)}|{language}"
     cached = _openers_cache.get(key)
     if cached and time.time() - cached[0] < _OPENER_TTL_SECONDS:
         return {"suggestions": cached[1], "material_id": material.material_id}
 
-    language = _response_language()
-    zh = _is_zh(language)
     try:
         from deeptutor.services.llm import complete
         from deeptutor.services.model_selection.tasks import task_llm_scope
+        from deeptutor.services.prompt.language import append_language_directive
 
         with task_llm_scope():
             raw = await asyncio.wait_for(
                 complete(
                     prompt=_render_openers(material, zh),
-                    system_prompt=_OPENER_SYSTEM_ZH if zh else _OPENER_SYSTEM_EN,
+                    system_prompt=(
+                        _OPENER_SYSTEM_ZH
+                        if zh
+                        else append_language_directive(_OPENER_SYSTEM_EN, language)
+                    ),
                     temperature=0.8,
                     max_tokens=220,
                     max_retries=0,

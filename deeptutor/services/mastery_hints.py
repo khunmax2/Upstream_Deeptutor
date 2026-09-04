@@ -87,8 +87,14 @@ _cache = _hint_cache.values
 _inflight = _hint_cache.inflight
 
 
-def _cache_key(path_id: str, kp_id: str, anchor: str) -> str:
-    return f"{path_id}\0{kp_id}\0{anchor}"
+def _cache_key(path_id: str, kp_id: str, anchor: str, language: str) -> str:
+    """Key a hint to the learner's position *and* the language it is written in.
+
+    A hint in the wrong language is not stale, it is unusable: without the
+    language here, changing the response language keeps serving the old one
+    for a full TTL.
+    """
+    return f"{path_id}\0{kp_id}\0{anchor}\0{language}"
 
 
 # ── Material ─────────────────────────────────────────────────────────────
@@ -308,24 +314,29 @@ def _sanitize(raw: str, language: str) -> str:
     return text
 
 
+def _response_language() -> str:
+    from deeptutor.services.settings.interface_settings import get_response_language
+
+    try:
+        return get_response_language(default="en")
+    except Exception:
+        logger.debug("ask-hint: response language unreadable", exc_info=True)
+        return "en"
+
+
 async def _generate(path_id: str, session_id: str, key_hint: str) -> AskHint:
     material = await _collect(path_id, session_id)
     empty = AskHint(hint="", knowledge_point_id=key_hint, generated_at=time.time())
     if not material:
         return empty
 
-    from deeptutor.services.settings.interface_settings import get_response_language
-
-    try:
-        language = get_response_language(default="en")
-    except Exception:
-        logger.debug("ask-hint: response language unreadable", exc_info=True)
-        language = "en"
+    language = _response_language()
     zh = _is_zh(language)
 
     try:
         from deeptutor.services.llm import complete
         from deeptutor.services.model_selection.tasks import task_llm_scope
+        from deeptutor.services.prompt.language import append_language_directive
 
         # Same call class as titles and starter lines — short, frequent, and
         # nobody asked for it — so it runs on the task model when one is set.
@@ -333,7 +344,14 @@ async def _generate(path_id: str, session_id: str, key_hint: str) -> AskHint:
             raw = await asyncio.wait_for(
                 complete(
                     prompt=_render(material, zh),
-                    system_prompt=_SYSTEM_ZH if zh else _SYSTEM_EN,
+                    # The English brief is the whole "not Chinese" branch
+                    # -- Thai included -- and never named an output
+                    # language, so the question came out in whatever the
+                    # material pulled the model toward. Appending the
+                    # shared directive leaves the upstream literal alone.
+                    system_prompt=(
+                        _SYSTEM_ZH if zh else append_language_directive(_SYSTEM_EN, language)
+                    ),
                     temperature=0.7,
                     max_tokens=120,
                     max_retries=0,
@@ -367,7 +385,7 @@ async def get_ask_hint(path_id: str, session_id: str = "") -> dict[str, Any]:
     if not material:
         return AskHint(hint="", knowledge_point_id="", generated_at=time.time()).to_dict()
 
-    key = _cache_key(path_id, material.anchor, session_id)
+    key = _cache_key(path_id, material.anchor, session_id, _response_language())
     try:
         value = await _hint_cache.get_or_create(
             key,
