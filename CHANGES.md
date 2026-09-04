@@ -66,6 +66,20 @@ the domain root: every hook is a no-op when `NEXT_PUBLIC_BASE_PATH` is empty.
   whole engine-icon map), `web/components/agents/agent-icons.tsx` (likewise, via
   `OfficialAssetGlyph`).
 
+**Login redirect (`web/shared/auth/return-url.ts`)** — the same class again, and
+it only shows up while **signed out**, so testing after a successful login never
+reaches it. Two sides that pull in opposite directions:
+
+- `loginHref()` is assigned to `window.location.href`, which does not apply
+  basePath the way the Next router does. It returned a bare `/login?…`, so a
+  signed-out visitor was thrown outside the subpath and the reverse proxy
+  answered 404 instead of showing the login page.
+- `browserReturnPath()` reads `window.location.pathname`, which *does* carry
+  basePath. The `next` value must not: the login page feeds it to
+  `router.replace()`, and the router adds basePath itself — `/deepwitya2` as
+  `next` would resolve to `/deepwitya2/deepwitya2` after signing in. The
+  middleware already emits a stripped `next`, so both paths now agree.
+
 **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
 HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
 `/login` with basePath preserved, APIs 401), and a full streaming turn over

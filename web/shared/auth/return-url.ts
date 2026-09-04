@@ -1,4 +1,22 @@
+import { BASE_PATH, withBasePath } from "@/lib/basePath";
+
 const RETURN_URL_BASE = "https://deeptutor.invalid";
+
+/**
+ * Drop the reverse-proxy subpath from a browser pathname.
+ *
+ * `window.location.pathname` carries BASE_PATH, but the `next` parameter must
+ * NOT: the login page feeds it to `router.replace()`, and the Next router adds
+ * BASE_PATH itself. The middleware already emits a stripped `next` (Next strips
+ * BASE_PATH before proxy.ts sees the request), so stripping here keeps the
+ * client-side and server-side redirects producing the same shape.
+ */
+function stripBasePath(pathname: string): string {
+  if (!BASE_PATH) return pathname;
+  if (pathname === BASE_PATH) return "/";
+  if (pathname.startsWith(`${BASE_PATH}/`)) return pathname.slice(BASE_PATH.length);
+  return pathname;
+}
 
 export interface BrowserLocationParts {
   pathname: string;
@@ -40,7 +58,7 @@ export function normalizeInternalReturnPath(
 
 export function browserReturnPath(location: BrowserLocationParts): string {
   return normalizeInternalReturnPath(
-    `${location.pathname}${location.search ?? ""}${location.hash ?? ""}`,
+    `${stripBasePath(location.pathname)}${location.search ?? ""}${location.hash ?? ""}`,
   );
 }
 
@@ -48,7 +66,10 @@ export function loginHref(returnPath: string): string {
   const query = new URLSearchParams({
     next: normalizeInternalReturnPath(returnPath),
   });
-  return `/login?${query.toString()}`;
+  // Assigned straight to window.location, which does NOT apply basePath the way
+  // the Next router does — so the prefix has to be added here or the browser
+  // leaves the app entirely and the reverse proxy answers 404.
+  return `${withBasePath("/login")}?${query.toString()}`;
 }
 
 /**
