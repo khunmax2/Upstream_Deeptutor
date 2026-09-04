@@ -2995,6 +2995,60 @@ is additive and isolated for mergeability — the only upstream-file edit is one
   `deeptutor/agents/question/pipeline.py`, `deeptutor/agents/research/pipeline.py`,
   `tests/core/test_labeled_step_tool_extras.py` (new).
 
+## Dashboards — admin + unified user (branch `feat/dashboards`, in progress)
+
+**2026-09-04 — Two operational dashboards, folded into the Learner Anima menu.**
+Ported from the reference implementation in the sibling `DeepTutor` workspace
+(see `DASHBOARD_HANDOFF.md` there) and reshaped for this fork.
+
+The sidebar keeps **one** new-looking entry, not two: the fork-only *Learner
+Anima* slot is renamed **Dashboard** and now holds two pages of its own —
+
+- `/dashboard` — the unified user dashboard, and
+- `/dashboard/anima` — the learning companion, unchanged.
+
+`/admin` gains the admin dashboard (provisioning health, per-account readiness,
+accounts needing attention, assignments in use, assignable resource inventory).
+Every metric comes from APIs and persisted state that already existed; nothing is
+simulated. The user dashboard widens or narrows by account preset and learning
+policy: a learner never calls the API groups its policy forbids, and one failed
+group degrades to partial data instead of an empty page. Business rules live in
+pure helpers (`web/lib/{admin,user}-dashboard.ts`), not in the components.
+
+**Kept deliberately additive**, so upstream syncs stay cheap — 12 of the 18 files
+are new, and Learner Anima moved by `git mv` (page → panel component) so its
+history follows:
+
+- New: `web/app/(admin)/admin/page.tsx`,
+  `web/app/(utility)/dashboard/{layout,page}.tsx`,
+  `web/app/(utility)/dashboard/anima/page.tsx`,
+  `web/components/admin/AdminDashboard.tsx`,
+  `web/components/dashboard/{UserDashboard,DashboardTabs,LearnerAnimaPanel}.tsx`,
+  `web/features/dashboard/useLearningPolicy.ts`,
+  `web/lib/{admin,user}-dashboard.ts`,
+  `web/tests/{admin,user}-dashboard.test.ts`.
+- Changed, and only these: `web/components/sidebar/nav-entries.ts` (the renamed
+  entry), `web/components/voice/VoiceCallWidget.tsx` +
+  `web/tests/voice-manifest-parity.test.ts` (Anima is no longer a top-level route,
+  so the manifest declares `/dashboard` and the parity test resolves a declared
+  path at any depth; `/admin` is excluded as an operator surface),
+  `web/components/pet/AnimaTour.tsx` and `web/lib/pet-api.ts` (doc comments),
+  and the three locales.
+
+The shared `CapabilityAccessContext` was **not** widened: the policy view the user
+dashboard needs is derived from auth status in the new `features/dashboard` hook,
+so an upstream file stays untouched.
+
+**i18n:** 139 keys added to `en`, `th` and `zh` — including 32 admin strings that
+the reference implementation renders as raw English keys.
+
+**Verification:** typecheck, eslint (0 errors), dependency-cruiser, i18n parity +
+audit, and vitest (22/22) all pass. `npm run test:node` leaves 5 failures, which
+were confirmed identical on a pristine `main` checkout — the known Windows
+path-separator contract failures, none introduced here. Not yet exercised against
+a live backend with Standard / Custom / Learner logins.
+
+
 ## Branches kept but not merged
 
 **`page-agent-clean-eval`** (`6dbe8d9f`, 5 commits, ~1,073 lines) — **evaluation
