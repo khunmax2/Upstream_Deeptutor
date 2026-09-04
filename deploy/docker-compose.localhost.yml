@@ -1,0 +1,71 @@
+# ============================================
+# Host-specific override — local HTTP deploy on this server (v2 / side-by-side)
+# ============================================
+# This is the SECOND deployment on this host, running alongside the original
+# v1.4.15 stack while it is validated. Everything is mirrored from the original
+# override; only the subpath, ports and container names differ so the two
+# stacks never collide. On cutover, move these back to the original values
+# (/deepwitya, 10310/8001/8090) and retire the old stack.
+#
+# Why no-new-privileges:false — on this host (Ubuntu kernel 6.8.0-63 + AppArmor
+# + Docker 29), the sandbox-runner's `no-new-privileges:true` makes execve of
+# python fail with EPERM. The cause is AppArmor profile-transition-on-exec being
+# denied once no_new_privs is set (confirmed: it fails even with
+# seccomp=unconfined AND apparmor=unconfined, and disappears the moment
+# no-new-privileges is dropped).
+#
+# Compose concatenates `security_opt`, so appending `no-new-privileges:false`
+# here lands AFTER the base `:true` and wins, disabling only that one control.
+# All other hardening on sandbox-runner is preserved: non-root user 1000,
+# cap_drop ALL, read_only rootfs, tmpfs, pids_limit, mem_limit.
+#
+# Re-add `no-new-privileges:true` (drop this overlay) on a host where it works.
+# ============================================
+
+services:
+  # Bake the reverse-proxy subpath into the Next.js frontend at build time.
+  # The app is reached at http://<host>/deepwitya2 via the system nginx on :80
+  # (only :80 is open externally on this host).
+  deeptutor:
+    container_name: deeptutor2
+    build:
+      args:
+        NEXT_PUBLIC_BASE_PATH: /deepwitya2
+    environment:
+      # bge-m3 on this CPU-only box is ~6s/chunk, so a 10-chunk batch (~58s)
+      # trips the default 60s embedding timeout when indexing real documents.
+      # Give generous headroom (read by resolve_embedding_runtime_config).
+      DEEPTUTOR_EMBEDDING_TIMEOUT: "600"
+
+  redis:
+    container_name: deeptutor2-redis
+
+  pocketbase:
+    container_name: pocketbase2
+
+  sandbox-runner:
+    container_name: deeptutor2-sandbox-runner
+    security_opt:
+      - "no-new-privileges:false"
+
+  # ----- Ollama: local embedding server (bge-m3) -----
+  # Self-hosted embeddings so KBs indexed locally with bge-m3 (1024-dim) keep
+  # working on the server. Reached only inside the compose network at
+  # http://ollama:11434 (not published to the host). CPU-only here (no GPU),
+  # which is fine on this 32-core / 157GB box. Models persist under ./data/ollama.
+  # The model blobs are copied from the v1 stack to avoid re-pulling 1.2 GB;
+  # otherwise pull once with:  docker exec deeptutor2-ollama ollama pull bge-m3
+  ollama:
+    image: ollama/ollama:latest
+    container_name: deeptutor2-ollama
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - deeptutor-network

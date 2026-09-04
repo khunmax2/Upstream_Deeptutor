@@ -17,6 +17,60 @@ upstream.
 
 ---
 
+## Local production deploy — nginx subpath `/deepwitya2` over HTTPS — 2026-09-04
+
+Second deployment of this fork on the ai4thai host, built from upstream
+`d19c5754` (v1.6.4) and run **side by side** with the existing v1.4.15 stack
+while it is validated. Nothing below changes behaviour when the app is served at
+the domain root: every hook is a no-op when `NEXT_PUBLIC_BASE_PATH` is empty.
+
+**Reverse-proxy subpath support (new files)**
+
+- `web/lib/basePath.ts` — `BASE_PATH`, `asset()`, and `withBasePath()`
+  (idempotent prefixer).
+- `deploy/docker-compose.localhost.yml` — host override: build arg
+  `NEXT_PUBLIC_BASE_PATH=/deepwitya2`, `DEEPTUTOR_EMBEDDING_TIMEOUT=600`,
+  a CPU-only `ollama` service, `no-new-privileges:false` for the sandbox runner
+  (AppArmor on kernel 6.8 denies profile-transition-on-exec otherwise), and
+  container-name overrides so the two stacks never collide.
+- `deploy/nginx-deepwitya2.locations.conf`,
+  `deploy/apply-nginx-deepwitya2.sh` — the nginx wiring, applied as snippets so
+  the shared server blocks each take a single `include` line.
+- `deploy/REDEPLOY.md` — what a fresh clone must re-apply, and the host gotchas.
+- `deploy/e2e_turn_check.py` — end-to-end turn check over the public wss origin.
+
+**Changed upstream files**
+
+- `web/next.config.js` — `basePath` / `assetPrefix` when `NEXT_PUBLIC_BASE_PATH`
+  is set, plus expose it through `env`.
+- `Dockerfile` — `ARG/ENV NEXT_PUBLIC_BASE_PATH` in the frontend-builder stage
+  (Next bakes `basePath` at build time; it cannot be swapped at runtime).
+- `web/shared/api/client.ts` — `apiUrl`/`wsUrl` prefix through `withBasePath`,
+  **and `apiFetch` applies it centrally**. The central guard matters: several
+  upstream call sites hand a raw path straight to `apiFetch`/`requestJson`
+  without going through `apiUrl` (e.g. `features/runtime-status`), and those
+  requests escaped the subpath and hit the reverse proxy's catch-all instead of
+  this app. `withBasePath` is idempotent so already-prefixed paths are untouched.
+- `web/features/chat/transport/TurnRuntimeClient.ts` — the turn socket defaulted
+  to a hardcoded `url: "/ws"`, so the browser opened `wss://<host>/ws` outside
+  the subpath and **every chat turn died as "connection lost" without ever
+  reaching FastAPI**. Now `wsUrl("/ws")`.
+- `asset()` wrappers for root-absolute `/public` URLs, which `basePath` does not
+  rewrite: `web/app/layout.tsx` (metadata icons),
+  `web/components/layout/AppShell.tsx`, `web/components/sidebar/SidebarShell.tsx`,
+  `web/components/chat/home/SessionLoadingView.tsx`,
+  `web/features/chat/components/ChatWorkspace.tsx`,
+  `web/components/common/ProviderIcon.tsx`,
+  `web/components/dashboard/LearnerAnimaPanel.tsx`,
+  `web/components/knowledge/KnowledgeEngineIcon.tsx` (one choke point covers the
+  whole engine-icon map), `web/components/agents/agent-icons.tsx` (likewise, via
+  `OfficialAssetGlyph`).
+
+**Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
+HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
+`/login` with basePath preserved, APIs 401), and a full streaming turn over
+`wss://…/deepwitya2/ws` returning a model answer.
+
 ## Upstream bug fixes
 
 These fix bugs that exist in upstream (not fork-specific). Each is kept as a

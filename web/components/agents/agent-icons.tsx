@@ -1,6 +1,7 @@
 "use client";
 
 import { type ComponentType, type SVGProps, useId } from "react";
+import { asset } from "@/lib/basePath";
 
 /**
  * Brand glyphs for connected-agent backends. The real marks (Claude's sunburst,
@@ -148,7 +149,7 @@ function OfficialAssetGlyph({
       {...props}
     >
       <image
-        href={src}
+        href={asset(src)}
         width="24"
         height="24"
         preserveAspectRatio="xMidYMid meet"

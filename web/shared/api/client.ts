@@ -1,5 +1,6 @@
 import { ApiError, type AppError, type AppErrorScope } from "./errors";
 import { browserReturnPath, loginHref } from "../auth/return-url";
+import { withBasePath } from "@/lib/basePath";
 
 export interface RequestOptions extends RequestInit {
   scope?: AppErrorScope;
@@ -8,12 +9,22 @@ export interface RequestOptions extends RequestInit {
 
 let runtimeAuthEnabled = false;
 
+// Reverse-proxy subpath support. Next.js strips basePath before the app sees a
+// request, so the middleware in proxy.ts matches "/api/..." unprefixed — but the
+// BROWSER must still request "/deepwitya/api/...".
+//
+// These helpers are NOT the only guard: plenty of upstream call sites hand a
+// raw path straight to apiFetch/requestJson without going through apiUrl (e.g.
+// features/runtime-status). Those requests would escape basePath and hit the
+// reverse proxy's catch-all instead of this app, so the prefix is ALSO applied
+// centrally in apiFetch below. withBasePath is idempotent, so a path that came
+// through apiUrl is left alone. BASE_PATH "" makes all of this a no-op.
 export function apiUrl(path: string): string {
-  return path;
+  return withBasePath(path);
 }
 
 export function wsUrl(path: string): string {
-  return path;
+  return withBasePath(path);
 }
 
 export function parseAuthEnabled(raw: string | undefined): boolean {
@@ -29,7 +40,12 @@ export async function apiFetch(
   init?: RequestInit & { skipAuthRedirect?: boolean },
 ): Promise<Response> {
   const { skipAuthRedirect, ...fetchInit } = init ?? {};
-  const response = await fetch(input, { credentials: "include", ...fetchInit });
+  // Central basePath guard — see the note on apiUrl above. Only bare
+  // root-absolute path strings are rewritten; Request/URL objects and absolute
+  // URLs pass through untouched.
+  const target =
+    typeof input === "string" ? withBasePath(input) : input;
+  const response = await fetch(target, { credentials: "include", ...fetchInit });
 
   if (
     response.status === 401 &&

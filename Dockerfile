@@ -39,6 +39,12 @@ COPY web/ ./
 # can read it during ``npm run build`` and inline it into the bundle.
 COPY deeptutor/__version__.py /app/deeptutor/__version__.py
 
+# Optional reverse-proxy subpath (e.g. /deepwitya). Next.js basePath is
+# structural and cannot be swapped at runtime, so it must be baked here at build
+# time via this build arg. Empty = served at the domain root.
+ARG NEXT_PUBLIC_BASE_PATH=""
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+
 # Create .env.local with the single env var the build needs (the app version,
 # exposed to the browser via next.config.js). URL knowledge is no longer baked
 # into the bundle: `apiUrl`/`wsUrl` in web/lib/api.ts are pass-throughs and
