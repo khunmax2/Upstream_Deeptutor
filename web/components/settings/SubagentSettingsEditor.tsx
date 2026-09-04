@@ -415,9 +415,9 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
       <SettingsPageHeader
         title={displayName}
         description={tr({
-          zh: `DeepTutor 通过 consult_subagent 调用本机 ${displayName} 时使用的模型、推理强度与运行参数。设置后即覆盖 CLI 的默认值；留空表示沿用 CLI 默认。`,
-          en: `Model, reasoning effort, and run parameters DeepTutor drives the local ${displayName} with when consulting it. These override the CLI defaults; leave blank to keep the CLI's own default.`,
-          th: `โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันที่ DeepTutor ใช้ขับ ${displayName} ในเครื่องเมื่อปรึกษาผ่าน consult_subagent ค่าเหล่านี้จะแทนที่ค่าเริ่มต้นของ CLI เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของ CLI เอง`,
+          zh: `DeepWitya 通过 consult_subagent 调用本机 ${displayName} 时使用的模型、推理强度与运行参数。设置后即覆盖 CLI 的默认值；留空表示沿用 CLI 默认。`,
+          en: `Model, reasoning effort, and run parameters DeepWitya drives the local ${displayName} with when consulting it. These override the CLI defaults; leave blank to keep the CLI's own default.`,
+          th: `โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันที่ DeepWitya ใช้ขับ ${displayName} ในเครื่องเมื่อปรึกษาผ่าน consult_subagent ค่าเหล่านี้จะแทนที่ค่าเริ่มต้นของ CLI เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของ CLI เอง`,
         })}
       />
 
@@ -516,17 +516,17 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           <SettingSection
             title={tr({ zh: "模型", en: "Model", th: "โมเดล" })}
             description={tr({
-              zh: "DeepTutor 调用该智能体时使用的模型与推理强度。",
-              en: "The model and reasoning effort DeepTutor consults this agent with.",
-              th: "โมเดลและระดับการให้เหตุผลที่ DeepTutor ใช้เมื่อปรึกษาเอเจนต์นี้",
+              zh: "DeepWitya 调用该智能体时使用的模型与推理强度。",
+              en: "The model and reasoning effort DeepWitya consults this agent with.",
+              th: "โมเดลและระดับการให้เหตุผลที่ DeepWitya ใช้เมื่อปรึกษาเอเจนต์นี้",
             })}
           >
             <SettingRow
               title={tr({ zh: "启用", en: "Enabled", th: "เปิดใช้งาน" })}
               description={tr({
-                zh: "关闭后，DeepTutor 不会在对话中调用该智能体。",
-                en: "When off, DeepTutor won't consult this agent in chat.",
-                th: "เมื่อปิด DeepTutor จะไม่ปรึกษาเอเจนต์นี้ในแชต",
+                zh: "关闭后，DeepWitya 不会在对话中调用该智能体。",
+                en: "When off, DeepWitya won't consult this agent in chat.",
+                th: "เมื่อปิด DeepWitya จะไม่ปรึกษาเอเจนต์นี้ในแชต",
               })}
               control={
                 <Toggle
@@ -619,9 +619,9 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
               description={`${tr(
                 SYSTEM_PROMPT_HINT[kind] ?? SYSTEM_PROMPT_HINT.claude_code,
               )} ${tr({
-                zh: "留空则使用 DeepTutor 的默认委派提示。",
-                en: "Blank uses DeepTutor's default delegate instruction.",
-                th: "เว้นว่างไว้เพื่อใช้คำสั่งมอบหมายงานเริ่มต้นของ DeepTutor",
+                zh: "留空则使用 DeepWitya 的默认委派提示。",
+                en: "Blank uses DeepWitya's default delegate instruction.",
+                th: "เว้นว่างไว้เพื่อใช้คำสั่งมอบหมายงานเริ่มต้นของ DeepWitya",
               })}`}
             >
               <div className="py-4">
@@ -646,9 +646,9 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           <SettingSection
             title={tr({ zh: "运行参数", en: "Run parameters", th: "พารามิเตอร์การรัน" })}
             description={tr({
-              zh: "DeepTutor 无人值守地驱动该智能体——默认值确保它不会卡在等待确认上。",
-              en: "DeepTutor drives the agent unattended — the defaults ensure it never stalls waiting for an approval prompt.",
-              th: "DeepTutor ขับเอเจนต์แบบไม่มีคนดูแล — ค่าเริ่มต้นช่วยให้ไม่ค้างรอการอนุมัติ",
+              zh: "DeepWitya 无人值守地驱动该智能体——默认值确保它不会卡在等待确认上。",
+              en: "DeepWitya drives the agent unattended — the defaults ensure it never stalls waiting for an approval prompt.",
+              th: "DeepWitya ขับเอเจนต์แบบไม่มีคนดูแล — ค่าเริ่มต้นช่วยให้ไม่ค้างรอการอนุมัติ",
             })}
           >
             {features.permissionMode && (
@@ -800,9 +800,9 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   th: "ส่งต่อรูปภาพ",
                 })}
                 description={tr({
-                  zh: "允许 DeepTutor 把本轮对话中的图片附件转发给该智能体。",
-                  en: "Let DeepTutor forward image attachments from the chat turn to this agent.",
-                  th: "ให้ DeepTutor ส่งต่อไฟล์แนบรูปภาพจากรอบสนทนานี้ไปยังเอเจนต์นี้",
+                  zh: "允许 DeepWitya 把本轮对话中的图片附件转发给该智能体。",
+                  en: "Let DeepWitya forward image attachments from the chat turn to this agent.",
+                  th: "ให้ DeepWitya ส่งต่อไฟล์แนบรูปภาพจากรอบสนทนานี้ไปยังเอเจนต์นี้",
                 })}
                 control={
                   <Toggle

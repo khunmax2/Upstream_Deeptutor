@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # Bias Whisper's decoding toward domain terms it otherwise mangles
 # ("DeepaTutor", "Deep Thielter", …). Whisper treats this as preceding context,
 # so a short comma list of correct spellings is enough.
-VOCAB_PROMPT = "DeepTutor, ดีพติวเตอร์, knowledge base, RAG, quiz, mastery path"
+VOCAB_PROMPT = "DeepWitya, ดีพวิทยา, knowledge base, RAG, quiz, mastery path"
 
 # Mean segment avg_logprob below this → the model was guessing (noise input).
 # Real speech on whisper-large-v3 typically lands well above -0.5.

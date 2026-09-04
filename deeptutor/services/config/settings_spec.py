@@ -182,7 +182,7 @@ def _interface_specs() -> list[SettingSpec]:
             scope="personal",
             effect="instant",
             label="Interface language",
-            summary="Language of the DeepTutor UI (menus, buttons, settings).",
+            summary="Language of the DeepWitya UI (menus, buttons, settings).",
             read=language_read,
             choices=_static_choices(_LANGUAGE_CHOICES, language_read),
             write=_write_ui("language"),

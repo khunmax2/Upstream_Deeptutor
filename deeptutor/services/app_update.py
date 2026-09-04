@@ -131,7 +131,7 @@ def _optional_string(value: object) -> str | None:
 def _version_tuple(value: str) -> tuple[int, int, int]:
     match = _CURRENT_VERSION.match(value.strip())
     if match is None:
-        raise ValueError(f"Invalid DeepTutor version: {value}")
+        raise ValueError(f"Invalid DeepWitya version: {value}")
     return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
 
 
@@ -185,7 +185,7 @@ def detect_installation() -> Installation:
             current_version=__version__,
             automatic_update=False,
             command="pip install -U deeptutor",
-            reason="The running DeepTutor distribution could not be identified.",
+            reason="The running DeepWitya distribution could not be identified.",
         )
     if bool((direct_url.get("dir_info") or {}).get("editable")):
         return Installation(
@@ -364,7 +364,7 @@ def _release_from_latest_url(value: str) -> ReleaseInfo:
         raise VersionCheckError("The latest release has an invalid version") from None
     return ReleaseInfo(
         version=version,
-        name=f"DeepTutor {version}",
+        name=f"DeepWitya {version}",
         published_at="",
         url=f"https://github.com{parsed.path}",
         excerpt="",
@@ -414,7 +414,7 @@ class UpdateJobStore:
         current = _normalise_stable_version(current_version)
         target = _normalise_stable_version(target_version)
         if _version_tuple(target) <= _version_tuple(current):
-            raise UpdateRequestError("No newer DeepTutor release is available")
+            raise UpdateRequestError("No newer DeepWitya release is available")
         self.root.mkdir(parents=True, exist_ok=True)
         job = UpdateJob(
             id=uuid.uuid4().hex,

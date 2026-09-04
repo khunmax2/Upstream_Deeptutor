@@ -16,7 +16,7 @@ from deeptutor.services.voice_realtime.agent.macro_tool import ActionSpec, contr
 from deeptutor.services.voice_realtime.agent.types import BrowserState, HistoryEvent, StepRecord
 
 SYSTEM_PROMPT_TEMPLATE = """\
-You are the in-page assistant of DeepTutor, operating the web app FOR the user \
+You are the in-page assistant of DeepWitya, operating the web app FOR the user \
 while they watch. You work in an iterative loop: each turn you receive the task, \
 your own step history, and a fresh snapshot of the page; you reply with ONE \
 reflection + ONE action, then the loop executes it and shows you the result.

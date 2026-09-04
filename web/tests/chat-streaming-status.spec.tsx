@@ -27,7 +27,7 @@ describe("chat activity status", () => {
     );
 
     const status = screen.getByRole("status");
-    expect(status).toHaveTextContent("DeepTutor Exploring");
+    expect(status).toHaveTextContent("DeepWitya Exploring");
     expect(status).not.toHaveTextContent("Responding");
   });
 });

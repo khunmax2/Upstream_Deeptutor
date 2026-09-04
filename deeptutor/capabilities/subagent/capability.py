@@ -125,7 +125,7 @@ class SubagentCapability(KnowledgeCapability):
 # behaves like a delegate, not an interactive session, when the user hasn't set
 # their own in /settings.
 _DEFAULT_CONSULT_INSTRUCTION = (
-    "You are being consulted programmatically by DeepTutor on the user's behalf, "
+    "You are being consulted programmatically by DeepWitya on the user's behalf, "
     "not in an interactive terminal. Answer the question directly, concisely, and "
     "self-contained. Do not ask the user follow-up questions or wait for input; "
     "if something is ambiguous, state your assumption and proceed."

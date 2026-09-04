@@ -70,7 +70,7 @@ class InspectSetupTool(BaseTool):
         return ToolDefinition(
             name="inspect_setup",
             description=(
-                "Read DeepTutor's own configuration: every setting you can "
+                "Read DeepWitya's own configuration: every setting you can "
                 "change, its current value, the other values it accepts, what "
                 "changing it would cost, plus anything missing from this "
                 "install and any install/download jobs available. Call this "
@@ -165,7 +165,7 @@ class ApplySettingTool(BaseTool):
         return ToolDefinition(
             name="apply_setting",
             description=(
-                "Change one DeepTutor setting. The value must be one of the "
+                "Change one DeepWitya setting. The value must be one of the "
                 "options inspect_setup reported for that key. Settings that "
                 "can break the assistant (the chat and embedding models) are "
                 "connection-tested before anything is saved, and are left "
@@ -221,7 +221,7 @@ class RequestCredentialTool(BaseTool):
                 "must NEVER ask the user to type a secret into the chat and "
                 "must never handle one yourself: this shows the user a card "
                 "that opens the right settings page, where the value is "
-                "entered directly into DeepTutor. Call it, tell the user what "
+                "entered directly into DeepWitya. Call it, tell the user what "
                 "to do there, and continue once they say they are done."
             ),
             parameters=[

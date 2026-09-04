@@ -18,7 +18,7 @@ from .common import console
 
 
 def _render_rich(report: DoctorReport) -> None:
-    table = Table(title="DeepTutor setup diagnostics")
+    table = Table(title="DeepWitya setup diagnostics")
     table.add_column("Status", no_wrap=True)
     table.add_column("Check")
     table.add_column("Details")

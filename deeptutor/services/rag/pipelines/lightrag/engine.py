@@ -46,7 +46,7 @@ def _require_exact_version() -> None:
     current = installed_version()
     if current != LIGHTRAG_VERSION:
         raise LightRagContractError(
-            f"DeepTutor requires {LIGHTRAG_DISTRIBUTION}=={LIGHTRAG_VERSION}; found {current}"
+            f"DeepWitya requires {LIGHTRAG_DISTRIBUTION}=={LIGHTRAG_VERSION}; found {current}"
         )
 
 
@@ -86,7 +86,7 @@ def _controlled_class():
         ) -> str:
             if parser_engine not in (None, PARSER_ENGINE):
                 raise IngressError(
-                    f"Unsupported parser engine for DeepTutor ingress: {parser_engine}"
+                    f"Unsupported parser engine for DeepWitya ingress: {parser_engine}"
                 )
             name = _validate_component(file_path, label="file_path")
             if source_file is not None:

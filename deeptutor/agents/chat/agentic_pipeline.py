@@ -1764,7 +1764,7 @@ class AgenticChatPipeline:
                 (
                     "当前 shell 是 Windows PowerShell。列目录使用 Get-ChildItem，限制输出使用 "
                     "Select-Object -First；连续命令使用分号。`python` 与 `python -m pip` 均指向 "
-                    "DeepTutor 自己的运行环境。通过 exec 使用 PowerShell here-string 将脚本写入文件再运行，例如：\n"
+                    "DeepWitya 自己的运行环境。通过 exec 使用 PowerShell here-string 将脚本写入文件再运行，例如：\n"
                     "  @'\n...Python 脚本内容...\n'@ | Set-Content -Encoding utf8 gen.py\n"
                     "  python gen.py\n"
                     "本地路径经 Test-Path 或 Get-Item 验证存在后，直接读取，不要要求用户重复上传。"
@@ -1790,7 +1790,7 @@ class AgenticChatPipeline:
                 (
                     "เชลล์ปัจจุบันคือ Windows PowerShell ใช้ Get-ChildItem เพื่อดูรายการไฟล์, "
                     "Select-Object -First เพื่อจำกัดผลลัพธ์ และคั่นหลายคำสั่งด้วยเซมิโคลอน "
-                    "ทั้ง `python` และ `python -m pip` ชี้ไปที่รันไทม์ของ DeepTutor เอง "
+                    "ทั้ง `python` และ `python -m pip` ชี้ไปที่รันไทม์ของ DeepWitya เอง "
                     "ให้เขียนสคริปต์ลงไฟล์ผ่าน exec ด้วย here-string ของ PowerShell แล้วค่อยรัน เช่น:\n"
                     "  @'\n...เนื้อหาสคริปต์ Python...\n'@ | Set-Content -Encoding utf8 gen.py\n"
                     "  python gen.py\n"
@@ -1817,7 +1817,7 @@ class AgenticChatPipeline:
             (
                 "the current shell is Windows PowerShell. Use Get-ChildItem to list files, "
                 "Select-Object -First to limit output, and semicolons between commands. "
-                "Both `python` and `python -m pip` resolve to DeepTutor's runtime. "
+                "Both `python` and `python -m pip` resolve to DeepWitya's runtime. "
                 "Write the script to a file through exec with a PowerShell "
                 "here-string, then run it, for example:\n"
                 "  @'\n...Python script contents...\n'@ | Set-Content -Encoding utf8 gen.py\n"

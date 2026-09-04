@@ -40,7 +40,7 @@ _MAX_TOPICS_IN_CATALOGUE = 8
 
 # NOTE: kept free of ``str.format`` — the JSON braces below would be read as
 # format fields. The catalogue is appended by ``_with_catalogue`` instead.
-_ROUTE_PROMPT = """A user is talking to DeepTutor. Given ONLY what the knowledge \
+_ROUTE_PROMPT = """A user is talking to DeepWitya. Given ONLY what the knowledge \
 base(s) contain (the catalogue that follows), decide how to handle their message. \
 Reply with ONLY a JSON object: {"route":"meta"} or {"route":"content"} or \
 {"route":"unrelated"}.

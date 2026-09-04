@@ -78,7 +78,7 @@ class LiteParseParser:
                 ready=False,
                 reason="update_required",
                 message=(
-                    f"Installed LiteParse {version or 'unknown'} is too old. DeepTutor needs "
+                    f"Installed LiteParse {version or 'unknown'} is too old. DeepWitya needs "
                     f"LiteParse >= {MIN_LITEPARSE_VERSION} for the current multi-format input "
                     "set. Update it under Settings → Document Parsing."
                 ),

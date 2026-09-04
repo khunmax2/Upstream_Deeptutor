@@ -29,7 +29,7 @@ configure_logging()
 
 app = typer.Typer(
     name="deeptutor",
-    help="DeepTutor CLI – agent-first interface for capabilities, tools, and knowledge.",
+    help="DeepWitya CLI – agent-first interface for capabilities, tools, and knowledge.",
     no_args_is_help=True,
     add_completion=False,
 )

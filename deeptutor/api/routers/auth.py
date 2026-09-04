@@ -482,16 +482,16 @@ async def receive_codex_oauth_callback(
     except CodexAuthError as exc:
         return HTMLResponse(
             (
-                "<!doctype html><title>DeepTutor Codex</title>"
-                "<p>Authentication could not be received. Return to DeepTutor and try again.</p>"
+                "<!doctype html><title>DeepWitya Codex</title>"
+                "<p>Authentication could not be received. Return to DeepWitya and try again.</p>"
             ),
             status_code=exc.http_status,
             headers=headers,
         )
     return HTMLResponse(
         (
-            "<!doctype html><title>DeepTutor Codex</title>"
-            "<p>Authentication received. You can return to DeepTutor.</p>"
+            "<!doctype html><title>DeepWitya Codex</title>"
+            "<p>Authentication received. You can return to DeepWitya.</p>"
         ),
         headers=headers,
     )

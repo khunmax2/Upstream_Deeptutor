@@ -54,7 +54,7 @@ import {
 const UI_PAGES: { id: string; label: string; path: string }[] = [
   {
     id: "chat",
-    label: "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepTutor)",
+    label: "หน้าแชทหลัก / หน้าหลัก / หน้าแรก (home, คุยกับ DeepWitya)",
     path: "/chat",
   },
   {
@@ -1528,7 +1528,7 @@ export default function VoiceCallWidget() {
       {!mounted && (
         <button
           onClick={() => void startCall()}
-          title="โทรคุยกับ DeepTutor"
+          title="โทรคุยกับ DeepWitya"
           aria-label="เริ่มสายสนทนาเสียง"
           style={{
             position: "fixed",

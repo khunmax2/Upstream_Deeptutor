@@ -74,7 +74,7 @@ class PyMuPDF4LLMParser:
                 ready=False,
                 reason="update_required",
                 message=(
-                    f"Installed PyMuPDF4LLM {version or 'unknown'} is too old. DeepTutor needs "
+                    f"Installed PyMuPDF4LLM {version or 'unknown'} is too old. DeepWitya needs "
                     f"PyMuPDF4LLM >= {MIN_PYMUPDF4LLM_VERSION} for current layout, OCR, image "
                     "and multi-format support. Update it under Settings → Document Parsing."
                 ),

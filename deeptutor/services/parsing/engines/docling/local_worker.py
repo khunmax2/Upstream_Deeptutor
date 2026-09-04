@@ -132,7 +132,7 @@ def _convert(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="DeepTutor isolated Docling converter")
+    parser = argparse.ArgumentParser(description="DeepWitya isolated Docling converter")
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--workdir", required=True, type=Path)
     parser.add_argument("--do-ocr", action="store_true")

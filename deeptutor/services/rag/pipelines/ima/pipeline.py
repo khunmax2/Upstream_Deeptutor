@@ -142,7 +142,7 @@ class ImaPipeline:
 
     async def initialize(self, kb_name: str, file_paths: List[str], **kwargs) -> bool:
         raise RuntimeError(
-            "Tencent IMA knowledge bases are indexed by IMA; DeepTutor does not "
+            "Tencent IMA knowledge bases are indexed by IMA; DeepWitya does not "
             "build or store their index. Add documents in IMA directly."
         )
 

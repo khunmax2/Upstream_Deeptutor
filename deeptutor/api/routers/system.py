@@ -272,7 +272,7 @@ async def request_managed_update(_request: ManagedUpdateRequest) -> dict[str, An
     if not launcher_available():
         raise HTTPException(
             status_code=409,
-            detail="Web updates require DeepTutor to be running under `deeptutor start`.",
+            detail="Web updates require DeepWitya to be running under `deeptutor start`.",
         )
     installation = get_update_installation()
     if installation.mode != "pypi" or not installation.automatic_update:
@@ -285,7 +285,7 @@ async def request_managed_update(_request: ManagedUpdateRequest) -> dict[str, An
     except VersionCheckError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     if not result.update_available:
-        raise HTTPException(status_code=409, detail="No newer DeepTutor release is available")
+        raise HTTPException(status_code=409, detail="No newer DeepWitya release is available")
     # Re-check installation evidence immediately before reserving the job. A
     # deployment changing underneath this request fails closed.
     confirmed = get_update_installation()
@@ -306,7 +306,7 @@ async def request_managed_update(_request: ManagedUpdateRequest) -> dict[str, An
     if job is None:
         raise HTTPException(
             status_code=409,
-            detail="Finish the active conversation before updating DeepTutor.",
+            detail="Finish the active conversation before updating DeepWitya.",
         )
     return _job_payload(job) or {}
 
@@ -603,7 +603,7 @@ async def test_search_connection():
                 message=f"Search provider `{search_config.requested_provider}` missing credentials.",
                 error="Set profile.api_key in Settings > Catalog.",
             )
-        result = web_search("DeepTutor health check", provider=search_config.provider)
+        result = web_search("DeepWitya health check", provider=search_config.provider)
         response_time = (time.time() - start_time) * 1000
         answer = result.get("answer") or result.get("search_results")
         if not answer:

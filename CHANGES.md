@@ -468,6 +468,61 @@ the collapsed-rail tooltips wrap to two lines unclipped.
 
 ## Branding
 
+- **2026-09-04 — Renamed every user-visible "DeepTutor" to "DeepWitya".**
+  The 2026-07-20 rebrand replaced the logo art but left the *name* in the copy.
+  This sweep finishes it across every surface a learner can read, while leaving
+  every surface a machine reads untouched.
+
+  *Web UI.* Locale **values** only — `web/locales/{en,th,zh}/app.json` (66 / 64 /
+  67 strings). The keys are the English source strings and stay byte-identical to
+  upstream, so the rename adds **zero** merge surface to the locale files and the
+  `t()` call sites in components need no edit at all. The one value left alone is
+  `"e.g. HKUDS/DeepTutor"`, which names a real repo. Hardcoded (non-`t()`) strings
+  were renamed in place: `web/app/layout.tsx` (browser-tab title),
+  `web/app/(auth)/{login,register}/page.tsx` (wordmark + footer),
+  `web/app/(utility)/avatar-preview/page.tsx` (sample titles),
+  `web/app/(workspace)/co-writer/sampleTemplate.ts` (sample document — heading
+  anchors `#deeptutor-*` renamed with the headings so the in-document links still
+  resolve), the `alt`/`aria-label` attributes in `SidebarShell.tsx`,
+  `AppShell.tsx`, `ChatWorkspace.tsx` and `SessionLoadingView.tsx`, the inline
+  `{zh,en,th}` description objects in `settings-nav.ts`,
+  `SubagentSettingsEditor.tsx` and `SettingsOverview.tsx`, the streaming-status
+  fallback agent name in `TracePresentation.tsx`, the OAuth error in
+  `lib/codex-oauth.ts`, and the Thai call-button labels in `VoiceCallWidget.tsx`.
+
+  *Backend.* Renamed only inside **string literals that reach a person or the
+  model** — 103 across 53 files, found by walking the AST rather than grepping, so
+  comments and docstrings were left alone (they are pure merge surface). That
+  covers the launcher/CLI banners (`runtime/banner.py`, `deeptutor_cli/{chat,
+  doctor,main,provider_cmd}.py`), update and install errors (`runtime/home.py`,
+  `runtime/launcher.py`, `services/app_update.py`, `services/cli_apps/models.py`),
+  the Codex sign-in callback pages (`services/codex_auth/oauth.py`,
+  `api/routers/auth.py`), engine/parser prerequisite messages, partner `/link`
+  copy, the macOS reminder-notification title (`services/cron/executor.py`), and
+  the MCP consent-screen client name (`services/mcp/oauth.py`).
+
+  *Agent identity.* 64 occurrences across 46 prompt YAMLs (`agents/chat`,
+  `agents/notebook`, `agents/visualize`, `book/prompts`, `services/memory`) plus 7
+  shipped system-prompt Markdown files (`capabilities/{mastery,setup,
+  partner_authoring}/prompts`, `skills/builtin/skill-creator/SKILL.md`) — this is
+  what makes the assistant introduce *itself* as DeepWitya. The Thai
+  speech-recognition vocabulary hint also moved from `ดีพติวเตอร์` to `ดีพวิทยา`
+  (`services/voice_realtime/stt_guard.py`).
+
+  *Deliberately NOT renamed*, because they are machine-read identity rather than
+  display: the `deeptutor` command and package name, `DEEPTUTOR_*` env vars,
+  `pip install deeptutor[...]` strings, the `DeepTutorApp` / `DeepTutorError` /
+  `DeepTutorParser` / `DeepTutorLightRAG` symbols, every `HKUDS/DeepTutor` URL and
+  the release-check path built from it, `deeptutor.info` links, the `User-Agent`
+  and OpenRouter/Codex client headers, and all comments and docstrings.
+
+  Nine test assertions that pinned the old copy were updated:
+  `tests/agents/chat/test_language_prompts.py`, `tests/runtime/test_launcher.py`,
+  `tests/api/test_codex_oauth_callback.py`, `tests/services/cli_apps/test_models.py`,
+  `tests/services/mcp/test_oauth.py`, `tests/services/rag/test_graphrag_pipeline.py`,
+  `web/tests/codex-oauth-client.test.ts`, `web/tests/chat-streaming-status.spec.tsx`,
+  `web/tests/e2e/turn-lifecycle.audit.ts`.
+
 - **2026-07-20 — Swapped the primary logo art for the "DeepWitya" brand.**
   Replaced the visible-surface logos with new art: a book/circuit icon (square)
   and a "DeepWitya" wordmark. Source images shipped with an opaque dark-navy

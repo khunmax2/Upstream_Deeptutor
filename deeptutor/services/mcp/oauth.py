@@ -57,7 +57,7 @@ _OAUTH_SUBDIR = ("private", "mcp-oauth")
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 #: How DeepTutor introduces itself on a consent screen.
-CLIENT_NAME = "DeepTutor"
+CLIENT_NAME = "DeepWitya"
 CLIENT_URI = "https://deeptutor.info"
 
 

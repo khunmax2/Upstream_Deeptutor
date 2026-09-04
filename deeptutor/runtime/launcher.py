@@ -786,7 +786,7 @@ def _resolve_frontend(
     node = shutil.which("node")
     if packaged is not None:
         if not node:
-            raise SystemExit("Node.js 20+ is required to run the packaged DeepTutor Web app.")
+            raise SystemExit("Node.js 20+ is required to run the packaged DeepWitya Web app.")
         runtime_web = _copy_packaged_web_if_needed(
             packaged,
             home=home,
@@ -823,7 +823,7 @@ def _resolve_frontend(
         )
 
     raise SystemExit(
-        "DeepTutor Web assets are not installed. Install the full app with `pip install -U deeptutor`, "
+        "DeepWitya Web assets are not installed. Install the full app with `pip install -U deeptutor`, "
         "or run from a source checkout that contains `web/`."
     )
 

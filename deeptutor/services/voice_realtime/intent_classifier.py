@@ -40,7 +40,7 @@ BINDING_ENV = "DEEPTUTOR_VOICE_CLASSIFIER_BINDING"
 
 Intent = Literal["chat", "ui_task", "unclear"]
 
-_SYSTEM_PROMPT = """You route one utterance in DeepTutor, a Thai-first learning app.
+_SYSTEM_PROMPT = """You route one utterance in DeepWitya, a Thai-first learning app.
 Output ONLY a JSON object: {"intent":"chat"}, {"intent":"ui_task"}, or {"intent":"unclear"}.
 
 - "ui_task" = the user wants to OPERATE the screen: navigate, open / create /

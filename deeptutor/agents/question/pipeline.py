@@ -997,7 +997,7 @@ class QuestionPipeline:
         meta = build_trace_metadata(
             call_id=call_id,
             phase=STAGE_EXPLORING,
-            label=self._t("labels.reflecting", default="DeepTutor Reflecting..."),
+            label=self._t("labels.reflecting", default="DeepWitya Reflecting..."),
             call_kind="tool_result_reflection",
             trace_id=call_id,
             trace_role="reflection",
@@ -1008,7 +1008,7 @@ class QuestionPipeline:
         # Open the sub-trace card before the LLM stream starts so the panel
         # registers the "Reflecting..." node immediately.
         await stream.progress(
-            self._t("labels.reflecting", default="DeepTutor Reflecting..."),
+            self._t("labels.reflecting", default="DeepWitya Reflecting..."),
             source=SOURCE,
             stage=STAGE_EXPLORING,
             metadata=merge_trace_metadata(

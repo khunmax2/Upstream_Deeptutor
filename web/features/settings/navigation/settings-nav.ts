@@ -156,9 +156,9 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
     href: "/settings#task-models",
     label: { zh: "任务模型", en: "Task models", th: "โมเดลสำหรับงานย่อย" },
     blurb: {
-      zh: "DeepTutor 自己发起的调用使用的模型。",
-      en: "The model behind the calls DeepTutor makes on its own.",
-      th: "โมเดลที่ใช้กับคำสั่งที่ DeepTutor เรียกเอง",
+      zh: "DeepWitya 自己发起的调用使用的模型。",
+      en: "The model behind the calls DeepWitya makes on its own.",
+      th: "โมเดลที่ใช้กับคำสั่งที่ DeepWitya เรียกเอง",
     },
     icon: ListChecks,
     tile: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
@@ -314,7 +314,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-claude-code",
     label: { zh: "Claude Code", en: "Claude Code", th: "Claude Code" },
     blurb: {
-      zh: "DeepTutor 调用本机 Claude Code 时的模型、推理强度与运行参数。",
+      zh: "DeepWitya 调用本机 Claude Code 时的模型、推理强度与运行参数。",
       en: "Model, reasoning effort, and run params for the local Claude Code.",
       th: "โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันของ Claude Code ในเครื่อง",
     },
@@ -328,7 +328,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-codex",
     label: { zh: "Codex", en: "Codex", th: "Codex" },
     blurb: {
-      zh: "DeepTutor 调用本机 Codex 时的模型、推理强度与运行参数。",
+      zh: "DeepWitya 调用本机 Codex 时的模型、推理强度与运行参数。",
       en: "Model, reasoning effort, and run params for the local Codex.",
       th: "โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันของ Codex ในเครื่อง",
     },
@@ -346,7 +346,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
       th: "Antigravity CLI",
     },
     blurb: {
-      zh: "DeepTutor 调用本机 Antigravity CLI 时的模型与运行参数。",
+      zh: "DeepWitya 调用本机 Antigravity CLI 时的模型与运行参数。",
       en: "Model and run params for the local Antigravity CLI.",
       th: "Model and run params for the local Antigravity CLI.",
     },
@@ -359,7 +359,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-kimi",
     label: { zh: "Kimi CLI", en: "Kimi CLI", th: "Kimi CLI" },
     blurb: {
-      zh: "DeepTutor 调用本机 Kimi CLI 时的模型与运行参数。",
+      zh: "DeepWitya 调用本机 Kimi CLI 时的模型与运行参数。",
       en: "Model and run params for the local Kimi CLI.",
       th: "โมเดลและพารามิเตอร์การรันของ Kimi CLI ในเครื่อง",
     },
@@ -372,7 +372,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-opencode",
     label: { zh: "opencode", en: "opencode", th: "opencode" },
     blurb: {
-      zh: "DeepTutor 调用本机 opencode 时的模型、推理强度与运行参数。",
+      zh: "DeepWitya 调用本机 opencode 时的模型、推理强度与运行参数。",
       en: "Model, reasoning effort, and run params for the local opencode.",
       th: "โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันของ opencode ในเครื่อง",
     },
@@ -385,7 +385,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-mimo",
     label: { zh: "MiMo Code", en: "MiMo Code", th: "MiMo Code" },
     blurb: {
-      zh: "DeepTutor 调用本机 MiMo Code 时的模型、推理强度与运行参数。",
+      zh: "DeepWitya 调用本机 MiMo Code 时的模型、推理强度与运行参数。",
       en: "Model, reasoning effort, and run params for the local MiMo Code.",
       th: "โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันของ MiMo Code ในเครื่อง",
     },
@@ -398,7 +398,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-hermes",
     label: { zh: "Hermes Agent", en: "Hermes Agent", th: "Hermes Agent" },
     blurb: {
-      zh: "DeepTutor 调用本机 Hermes Agent 时的模型、推理强度与运行参数。",
+      zh: "DeepWitya 调用本机 Hermes Agent 时的模型、推理强度与运行参数。",
       en: "Model, reasoning effort, and run params for the local Hermes Agent.",
       th: "Model, reasoning effort, and run params for the local Hermes Agent.",
     },
@@ -411,7 +411,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     href: "/settings#agent-openclaw",
     label: { zh: "OpenClaw", en: "OpenClaw", th: "OpenClaw" },
     blurb: {
-      zh: "DeepTutor 通过 Gateway 或本地模式调用 OpenClaw 的运行参数。",
+      zh: "DeepWitya 通过 Gateway 或本地模式调用 OpenClaw 的运行参数。",
       en: "Gateway or local-mode run params for the local OpenClaw agent.",
       th: "Gateway or local-mode run params for the local OpenClaw agent.",
     },
@@ -428,7 +428,7 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
       th: "DeepSeek Harness",
     },
     blurb: {
-      zh: "DeepTutor 通过 Python SDK 或 headless CLI 调用 DeepSeek Harness。",
+      zh: "DeepWitya 通过 Python SDK 或 headless CLI 调用 DeepSeek Harness。",
       en: "Python SDK or headless CLI settings for DeepSeek Harness.",
       th: "Python SDK or headless CLI settings for DeepSeek Harness.",
     },
