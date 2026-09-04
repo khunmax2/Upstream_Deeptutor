@@ -62,15 +62,19 @@ export function useLearningPolicy(): LearningPolicyAccess {
  *
  * `allowsAnima` is the coarsest of the three and deliberately so. The pet
  * router sits behind `require_learning_surface` (`api/main.py`), and
- * `_learning_surface_for_path()` has **no mapping for `/api/v1/pet`** — so the
- * guard default-denies it for every policy-bound account, whatever that
- * policy's `allowed_surfaces` happen to say. There is no combination of
- * surfaces that opens the companion today; holding a policy at all closes it.
- * Hence `!policy`, not a lookup.
+ * `_learning_surface_for_path()` has **no mapping for the pet router**
+ * (`deeptutor/api/routers/pet.py`) — so the guard default-denies it for every
+ * policy-bound account, whatever that policy's `allowed_surfaces` happen to
+ * say. There is no combination of surfaces that opens the companion today;
+ * holding a policy at all closes it. Hence `!policy`, not a lookup.
  *
  * When Anima becomes grantable the fix is here and in one line of the backend
  * map — see the round-2 report: mastery has to become assignable first, since
  * the companion is fed exclusively by mastery gates.
+ *
+ * (Named by module rather than by URL on purpose: `tests/no-v1-chat-surface.ts`
+ * forbids a v1 path literal anywhere under the frontend source roots, and a
+ * doc comment is not exempt from a plain text scan.)
  */
 export function learningPolicyAccessFor(status: AuthStatus | null): {
   learningPolicy: NonNullable<AuthStatus["learning_policy"]> | null;
