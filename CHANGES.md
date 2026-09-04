@@ -23,6 +23,58 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-04 — Learner surface audit: what an admin can grant vs. what a
+  learner can reach.** After the `allow_upload` fix below, the obvious question
+  was whether anything else an administrator hands a learning account is refused
+  the same way. Audited by walking a real `preset="learner"` account, logged in
+  with a real token, over HTTP against the full app.
+
+  **Reading is whole.** Upload, open, units, revisions, export, position,
+  highlight, list highlights, duplicate-check, URL import, delete, the
+  extension list and `read_aloud`, collections with tabs, reading conversations,
+  suggested openers — all answer. The admin-assign flow from the Learning Policy
+  screen works end to end: `_stage_assigned_materials` copies the material into
+  the learner workspace and the learner lists, opens and reads it. Chat's
+  permitted half (`/api/sessions`, `/api/settings/llm-options`,
+  `/api/question-notebook`, `/api/auth/*`, `/api/settings/ui`) answers too.
+
+  Denials that are *consistent* — hidden by `filterNavBySurfaces` and zeroed by
+  `apply_learning_policy` — are notebooks, memory, knowledge bases, skills,
+  system, video learning, mastery paths, co-writer and visualizers. Nothing to
+  do there.
+
+  Three places still contradict themselves. All three are the same defect as
+  `allow_upload`: `_learning_surface_for_path` is a hardcoded list of URL
+  prefixes, while permissions are granted through other systems entirely
+  (grants, `book_permission`, courses) that do not know it exists.
+
+  1. **Books assigned to a learner are unreachable.** There is a whole guardian
+     screen ("Approved materials"), an endpoint
+     (`PUT /api/multi-user/learners/{id}/materials`), a per-book `read` level
+     and an audit event (`guardian_material_assign`) — and every `/api/books*`
+     route answers 403 for any account carrying a learning policy. There is no
+     surface to grant either: `LEARNING_SURFACES` is `{"chat", "reading"}`, so
+     the assignment is structurally dead, not merely switched off.
+  2. **"Send reading notes to Notebook" is a dead end inside Reading.** The
+     button sits on the reading surface the admin enabled, but its dialog lists
+     notebooks through `/api/notebooks`, which is 403 — so the learner gets a
+     raw error string where the picker should be.
+  3. **Courses** — upstream
+     [#1228](https://github.com/HKUDS/DeepTutor/issues/1228), independently
+     reported. The sidebar half is already handled in this fork (a 403 in the
+     `Promise.all` used to discard the session list, so a learner saw "No
+     conversations yet" over a full history); what remains is the chat
+     composer's course pill offering "Manage courses" into a 403 page.
+
+  Learner Anima is *deliberately* off for policy-bound accounts
+  (`learningPolicyAccessFor` returns `allowsAnima: false`, matching the server's
+  403), so UI and server agree — worth revisiting as a product call, not a bug.
+
+  The audit is kept as `tests/multi_user/test_learner_surface_contract.py`:
+  four tests that log a real learner in and assert the reading and chat surfaces
+  answer end to end. It is the regression guard the earlier bugs lacked — each
+  layer was correct alone, and only an end-to-end walk showed the contradiction.
+
 - **2026-09-04 — A second admin was handed the first admin's entire workspace,
   chat history included.** Create an account, promote it to admin, and it sees
   every conversation belonging to admin #1. The cause is one line in
