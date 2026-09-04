@@ -3139,6 +3139,27 @@ upstream file was touched.
   that Dashboard survives even an empty allow-list, since it is the one page
   that explains the restriction itself.
 
+- **Learner Anima's tab is hidden from accounts it is closed to, not just
+  locked.** Follow-up to the locked notice above, on the user's call: a door
+  that cannot open still invites the question *"why is this here?"*, so the
+  companion's tab no longer renders for a policy-bound account. New
+  `allowsAnima` on `learningPolicyAccessFor()` carries the rule, and it is
+  deliberately coarse — the pet router has **no** entry in
+  `_learning_surface_for_path()`, so `require_learning_surface` default-denies
+  it for every policy-bound account whatever its `allowed_surfaces` say. There
+  is no surface combination that opens Anima today, hence `!policy` rather than
+  a lookup. The tab is gated on `policyResolved` in the hiding direction, so it
+  appears once an account is known to be allowed rather than flashing and being
+  pulled away. **The panel keeps its locked notice**: this hides the entrance,
+  not the explanation, so a bookmark or an old link still says why instead of
+  meeting a broken page. `tests/learner-anima-access.test.ts` (new, 5 tests)
+  pins the rule — including that an admin keeps Anima while carrying a policy,
+  which the `/admin` quick-action card depends on — so the day someone maps
+  `/api/v1/pet` to a surface, it fails and gets rewritten deliberately. Files:
+  `web/features/dashboard/useLearningPolicy.ts`,
+  `web/components/dashboard/DashboardTabs.tsx`,
+  `web/tests/learner-anima-access.test.ts` (new).
+
 **i18n:** 4 keys added to `en`, `th` and `zh`, plus `th`'s pre-existing
 `"Reading": "Reading"` translated to `"การอ่าน"` — a **shared key** with three
 other call sites (ChatComposer, CourseResources, ChatMessageList), flagged for
