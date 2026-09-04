@@ -15,11 +15,21 @@ import dynamic from "next/dynamic";
  * reason this one-line wrapper exists: `app/layout.tsx` is a Server Component.
  * The widget touches nothing but browser APIs (mic, speech, canvas), so there
  * is nothing to render on the server anyway.
+ *
+ * The call button is parked for now: `NEXT_PUBLIC_VOICE_CALL` gates it, and it
+ * stays off unless that variable is set to `1`/`true`. Returning before the
+ * dynamic import means the chunk is never requested either, so a disabled
+ * build pays nothing for it.
  */
+const VOICE_CALL_ENABLED = ["1", "true"].includes(
+  (process.env.NEXT_PUBLIC_VOICE_CALL ?? "").toLowerCase(),
+);
+
 const VoiceCallWidget = dynamic(() => import("./VoiceCallWidget"), {
   ssr: false,
 });
 
 export default function VoiceCallWidgetMount() {
+  if (!VOICE_CALL_ENABLED) return null;
   return <VoiceCallWidget />;
 }

@@ -920,6 +920,15 @@ channel — it reuses `ChatOrchestrator` directly (bypassing the text/turn-based
 `MessageBus`) so it can stream tokens to per-sentence TTS and support barge-in. All
 code is additive and isolated for mergeability.
 
+- **2026-09-04 — The floating call button is parked behind a flag (default off).**
+  `VoiceCallWidgetMount` now returns `null` unless `NEXT_PUBLIC_VOICE_CALL` is
+  `1`/`true`, so no page renders the button and — because the guard sits *before*
+  the `dynamic()` boundary is rendered — the widget chunk (the DOM-tree engine +
+  page actuator, the largest client chunk in the app) is never requested either.
+  Nothing was deleted: the widget, the realtime backend and the voice settings all
+  stay in place, and setting the variable brings the button straight back. File:
+  `web/components/voice/VoiceCallWidgetMount.tsx`.
+
 - **2026-07-16 — Voice call overlay: collapsible chat panel + calmer DOM-read
   highlights.** The call overlay now starts as the mascot ALONE — the typed-
   command box and the on-screen log (incl. the DOM-read notes) collapse by
