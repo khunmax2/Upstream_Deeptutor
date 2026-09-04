@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   BookMarked,
   BookOpen,
@@ -16,6 +17,7 @@ import {
   Database,
   HeartHandshake,
   KeyRound,
+  PawPrint,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -228,10 +230,19 @@ export default function AdminDashboard() {
   if (loading) return <AdminDashboardSkeleton />;
 
   return (
-    <div className="h-full overflow-y-auto bg-[var(--background)] [scrollbar-gutter:stable]">
+    <div className="h-screen overflow-y-auto bg-[var(--background)] [scrollbar-gutter:stable]">
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
+            {/* The (admin) layout has no sidebar, so this page needs its own way
+                out — the same one /admin/users has carried all along. */}
+            <Link
+              href="/"
+              className="mb-3 inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            >
+              <ArrowLeft size={16} />
+              {t("Back")}
+            </Link>
             <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-[var(--primary)]">
               <ShieldCheck size={14} /> {t("Administration")}
             </div>
@@ -495,6 +506,15 @@ function AdminQuickActions() {
       label: t("Configure shared resources"),
       detail: t("Models, tools, and system services"),
       icon: Settings,
+    },
+    {
+      // An admin lands here instead of /dashboard, and Learner Anima gave up its
+      // own sidebar slot to live inside that route — so without this card the
+      // companion has no door left in the UI for an administrator.
+      href: "/dashboard/anima",
+      label: t("Learner Anima"),
+      detail: t("Anima tooltip"),
+      icon: PawPrint,
     },
   ];
   return (
