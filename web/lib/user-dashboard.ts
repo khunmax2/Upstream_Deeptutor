@@ -42,6 +42,12 @@ export function capabilityLaunchHref(capabilityId: string): string {
   return `/chat?capability=${encodeURIComponent(capabilityId)}`;
 }
 
+/**
+ * Turn a capability / surface / extension id into its **locale key**, not its
+ * finished label — callers must pass the result through `t()`. The keys match
+ * the ones the capability catalog already ships, so a translated app shows
+ * "การอ่านแบบดื่มด่ำ" rather than the English that a raw return leaves behind.
+ */
 export function formatCapabilityLabel(capabilityId: string): string {
   if (capabilityId === "immersive_reading") return "Immersive Reading";
   if (capabilityId === "mastery_path") return "Mastery Path";

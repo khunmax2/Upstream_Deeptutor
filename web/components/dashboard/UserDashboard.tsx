@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { useLearningPolicy } from "@/features/dashboard/useLearningPolicy";
+import { isApiError } from "@/shared/api/errors";
 import { fetchCapabilityCatalog } from "@/features/capabilities/api";
 import type { CapabilityDescriptor } from "@/features/capabilities/model";
 import {
@@ -81,6 +82,8 @@ interface DashboardData {
   tools: string[];
   models: LLMOption[];
   unavailable: string[];
+  /** Subset of `unavailable` the server refused outright (403), not transiently. */
+  denied: string[];
 }
 
 const EMPTY_DATA: DashboardData = {
@@ -96,17 +99,41 @@ const EMPTY_DATA: DashboardData = {
   tools: [],
   models: [],
   unavailable: [],
+  denied: [],
 };
+
+/**
+ * Status code carried by a failed request, whichever shape it arrives in.
+ *
+ * The dashboard fans out across API helpers written at different times: some
+ * throw the shared `ApiError`, others `new Error(`HTTP ${status}`)` — the
+ * convention in `features/capabilities/api.ts`, an upstream file this fork
+ * would rather not edit for a message the caller can simply read. Handling
+ * both keeps the page honest about *why* a panel is missing.
+ */
+function failureStatus(reason: unknown): number | undefined {
+  if (isApiError(reason)) return reason.status;
+  const message = reason instanceof Error ? reason.message : "";
+  const match = /\bHTTP (\d{3})\b/.exec(message);
+  return match ? Number(match[1]) : undefined;
+}
 
 async function safeLoad<T>(
   name: string,
   request: Promise<T>,
   fallback: T,
-): Promise<{ name: string; value: T; failed: boolean }> {
+): Promise<{ name: string; value: T; failed: boolean; denied: boolean }> {
   try {
-    return { name, value: await request, failed: false };
-  } catch {
-    return { name, value: fallback, failed: true };
+    return { name, value: await request, failed: false, denied: false };
+  } catch (reason) {
+    // A 403 is the account's policy, not a bad moment: it will answer the same
+    // way on every retry, so the page must not promise that it is temporary.
+    return {
+      name,
+      value: fallback,
+      failed: true,
+      denied: failureStatus(reason) === 403,
+    };
   }
 }
 
@@ -137,7 +164,8 @@ function presetLabel(preset: UserPreset): string {
 export default function UserDashboard() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const { allowsLearningSurface, policyResolved } = useLearningPolicy();
+  const { allowsLearningSurface, policyResolved, learningPolicy } =
+    useLearningPolicy();
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
@@ -184,10 +212,16 @@ export default function UserDashboard() {
         ),
       ]);
 
-      const extended =
-        preset === "learner"
-          ? []
-          : await Promise.all([
+      // Which dashboard an account gets follows its *policy*, not its preset.
+      // The sidebar and the server already decide this way, so a `custom`
+      // account an admin gave a learning policy was the odd one out: it was
+      // filtered down to chat + reading everywhere else, yet handed the wide
+      // layout here — which then asked for six APIs its own policy denies and
+      // printed each denial as a zero. See `restricted` in the render below.
+      const restricted = preset === "learner" || Boolean(auth.learning_policy);
+      const extended = restricted
+        ? []
+        : await Promise.all([
               safeLoad("notebooks", listNotebooks(), [] as NotebookSummary[]),
               safeLoad("questions", getQuestionBankStats(), null),
               safeLoad(
@@ -232,6 +266,9 @@ export default function UserDashboard() {
         unavailable: results
           .filter((result) => result.failed)
           .map((result) => result.name),
+        denied: results
+          .filter((result) => result.denied)
+          .map((result) => result.name),
       });
     } catch (reason) {
       setError(
@@ -256,26 +293,52 @@ export default function UserDashboard() {
   const capabilities = useMemo(
     () => {
       const merged = mergeCapabilityPresentations(data.capabilities);
+      const readingDef = (): ChatCapabilityDef => ({
+        value: "immersive_reading",
+        label: "Immersive Reading",
+        description: "Read assigned or personal material with tutor support",
+        icon: BookOpen,
+        allowedTools: [],
+        defaultTools: [],
+      });
+
+      // A restricted account is denied the capability catalog (403), so counting
+      // what came back from it reported one mode on an account whose plan grants
+      // two — and contradicted the "Learning modes" figure shown further down
+      // this same page. The policy travels with the auth status and is what the
+      // server actually enforces, so for these accounts it is the source.
+      if (learningPolicy) {
+        const allowed = learningPolicy.allowed_capabilities ?? [];
+        return allowed.map((id) => {
+          if (id === "immersive_reading") return readingDef();
+          const known = merged.find(
+            (capability) => (capability.value || "chat") === id,
+          );
+          return (
+            known ?? {
+              value: id,
+              label: formatCapabilityLabel(id),
+              description: "",
+              icon: Compass,
+              allowedTools: [],
+              defaultTools: [],
+            }
+          );
+        });
+      }
+
       if (
         allowsLearningSurface("reading") &&
         !merged.some((capability) => capability.value === "immersive_reading")
       ) {
-        const reading: ChatCapabilityDef = {
-          value: "immersive_reading",
-          label: "Immersive Reading",
-          description: "Read assigned or personal material with tutor support",
-          icon: BookOpen,
-          allowedTools: [],
-          defaultTools: [],
-        };
         const chatIndex = merged.findIndex(
           (capability) => (capability.value || "chat") === "chat",
         );
-        merged.splice(chatIndex >= 0 ? chatIndex + 1 : 0, 0, reading);
+        merged.splice(chatIndex >= 0 ? chatIndex + 1 : 0, 0, readingDef());
       }
       return merged.slice(0, 6);
     },
-    [allowsLearningSurface, data.capabilities],
+    [allowsLearningSurface, data.capabilities, learningPolicy],
   );
   const locale = i18n.language?.startsWith("zh") ? "zh-CN" : "en-US";
   const activitySeries = useMemo(
@@ -289,8 +352,12 @@ export default function UserDashboard() {
 
   if (loading || !status) return <DashboardSkeleton />;
 
+  // Same rule as the loader above: a policy-bound account gets the narrow,
+  // truthful layout whatever its preset says.
+  const restricted = preset === "learner" || Boolean(status.learning_policy);
+
   const metricCards =
-    preset === "learner"
+    restricted
       ? [
           {
             label: t("Conversations"),
@@ -382,7 +449,7 @@ export default function UserDashboard() {
               </span>
             </div>
             <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-              {preset === "learner"
+              {restricted
                 ? t("Continue your assigned learning and reading activities.")
                 : t("Pick up where you left off or start something new.")}
             </p>
@@ -407,7 +474,13 @@ export default function UserDashboard() {
 
         {data.unavailable.length > 0 ? (
           <div className="mb-5 rounded-xl border border-amber-500/25 bg-[var(--warning-surface)] px-4 py-3 text-xs text-[var(--warning)]">
-            {t("Some dashboard data is temporarily unavailable. Your available activities still work normally.")}
+            {data.denied.length > 0
+              ? t(
+                  "Some dashboard data is not open to this account. Your available activities still work normally.",
+                )
+              : t(
+                  "Some dashboard data is temporarily unavailable. Your available activities still work normally.",
+                )}
           </div>
         ) : null}
 
@@ -424,7 +497,7 @@ export default function UserDashboard() {
             locale={locale}
           />
           <NextSteps
-            preset={preset}
+            restricted={restricted}
             sessions={sessions}
             materials={data.materials}
             books={data.books}
@@ -438,7 +511,7 @@ export default function UserDashboard() {
           <ContinueCard
             session={nextSession}
             firstMaterial={data.materials[0]}
-            preset={preset}
+            restricted={restricted}
             locale={locale}
           />
           <CapabilityCard capabilities={capabilities} />
@@ -446,14 +519,14 @@ export default function UserDashboard() {
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <RecentActivity sessions={recent} locale={locale} />
-          {preset === "learner" ? (
+          {restricted ? (
             <AssignedLearning status={status} materials={data.materials} />
           ) : (
             <WorkspaceAccess preset={preset} data={data} />
           )}
         </section>
 
-        {preset === "learner" ? (
+        {restricted ? (
           <LearningPlan status={status} />
         ) : (
           <LearningLibrary data={data} />
@@ -586,7 +659,7 @@ function MomentumStat({
 }
 
 function NextSteps({
-  preset,
+  restricted,
   sessions,
   materials,
   books,
@@ -594,7 +667,7 @@ function NextSteps({
   chatAllowed,
   readingAllowed,
 }: {
-  preset: UserPreset;
+  restricted: boolean;
   sessions: SessionSummary[];
   materials: MaterialInfo[];
   books: Book[];
@@ -623,12 +696,12 @@ function NextSteps({
   if (readingAllowed && materials[0]) {
     actions.push({
       href: "/reading/materials",
-      label: preset === "learner" ? t("Open assigned reading") : t("Read a saved material"),
+      label: restricted ? t("Open assigned reading") : t("Read a saved material"),
       detail: materials[0].title,
       icon: BookOpen,
     });
   }
-  if (preset !== "learner" && (questionStats?.wrong ?? 0) > 0) {
+  if (!restricted && (questionStats?.wrong ?? 0) > 0) {
     actions.push({
       href: "/space/questions",
       label: t("Review questions"),
@@ -636,7 +709,7 @@ function NextSteps({
       icon: FileQuestion,
     });
   }
-  if (preset !== "learner" && inProgressBook) {
+  if (!restricted && inProgressBook) {
     actions.push({
       href: `/books/${encodeURIComponent(inProgressBook.id)}`,
       label: t("Continue your book"),
@@ -685,16 +758,16 @@ function NextSteps({
 function ContinueCard({
   session,
   firstMaterial,
-  preset,
+  restricted,
   locale,
 }: {
   session?: SessionSummary;
   firstMaterial?: MaterialInfo;
-  preset: UserPreset;
+  restricted: boolean;
   locale: string;
 }) {
   const { t } = useTranslation();
-  const fallbackToReading = preset === "learner" && firstMaterial;
+  const fallbackToReading = restricted && firstMaterial;
   const href = session
     ? sessionRoute(session)
     : fallbackToReading
@@ -737,7 +810,7 @@ function ContinueCard({
               </Link>
               {session ? (
                 <span className="text-xs text-[var(--muted-foreground)]">
-                  {formatCapabilityLabel(sessionCapabilityId(session))} · {relativeTime(session.updated_at, locale)}
+                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} · {relativeTime(session.updated_at, locale)}
                 </span>
               ) : null}
             </div>
@@ -826,7 +899,7 @@ function RecentActivity({
                   {session.title || t("Untitled conversation")}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]">
-                  {formatCapabilityLabel(sessionCapabilityId(session))} · {t("{{count}} messages", { count: session.message_count })}
+                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} · {t("{{count}} messages", { count: session.message_count })}
                 </p>
               </div>
               <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
@@ -1061,7 +1134,7 @@ function LearningPlan({ status }: { status: AuthStatus }) {
   const facts = [
     {
       label: t("Default activity"),
-      value: formatCapabilityLabel(policy?.default_capability ?? "chat"),
+      value: t(formatCapabilityLabel(policy?.default_capability ?? "chat")),
       icon: Compass,
     },
     {
@@ -1097,8 +1170,8 @@ function LearningPlan({ status }: { status: AuthStatus }) {
         ))}
       </div>
       <div className="grid gap-5 border-t border-[var(--border)]/70 px-5 py-4 md:grid-cols-2">
-        <PlanChips title={t("Accessible areas")} values={surfaces.map(formatCapabilityLabel)} empty={t("No area enabled")} />
-        <PlanChips title={t("Reading extensions")} values={extensions.map(formatCapabilityLabel)} empty={t("No reading extension enabled")} />
+        <PlanChips title={t("Accessible areas")} values={surfaces.map((id) => t(formatCapabilityLabel(id)))} empty={t("No area enabled")} />
+        <PlanChips title={t("Reading extensions")} values={extensions.map((id) => t(formatCapabilityLabel(id)))} empty={t("No reading extension enabled")} />
       </div>
     </section>
   );

@@ -90,17 +90,40 @@ export interface PetDashboard {
   paths: PathSummary[];
 }
 
+/**
+ * A pet request the server refused, carrying the status so callers can tell a
+ * policy answer from a hiccup. A 403 here means the account is not allowed the
+ * companion at all — retrying cannot change it.
+ */
+export class PetRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PetRequestError";
+  }
+}
+
 /** Aggregated pull for the whole /dashboard/anima page (pet + all-path learning view). */
 export async function fetchPetDashboard(): Promise<PetDashboard> {
   const res = await apiFetch(apiUrl(`/api/v1/pet/dashboard`));
-  if (!res.ok) throw new Error(`Failed to fetch pet dashboard: ${res.status}`);
+  if (!res.ok)
+    throw new PetRequestError(
+      res.status,
+      `Failed to fetch pet dashboard: ${res.status}`,
+    );
   return res.json() as Promise<PetDashboard>;
 }
 
 /** Authoritative pull: the server applies decay + drains new mastery signal. */
 export async function fetchPetState(): Promise<PetState> {
   const res = await apiFetch(apiUrl(`/api/v1/pet/state`));
-  if (!res.ok) throw new Error(`Failed to fetch pet state: ${res.status}`);
+  if (!res.ok)
+    throw new PetRequestError(
+      res.status,
+      `Failed to fetch pet state: ${res.status}`,
+    );
   return res.json() as Promise<PetState>;
 }
 
@@ -114,6 +137,10 @@ export async function postPetEvent(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event, decay_amount: decayAmount }),
   });
-  if (!res.ok) throw new Error(`Failed to post pet event: ${res.status}`);
+  if (!res.ok)
+    throw new PetRequestError(
+      res.status,
+      `Failed to post pet event: ${res.status}`,
+    );
   return res.json() as Promise<PetState>;
 }

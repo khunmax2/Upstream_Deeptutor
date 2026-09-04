@@ -19,6 +19,7 @@ import {
   PenLine,
   Users,
   HelpCircle,
+  Lock,
 } from "lucide-react";
 
 import PetHabitat from "@/components/pet/PetHabitat";
@@ -27,6 +28,7 @@ import AnimaGuide from "@/components/pet/AnimaGuide";
 import { BookIcon } from "@/components/pet/AnimaIcons";
 import {
   fetchPetDashboard,
+  PetRequestError,
   type PetDashboard,
   type MasteryAxis,
 } from "@/lib/pet-api";
@@ -65,6 +67,7 @@ export default function LearnerAnimaPanel() {
   const router = useRouter();
   const [dash, setDash] = useState<PetDashboard | null>(null);
   const [offline, setOffline] = useState(false);
+  const [denied, setDenied] = useState(false);
   // Reference clock for relative times + the greeting, refreshed each poll (kept
   // out of render so the components stay pure — no Date.now() during render).
   const [now, setNow] = useState(0);
@@ -74,6 +77,7 @@ export default function LearnerAnimaPanel() {
 
   useEffect(() => {
     let cancelled = false;
+    let timer = 0;
     const poll = async () => {
       try {
         const next = await fetchPetDashboard();
@@ -83,15 +87,26 @@ export default function LearnerAnimaPanel() {
           setOffline(false);
           setSeeded(true);
         }
-      } catch {
-        if (!cancelled) setOffline(true); // keep the last-good view, flag offline
+      } catch (reason) {
+        if (cancelled) return;
+        // A 403 is the server's policy answer, not a hiccup: this account is not
+        // allowed the companion. Retrying cannot change it, so stop the timer
+        // rather than poll a denial every few seconds, and say so — the offline
+        // path below keeps the last-good view, and an account that never had one
+        // would be shown an empty pet that reads as a broken one.
+        if (reason instanceof PetRequestError && reason.status === 403) {
+          setDenied(true);
+          window.clearInterval(timer);
+          return;
+        }
+        setOffline(true); // keep the last-good view, flag offline
       }
     };
-    poll();
-    const id = window.setInterval(poll, POLL_MS);
+    void poll();
+    timer = window.setInterval(poll, POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -133,6 +148,28 @@ export default function LearnerAnimaPanel() {
 
   const pet = dash?.pet ?? null;
   const empty = seeded && (dash?.paths.length ?? 0) === 0;
+
+  // Returned before the pet UI, and before the first-visit tour: an account that
+  // cannot reach the companion should not be walked through one.
+  if (denied) {
+    return (
+      <div className="grid h-full place-items-center px-6 py-16 text-center">
+        <div className="max-w-md">
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">
+            <Lock className="h-5 w-5" />
+          </div>
+          <h1 className="text-lg font-semibold text-[var(--foreground)]">
+            {t("Learner Anima is not open for this account")}
+          </h1>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            {t(
+              "Anima grows only from mastery work, which this account's learning plan does not include. An administrator can change the plan.",
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
