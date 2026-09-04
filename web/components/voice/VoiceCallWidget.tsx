@@ -73,9 +73,14 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
   },
   { id: "space", label: "หน้า space", path: "/space" },
   {
+    id: "dashboard",
+    label: "หน้าแดชบอร์ด (dashboard, ภาพรวมการเรียน)",
+    path: "/dashboard",
+  },
+  {
     id: "anima",
     label: "หน้าเพื่อนเรียนรู้ / สัตว์เลี้ยงประจำตัว (learner anima, pet)",
-    path: "/anima",
+    path: "/dashboard/anima",
   },
   {
     id: "partners",
@@ -113,6 +118,9 @@ export const VOICE_MANIFEST_EXCLUDED_ROUTES = [
   // upstream removes the harness — the parity test will then flag it as a stale
   // exclusion rather than let it rot here.
   "/avatar-preview",
+  // The admin console is an operator surface, not a learning one: account
+  // provisioning is not something a caller should reach by voice.
+  "/admin",
 ];
 export { UI_PAGES };
 

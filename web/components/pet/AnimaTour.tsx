@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Sparkles, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 /**
- * A single-page guided tour for /anima. Mirrors the settings tour overlay
+ * A single-page guided tour for /dashboard/anima. Mirrors the settings tour overlay
  * (soft scrim + highlight ring + tooltip, keyboard nav) but self-contained:
  * no routing, no context. The parent mounts it only while open and remounts it
  * (via `key`) to restart, so step state resets naturally. Steps anchor to

@@ -1004,6 +1004,84 @@ code is additive and isolated for mergeability.
   stay in place, and setting the variable brings the button straight back. File:
   `web/components/voice/VoiceCallWidgetMount.tsx`.
 
+- **2026-09-04 — Two more sidebar tooltips were broken the same way, and the
+  checker could not see any of them.** An audit of the remaining Thai nav labels
+  (asked for after the rename below) found the labels themselves in good shape —
+  the fork's Thai is behaviour-first throughout, and in places *corrects* the
+  English, e.g. Knowledge Center's `en` still reads "Manage learning personas."
+  while `th` describes the RAG store it actually is. But two sibling defects of
+  the same family turned up:
+
+  - **`/mastery`'s tooltip key existed in no locale at all.** `nav-entries.ts`
+    asks for `"Learn through a living mastery map"`, which is absent from `en`,
+    `th` and `zh` — so `t()` returned the key and **Thai and Chinese readers were
+    shown raw English**, while English readers saw a sentence and nobody noticed.
+    Written from the real behaviour in all three: map a topic, then work each
+    objective until it clears the tutor's mastery gate.
+  - **`"Partners tooltip"` in `en` was the key echoed back** — the exact mirror
+    of the Immersive Reading bug below: there, `th` was the placeholder and `en`
+    was fine; here `th` and `zh` carried real content and `en` showed the literal
+    string "Partners tooltip". Filled in from what the other two already said.
+
+  **Root cause, and the gap closed:** `i18n:audit` scans for `t("a literal")` in
+  source, but every sidebar tooltip renders as `t(entry.tooltipKey)` — a
+  *variable* — so the audit was blind to the whole set, which is how three
+  separate defects survived in it. `scripts/i18n_parity.mjs` now also reads
+  `components/sidebar/nav-entries.ts` and fails the build when a referenced
+  `label` / `tooltipKey` is missing from `en`, or when a tooltip's `en` value is
+  just its key. Proven by reinstating both defects and watching the gate exit 1;
+  it reports 23 sidebar keys resolving otherwise. The third failure mode — a
+  translated *key name*, as in the entry below — is not machine-checkable and is
+  called out as such in the script's comment. Files:
+  `web/scripts/i18n_parity.mjs`, `web/locales/{en,th,zh}/app.json`.
+
+- **2026-09-04 — Immersive Reading and Immersive Watching are named in Thai
+  after what they do.** `"การอ่านแบบดื่มด่ำ"` was a literal calque of
+  *immersive*: **ดื่มด่ำ** is the Thai for savouring something — music, scenery,
+  a novel read for pleasure — and it landed in the wrong register for a study
+  tool that a nine-year-old opens to be quizzed on a chemistry chapter. It was
+  also the last literal translation left in the sidebar, where every sibling is
+  already named for its behaviour (Home → **ห้องแชต**, Co-Writer →
+  **ผู้ช่วยเขียนเอกสาร**, Book → **สร้างหนังสือเรียน**).
+
+  Renamed to **"อ่านกับติวเตอร์"** — *read with a tutor* — chosen by the user
+  from four behaviour-derived candidates, with the sibling capability following
+  as **"ชมกับติวเตอร์"** so the อ่าน / ชม pair still reads as a pair. The name
+  states the one thing that actually distinguishes the feature: a tutor sits
+  with you and may speak only from the material you opened. 9 strings across the
+  file were re-fitted rather than string-substituted, since the new label is a
+  verb phrase where the old one was a noun.
+
+  **Fixed alongside it:** the Thai `"Immersive Reading tooltip"` read
+  `"คำแนะนำการอ่านแบบดื่มด่ำ"` — *"tooltip for immersive reading"*, i.e. someone
+  had translated the **key name** instead of the value, so a Thai learner
+  hovering the sidebar entry was told nothing at all. (`zh` had it right.) Now
+  the real sentence: *"อ่านเอกสาร หน้าเว็บ และสื่อเสียงหรือวิดีโอ
+  พร้อมติวเตอร์ AI ที่อ้างอิงเนื้อหาจริง"*. Verified live on the Thai UI —
+  sidebar label and hover card both. `en` and `zh` untouched; parity passes.
+  File: `web/locales/th/app.json` (10 values).
+
+- **2026-09-04 — Upstream's GitHub and documentation links are parked behind a
+  flag (default off).** The sidebar footer carried two icon links beside the
+  version badge, and Settings ▸ About carried a whole *Project* section — all
+  four pointing at `github.com/HKUDS/DeepTutor` and `deeptutor.info`. This fork
+  ships as **DeepWitya** to learners, including children on `learner` and
+  policy-bound accounts, so the app was sending its least technical audience to
+  someone else's source repository. New `web/lib/upstream-links.ts` holds the
+  three URLs and a `NEXT_PUBLIC_UPSTREAM_LINKS` flag (`1`/`true` brings every
+  link straight back), following the same shape as `NEXT_PUBLIC_VOICE_CALL`.
+
+  Nothing was deleted — both upstream files keep their markup and gain only an
+  import and a guard, which is the cheapest thing to resolve on a sync. **The
+  Apache-2.0 attribution is untouched:** §4 asks for notices in the
+  *distribution*, and that lives in `NOTICE`, `LICENSE` and this file, not in a
+  link in the running UI. Verified live on a restricted account: zero
+  `github.com` / `deeptutor.info` anchors in either sidebar state (expanded and
+  collapsed are separate code paths, both checked) and no *Project* section in
+  About. Files: `web/lib/upstream-links.ts` (new),
+  `web/components/sidebar/SidebarShell.tsx`,
+  `web/features/settings/sections/AboutSettingsSection.tsx`.
+
 - **2026-07-16 — Voice call overlay: collapsible chat panel + calmer DOM-read
   highlights.** The call overlay now starts as the mascot ALONE — the typed-
   command box and the on-screen log (incl. the DOM-read notes) collapse by
@@ -3037,6 +3115,167 @@ is additive and isolated for mergeability — the only upstream-file edit is one
   `deeptutor/core/agentic/loop.py`, `deeptutor/core/agentic/__init__.py`,
   `deeptutor/agents/question/pipeline.py`, `deeptutor/agents/research/pipeline.py`,
   `tests/core/test_labeled_step_tool_extras.py` (new).
+
+## Dashboards — admin + unified user (branch `feat/dashboards`, in progress)
+
+**2026-09-04 — Two operational dashboards, folded into the Learner Anima menu.**
+Ported from the reference implementation in the sibling `DeepTutor` workspace
+(see `DASHBOARD_HANDOFF.md` there) and reshaped for this fork.
+
+The sidebar keeps **one** new-looking entry, not two: the fork-only *Learner
+Anima* slot is renamed **Dashboard** and now holds two pages of its own —
+
+- `/dashboard` — the unified user dashboard, and
+- `/dashboard/anima` — the learning companion, unchanged.
+
+`/admin` gains the admin dashboard (provisioning health, per-account readiness,
+accounts needing attention, assignments in use, assignable resource inventory).
+Every metric comes from APIs and persisted state that already existed; nothing is
+simulated. The user dashboard widens or narrows by account preset and learning
+policy: a learner never calls the API groups its policy forbids, and one failed
+group degrades to partial data instead of an empty page. Business rules live in
+pure helpers (`web/lib/{admin,user}-dashboard.ts`), not in the components.
+
+**Kept deliberately additive**, so upstream syncs stay cheap — 12 of the 18 files
+are new, and Learner Anima moved by `git mv` (page → panel component) so its
+history follows:
+
+- New: `web/app/(admin)/admin/page.tsx`,
+  `web/app/(utility)/dashboard/{layout,page}.tsx`,
+  `web/app/(utility)/dashboard/anima/page.tsx`,
+  `web/components/admin/AdminDashboard.tsx`,
+  `web/components/dashboard/{UserDashboard,DashboardTabs,LearnerAnimaPanel}.tsx`,
+  `web/features/dashboard/useLearningPolicy.ts`,
+  `web/lib/{admin,user}-dashboard.ts`,
+  `web/tests/{admin,user}-dashboard.test.ts`.
+- Changed, and only these: `web/components/sidebar/nav-entries.ts` (the renamed
+  entry), `web/components/voice/VoiceCallWidget.tsx` +
+  `web/tests/voice-manifest-parity.test.ts` (Anima is no longer a top-level route,
+  so the manifest declares `/dashboard` and the parity test resolves a declared
+  path at any depth; `/admin` is excluded as an operator surface),
+  `web/components/pet/AnimaTour.tsx` and `web/lib/pet-api.ts` (doc comments),
+  and the three locales.
+
+The shared `CapabilityAccessContext` was **not** widened: the policy view the user
+dashboard needs is derived from auth status in the new `features/dashboard` hook,
+so an upstream file stays untouched.
+
+**i18n:** 139 keys added to `en`, `th` and `zh` — including 32 admin strings that
+the reference implementation renders as raw English keys.
+
+**Verification:** typecheck, eslint (0 errors), dependency-cruiser, i18n parity +
+audit, and vitest (22/22) all pass. `npm run test:node` leaves 5 failures, which
+were confirmed identical on a pristine `main` checkout — the known Windows
+path-separator contract failures, none introduced here. Not yet exercised against
+a live backend with Standard / Custom / Learner logins.
+
+**2026-09-04 — Live-backend run: six defects the green suite could not see.**
+Round 1 above passed typecheck, eslint, dependency-cruiser, i18n and vitest — and
+`/dashboard` still rendered **nothing** for every non-admin account. This round
+opened both dashboards in a browser under real `standard` / `custom` / `learner`
+logins against a running API, and fixed what that exposed. No backend file and no
+upstream file was touched.
+
+- **`/dashboard` never rendered, and hammered the API at ~67 req/s.**
+  `useLearningPolicy()` returned `{...learningPolicyAccessFor(status)}` computed
+  fresh on every render, so `allowsLearningSurface` was a new closure each time;
+  `UserDashboard`'s loader is a `useCallback` depending on it, and its `useEffect`
+  therefore re-fired on its own result. `loading` never cleared, the page stayed
+  on the skeleton, and the fan-out re-ran forever — **334 requests in 5 s**
+  measured before, **0 in 8 s** after. Fixed by memoising on the status object.
+  A pure-function unit test cannot catch this: the bug is closure identity across
+  renders, not the helper's output.
+- **`/admin` could not be scrolled — 64% of the page unreachable.**
+  `h-full` under a `min-h-screen` parent with no definite height collapses to
+  content height, so `overflow-y-auto` never engaged and the global
+  `body { overflow: hidden }` clipped at the viewport. Proven in the DOM
+  (`clientHeight === scrollHeight === 2989`, viewport 1069) and fixed to
+  `h-screen`, matching the sibling `admin/users/page.tsx` that had it right.
+- **`/admin` was a dead end**, and **an admin could not reach Learner Anima at
+  all** — the `(admin)` route group renders no sidebar, `UserDashboard` redirects
+  admins away from `/dashboard`, and this branch had already folded Anima's own
+  sidebar slot into that route. Added a `← Back` link and a *Learner Anima* card
+  in Quick actions pointing at `/dashboard/anima`, reusing existing keys.
+- **Anima showed a fabricated empty pet to accounts it was denied.**
+  `GET /api/v1/pet/dashboard` answers **403** for any learning account, and the
+  panel's "keep the last-good view" fallback painted a full pet UI at 0% hunger /
+  0% happiness — a sick pet, not a locked one — while re-polling the denial every
+  4 s forever. New `PetRequestError` (carrying `status`) lets the panel tell 403
+  from a hiccup, stop the interval, and show a plain locked notice.
+- **The learner dashboard reported numbers derived from denied requests.**
+  *"Available modes: 1"* under a caption reading *"Set by your learning plan"* —
+  while the plan said 2 on the same page — because it counted a 403'd capability
+  catalog; the mode chips dropped chat for the same reason. Both now derive from
+  `learning_policy.allowed_capabilities`, which is what the server enforces. The
+  partial-data banner said *"temporarily unavailable"* for a permanent policy
+  denial; `safeLoad` now records `denied` separately via a `failureStatus()`
+  helper that reads both `ApiError.status` and the `HTTP {status}` message
+  convention of `features/capabilities/api.ts` — deliberately *reading* that
+  upstream file's error shape rather than editing it. And eight English labels
+  survived on a fully Thai page because `formatCapabilityLabel()` returns a
+  **locale key**, not a finished label: it is now documented as such and all five
+  call sites pass it through `t()`.
+- **A policy-bound non-learner got the wide dashboard.** A `custom` account with
+  a learning policy was narrowed to two sidebar entries (the sidebar reads
+  `allowedSurfaces`) yet handed the full layout here (it read `preset`), firing
+  **seven denied API groups per load** and printing *"Assigned skills: 0"* — with
+  a footnote to ask an administrator — against a grant that assigns **five**.
+  Layout and fan-out now follow the policy the way the sidebar and the server
+  already do: `preset === "learner" || Boolean(status.learning_policy)`.
+  `NextSteps` and `ContinueCard` take `restricted: boolean`; `preset` survives
+  only where it still means the preset, on the account badge.
+
+- **The sidebar hid Dashboard from every account it was built for.** Found by
+  the user on a refresh after the six above were fixed: the `/dashboard` nav
+  entry declared no `surface`, and `filterNavBySurfaces()` treats an undeclared
+  entry as restricted — the safe default for a feature nobody has classified.
+  So a policy-bound account saw Home, Immersive Reading and Settings, and could
+  reach the restricted dashboard this whole round was spent making truthful
+  **only by typing the URL**. Marked `"unrestricted"` on the same evidence
+  Settings carries: verified against the running server that a chat+reading
+  account renders it in full — its one required call (`/api/auth/status`) is
+  never guarded, and every optional one now degrades to a stated denial rather
+  than an error. `learning-surface-nav.test.ts` pins the new contract, including
+  that Dashboard survives even an empty allow-list, since it is the one page
+  that explains the restriction itself.
+
+- **Learner Anima's tab is hidden from accounts it is closed to, not just
+  locked.** Follow-up to the locked notice above, on the user's call: a door
+  that cannot open still invites the question *"why is this here?"*, so the
+  companion's tab no longer renders for a policy-bound account. New
+  `allowsAnima` on `learningPolicyAccessFor()` carries the rule, and it is
+  deliberately coarse — the pet router has **no** entry in
+  `_learning_surface_for_path()`, so `require_learning_surface` default-denies
+  it for every policy-bound account whatever its `allowed_surfaces` say. There
+  is no surface combination that opens Anima today, hence `!policy` rather than
+  a lookup. The tab is gated on `policyResolved` in the hiding direction, so it
+  appears once an account is known to be allowed rather than flashing and being
+  pulled away. **The panel keeps its locked notice**: this hides the entrance,
+  not the explanation, so a bookmark or an old link still says why instead of
+  meeting a broken page. `tests/learner-anima-access.test.ts` (new, 5 tests)
+  pins the rule — including that an admin keeps Anima while carrying a policy,
+  which the `/admin` quick-action card depends on — so the day someone maps
+  `/api/v1/pet` to a surface, it fails and gets rewritten deliberately. Files:
+  `web/features/dashboard/useLearningPolicy.ts`,
+  `web/components/dashboard/DashboardTabs.tsx`,
+  `web/tests/learner-anima-access.test.ts` (new).
+
+**i18n:** 4 keys added to `en`, `th` and `zh`, plus `th`'s pre-existing
+`"Reading": "Reading"` translated to `"การอ่าน"` — a **shared key** with three
+other call sites (ChatComposer, CourseResources, ChatMessageList), flagged for
+review in case the English term was deliberate the way `"Knowledge Base"` is.
+
+**Verification:** every fix confirmed in a browser under the account that
+exhibited it, with the backend request log as the oracle. Gates re-run green:
+typecheck, eslint (0 errors), `i18n:parity` OK, vitest 22/22. Files:
+`web/features/dashboard/useLearningPolicy.ts`,
+`web/components/dashboard/{UserDashboard,LearnerAnimaPanel}.tsx`,
+`web/components/admin/AdminDashboard.tsx`, `web/lib/{pet-api,user-dashboard}.ts`
+and the three locales. A `.claude/launch.json` naming the frontend dev command
+was added for agent tooling but is **not committed** — `.gitignore:19` excludes
+`.claude/*`; the command it holds is written out in the report instead.
+Details in `docs/reports/REPORT_dashboards_live_run_2026-09-04.md`.
+
 
 ## Branches kept but not merged
 

@@ -35,6 +35,11 @@ import {
 } from "@/lib/app-update";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { normalizeVersionTag } from "@/lib/version";
+import {
+  UPSTREAM_DOCS_SITE_URL,
+  UPSTREAM_LINKS_ENABLED,
+  UPSTREAM_REPO_URL,
+} from "@/lib/upstream-links";
 
 const POLL_INTERVAL_MS = 800;
 const POLL_TIMEOUT_MS = 120_000;
@@ -415,20 +420,27 @@ export default function AboutSettingsPage() {
         )}
       </SettingSection>
 
-      <SettingSection title={t("Project")}>
-        <ResourceRow
-          title={t("GitHub")}
-          description={t("Source code, issues, and contributions")}
-          href="https://github.com/HKUDS/DeepTutor"
-          icon={<Github className="h-4 w-4" />}
-        />
-        <ResourceRow
-          title={t("Documentation")}
-          description={t("Installation, configuration, and guides")}
-          href="https://docs.deeptutor.info"
-          icon={<ArrowUpRight className="h-4 w-4" />}
-        />
-      </SettingSection>
+      {/* Upstream's own repo and docs. Hidden unless NEXT_PUBLIC_UPSTREAM_LINKS
+          is set — this fork ships as DeepWitya, and the whole section pointed
+          learners at someone else's project. The section is guarded rather than
+          deleted so an upstream sync has nothing to conflict with; the licence
+          attribution lives in NOTICE / LICENSE / CHANGES.md, not here. */}
+      {UPSTREAM_LINKS_ENABLED ? (
+        <SettingSection title={t("Project")}>
+          <ResourceRow
+            title={t("GitHub")}
+            description={t("Source code, issues, and contributions")}
+            href={UPSTREAM_REPO_URL}
+            icon={<Github className="h-4 w-4" />}
+          />
+          <ResourceRow
+            title={t("Documentation")}
+            description={t("Installation, configuration, and guides")}
+            href={UPSTREAM_DOCS_SITE_URL}
+            icon={<ArrowUpRight className="h-4 w-4" />}
+          />
+        </SettingSection>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen}

@@ -5,9 +5,9 @@ import {
   Brain,
   HeartHandshake,
   House,
+  LayoutDashboard,
   LayoutGrid,
   Library,
-  PawPrint,
   PenLine,
   Route,
   Settings,
@@ -113,13 +113,24 @@ export const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
-    // Learner Anima: the learning-companion pet, pulled out to top level so it
-    // is one click from anywhere. One pet per user, fed by every mastery path.
-    // Ungated — it only reads learning state, no per-user model grant needed.
-    href: "/anima",
-    label: "Learner Anima",
-    icon: PawPrint,
-    tooltipKey: "Anima tooltip",
+    // Dashboard: the learner's own overview, with Learner Anima as its second
+    // page (/dashboard/anima). The companion kept its one-click reach while
+    // giving up its own sidebar slot, so the two live behind one entry.
+    // Ungated — both pages only read learning state, no model grant needed.
+    //
+    // Marked "unrestricted" for the same reason as Settings, and with the same
+    // evidence: verified against the running server that a chat+reading account
+    // renders the page in full. Unlike Settings this one *does* call guarded
+    // APIs — but only optional ones, and each degrades to a stated denial
+    // rather than an error, while its one required call (/api/auth/status) is
+    // never guarded. Leaving it undeclared hid the restricted layout from
+    // precisely the accounts it was built for: they could reach /dashboard only
+    // by typing the URL.
+    href: "/dashboard",
+    surface: "unrestricted",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    tooltipKey: "Dashboard tooltip",
   },
   {
     href: "/space",

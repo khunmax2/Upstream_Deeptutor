@@ -30,16 +30,37 @@ test("an unrestricted account keeps every entry", () => {
 });
 
 test("chat + reading learner sees only the surfaces it can reach", () => {
-  assert.deepEqual(permittedHrefs(["chat", "reading"]), ["/chat", "/reading"]);
+  assert.deepEqual(permittedHrefs(["chat", "reading"]), [
+    "/chat",
+    "/reading",
+    "/dashboard",
+  ]);
 });
 
 test("dropping a surface drops its entry", () => {
-  assert.deepEqual(permittedHrefs(["chat"]), ["/chat"]);
-  assert.deepEqual(permittedHrefs(["reading"]), ["/reading"]);
+  assert.deepEqual(permittedHrefs(["chat"]), ["/chat", "/dashboard"]);
+  assert.deepEqual(permittedHrefs(["reading"]), ["/reading", "/dashboard"]);
 });
 
 test("an empty allow-list is a restriction, not an absent policy", () => {
-  assert.deepEqual(permittedHrefs([]), []);
+  // Dashboard survives even here: it is the one page that describes the
+  // restriction itself, so an account allowed nothing else can still read what
+  // its plan says and who to ask.
+  assert.deepEqual(permittedHrefs([]), ["/dashboard"]);
+});
+
+test("Dashboard survives a restriction — it is the restricted account's own overview", () => {
+  // Verified against the running server on a `custom` account holding a
+  // chat+reading policy: /dashboard renders in full, because its one required
+  // call (/api/auth/status) is never guarded and every optional one degrades to
+  // a stated denial. Left undeclared it was hidden from exactly the accounts
+  // whose layout it exists to serve — reachable only by typing the URL.
+  for (const surfaces of [["chat", "reading"], ["chat"], ["reading"], []]) {
+    assert.ok(
+      permittedHrefs(surfaces).includes("/dashboard"),
+      `/dashboard must stay reachable with surfaces [${surfaces.join(", ")}]`,
+    );
+  }
 });
 
 test("Settings survives a restriction because its API is not guarded", () => {
