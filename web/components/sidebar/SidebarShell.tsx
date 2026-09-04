@@ -38,9 +38,18 @@ import {
   readSessionOrder,
   writeSessionOrder,
 } from "@/lib/sidebar-layout";
+import {
+  UPSTREAM_DOCS_URL,
+  UPSTREAM_LINKS_ENABLED,
+  UPSTREAM_REPO_URL,
+} from "@/lib/upstream-links";
 
-const GITHUB_REPO_URL = "https://github.com/HKUDS/DeepTutor";
-const DOCS_URL = "https://deeptutor.info/";
+// Both footers below render these only when UPSTREAM_LINKS_ENABLED — off by
+// default, since this fork ships as DeepWitya and these point at upstream's
+// repo and site. See lib/upstream-links.ts for the flag and why the licence
+// attribution is unaffected.
+const GITHUB_REPO_URL = UPSTREAM_REPO_URL;
+const DOCS_URL = UPSTREAM_DOCS_URL;
 
 interface SidebarShellProps {
   sessions?: SessionSummary[];
@@ -225,35 +234,39 @@ export function SidebarShell({
             );
           })}
           {renderedFooter}
-          <a
-            href={DOCS_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={t("Docs") as string}
-            aria-label={t("Docs") as string}
-            className="mt-1 flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted-foreground)]/70 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
-          >
-            <BookText
-              size={15}
-              strokeWidth={1.8}
-              className="text-blue-600 dark:text-blue-400"
-            />
-          </a>
-          <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title="GitHub"
-            aria-label="GitHub"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted-foreground)]/70 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
-          >
-            <BrandGlyph
-              namespace="mcp"
-              id="github"
-              size={15}
-              className="text-[#181717] dark:text-white"
-            />
-          </a>
+          {UPSTREAM_LINKS_ENABLED ? (
+            <>
+              <a
+                href={DOCS_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                title={t("Docs") as string}
+                aria-label={t("Docs") as string}
+                className="mt-1 flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted-foreground)]/70 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
+              >
+                <BookText
+                  size={15}
+                  strokeWidth={1.8}
+                  className="text-blue-600 dark:text-blue-400"
+                />
+              </a>
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                title="GitHub"
+                aria-label="GitHub"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted-foreground)]/70 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
+              >
+                <BrandGlyph
+                  namespace="mcp"
+                  id="github"
+                  size={15}
+                  className="text-[#181717] dark:text-white"
+                />
+              </a>
+            </>
+          ) : null}
           <VersionBadge collapsed />
         </div>
       </aside>
@@ -386,35 +399,39 @@ export function SidebarShell({
         {renderedFooter}
         <div className="mt-0.5 flex items-center gap-0.5">
           <VersionBadge />
-          <a
-            href={DOCS_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={t("Docs") as string}
-            aria-label={t("Docs") as string}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
-          >
-            <BookText
-              size={15}
-              strokeWidth={1.9}
-              className="text-blue-600 dark:text-blue-400"
-            />
-          </a>
-          <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title="GitHub"
-            aria-label="GitHub"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
-          >
-            <BrandGlyph
-              namespace="mcp"
-              id="github"
-              size={15}
-              className="text-[#181717] dark:text-white"
-            />
-          </a>
+          {UPSTREAM_LINKS_ENABLED ? (
+            <>
+              <a
+                href={DOCS_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                title={t("Docs") as string}
+                aria-label={t("Docs") as string}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
+              >
+                <BookText
+                  size={15}
+                  strokeWidth={1.9}
+                  className="text-blue-600 dark:text-blue-400"
+                />
+              </a>
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                title="GitHub"
+                aria-label="GitHub"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
+              >
+                <BrandGlyph
+                  namespace="mcp"
+                  id="github"
+                  size={15}
+                  className="text-[#181717] dark:text-white"
+                />
+              </a>
+            </>
+          ) : null}
         </div>
       </div>
     </aside>

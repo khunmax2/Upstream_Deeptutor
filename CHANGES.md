@@ -961,6 +961,27 @@ code is additive and isolated for mergeability.
   stay in place, and setting the variable brings the button straight back. File:
   `web/components/voice/VoiceCallWidgetMount.tsx`.
 
+- **2026-09-04 — Upstream's GitHub and documentation links are parked behind a
+  flag (default off).** The sidebar footer carried two icon links beside the
+  version badge, and Settings ▸ About carried a whole *Project* section — all
+  four pointing at `github.com/HKUDS/DeepTutor` and `deeptutor.info`. This fork
+  ships as **DeepWitya** to learners, including children on `learner` and
+  policy-bound accounts, so the app was sending its least technical audience to
+  someone else's source repository. New `web/lib/upstream-links.ts` holds the
+  three URLs and a `NEXT_PUBLIC_UPSTREAM_LINKS` flag (`1`/`true` brings every
+  link straight back), following the same shape as `NEXT_PUBLIC_VOICE_CALL`.
+
+  Nothing was deleted — both upstream files keep their markup and gain only an
+  import and a guard, which is the cheapest thing to resolve on a sync. **The
+  Apache-2.0 attribution is untouched:** §4 asks for notices in the
+  *distribution*, and that lives in `NOTICE`, `LICENSE` and this file, not in a
+  link in the running UI. Verified live on a restricted account: zero
+  `github.com` / `deeptutor.info` anchors in either sidebar state (expanded and
+  collapsed are separate code paths, both checked) and no *Project* section in
+  About. Files: `web/lib/upstream-links.ts` (new),
+  `web/components/sidebar/SidebarShell.tsx`,
+  `web/features/settings/sections/AboutSettingsSection.tsx`.
+
 - **2026-07-16 — Voice call overlay: collapsible chat panel + calmer DOM-read
   highlights.** The call overlay now starts as the mascot ALONE — the typed-
   command box and the on-screen log (incl. the DOM-read notes) collapse by
