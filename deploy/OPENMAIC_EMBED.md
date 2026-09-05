@@ -94,6 +94,75 @@ shared origin, an XSS anywhere in DeepTutor can read those keys, and vice versa.
 Today the key names do not collide (this app namespaces everything as
 `deeptutor-*` / `dt:*` / `dt.*`), but that is luck, not design.
 
+## The same-origin shape, measured
+
+Everything below was run rather than reasoned about: DeepTutor on :3000, OpenMAIC
+on :3100 with `NEXT_PUBLIC_BASE_PATH=/maic-app`, and a throwaway Node reverse
+proxy on :3080 standing in for nginx.
+
+**What same-origin buys, and it is a lot**
+
+| | result |
+|---|---|
+| iframe loads with **no** `ALLOWED_FRAME_ANCESTORS` | `frame-ancestors 'self'` is already satisfied |
+| `iframe.contentWindow.location.origin` | same as the parent |
+| `iframe.contentDocument` | reachable — the parent can inject CSS, verified by hiding OpenMAIC's own control pill |
+| `localStorage` | one store. The parent wrote `locale=th-TH` and `theme=dark`, reloaded the frame, and OpenMAIC came up Thai and dark |
+
+That last row is the whole integration story: **language and theme sync need no
+patch to OpenMAIC's logic at all.** It reads both from bare `localStorage` keys
+on mount (`lib/hooks/use-i18n.tsx`, `lib/hooks/use-theme.tsx`), and on a shared
+origin those are the same keys we can write.
+
+**What it costs, and this is the part that is easy to miss**
+
+`basePath` (patch `0003`) fixes `/_next/` assets and router links. It does **not**
+prefix `fetch('/api/...')`, and OpenMAIC makes **53** such calls from the browser
+with no central helper to patch. On a shared origin they land on whatever else
+owns `/api` — here, DeepTutor's proxy, which forwards everything to FastAPI.
+
+The first symptom was not an error page. It was OpenMAIC showing a **login box
+that was never configured**: `/api/access-code/status` failed, and its guard
+defaults to "locked" on error rather than open. Fails closed, which is the right
+default and a confusing one to debug.
+
+Raw `/public` references have the same gap — `/logo-horizontal.png`,
+`/avatars/*.png` — exactly what this fork documents for itself in
+`web/lib/basePath.ts`.
+
+**A reverse proxy can resolve it, by asking who is calling**
+
+Routing shared-root paths by `Referer` — a request whose referring page is under
+`/maic-app` came from inside the frame — works. Measured over a full page load:
+
+```
+/api routing — frame:6  host:14  no-referer:0
+```
+
+No request was unclassifiable, and the phantom login box disappeared.
+
+Treat that as a demonstration, not a recommendation. It leans on a header that
+referrer policy can strip, and it means the routing rule for `/api` is no longer
+a path prefix but a heuristic — the kind of thing that works until the day it
+does not, and fails in a way that looks like an application bug.
+
+**So the choice is a real one**
+
+| | cross-origin (today) | same-origin |
+|---|---|---|
+| language / theme sync | ✗ | ✓ |
+| hide their chrome, look like one module | ✗ | ✓ |
+| `/api/*` | clean | collides; needs Referer routing |
+| `localStorage` isolation | ✓ | ✗ — shared, and OpenMAIC keeps provider API keys there |
+| patches to OpenMAIC | none | `0003-basepath.patch` |
+| reverse proxy | simple prefix | prefix + a heuristic |
+
+Cross-origin is what ships today and it is honest about being two systems.
+Same-origin is what makes it read as one module, and it buys that with a shared
+storage boundary and a proxy rule that has to be right.
+
+---
+
 ## Known limitations of this first cut
 
 1. **The page is gated; the service behind it is not.** Measured with
