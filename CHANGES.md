@@ -17,6 +17,34 @@ upstream.
 
 ---
 
+## Thai script support, and a checked procedure for following OpenMAIC — 2026-09-06
+
+**Thai font** — `deploy/openmaic-patches/0002-thai-script-support.patch`. Nothing
+in OpenMAIC's font stack covered Thai: Inter carries latin, greek, cyrillic and
+vietnamese, and the two video-export font registries carry CJK and
+cyrillic + arabic. The UI merely looked inconsistent (Thai fell to the OS font,
+as Chinese and Korean still do); the export was broken outright, rendering Thai
+narration as tofu in the MP4. Both fixed the way the project already does it —
+per-subset `unicode-range` faces, verified on a running server: two of six
+declared faces load, and `document.fonts.check(..., 'ก')` is true while 'A' is
+false.
+
+**Tooling that keeps the checkout a mirror**
+
+- `deploy/openmaic-patches/check_openmaic_contract.py` — asserts the five
+  runtime assumptions the embed rests on (reachable, no `X-Frame-Options`,
+  `frame-ancestors` allows us, access gate off) plus offline drift against the
+  pin. Verified in both directions: green against an allowed origin, and red with
+  exit 1 against a disallowed one — the exact condition that produced a blank
+  iframe during testing and took a while to name.
+- `deploy/openmaic-patches/openmaic-pin.json` — the commit everything was
+  verified against, so taking a new OpenMAIC release is a decision rather than a
+  surprise.
+- `deploy/OPENMAIC_SYNC.md` — the procedure, in seven steps. Short by design:
+  there is nothing to merge, only a checkout to keep clean.
+
+---
+
 ## Thai locale for OpenMAIC, and the tooling that keeps our copy pristine — 2026-09-06
 
 OpenMAIC ships 12 locales and none of them is Thai, so a learner who picks Thai
