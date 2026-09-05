@@ -90,12 +90,46 @@ Runtime, both servers live (DeepTutor `:3000`, OpenMAIC `:3100`):
 The one pre-existing audit note (`contextBudget.note.deferredTools`, 1 missing
 key per locale) is unchanged from before this branch.
 
+### Second pass — production build, auth, and a real course
+
+Run after the first commit, with the backend up (`deeptutor serve --port 8001`):
+
+- **Production build.** `rm -rf .next && npm run build` lists the route as
+  **`ƒ /maic`** — server-rendered on demand. Every other plain page is `○`
+  (static), so without `force-dynamic` this one really would have been frozen at
+  build time. `npm run perf:check` passes every budget; the root shell measures
+  395KB against its 410KB budget, i.e. the 8 new locale keys cost nothing
+  meaningful.
+- **Auth gate, measured with `auth.enabled = true`.** `GET /maic` with no cookie
+  answers `307 -> /login?next=%2Fmaic`, exactly like `/chat` and `/settings`.
+  With a valid `dt_token` it answers 200. The page is properly gated.
+- **The gap, also measured.** `GET http://localhost:3100/` with no cookie at all
+  answers **200**, as does its `/api/access-code/status`. The framed service is
+  independently reachable — the limitation in §5.1 is now a measurement, not a
+  prediction.
+- **A real course, end to end.** Through the iframe, prompt "Photosynthesis for
+  grade 8" against OpenMAIC's configured Google provider: it generated three
+  classroom roles (teacher / assistant / student, each with written personas), a
+  rendered slide ("Introduction to Photosynthesis" — Definition / Energy Source /
+  Who Performs It?) and opening teacher dialogue. Its own IndexedDB persisted the
+  draft prompt across a full server restart, inside the frame.
+
+Two dev-environment traps hit along the way, neither a defect in this branch and
+both worth knowing:
+
+- A stale `.next` (production artifacts left over from an earlier `npm run
+  build`, plus dev state from two runs with different env) served **404** for the
+  new route until the file was touched. `rm -rf .next` is the reliable reset.
+- The backend caches `auth.json` in memory at startup, so restoring
+  `enabled: false` on disk did nothing until the backend was restarted — the UI
+  kept redirecting to `/login` while the file said otherwise.
+
 ## 5. Not done — deliberately
 
-1. **The frame inherits no auth.** `web/proxy.ts` guards only what Next serves; a
-   request the reverse proxy hands straight to OpenMAIC bypasses it. Must be
-   solved (nginx `auth_request`, or same-origin + `ACCESS_CODE`) before any
-   public deployment.
+1. **The page is gated, the service behind it is not** — both now measured (see
+   above). `/maic` redirects to `/login` without a cookie; OpenMAIC's own address
+   answers 200 to anyone. Must be solved (nginx `auth_request`, or same-origin +
+   `ACCESS_CODE`) before any public deployment.
 2. **No Thai in OpenMAIC.** A Thai learner lands in English.
 3. **Nothing shared but the shell** — no common session, data, theme, model
    config; a course built there does not reach Learning Space or Mastery.

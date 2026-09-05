@@ -96,11 +96,20 @@ Today the key names do not collide (this app namespaces everything as
 
 ## Known limitations of this first cut
 
-1. **The embed inherits no authentication.** `web/proxy.ts` only guards what
-   Next serves; a request the reverse proxy sends straight to the OpenMAIC
-   container never passes through it. Before any public deployment, front it
-   with nginx `auth_request` against this app's auth status, or accept the
-   same-origin shape and enable `ACCESS_CODE`.
+1. **The page is gated; the service behind it is not.** Measured with
+   `auth.enabled = true`: `GET /maic` with no cookie answers
+   `307 -> /login?next=%2Fmaic`, identical to `/chat` and `/settings`, and opens
+   normally once `dt_token` is present. But `GET http://<openmaic-host>/` with
+   no cookie at all still answers **200** — `web/proxy.ts` guards only what Next
+   serves, and a request the reverse proxy hands straight to the OpenMAIC
+   container never passes through it.
+
+   So the sidebar route is protected and the upstream service is not. Anyone who
+   learns OpenMAIC's own address reaches it directly. Before any public
+   deployment, front it with nginx `auth_request` against this app's auth
+   status, or accept the same-origin shape and enable `ACCESS_CODE`. Binding the
+   container to loopback (as `deploy/docker-compose.openmaic.yml` does) is a
+   mitigation, not a fix — it only means the reverse proxy is the sole route in.
 2. **No Thai.** OpenMAIC ships 12 locales and Thai is not among them
    (`lib/i18n/locales/`, `lib/i18n/workbench-locales/`). A Thai learner clicking
    Course Studio lands in English.
