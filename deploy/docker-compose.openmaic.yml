@@ -37,6 +37,10 @@
 services:
   openmaic:
     build:
+      # Relative to the PROJECT directory (the repo root, from the first -f
+      # file), not to this file's own `deploy/` directory — so this resolves
+      # to a sibling checkout of the repo, e.g. D:/Vscode/OpenMAIC next to
+      # D:/Vscode/Upstream_Deeptutor. Verified with `docker compose config`.
       context: ../OpenMAIC
       args:
         # Compiled into the browser bundle at build time. Without our origin

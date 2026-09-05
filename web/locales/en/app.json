@@ -4887,7 +4887,7 @@
   "Course Studio": "Course Studio",
   "Course Studio tooltip": "Build a whole course with OpenMAIC",
   "OpenMAIC is not connected": "OpenMAIC is not connected",
-  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.": "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.",
+  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.": "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.",
   "Set the environment variable": "Set the environment variable",
   "or add this to data/user/settings/openmaic.json": "or add this to data/user/settings/openmaic.json",
   "Open OpenMAIC in a new tab": "Open OpenMAIC in a new tab",

@@ -115,7 +115,9 @@ Today the key names do not collide (this app namespaces everything as
    Course Studio lands in English.
 3. **Nothing is shared but the shell.** No shared session, data, theme, model
    config, or uploaded files. A course built here does not appear in Learning
-   Space or Mastery.
+   Space or Mastery. The theme split is visible, not theoretical: switch this
+   app to its light theme and the surrounding chrome turns light while the frame
+   stays on whatever theme OpenMAIC is set to, since it owns its own toggle.
 4. **The Pro agent workbench needs Postgres.**
    `lib/server/agent-runtime/store.ts` rejects without `DATABASE_URL`. The
    classic one-click generator works browser-side without it. Start it with the

@@ -40,7 +40,7 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
           </h1>
           <p className="text-sm leading-relaxed text-[var(--muted-foreground)]">
             {t(
-              "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.",
+              "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.",
             )}
           </p>
           <div className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4 text-left text-xs">
@@ -67,34 +67,47 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
   const src = sameOrigin ? withBasePath(url) : url;
 
   return (
-    <div className="relative h-full w-full">
-      {!loaded ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--background)]">
-          <Loader2
-            size={22}
-            className="animate-spin text-[var(--muted-foreground)]"
-          />
-        </div>
-      ) : null}
+    <div className="flex h-full w-full flex-col">
+      {/* A strip of our own chrome rather than a button floating over the frame.
+          OpenMAIC puts its own controls in the top-right (language / display /
+          settings) and along the right edge in the classroom view, so any
+          absolutely-positioned overlay collides with something at some width —
+          on a phone it covered their settings gear outright. This also gives
+          the page one honest line saying whose app you are looking at. */}
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--background)] px-3">
+        <span className="truncate text-xs text-[var(--muted-foreground)]">
+          {t("OpenMAIC course studio")}
+        </span>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t("Open OpenMAIC in a new tab")}
+          aria-label={t("Open OpenMAIC in a new tab")}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)]/55 hover:text-[var(--foreground)]"
+        >
+          <ExternalLink size={15} strokeWidth={1.8} />
+        </a>
+      </div>
 
-      <a
-        href={src}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={t("Open OpenMAIC in a new tab")}
-        aria-label={t("Open OpenMAIC in a new tab")}
-        className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--background)]/90 text-[var(--muted-foreground)] backdrop-blur transition-colors hover:text-[var(--foreground)]"
-      >
-        <ExternalLink size={15} strokeWidth={1.8} />
-      </a>
+      <div className="relative min-h-0 flex-1">
+        {!loaded ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--background)]">
+            <Loader2
+              size={22}
+              className="animate-spin text-[var(--muted-foreground)]"
+            />
+          </div>
+        ) : null}
 
-      <iframe
-        src={src}
-        title={t("OpenMAIC course studio")}
-        onLoad={() => setLoaded(true)}
-        allow="clipboard-write; fullscreen; microphone"
-        className="h-full w-full border-0"
-      />
+        <iframe
+          src={src}
+          title={t("OpenMAIC course studio")}
+          onLoad={() => setLoaded(true)}
+          allow="clipboard-write; fullscreen; microphone"
+          className="h-full w-full border-0"
+        />
+      </div>
     </div>
   );
 }
