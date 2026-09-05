@@ -75,6 +75,18 @@ back to HKUDS; once merged upstream the divergence is removed.
   answer end to end. It is the regression guard the earlier bugs lacked — each
   layer was correct alone, and only an end-to-end walk showed the contradiction.
 
+  That test was red on all four Python versions in CI while green locally. The
+  reading extensions register through the `deeptutor.reading_extensions` entry
+  point group, and CI's `python-tests` job installs the requirements files but
+  never runs `pip install -e .`, so the registry came up empty and the policy
+  under test was rejected as `Unknown reading extensions`. The fixture now
+  builds the registry from the extension classes and **seeds
+  `deeptutor.reading.extensions._registry`** — patching only the accessor was
+  not enough, because `deeptutor/api/routers/multi_user.py` does
+  `from ... import get_reading_extension_registry` and so holds a binding of its
+  own that a patch on the defining module never reaches
+  (`tests/multi_user/test_learner_surface_contract.py`).
+
 - **2026-09-04 — A second admin was handed the first admin's entire workspace,
   chat history included.** Create an account, promote it to admin, and it sees
   every conversation belonging to admin #1. The cause is one line in

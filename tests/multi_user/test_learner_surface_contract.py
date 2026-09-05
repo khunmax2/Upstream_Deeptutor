@@ -26,15 +26,8 @@ def learner_http(mu_isolated_root, monkeypatch):
     from fastapi.testclient import TestClient
 
     from deeptutor.api.routers import auth as auth_router
+    from deeptutor.api.routers import multi_user as multi_user_router
     from deeptutor.multi_user.identity import save_user
-
-    # The reading extensions register through entry points, which only exist once
-    # the package is installed. CI's python-tests job installs the requirements
-    # files and never runs `pip install -e .`, so the registry comes up empty
-    # there and the policy below is rejected with "Unknown reading extensions" —
-    # green locally, red on every Python version in CI. Build the registry from
-    # the classes directly so the contract under test is the policy, not how the
-    # environment was provisioned.
     from deeptutor.reading import extensions as reading_extensions
     from deeptutor.reading.quiz import ReadingQuizExtension
     from deeptutor.reading.read_aloud import ReadAloudExtension
@@ -44,7 +37,19 @@ def learner_http(mu_isolated_root, monkeypatch):
     registry = reading_extensions.ReadingExtensionRegistry(
         [ReadAloudExtension(), StudyGuidanceExtension(), ReadingQuizExtension()]
     )
+    # The reading extensions register through entry points, which only resolve
+    # once the package is installed. CI's python-tests job installs the
+    # requirements files and never runs `pip install -e .`, so the registry comes
+    # up empty there and the policy below is rejected as "Unknown reading
+    # extensions" — green locally, red on every Python version in CI. Build the
+    # registry from the classes instead, and seed the module-level cache rather
+    # than only replacing the accessor: multi_user.py does
+    # `from ... import get_reading_extension_registry`, so it holds a reference of
+    # its own that a patch on the defining module never reaches. Filling the cache
+    # covers every consumer whichever way it imported the name.
+    monkeypatch.setattr(reading_extensions, "_registry", registry, raising=False)
     monkeypatch.setattr(reading_extensions, "get_reading_extension_registry", lambda **_: registry)
+    monkeypatch.setattr(multi_user_router, "get_reading_extension_registry", lambda **_: registry)
 
     monkeypatch.setattr(auth_service, "AUTH_SECRET", "secret-for-the-learner-contract-test")
     for module in (auth_service, auth_router):
