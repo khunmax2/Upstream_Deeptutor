@@ -4883,5 +4883,13 @@
   "Users": "Users",
   "{{count}} active": "{{count}} active",
   "{{count}} administrator account is excluded from the preset chart.": "{{count}} administrator account is excluded from the preset chart.",
-  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked."
+  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked.",
+  "Course Studio": "Course Studio",
+  "Course Studio tooltip": "Build a whole course with OpenMAIC",
+  "OpenMAIC is not connected": "OpenMAIC is not connected",
+  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.": "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.",
+  "Set the environment variable": "Set the environment variable",
+  "or add this to data/user/settings/openmaic.json": "or add this to data/user/settings/openmaic.json",
+  "Open OpenMAIC in a new tab": "Open OpenMAIC in a new tab",
+  "OpenMAIC course studio": "OpenMAIC course studio"
 }

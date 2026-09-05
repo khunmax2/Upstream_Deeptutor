@@ -4883,5 +4883,13 @@
   "Users": "ผู้ใช้",
   "{{count}} active": "ใช้งานอยู่ {{count}} รายการ",
   "{{count}} administrator account is excluded from the preset chart.": "แผนภูมิพรีเซ็ตไม่นับบัญชีผู้ดูแลระบบ {{count}} บัญชี",
-  "{{count}} assignment record could not be checked.": "ตรวจสอบข้อมูลการมอบหมาย {{count}} รายการไม่ได้"
+  "{{count}} assignment record could not be checked.": "ตรวจสอบข้อมูลการมอบหมาย {{count}} รายการไม่ได้",
+  "Course Studio": "สตูดิโอสร้างคอร์ส",
+  "Course Studio tooltip": "สร้างคอร์สทั้งคอร์สด้วย OpenMAIC",
+  "OpenMAIC is not connected": "ยังไม่ได้เชื่อมต่อ OpenMAIC",
+  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then restart the frontend.": "OpenMAIC ทำงานเป็นบริการแยกข้าง DeepTutor ตั้งค่าปลายทางให้หน้านี้ แล้วรีสตาร์ท frontend",
+  "Set the environment variable": "ตั้งค่า environment variable",
+  "or add this to data/user/settings/openmaic.json": "หรือเพิ่มค่านี้ใน data/user/settings/openmaic.json",
+  "Open OpenMAIC in a new tab": "เปิด OpenMAIC ในแท็บใหม่",
+  "OpenMAIC course studio": "สตูดิโอสร้างคอร์ส OpenMAIC"
 }

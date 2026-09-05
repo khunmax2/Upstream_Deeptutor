@@ -1,0 +1,88 @@
+# ============================================
+# OpenMAIC — sibling service for the /maic embed
+# ============================================
+# OpenMAIC (https://github.com/THU-MAIC/OpenMAIC, MIT) is framed by this app at
+# /maic. It is a whole second application, not a library: it cannot be merged
+# into web/ because it ships Tailwind v4 against our v3, and its 69 Next API
+# routes collide with `web/proxy.ts`, which forwards every /api/* path to
+# FastAPI. So it runs beside us and we point an iframe at it.
+#
+# Usage (from the repo root, with OpenMAIC checked out as a sibling directory):
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f deploy/docker-compose.openmaic.yml up -d
+#
+# Then tell the frontend where it lives, either with the environment variable
+#
+#   DEEPTUTOR_OPENMAIC_URL=http://localhost:3100
+#
+# or in data/user/settings/integrations.json:
+#
+#   "openmaic": { "embed_url": "http://localhost:3100" }
+#
+# ⚠️ Two things this file deliberately does NOT do — see deploy/OPENMAIC_EMBED.md
+#    before exposing any of this publicly:
+#
+#    1. It does not put OpenMAIC behind DeepTutor's auth gate. `web/proxy.ts`
+#       only guards routes Next serves; a request that the reverse proxy sends
+#       straight to this container never passes through it. On a public host
+#       either front it with nginx `auth_request`, or set ACCESS_CODE here and
+#       accept that the frame then needs a same-origin deployment.
+#    2. It does not enable the Pro agent workbench. That needs DATABASE_URL and
+#       therefore the `server-persistence` profile below; the classic one-click
+#       generator works without it, browser-side.
+# ============================================
+
+services:
+  openmaic:
+    build:
+      context: ../OpenMAIC
+      args:
+        # Compiled into the browser bundle at build time. Without our origin
+        # here, OpenMAIC's own `frame-ancestors 'self'` refuses the iframe and
+        # the page renders blank with only a console error.
+        - ALLOWED_FRAME_ANCESTORS=${DEEPTUTOR_PUBLIC_ORIGIN:-http://localhost:3782}
+    container_name: deeptutor-openmaic
+    ports:
+      # Bound to loopback on purpose: the browser reaches OpenMAIC through the
+      # reverse proxy, not through this port. Publishing it on 0.0.0.0 would put
+      # an unauthenticated app on the network — see caveat 1 above.
+      - "127.0.0.1:3100:3000"
+    environment:
+      # Leave ACCESS_CODE unset: OpenMAIC's access cookie is SameSite=Lax and
+      # does not survive a cross-origin frame, so enabling it here locks the
+      # embed out rather than securing it.
+      - NODE_ENV=production
+    volumes:
+      - openmaic-data:/app/data
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
+  # Optional: durable server-side sessions for OpenMAIC's Pro agent workbench.
+  # `lib/server/agent-runtime/store.ts` rejects outright without DATABASE_URL.
+  openmaic-postgres:
+    image: postgres:16
+    container_name: deeptutor-openmaic-postgres
+    profiles:
+      - openmaic-persistence
+    environment:
+      - POSTGRES_DB=openmaic
+      - POSTGRES_USER=openmaic
+      - POSTGRES_PASSWORD=${OPENMAIC_POSTGRES_PASSWORD:-openmaic-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmaic -d openmaic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - openmaic-postgres:/var/lib/postgresql/data
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
+volumes:
+  openmaic-data:
+  openmaic-postgres:

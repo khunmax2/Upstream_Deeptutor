@@ -17,6 +17,57 @@ upstream.
 
 ---
 
+## OpenMAIC course studio embedded at `/maic` — 2026-09-05
+
+First cut ("L1") of bringing [THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)
+(MIT) into this app. OpenMAIC runs as a **sibling service** and is framed at
+`/maic`; it is deliberately *not* merged into `web/`. Two blockers make a merge
+impossible rather than merely expensive: it ships Tailwind v4 against this app's
+v3 (one Next app, one PostCSS pipeline), and its 69 Next API routes all live
+under `/api/*`, which `web/lib/proxy-policy.ts` forwards wholesale to FastAPI.
+
+**New files**
+
+- `web/lib/openmaic-embed.ts` — resolves the embed target from
+  `DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/openmaic.json`, and validates
+  it (only `http(s)` URLs and same-origin paths; `javascript:`, `data:` and
+  protocol-relative `//host` are rejected as unconfigured).
+- `web/app/(workspace)/maic/page.tsx` — `force-dynamic` server component, so the
+  setting is read per request rather than frozen into the Docker image at build.
+- `web/components/maic/MaicWorkspace.tsx` — the frame, its loading state, an
+  open-in-new-tab escape hatch, and a setup panel when nothing is configured.
+- `web/tests/openmaic-embed.test.ts` — 8 node tests, including the three hostile
+  URL shapes.
+- `deploy/docker-compose.openmaic.yml` — the sibling service (+ optional
+  Postgres under the `openmaic-persistence` profile, which OpenMAIC's Pro agent
+  workbench requires).
+- `deploy/OPENMAIC_EMBED.md` — the two deployment shapes, and the limitations
+  this first cut knowingly ships with.
+
+**Changed upstream files** (kept to three, each a single insertion)
+
+- `web/components/sidebar/nav-entries.ts` — "Course Studio" nav entry.
+- `web/components/voice/VoiceCallWidget.tsx` — `/maic` added to `UI_PAGES`;
+  `tests/voice-manifest-parity.test.ts` fails the build for any top-level page
+  missing from that manifest.
+- `web/locales/{en,th,zh}/app.json` — 8 keys each, keeping i18n parity at 4,893.
+
+**Config note.** The embed URL lives in a fork-owned
+`data/user/settings/openmaic.json`, **not** in upstream's `integrations.json`.
+`_normalize_integrations` in `deeptutor/services/config/runtime_settings.py`
+rebuilds that payload from a hardcoded dict literal on every load and save, so an
+added key is silently deleted the next time the backend touches the file — found
+by testing, after a configured URL disappeared between writing it and loading the
+page.
+
+**Known limitations** (documented in `deploy/OPENMAIC_EMBED.md`, not defects to
+fix silently): the framed app inherits no authentication from this one; OpenMAIC
+has no Thai locale; nothing but the shell is shared (no common session, data,
+theme or model config); and on a same-origin deployment the two apps share
+`localStorage`, where OpenMAIC keeps provider API keys.
+
+---
+
 ## Local production deploy — nginx subpath `/deepwitya2` over HTTPS — 2026-09-04
 
 Second deployment of this fork on the ai4thai host, built from upstream
