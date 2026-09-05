@@ -17,6 +17,46 @@ upstream.
 
 ---
 
+## Thai locale for OpenMAIC, and the tooling that keeps our copy pristine — 2026-09-06
+
+OpenMAIC ships 12 locales and none of them is Thai, so a learner who picks Thai
+in this app lands in English the moment they open Course Studio. This adds the
+Thai locale — and, more importantly, adds it in a way that does not turn our
+OpenMAIC checkout into a second fork.
+
+**New files (all in this repository; the OpenMAIC checkout stays untouched)**
+
+- `deploy/openmaic-patches/th-TH.partial.json` — the translation itself, 1,689
+  of 1,800 keys. The remaining 111 are deliberate: 108 `settings.lang_*`
+  endonyms (`lang_ja` is 日本語 in the English file too) and 3 `workbench.tool.*`
+  keys that are `null` upstream.
+- `deploy/openmaic-patches/build_th_locale.py` — merges the partial over
+  `en-US.json` so the generated file is always complete. OpenMAIC falls back to
+  **zh-CN**, not English, for missing keys, so a partial file would have shown
+  Thai mixed with Chinese; this is what made an incremental translation possible
+  at all. Also enforces interpolation parity and fails on keys that no longer
+  exist upstream.
+- `deploy/openmaic-patches/0001-register-th-TH-locale.patch` — three lines
+  across two files, generated from a real `git diff`. The locale file is a new
+  file and needs no patch, which is why the footprint stays this small.
+- `deploy/openmaic-patches/check_openmaic_tree.py` — sorts every change in the
+  checkout into allowed / ours / foreign, so a Dockerfile experiment or a
+  leftover `.bak` cannot ride along into an upstream PR unnoticed.
+
+**Verified against a running OpenMAIC at `d4ef5faa`, applied then reverted:**
+their own `scripts/check-i18n-keys.mjs` reports 13 locale files with exact key
+alignment; the home screen and settings dialog render in Thai; no Chinese leaks
+through the fallback.
+
+**Two upstream i18n gaps found, not fixable from a locale file:** the
+persistence-failure toast is hardcoded English (`app/page.tsx:291`) and the dev
+feature chip is hardcoded Chinese (`app/page.tsx:988`).
+
+**Still open:** no font in OpenMAIC covers Thai script, so Thai currently renders
+in whatever the OS supplies. See `docs/planning/PLAN_openmaic_thai_i18n.md`.
+
+---
+
 ## OpenMAIC course studio embedded at `/maic` — 2026-09-05
 
 First cut ("L1") of bringing [THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)
