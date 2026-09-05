@@ -83,7 +83,7 @@ back to HKUDS; once merged upstream the divergence is removed.
   ```python
   def scope_for_user(user_id: str, *, is_admin: bool) -> UserScope:
       if is_admin:
-          return admin_scope()   # hardcodes LOCAL_ADMIN_ID + data/
+          return admin_scope()  # hardcodes LOCAL_ADMIN_ID + data/
   ```
 
   Every admin resolved to the identical root with their user id rewritten to
