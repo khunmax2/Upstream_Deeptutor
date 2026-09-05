@@ -23,6 +23,35 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-05 — The web contract tests compare `/`-separated paths against a
+  file walker that returns `\` on Windows, so five of them can never pass
+  there.** `web/tests/architecture-contracts.test.ts`,
+  `internal-route-contract.test.ts` and `no-v1-chat-surface.test.ts` build their
+  allowlists as forward-slash literals (`"shared/api/client.ts"`,
+  `"components/voice/VoiceCallWidget.tsx"`) but look files up with
+  `path.relative()`, which yields `shared\api\client.ts` on Windows. The
+  allowlists therefore never match and every deliberately exempt file reads as a
+  violation. `internal-route-contract` fails harder: it selects route files with
+  `/\/page\.(?:ts|tsx|js|jsx)$/`, which matches nothing under
+  `app\chat\page.tsx`, so `pagePatterns` is empty and *every* internal link
+  resolves to "not a real page". Notably `pagePattern()` two lines above
+  already splits on `path.sep` correctly — the separator was handled in one
+  place and missed in the other.
+
+  Fixed by normalising to POSIX separators before every comparison, via a local
+  `toPosix = (p) => p.split(path.sep).join("/")`. Splitting on `path.sep` rather
+  than regex-replacing backslashes matters: a backslash is a legal character in a
+  POSIX filename, and replacing it there would corrupt the path — moving the bug
+  from Windows to macOS. On macOS and Linux `path.sep` is already `/`, so the
+  helper is the identity function and CI (`web-tests` runs on `ubuntu-latest`) is
+  unaffected. Test files only; no production code touched.
+
+  Effect on Windows: `npm run test:node` goes from 5 failures to **1097 pass / 0
+  fail**, and because `check:fast` chains with `&&`, the four gates that had never
+  run there — `test:unit`, `lint`, `i18n:check`, `build` + `perf:check` — now
+  execute and pass (`npm run check` exits 0; eslint 0 errors, 76 pre-existing
+  warnings; all route budgets OK).
+
 - **2026-09-04 — Learner surface audit: what an admin can grant vs. what a
   learner can reach.** After the `allow_upload` fix below, the obvious question
   was whether anything else an administrator hands a learning account is refused

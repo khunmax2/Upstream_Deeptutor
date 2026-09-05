@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+// Path comparisons below are written with forward slashes, but path.relative()
+// and path.join() return backslash-separated paths on Windows, so the
+// allowlists never matched and every exempt file read as a violation.
+// Normalise to POSIX separators before comparing. Split on path.sep rather
+// than regex-replacing backslashes: a backslash is a legal character in a
+// POSIX filename, and replacing it there would corrupt the path. On macOS and
+// Linux path.sep is already "/", so this is the identity function and CI
+// (ubuntu) is unaffected.
+const toPosix = (p: string) => p.split(path.sep).join("/");
 
 const SOURCE_ROOTS = [
   "app",
@@ -42,7 +51,7 @@ test("the frontend has no retired transport, URL, or compatibility surface", () 
   ]);
   const files = SOURCE_ROOTS.flatMap((root) =>
     sourceFiles(path.resolve(cwd, root)),
-  ).filter((file) => !ALLOWED.has(path.relative(cwd, file)));
+  ).filter((file) => !ALLOWED.has(toPosix(path.relative(cwd, file))));
   const forbidden = [
     /\/api\/v1(?:\/|["'`])/,
     /\/api\/(?:attachments|book|co_writer|knowledge|learning|notebook|outputs)(?:\/|["'`])/,
@@ -59,7 +68,7 @@ test("the frontend has no retired transport, URL, or compatibility surface", () 
       assert.doesNotMatch(
         source,
         pattern,
-        `${path.relative(cwd, file)} contains ${pattern}`,
+        `${toPosix(path.relative(cwd, file))} contains ${pattern}`,
       );
     }
   }

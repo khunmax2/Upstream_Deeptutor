@@ -6,6 +6,15 @@ import test from "node:test";
 const ROOT = process.cwd();
 const APP_ROOT = path.join(ROOT, "app");
 const SOURCE_ROOTS = ["app", "components", "context", "features", "hooks", "lib", "shared"];
+// Path comparisons below are written with forward slashes, but path.relative()
+// and path.join() return backslash-separated paths on Windows, so the
+// allowlists never matched and every exempt file read as a violation.
+// Normalise to POSIX separators before comparing. Split on path.sep rather
+// than regex-replacing backslashes: a backslash is a legal character in a
+// POSIX filename, and replacing it there would corrupt the path. On macOS and
+// Linux path.sep is already "/", so this is the identity function and CI
+// (ubuntu) is unaffected.
+const toPosix = (p: string) => p.split(path.sep).join("/");
 
 function walk(directory: string): string[] {
   return readdirSync(directory).flatMap((name) => {
@@ -35,7 +44,7 @@ function pagePattern(pageFile: string): RegExp {
 }
 
 const pagePatterns = walk(APP_ROOT)
-  .filter((file) => /\/page\.(?:ts|tsx|js|jsx)$/.test(file))
+  .filter((file) => /\/page\.(?:ts|tsx|js|jsx)$/.test(toPosix(file)))
   .map(pagePattern);
 
 function isPagePath(value: string): boolean {
@@ -76,7 +85,7 @@ test("literal frontend navigation targets resolve to real pages", () => {
           continue;
         }
         if (!isPagePath(target)) {
-          failures.push(`${path.relative(ROOT, file)} -> ${target}`);
+          failures.push(`${toPosix(path.relative(ROOT, file))} -> ${target}`);
         }
       }
     }
