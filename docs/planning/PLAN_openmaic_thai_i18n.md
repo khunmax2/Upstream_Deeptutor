@@ -1,7 +1,14 @@
 # แผน: ภาษาไทยสำหรับ OpenMAIC (ส่งขึ้น upstream THU-MAIC)
 
-> สถานะ (2026-09-05): **ประเมินเสร็จ ยังไม่เริ่มลงมือ** — ตัวเลขทุกตัวในเอกสารนี้
-> วัดจากซอร์สจริงของ `D:\Vscode\OpenMAIC` (commit `d4ef5faa`) ไม่ใช่การประมาณ
+> สถานะ (2026-09-06): **PR 1 และ PR 2 ทำเสร็จแล้ว รอการตัดสินใจว่าจะส่ง upstream
+> หรือไม่** งานอยู่ใน `deploy/openmaic-patches/` — ยังไม่ push และยังไม่ส่งใคร
+> ตัวเลขทุกตัวในเอกสารนี้วัดจากซอร์สจริงของ `D:\Vscode\OpenMAIC` (commit
+> `d4ef5faa`) ไม่ใช่การประมาณ
+>
+> - **PR 2 (locale)** — แปล 1,689/1,800 คีย์ ที่เหลือคือ endonym 108 ตัวกับ
+>   `null` 3 ตัวที่ไม่มีอะไรให้แปล ผ่าน `check-i18n-keys.mjs` ของ upstream เอง
+> - **PR 1 (ฟอนต์)** — `0002-thai-script-support.patch` ครอบทั้ง UI และ video export
+> - **เฟส 3 (workbench overlay 247 คีย์)** — ยังไม่ทำ ไม่บล็อกอะไร
 > เจ้าของ: Attapon · ผู้ช่วยวิเคราะห์: Claude
 > ซอร์สอ้างอิง: [THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) (MIT)
 > งานที่เกี่ยวข้อง: `feat/openmaic-embed` (ฝัง OpenMAIC ที่ `/maic`) —
@@ -114,32 +121,43 @@ fall back เป็นอังกฤษที่อ่านรู้เรื�
 
 ## 4. สองอย่างที่ไทยต้องทำเพิ่ม แต่ vi-VN ไม่ต้อง
 
-### 4.1 ไม่มีฟอนต์ไทยเลยสักตัว — ปัญหาใหญ่สุดของแผนนี้
+### 4.1 ฟอนต์ไทย — แก้ข้อมูลจากฉบับแรก
 
-OpenMAIC โหลด Inter (UI, ผ่าน `@fontsource-variable/inter` ใน `app/layout.tsx`)
-บวกฟอนต์ละตินชุดใหญ่และ Noto CJK ใน `app/editor-fonts.ts` และสังเกตว่า
-**เขาเพิ่มฟอนต์แยกต่อ script ทุกภาษาที่ไม่ใช่ละติน**:
+> **แก้ข้อมูล (2026-09-06):** ฉบับแรกเขียนว่า *"เขาเพิ่มฟอนต์แยกต่อ script ทุกภาษา
+> ที่ไม่ใช่ละติน (zh→noto-sans-sc, ko→noto-sans-kr, ar→noto-sans-arabic)"* —
+> **ไม่จริง** ฟอนต์เหล่านั้นไม่ได้เข้า UI chrome: `app/editor-fonts.ts` ถูกโหลด
+> โดย `lib/edit/preload-editor.ts` เท่านั้น คือเป็นฟอนต์สำหรับ*เนื้อหาในสไลด์*
+> ส่วนอีกชุดใช้ตอน video export ข้อความ UI ภาษาจีน เกาหลี และอาหรับ **ตกไปใช้
+> ฟอนต์ OS เหมือนกันหมด** ไทยจึงไม่ได้แย่กว่าภาษาอื่น
 
-```
-zh -> @fontsource/noto-sans-sc, noto-serif-sc, lxgw-wenkai
-ko -> @fontsource/noto-sans-kr
-ar -> @fontsource/noto-sans-arabic
-th -> (ไม่มี)
-```
+สภาพจริง แยกเป็นสามเส้นทาง:
 
-`grep -i thai package.json` ไม่เจออะไรเลย
+| | UI chrome | ฟอนต์ในสไลด์ | video export (MP4) |
+|---|---|---|---|
+| latin, cyrillic, greek, vietnamese | **Inter** OK | — | `noto-script-fonts` OK |
+| จีน, เกาหลี | ฟอนต์ OS | `editor-fonts.ts` OK | `noto-cjk` OK |
+| อาหรับ | ฟอนต์ OS | — | `noto-script-fonts` OK |
+| **ไทย** | ฟอนต์ OS | ไม่มี | **ไม่มีเลย** |
 
-ผลถ้าแปลอย่างเดียวโดยไม่แตะฟอนต์: ข้อความไทยตกไปใช้ฟอนต์ที่ OS มี → หน้าตาต่างกัน
-ทุกเครื่อง และผสมกันกลางประโยคเมื่อมีอังกฤษปน **นี่คือบั๊กเดียวกับที่ DeepTutor
-เขียนคอมเมนต์เตือนไว้ใน `web/tailwind.config.js` เรื่อง CJK เป๊ะๆ**
+งานฟอนต์จึงมีน้ำหนักไม่เท่ากันสองชิ้น:
 
-vi-VN ไม่เจอเพราะเวียดนามเป็นอักษรละติน + เครื่องหมายเสียง ซึ่ง Inter ครอบคลุมผ่าน
-subset `latin-ext` อยู่แล้ว — **ไทยจะเป็นภาษาแรกของ OpenMAIC ที่ใช้อักษรนอกกลุ่ม
-ละติน / CJK / อาหรับ**
+**(ก) video export — บั๊กจริง** ทั้ง `generate-video-export-noto-cjk.mjs` (sc/kr)
+และ `generate-video-export-noto-script-fonts.mjs` (cyrillic/arabic) ไม่มีไทย
+MP4 ที่ export ออกมาเป็นกล่องสี่เหลี่ยม ไม่ใช่แค่คนละฟอนต์
 
-ต้องเพิ่ม `@fontsource/noto-sans-thai` (หรือเทียบเท่า) เข้า font stack ของ UI
-โดยประกาศเป็น face พี่น้องที่มี `unicode-range` — วิธีเดียวกับที่ `layout.tsx`
-อธิบายไว้เองว่าทำไมถึงโหลดจาก stylesheet ของ `@fontsource` แทน `next/font`
+**(ข) UI chrome — เป็นการเพิ่ม ไม่ใช่การแก้** ไทยเรนเดอร์ด้วยฟอนต์ OS เหมือนจีน
+กับเกาหลีเป็นอยู่ทุกวันนี้ ถ้า bundle ให้ไทย ไทยจะดีกว่าจีนซึ่งเป็น locale ปริยาย
+ของเขา — upstream มีสิทธิ์ถามว่าทำไมทำให้ภาษาเดียว
+
+**ทั้งสองข้อทำเสร็จแล้ว** ใน `deploy/openmaic-patches/0002-thai-script-support.patch`
+ใช้ `@fontsource/noto-sans-thai` (ยืนยันแล้วว่า `@fontsource/noto-sans` มี subset
+cyrillic/devanagari/greek/latin/vietnamese **ไม่มี thai**) โหลดผ่าน `400.css` /
+`700.css` ที่มี `unicode-range` ต่อ subset — วิธีเดียวกับที่ `layout.tsx` อธิบาย
+ไว้เองว่าทำไมถึงเลิกใช้ `next/font`
+
+วัดผลบน dev server จริง: จาก 6 faces ที่ประกาศ โหลดมา 2 (ไทย 400 และ 700) ส่วน
+latin / latin-ext ไม่ถูกดึงเลย และ `document.fonts.check(..., 'ก')` = true ขณะที่
+เช็คด้วย 'A' = false
 
 ### 4.2 ฟอนต์สำหรับ video export
 

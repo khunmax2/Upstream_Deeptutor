@@ -52,15 +52,19 @@ PROFILES: dict[str, set[str]] = {
         "pnpm-lock.yaml",
         "app/layout.tsx",
         "app/globals.css",
-        "app/editor-fonts.ts",
         "scripts/generate-video-export-noto-script-fonts.mjs",
-        "lib/video-export-app/noto-script-font-assets.ts",
     },
 }
 
 # Generated locally, applied to the checkout to build or test, then removed.
-# Never part of a patch: a brand-new file needs none and cannot conflict.
-OURS = {"lib/i18n/locales/th-TH.json"}
+# th-TH.json is a brand-new file, which needs no patch and cannot conflict; the
+# other two come out of `pnpm run gen:video-export-noto-script-fonts` and are
+# regenerated rather than carried, so a patch never has to hold a binary.
+OURS = {
+    "lib/i18n/locales/th-TH.json",
+    "lib/video-export/emit-hyperframes/noto-script-font-assets.ts",
+    "public/vendor/video-export/fonts/noto-sans-thai-thai-400-normal.woff2",
+}
 
 
 def git(repo: Path, *args: str) -> str:
