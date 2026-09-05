@@ -17,6 +17,39 @@ upstream.
 
 ---
 
+## Embedding seams for OpenMAIC, kept generic enough to upstream — 2026-09-06
+
+Two patches that let a host embed OpenMAIC properly, neither of which mentions
+DeepTutor:
+
+- `0003-basepath.patch` — serve the app under a reverse-proxy subpath. Next
+  generates every `/_next/` URL from `basePath`, so without it a framed app 404s
+  on its own chunks.
+- `0004-host-supplied-locale-and-theme.patch` — `?lang=` and `?theme=`. Both
+  settings are read once on mount from bare `localStorage` keys, which an
+  embedder can only write by sharing an origin — and that shares every other key
+  with it too. These parameters give a cross-origin host the same reach without
+  collapsing the security boundary.
+
+That is the point of the pair: the integration that made same-origin look
+necessary is achievable across origins, so the origin split stays a security
+decision rather than a cost.
+
+Measured before writing them down. Same-origin was built end to end (DeepTutor
+:3000, OpenMAIC :3100 under a subpath, a Node proxy for one origin) and it does
+work — the parent wrote `locale` and `theme`, the frame came up Thai and dark,
+and `iframe.contentDocument` was reachable. What it also does is put OpenMAIC's
+`fetch('/api/...')` calls — **68** of them, not the 53 first counted, since 15
+are template literals — onto whoever else owns `/api` there. The first symptom
+was not an error: OpenMAIC rendered a login box that was never configured,
+because its access-code check failed and the guard defaults to locked.
+
+`0004` is verified with localStorage cleared first, so the query is demonstrably
+what applied it: `/?lang=th&theme=dark` comes up Thai with the dark class set,
+and persists both so in-app navigation keeps them.
+
+---
+
 ## Thai script support, and a checked procedure for following OpenMAIC — 2026-09-06
 
 **Thai font** — `deploy/openmaic-patches/0002-thai-script-support.patch`. Nothing

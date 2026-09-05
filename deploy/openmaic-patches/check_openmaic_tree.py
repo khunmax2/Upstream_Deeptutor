@@ -45,6 +45,15 @@ PROFILES: dict[str, set[str]] = {
         "README.md",
         "README-zh.md",
     },
+    # Generic embedding seams: serving under a reverse-proxy subpath, and
+    # letting a host choose language and theme. Neither mentions DeepTutor —
+    # both are capabilities any embedder or subpath deployment needs, which is
+    # what makes them upstream candidates rather than integration adapters.
+    "embed-seams": {
+        "next.config.ts",
+        "lib/hooks/use-i18n.tsx",
+        "lib/hooks/use-theme.tsx",
+    },
     # PR 1 — Thai script support. Nothing in this project's font stack covers
     # Thai, and the video-export registry enumerates only cyrillic and arabic.
     "th-font": {
