@@ -1163,5 +1163,418 @@
       "deleteConfirm": "สกิลนี้จะถูกลบออกจากบัญชีของคุณ การกระทำนี้ย้อนกลับไม่ได้",
       "deleteFailed": "ลบสกิลไม่สำเร็จ กรุณาลองใหม่"
     }
+  },
+  "edit": {
+    "line": {
+      "toolbar": "แถบเครื่องมือเส้น",
+      "kind": "ชนิดเส้น",
+      "color": "สีเส้น",
+      "width": "ความหนาเส้น",
+      "style": "ลักษณะเส้น",
+      "start": "หัวเส้น",
+      "end": "ปลายเส้น",
+      "straight": "เส้นตรง",
+      "broken": "เส้นหักมุม",
+      "broken2": "เส้นหักมุมสองจุด",
+      "curve": "เส้นโค้ง",
+      "cubic": "เส้นโค้งลูกบาศก์",
+      "solid": "เส้นทึบ",
+      "dashed": "เส้นประ",
+      "dotted": "เส้นจุด",
+      "none": "ไม่มี",
+      "arrow": "หัวลูกศร",
+      "dot": "จุด"
+    },
+    "insert": {
+      "toolbar": "แถบเครื่องมือแทรก",
+      "textBox": "กล่องข้อความ",
+      "line": "เส้น",
+      "linePresets": {
+        "straight": "เส้นตรง",
+        "dashed": "เส้นประ",
+        "arrow": "เส้นลูกศร",
+        "dashedArrow": "เส้นประหัวลูกศร",
+        "dottedEnd": "เส้นปลายจุด",
+        "broken": "เส้นหักมุม",
+        "doubleBroken": "เส้นหักมุมสองจุด",
+        "curve": "เส้นโค้ง",
+        "cubic": "เส้นโค้งลูกบาศก์"
+      },
+      "table": "ตาราง",
+      "formula": "สูตร",
+      "chart": "แผนภูมิ",
+      "chartBar": "แผนภูมิแท่ง",
+      "chartLine": "แผนภูมิเส้น",
+      "chartPie": "แผนภูมิวงกลม",
+      "tableDimensions": "ตาราง {{rows}} x {{columns}}",
+      "dragToolbar": "ย้ายเครื่องมือแทรก",
+      "dragToolbarKeyboard": "ย้ายเครื่องมือแทรก: กด Enter หรือ Space แล้วใช้ปุ่มลูกศร",
+      "collapseToolbar": "ย่อเครื่องมือแทรก",
+      "expandToolbar": "ขยายเครื่องมือแทรก",
+      "image": "รูปภาพ",
+      "imageDrop": "ลากรูปมาวาง หรือคลิกเพื่อเลือกไฟล์",
+      "imageOr": "หรือวาง URL ของรูปภาพ",
+      "imageUrlPlaceholder": "https://…",
+      "imageInsert": "แทรก",
+      "video": "วิดีโอ",
+      "videoDrop": "ลากวิดีโอมาวาง หรือคลิกเพื่อเลือกไฟล์",
+      "videoOr": "หรือวาง URL ของวิดีโอ",
+      "videoUrlPlaceholder": "https://…",
+      "videoInsert": "แทรก",
+      "audio": "เสียง",
+      "audioDrop": "ลากไฟล์เสียงมาวาง หรือคลิกเพื่อเลือกไฟล์",
+      "audioOr": "หรือวาง URL ของไฟล์เสียง",
+      "audioUrlPlaceholder": "https://…",
+      "audioInsert": "แทรก"
+    },
+    "quiz": {
+      "addQuestion": "เพิ่มคำถาม",
+      "reorder": "ลากเพื่อจัดลำดับ",
+      "deleteQuestion": "ลบคำถาม",
+      "untitledQuestion": "คำถามไม่มีชื่อ",
+      "questionLabel": "คำถาม",
+      "questionPlaceholder": "ใส่คำถาม…",
+      "typeLabel": "ประเภท",
+      "pointsLabel": "คะแนน",
+      "optionsLabel": "ตัวเลือก",
+      "optionPlaceholder": "ข้อความตัวเลือก",
+      "addOption": "เพิ่มตัวเลือก",
+      "deleteOption": "ลบตัวเลือก",
+      "markCorrect": "ทำเครื่องหมายว่าเป็นคำตอบที่ถูก",
+      "moveUp": "เลื่อนขึ้น",
+      "moveDown": "เลื่อนลง",
+      "analysisLabel": "คำอธิบาย",
+      "analysisPlaceholder": "แสดงหลังจากตรวจคำถามแล้ว…",
+      "commentPromptLabel": "แนวทางการให้คะแนน",
+      "commentPromptPlaceholder": "ควรให้คะแนนคำตอบแบบเขียนตอบนี้อย่างไร",
+      "empty": "ยังไม่มีคำถาม",
+      "emptyHint": "กด “เพิ่มคำถาม” เพื่อสร้างข้อแรก",
+      "type": {
+        "single": "เลือกตอบข้อเดียว",
+        "multiple": "เลือกตอบหลายข้อ",
+        "short_answer": "ตอบสั้น"
+      },
+      "shortAnswerGradingNote": "คำตอบแบบเขียนตอบจะถูกตรวจโดย AI ตามแนวทางด้านล่างเสมอ",
+      "hint": {
+        "emptyText": "ข้อ {{n}}: กรุณาใส่ข้อความคำถาม",
+        "fewOptions": "ข้อ {{n}}: ต้องมีตัวเลือกอย่างน้อยสองตัว",
+        "emptyOption": "ข้อ {{n}}: มีตัวเลือกที่ยังว่างอยู่",
+        "noCorrect": "ข้อ {{n}}: กรุณาระบุคำตอบที่ถูก"
+      }
+    },
+    "agent": {
+      "expand": "ขยายผู้ช่วย AI",
+      "collapse": "ย่อ",
+      "stopped": "หยุดแล้ว",
+      "emptyTitle": "อยากแก้อะไรดี",
+      "emptyHint": "หลังแก้สไลด์นี้บนผืนผ้าใบแล้ว ให้ AI สร้างคำบรรยายใหม่ให้ตรงกับเนื้อหา",
+      "placeholder": "บอกว่าอยากแก้สไลด์นี้อย่างไร…",
+      "stop": "หยุดสร้าง",
+      "empty": {
+        "lead": "บอกมาว่าอยากแก้สไลด์นี้ยังไง — เดี๋ยวผมจัดการเนื้อหาใหม่และปรับคำบรรยายให้เข้ากัน",
+        "boundary": "ถ้าจะแก้ละเอียดให้ใช้ตัวแก้ไข ส่วนการเพิ่ม / ลบ / จัดลำดับสไลด์ ทำได้จากแถบนำทางทางซ้าย",
+        "comingSoon": "ความสามารถอื่นๆ กำลังจะตามมา"
+      },
+      "interactive": {
+        "emptyTitle": "หน้านี้มีอะไรต้องแก้",
+        "lead": "อธิบายจุดที่ผิดพลาดบนหน้าโต้ตอบนี้ — เช่น ปุ่มที่กดแล้วไม่มีอะไรเกิดขึ้น — เดี๋ยวผมแก้เฉพาะจุดนั้น โดยไม่แตะส่วนอื่น",
+        "placeholder": "อธิบายจุดที่ผิดพลาดบนหน้าโต้ตอบนี้…",
+        "boundary": "ผมแก้เฉพาะจุดที่ระบุ ไม่สร้างหน้าใหม่ทั้งหน้า หากต้องการเปลี่ยนฉาก ใช้แถบนำทางทางซ้าย"
+      },
+      "cap": {
+        "content": {
+          "label": "สร้างสไลด์ใหม่",
+          "examples": "“ย่อให้เหลือ 3 ประเด็น”, “เพิ่มตัวอย่างจากสถานการณ์จริง”"
+        },
+        "narration": {
+          "label": "สร้างบทคำบรรยายใหม่",
+          "examples": "“ทำให้ฟังเป็นกันเองขึ้น”, “ปรับให้ตรงกับที่ผมแก้บนผืนผ้าใบ”"
+        },
+        "fixHtml": {
+          "label": "แก้จุดผิดพลาดบนหน้า",
+          "examples": "“ปุ่มเริ่มกดแล้วไม่ทำงาน”, “แผงซ้อนทับกันบนมือถือ”"
+        },
+        "elements": {
+          "label": "ปรับองค์ประกอบที่เลือก",
+          "examples": "“ทำหัวข้อเป็นสีน้ำเงินแล้วเลื่อนขึ้น”, “ย่อรูปนี้ให้เล็กลง”"
+        }
+      },
+      "newConversation": "การสนทนาใหม่",
+      "sessionHistory": "ประวัติ",
+      "sessionUntitled": "แชทไม่มีชื่อ",
+      "sessionDelete": "ลบ",
+      "sessionEmpty": "ไม่มีการสนทนาก่อนหน้า",
+      "thinking": "กำลังคิด…",
+      "reasoning": "การให้เหตุผล",
+      "thought": "ใช้เวลาคิด",
+      "title": "แก้ไขด้วย AI"
+    },
+    "timeline": {
+      "title": "บทคำบรรยาย",
+      "regenAllTts": "สร้างเสียงพากย์ใหม่ทั้งหมด",
+      "voiceAll": "พากย์ทั้งหมด",
+      "counts": "คำบรรยาย {{speech}} · คิว {{cue}}",
+      "panLeft": "เลื่อนไปทางซ้าย",
+      "panRight": "เลื่อนไปทางขวา",
+      "collapseAxis": "ย่อเหลือแกนเวลา",
+      "expandTrack": "ขยายแทร็ก",
+      "emptyHint": "ลากการกระทำมาวางบนแกนเวลาเพื่อเริ่ม หรือให้ MAIC Agent สร้างคำบรรยายให้",
+      "speechPlaceholder": "ใส่คำบรรยายบรรทัดนี้…",
+      "reorder": "ลากเพื่อจัดลำดับ",
+      "moveLeft": "เลื่อนไปทางซ้าย",
+      "moveRight": "เลื่อนไปทางขวา",
+      "pickElement": "เลือกองค์ประกอบ",
+      "bound": "ผูกแล้ว",
+      "fieldAction": "การกระทำ",
+      "fieldElement": "องค์ประกอบ",
+      "fieldContent": "เนื้อหา",
+      "addDiscussionExists": "หนึ่งฉากมีการอภิปรายได้เพียงรายการเดียว",
+      "discussionTerminal": "จบ",
+      "discussionTerminalHint": "การอภิปรายจะอยู่ท้ายฉากเสมอ (ฉากละหนึ่งรายการ)",
+      "discussionTopicPlaceholder": "หัวข้ออภิปราย (จำเป็น)",
+      "discussionPromptPlaceholder": "คำแนะนำเพิ่มเติม (ไม่บังคับ)",
+      "discussionAgent": "ผู้เริ่ม",
+      "discussionAgentUnset": "ไม่ระบุ",
+      "addAction": "เพิ่มการกระทำ"
+    },
+    "proMode": "Pro",
+    "undo": "เลิกทำ",
+    "redo": "ทำซ้ำ",
+    "delete": "ลบ",
+    "title": "กำลังแก้ไข · {{type}}",
+    "unsupportedScene": "{{type}} ยังแก้ไขไม่ได้",
+    "readOnlyBadge": "{{type}} · ดูอย่างเดียว",
+    "text": {
+      "toolbar": "แถบเครื่องมือข้อความ",
+      "label": "ข้อความ",
+      "font": "แบบอักษร",
+      "fontDefault": "ค่าเริ่มต้น",
+      "sizeUp": "เพิ่มขนาด",
+      "sizeDown": "ลดขนาด",
+      "fontSize": "ขนาดตัวอักษร",
+      "bold": "ตัวหนา",
+      "italic": "ตัวเอียง",
+      "underline": "ขีดเส้นใต้",
+      "color": "สีข้อความ",
+      "alignLeft": "ชิดซ้าย",
+      "alignCenter": "กึ่งกลาง",
+      "alignRight": "ชิดขวา",
+      "bullet": "รายการหัวข้อย่อย",
+      "colorHex": "ค่าสี"
+    },
+    "nav": {
+      "addSlide": "เพิ่มสไลด์",
+      "duplicate": "ทำสำเนา",
+      "delete": "ลบ",
+      "deleted": "ลบแล้ว",
+      "undo": "เลิกทำ",
+      "copySuffix": "(สำเนา)",
+      "untitledSlide": "สไลด์ไม่มีชื่อ",
+      "collapse": "ย่อแถบ",
+      "expand": "ขยายแถบ",
+      "dragHandle": "ลากเพื่อจัดลำดับ",
+      "deckLabel": "ฉาก",
+      "moreActions": "การทำงานเพิ่มเติม",
+      "rename": "เปลี่ยนชื่อ",
+      "sceneIncomplete": "หน้านี้มีเนื้อหาไม่ครบ",
+      "addPage": "เพิ่มหน้า",
+      "nextPage": "หน้าถัดไป",
+      "prevPage": "หน้าก่อนหน้า"
+    },
+    "contextMenu": {
+      "horizontalAlignment": "จัดแนวแนวนอน",
+      "verticalAlignment": "จัดแนวแนวตั้ง",
+      "selectAll": "เลือกทั้งหมด",
+      "copy": "คัดลอก",
+      "cut": "ตัด",
+      "paste": "วาง",
+      "unlock": "ปลดล็อก",
+      "lock": "ล็อก",
+      "group": "จัดกลุ่ม",
+      "ungroup": "ยกเลิกการจัดกลุ่ม",
+      "bringForward": "เลื่อนขึ้นหน้า",
+      "sendBackward": "เลื่อนลงหลัง",
+      "alignTop": "ชิดบน",
+      "alignMiddle": "กึ่งกลางแนวตั้ง",
+      "alignBottom": "ชิดล่าง"
+    },
+    "cue": {
+      "speech": "คำบรรยาย",
+      "spotlight": "ไฮไลต์",
+      "laser": "เลเซอร์",
+      "whiteboardOpen": "กระดาน",
+      "whiteboardText": "เขียน",
+      "whiteboardShape": "รูปทรง",
+      "whiteboardLatex": "สูตร",
+      "whiteboardTable": "ตาราง",
+      "action": "การกระทำ",
+      "discussion": "อภิปราย"
+    },
+    "element": {
+      "toolbar": "แถบเครื่องมือองค์ประกอบ",
+      "text": "ข้อความ",
+      "image": "รูปภาพ",
+      "shape": "รูปทรง",
+      "line": "เส้น",
+      "chart": "แผนภูมิ",
+      "table": "ตาราง",
+      "latex": "สูตร",
+      "video": "วิดีโอ",
+      "audio": "เสียง",
+      "code": "โค้ด"
+    },
+    "pick": {
+      "pickFor": "เลือกองค์ประกอบสำหรับ \"{{label}}\"",
+      "pickHint": "คลิกองค์ประกอบที่ไฮไลต์ไว้ หรือเลือกจากรายการด้านล่าง · กด Esc เพื่อยกเลิก",
+      "pageElements": "องค์ประกอบในหน้า · {{count}}",
+      "expand": "ขยาย",
+      "collapse": "ย่อ",
+      "noElements": "สไลด์นี้ไม่มีองค์ประกอบที่ระบุตำแหน่งได้",
+      "bindHint": "คลิกองค์ประกอบที่ไฮไลต์บนผืนผ้าใบเพื่อผูก",
+      "refCapHint": "ถึงขีดจำกัดแล้ว — เอาออกหนึ่งรายการเพื่อสลับ · กด Esc เมื่อเสร็จ",
+      "refHint": "คลิกเพื่อเพิ่มหรือเอาออก · กด Esc เมื่อเสร็จ",
+      "refLead": "องค์ประกอบที่อ้างอิง · {{count}}/{{max}}"
+    },
+    "roster": {
+      "title": "รายชื่อสมาชิกในห้อง",
+      "count": "{{count}} คน",
+      "editHint": "คลิกที่สมาชิกเพื่อแก้ไข",
+      "personaLabel": "บุคลิก",
+      "personaPlaceholder": "อธิบายบุคลิก สไตล์การสอน และหน้าที่ของบทบาทนี้...",
+      "noPersona": "ยังไม่ได้กำหนดบุคลิก",
+      "unnamed": "ไม่มีชื่อ",
+      "teacherBadge": "ผู้นำ",
+      "moveUp": "เลื่อนขึ้น",
+      "moveDown": "เลื่อนลง",
+      "removeFromClass": "เอาออกจากห้องเรียน",
+      "aiClassmates": "เพื่อนร่วมชั้น AI · {{count}}",
+      "addRole": "เพิ่มบทบาท",
+      "shortTitle": "รายชื่อ"
+    },
+    "sceneType": {
+      "slide": "สไลด์",
+      "quiz": "แบบทดสอบ",
+      "interactive": "โต้ตอบ",
+      "pbl": "PBL"
+    },
+    "asset": {
+      "drop": "ลากไฟล์มาวาง หรือคลิกเพื่อเลือก",
+      "orUrl": "หรือวาง URL ของไฟล์",
+      "urlPlaceholder": "https://…",
+      "insert": "แทรก",
+      "invalidType": "ไม่รองรับไฟล์ประเภทนี้",
+      "readFailed": "อ่านไฟล์ไม่ได้"
+    },
+    "latex": {
+      "toolbar": "แถบเครื่องมือสูตร",
+      "editFormula": "แก้ไขสูตร",
+      "dialog": "ตัวแก้ไขสูตร",
+      "source": "ซอร์ส LaTeX",
+      "preview": "ตัวอย่าง",
+      "symbols": "สัญลักษณ์",
+      "presets": "ชุดสำเร็จรูป",
+      "invalidSource": "ซอร์ส LaTeX ไม่ถูกต้อง"
+    },
+    "video": {
+      "toolbar": "แถบเครื่องมือวิดีโอ",
+      "poster": "ตั้งภาพหน้าปก"
+    },
+    "audio": {
+      "toolbar": "แถบเครื่องมือเสียง",
+      "preview": "ฟังตัวอย่าง",
+      "pause": "หยุดฟังชั่วคราว",
+      "loop": "เล่นวน"
+    },
+    "table": {
+      "doubleClickToEdit": "ดับเบิลคลิกเพื่อแก้ไข"
+    },
+    "zorder": {
+      "toFront": "นำมาไว้หน้าสุด",
+      "toBack": "ส่งไปหลังสุด"
+    },
+    "image": {
+      "toolbar": "แถบเครื่องมือรูปภาพ",
+      "replace": "แทนที่รูปภาพ",
+      "flipH": "พลิกแนวนอน",
+      "flipV": "พลิกแนวตั้ง",
+      "crop": "ครอบตัดรูปภาพ"
+    },
+    "background": {
+      "label": "พื้นหลัง",
+      "solid": "สีทึบ",
+      "image": "รูปภาพ",
+      "color": "สี"
+    },
+    "common": {
+      "cancel": "ยกเลิก",
+      "confirm": "ยืนยัน"
+    },
+    "picker": {
+      "title": "แทรกการกระทำ",
+      "speechDesc": "พูดหนึ่งบรรทัด — พากย์อัตโนมัติได้",
+      "spotlightDesc": "ไฮไลต์องค์ประกอบบนผืนผ้าใบ",
+      "laserDesc": "ชี้เลเซอร์ไปที่องค์ประกอบ",
+      "discussionDesc": "ตั้งคำถาม แล้วเลือกว่าใครเป็นคนเริ่ม"
+    },
+    "tts": {
+      "cancelPreview": "ยกเลิกการฟังตัวอย่าง",
+      "preview": "ฟังตัวอย่าง",
+      "regenerate": "สร้างเสียงพากย์ใหม่",
+      "statusReady": "พากย์แล้ว",
+      "statusNone": "ยังไม่ได้พากย์",
+      "statusGenerating": "กำลังสร้าง",
+      "stopPreview": "หยุดฟังตัวอย่าง",
+      "statusError": "ไม่สำเร็จ"
+    },
+    "regen": {
+      "title": "สร้างคำบรรยายใหม่",
+      "running": "กำลังสร้าง…",
+      "noActions": "ไม่ได้สร้างการกระทำใด",
+      "actionsCount": "{{count}} การกระทำ",
+      "generating": "กำลังสร้าง",
+      "notGenerated": "ยังไม่ได้สร้าง",
+      "updated": "อัปเดตแล้ว"
+    },
+    "regenScene": {
+      "title": "สร้างสไลด์ใหม่",
+      "generating": "กำลังสร้าง",
+      "updated": "อัปเดตแล้ว",
+      "notGenerated": "ยังไม่ได้สร้าง",
+      "elementsCount": "{{count}} องค์ประกอบ",
+      "restore": "คืนค่าก่อนหน้า",
+      "restored": "คืนค่าแล้ว",
+      "resume": "ทำต่อ"
+    },
+    "fixHtml": {
+      "title": "แก้ไขหน้าโต้ตอบ",
+      "fixing": "กำลังแก้ไข",
+      "fixed": "แก้ไขแล้ว",
+      "notFixed": "ยังไม่ได้แก้",
+      "editsCount": "แก้ไข {{count}} จุด"
+    },
+    "readCard": {
+      "title": "อ่านเนื้อหาสไลด์",
+      "reading": "กำลังอ่าน",
+      "done": "อ่านแล้ว",
+      "failed": "อ่านไม่สำเร็จ"
+    },
+    "editElements": {
+      "title": "แก้ไของค์ประกอบ",
+      "editing": "กำลังแก้ไข",
+      "applied": "ใช้แล้ว",
+      "notApplied": "ยังไม่ได้ใช้",
+      "applyFailed": "ตัวแก้ไขใช้การแก้ไของค์ประกอบไม่สำเร็จ ไม่มีอะไรถูกเปลี่ยน",
+      "applyPartiallyFailed": "ตัวแก้ไขใช้การแก้ไของค์ประกอบบางรายการไม่สำเร็จ รายการอื่นอาจถูกใช้ไปแล้ว"
+    },
+    "elementRef": {
+      "remove": "เอาการอ้างอิง {{label}} ออก",
+      "counts": "อ้างอิงแล้ว {{count}}/{{max}}",
+      "exitPicking": "เลือกเสร็จแล้ว",
+      "startPicking": "อ้างอิงองค์ประกอบ"
+    },
+    "dock": {
+      "elementRefHint": "การอ้างอิงองค์ประกอบ — เลือกองค์ประกอบเพื่อส่งไปพร้อมข้อความถัดไป",
+      "globalTools": "เครื่องมือรวม"
+    }
   }
 }
