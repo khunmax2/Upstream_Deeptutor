@@ -72,6 +72,17 @@ const NEXT_PUBLIC_AUTH_ENABLED = normalizeBoolean(
   ),
 );
 
+// Optional subpath the app is served under when behind a reverse proxy that
+// routes a path prefix (e.g. nginx ``location /deepwitya`` -> this app). Unlike
+// NEXT_PUBLIC_API_BASE this is structural and must be baked at build time, so it
+// is supplied via the NEXT_PUBLIC_BASE_PATH build arg (data/ is not in the Docker
+// build context, so system.json is only a fallback for non-Docker dev runs).
+const BASE_PATH = firstNonEmpty(
+  process.env.NEXT_PUBLIC_BASE_PATH,
+  SYSTEM_SETTINGS.base_path,
+  "",
+);
+
 process.env.NEXT_PUBLIC_API_BASE = NEXT_PUBLIC_API_BASE;
 process.env.NEXT_PUBLIC_AUTH_ENABLED = NEXT_PUBLIC_AUTH_ENABLED;
 
@@ -91,6 +102,10 @@ const APP_VERSION = (() => {
 })();
 
 const nextConfig = {
+  // Serve the whole app under a path prefix when set (reverse-proxy subpath).
+  // basePath automatically prefixes routes, links and /_next/ assets.
+  ...(BASE_PATH ? { basePath: BASE_PATH, assetPrefix: BASE_PATH } : {}),
+
   // Keep the production build used by `deeptutor start` separate from the
   // `.next` development cache used by the explicit `deeptutor start --dev`.
   // Without separate directories either command can invalidate the other
@@ -108,6 +123,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,
     NEXT_PUBLIC_API_BASE,
+    NEXT_PUBLIC_BASE_PATH: BASE_PATH,
     NEXT_PUBLIC_AUTH_ENABLED,
   },
 

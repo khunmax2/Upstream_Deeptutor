@@ -6,6 +6,7 @@ import type {
 import { buildPing, buildResumeTurn } from "@/contracts/parse/turn-command";
 import { parseTurnEvent } from "@/contracts/parse/turn-event";
 
+import { wsUrl } from "@/lib/api";
 import {
   browserSocketFactory,
   SOCKET_CONNECTING,
@@ -117,7 +118,11 @@ export class TurnRuntimeClient {
 
   constructor(options: TurnRuntimeClientOptions) {
     this.options = {
-      url: "/ws",
+      // wsUrl() prepends the reverse-proxy basePath. Without it the browser
+      // opens wss://<host>/ws — outside /deepwitya2 — which nginx hands to the
+      // catch-all upstream instead of this app, so every turn dies as
+      // "connection lost" before it ever reaches FastAPI.
+      url: wsUrl("/ws"),
       socketFactory: browserSocketFactory,
       scheduler: defaultScheduler,
       random: Math.random,

@@ -6,6 +6,7 @@ import ToastViewport from "@/components/common/ToastViewport";
 import { AppShellProvider } from "@/context/AppShellContext";
 import VoiceCallWidgetMount from "@/components/voice/VoiceCallWidgetMount";
 import { I18nClientBridge } from "@/i18n/I18nClientBridge";
+import { asset } from "@/lib/basePath";
 
 // Geist matches the public site (deeptutor.info) and stays crisp at the
 // small UI sizes the composer/toolbars use, unlike the rounder Jakarta.
@@ -26,10 +27,10 @@ export const metadata: Metadata = {
   description: "Agent-native intelligent learning companion",
   icons: {
     icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: asset("/favicon-16x16.png"), sizes: "16x16", type: "image/png" },
+      { url: asset("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: asset("/apple-touch-icon.png"),
   },
 };
 

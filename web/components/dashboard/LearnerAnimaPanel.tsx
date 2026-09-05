@@ -32,6 +32,7 @@ import {
   type PetDashboard,
   type MasteryAxis,
 } from "@/lib/pet-api";
+import { asset } from "@/lib/basePath";
 
 /**
  * Learner Anima — the companion panel, shown as the second page of the
@@ -886,7 +887,7 @@ function ReviewsCard({
         {items.length === 0 && (
           <li className="flex flex-col items-center gap-2 py-6 text-center">
             <Image
-              src="/anima/reviews-clipboard.png"
+              src={asset("/anima/reviews-clipboard.png")}
               alt=""
               width={512}
               height={446}

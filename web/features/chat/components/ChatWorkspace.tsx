@@ -133,6 +133,7 @@ import {
   type SelectionTutorContext,
 } from "@/lib/selection-tutor";
 import { shouldReturnToChatAfterResearch } from "@/lib/deep-research-report";
+import { asset } from "@/lib/basePath";
 
 const NotebookRecordPicker = dynamic(
   () => import("@/components/notebook/NotebookRecordPicker"),
@@ -2332,7 +2333,7 @@ export default function ChatWorkspace() {
                 <div className="flex w-full flex-1 min-h-0 items-end justify-center pb-14 animate-fade-in px-6">
                   <div className="w-full max-w-[960px] flex items-center justify-center gap-4">
                     <img
-                      src="/logo_black.png"
+                      src={asset("/logo_black.png")}
                       alt="DeepWitya"
                       width={40}
                       height={40}
