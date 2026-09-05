@@ -27,7 +27,24 @@ def learner_http(mu_isolated_root, monkeypatch):
 
     from deeptutor.api.routers import auth as auth_router
     from deeptutor.multi_user.identity import save_user
+
+    # The reading extensions register through entry points, which only exist once
+    # the package is installed. CI's python-tests job installs the requirements
+    # files and never runs `pip install -e .`, so the registry comes up empty
+    # there and the policy below is rejected with "Unknown reading extensions" —
+    # green locally, red on every Python version in CI. Build the registry from
+    # the classes directly so the contract under test is the policy, not how the
+    # environment was provisioned.
+    from deeptutor.reading import extensions as reading_extensions
+    from deeptutor.reading.quiz import ReadingQuizExtension
+    from deeptutor.reading.read_aloud import ReadAloudExtension
+    from deeptutor.reading.study_guidance import StudyGuidanceExtension
     from deeptutor.services import auth as auth_service
+
+    registry = reading_extensions.ReadingExtensionRegistry(
+        [ReadAloudExtension(), StudyGuidanceExtension(), ReadingQuizExtension()]
+    )
+    monkeypatch.setattr(reading_extensions, "get_reading_extension_registry", lambda **_: registry)
 
     monkeypatch.setattr(auth_service, "AUTH_SECRET", "secret-for-the-learner-contract-test")
     for module in (auth_service, auth_router):
