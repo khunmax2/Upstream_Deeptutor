@@ -17,6 +17,35 @@ upstream.
 
 ---
 
+## The OpenMAIC stack, built and run rather than described — 2026-09-06
+
+"Anything never built is not deployable." The compose overlay had been written,
+validated and committed without once being built, so this built it and ran it.
+
+`docker compose build openmaic` succeeds with all four patches applied — which
+also puts `0004` and `0005` through a production `next build` for the first
+time, the only place their client-side `window.location` reads would show up as
+a hydration problem. It didn't.
+
+The gate then verified in containers, not in a harness — no cookie answers 401
+`not_signed_in`, a bad cookie 401 `session_invalid`, a valid one 200 carrying
+OpenMAIC's own HTML, and OpenMAIC itself is unreachable from the host.
+
+Three things the build found that no amount of reading would have:
+
+- **`0002` cannot be applied alone.** The Dockerfile runs
+  `pnpm install --frozen-lockfile`, and that patch adds a dependency while
+  deliberately excluding the lockfile. `pnpm install` has to run between
+  applying it and building. Recorded in `deploy/OPENMAIC_SYNC.md`.
+- **The gatekeeper's volume path was wrong.** `./openmaic-gatekeeper` resolves
+  against the project directory, not the file's own `deploy/` — exactly the rule
+  written in a comment on `build.context` four lines above it. The container
+  restart-looped on `MODULE_NOT_FOUND`.
+- **The port publish removal had silently not been applied** — see the
+  correction in the entry below.
+
+---
+
 ## An auth gate in front of the embedded OpenMAIC — 2026-09-06
 
 Framing OpenMAIC never protected it. Its requests go to its own origin and never
@@ -49,8 +78,15 @@ observed refusing anything is not a gate. 12 checks, all passing.
 Also new: `deploy/nginx-openmaic.locations.conf` (TLS on :10330, and
 `frame-ancestors` naming DeepTutor, with no `X-Frame-Options` beside it since
 that header cannot express a different port), and a `gatekeeper` service in the
-compose overlay. OpenMAIC itself now publishes **no host port at all** — the
-gate cannot be walked around from the host.
+compose overlay.
+
+> **Correction.** This entry first claimed OpenMAIC published no host port. It
+> still did: the edit that removed it was lost when the script making it hit a
+> failed assertion before writing, and the check that was supposed to catch that
+> used an `awk` range that ended early and reported a false negative. Both were
+> fixed while building the stack for real, and re-verified by asking
+> `docker compose config` for that service's ports directly rather than by
+> pattern-matching its output.
 
 Not solved, and stated plainly in the README: `dt_token` stays readable by
 anything else on that host. Cookies are scoped by host and path and ignore the

@@ -103,6 +103,18 @@ cd ../OpenMAIC && pnpm install && pnpm run gen:video-export-noto-script-fonts
 node scripts/check-i18n-keys.mjs     # their gate: expect 13 locale files
 ```
 
+`pnpm install` there is not optional and not a habit. `0002` adds a dependency
+while deliberately leaving `pnpm-lock.yaml` out of the patch (one package churned
+2,934 lines of it, and lockfile hunks conflict on every upstream dependency
+change). The Dockerfile runs `pnpm install --frozen-lockfile`, so without this
+step the image build fails on a lockfile that does not match `package.json`.
+
+To build the container image:
+
+```bash
+docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml build openmaic
+```
+
 Start it, then check the runtime contract against a running instance:
 
 ```bash

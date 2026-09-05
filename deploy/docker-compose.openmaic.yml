@@ -24,11 +24,11 @@
 # ⚠️ Two things this file deliberately does NOT do — see deploy/OPENMAIC_EMBED.md
 #    before exposing any of this publicly:
 #
-#    1. It does not put OpenMAIC behind DeepTutor's auth gate. `web/proxy.ts`
-#       only guards routes Next serves; a request that the reverse proxy sends
-#       straight to this container never passes through it. On a public host
-#       either front it with nginx `auth_request`, or set ACCESS_CODE here and
-#       accept that the frame then needs a same-origin deployment.
+#    1. (resolved) OpenMAIC used to be reachable without DeepTutor's auth gate:
+#       `web/proxy.ts` only guards routes Next serves, and a request sent
+#       straight to this container never passed through it. The `gatekeeper`
+#       service below now verifies the DeepTutor session in front of it — see
+#       deploy/openmaic-gatekeeper/README.md.
 #    2. It does not enable the Pro agent workbench. That needs DATABASE_URL and
 #       therefore the `server-persistence` profile below; the classic one-click
 #       generator works without it, browser-side.
@@ -48,11 +48,9 @@ services:
         # the page renders blank with only a console error.
         - ALLOWED_FRAME_ANCESTORS=${DEEPTUTOR_PUBLIC_ORIGIN:-http://localhost:3782}
     container_name: deeptutor-openmaic
-    ports:
-      # Bound to loopback on purpose: the browser reaches OpenMAIC through the
-      # reverse proxy, not through this port. Publishing it on 0.0.0.0 would put
-      # an unauthenticated app on the network — see caveat 1 above.
-      - "127.0.0.1:3100:3000"
+    # No `ports` on purpose. Reachable only from the compose network, so the
+    # only route in is the gatekeeper. Publishing a port here — even on
+    # loopback — is a way around the gate for anything already on the host.
     environment:
       # Leave ACCESS_CODE unset: OpenMAIC's access cookie is SameSite=Lax and
       # does not survive a cross-origin frame, so enabling it here locks the
@@ -74,7 +72,12 @@ services:
     command: ["node", "/app/gatekeeper.mjs"]
     working_dir: /app
     volumes:
-      - ./openmaic-gatekeeper:/app:ro
+      # Relative to the PROJECT directory (repo root), not to this file's own
+      # deploy/ directory — the same resolution rule noted on build.context
+      # above, and the same one that bit here first: ./openmaic-gatekeeper
+      # resolved to a path that does not exist and the container restart-looped
+      # on MODULE_NOT_FOUND.
+      - ./deploy/openmaic-gatekeeper:/app:ro
     ports:
       # Loopback only: nginx is the sole route in. Publishing this on 0.0.0.0
       # would expose the gate's own port and defeat the TLS termination above.
