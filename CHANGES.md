@@ -87,6 +87,24 @@ back to HKUDS; once merged upstream the divergence is removed.
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
 
+- **2026-09-05 — `.gitattributes` now normalises every tracked file to LF.**
+  Upstream's rules cover `.py`, `.sh`, `.md`, `.json`, `.yaml` and `.toml`
+  (2,015 files) but never `.ts`, `.tsx`, `.mjs`, `.css` or `.js` — 984 files
+  that a Windows clone would check out as CRLF under git's default
+  `core.autocrlf=true`. That does not break CI (the `npm run check` chain has
+  no prettier step), but it breaks the `prettier` pre-commit hook, and any such
+  checkout committed back would rewrite every line of those files and make the
+  next upstream merge unresolvable.
+
+  A `* text=auto eol=lf` baseline is added **above** the existing rules, because
+  later lines win and `*.mp4`'s `-text` must keep overriding it. Explicit
+  `-text` guards for `.png/.jpg/.jpeg/.gif/.ico/.pdf/.woff/.woff2/.ttf/.otf/
+  .zip/.gz` follow it: one tracked fixture
+  (`tests/fixtures/lightrag_bridge/.../_origin.pdf`) is stored with CRLF and
+  git's auto-detection reads it as text, so an unguarded wildcard would
+  renormalise and corrupt it. Verified with `git add --renormalize .` — only
+  `.gitattributes` itself changes (`.gitattributes`).
+
 - **2026-09-04 — A second admin was handed the first admin's entire workspace,
   chat history included.** Create an account, promote it to admin, and it sees
   every conversation belonging to admin #1. The cause is one line in

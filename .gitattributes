@@ -1,3 +1,31 @@
+# --- fork addition (khunmax2/Upstream_Deeptutor) ---------------------------
+# Baseline for every tracked file: normalise to LF in the repository and check
+# out LF on every platform, so a Windows clone does not turn 984 frontend files
+# into CRLF and fail `prettier --check` (web/.prettierrc pins endOfLine: "lf").
+# Upstream's per-extension rules below already did this for .py/.sh/.md/.json/
+# .yaml/.toml but never covered .ts/.tsx/.mjs/.css/.js.
+#
+# Order matters: later lines win, so this wildcard must come FIRST and every
+# binary type must be re-excluded after it. One tracked fixture
+# (tests/fixtures/.../_origin.pdf) is stored with CRLF and git's auto-detection
+# reads it as text — without the `-text` guards below, adding this line would
+# renormalise and corrupt it.
+* text=auto eol=lf
+
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.ico -text
+*.pdf -text
+*.woff -text
+*.woff2 -text
+*.ttf -text
+*.otf -text
+*.zip -text
+*.gz -text
+# --- end fork addition -----------------------------------------------------
+
 *.mp4 filter=lfs diff=lfs merge=lfs -text
 
 # Force critical build and script files to use LF line endings for cross-platform compatibility
