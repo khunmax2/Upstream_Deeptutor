@@ -1,0 +1,409 @@
+Hide host-owned controls when framed: ?embed=1
+
+With ?lang= and ?theme= a host decides what the app starts with, but the app
+still renders its own language menu and theme switch. The reader then has two
+switches for one setting, and the one they reach for first is the one that loses
+on the next load, because the host reapplies its choice. This adds ?embed=1 to
+hide the two controls a host has taken over.
+
+Deliberately narrow, and it is not a kiosk mode:
+
+- Settings stays. It is the only route to provider configuration, and a host
+  cannot offer that on the app's behalf. Hiding it would strand the user.
+- Attribution stays. Nothing here removes the project's name from the page.
+
+useIsEmbedded resolves after mount rather than during render: the server has no
+query string, so branching inline would hydrate differently than it rendered.
+
+The language gate lives inside LanguageSwitcher rather than at each call site,
+because that pill is rendered from three places — the home page, the classroom
+header and the Pro rail — and a host that supplied ?lang= wants it gone from all
+of them. Theme has no such single component: the Pro rail uses ThemeToggle while
+the home page and classroom header each build their own inline menu, so all
+three are gated separately.
+
+Verified on a dev server with ?lang=th&theme=dark&embed=1: the control pill goes
+from three buttons to one (Settings), while the Thai locale and the dark class
+both remain applied — the host's choices survive, only its duplicated controls
+are gone.
+
+diff --git a/app/page.tsx b/app/page.tsx
+index 6dc44c04..80fbb2cf 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -30,6 +30,7 @@ import {
+ } from 'lucide-react';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { LanguageSwitcher } from '@/components/language-switcher';
++import { useIsEmbedded } from '@/lib/hooks/use-embed';
+ import { createLogger } from '@/lib/logger';
+ import { Button } from '@/components/ui/button';
+ import { InputGroup, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
+@@ -165,6 +166,7 @@ function HomePage() {
+   }, [router, workbenchEntryEnabled]);
+   const [form, setForm] = useState<FormState>(initialFormState);
+   const [settingsOpen, setSettingsOpen] = useState(false);
++  const embedded = useIsEmbedded();
+   const [settingsSection, setSettingsSection] = useState<
+     import('@/lib/types/settings').SettingsSection | undefined
+   >(undefined);
+@@ -728,71 +730,73 @@ function HomePage() {
+         {/* Language Selector */}
+         <LanguageSwitcher onOpen={() => setThemeOpen(false)} />
+ 
+-        <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
++        {!embedded && <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />}
+ 
+-        {/* Theme Selector */}
+-        <div className="relative">
+-          <button
+-            onClick={() => {
+-              setThemeOpen(!themeOpen);
+-            }}
+-            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
+-          >
+-            {theme === 'light' && <Sun className="w-4 h-4" />}
+-            {theme === 'dark' && <Moon className="w-4 h-4" />}
+-            {theme === 'system' && <Monitor className="w-4 h-4" />}
+-          </button>
+-          {themeOpen && (
+-            <div className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50 min-w-[140px]">
+-              <button
+-                onClick={() => {
+-                  setTheme('light');
+-                  setThemeOpen(false);
+-                }}
+-                className={cn(
+-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+-                  theme === 'light' &&
+-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-                )}
+-              >
+-                <Sun className="w-4 h-4" />
+-                {t('settings.themeOptions.light')}
+-              </button>
+-              <button
+-                onClick={() => {
+-                  setTheme('dark');
+-                  setThemeOpen(false);
+-                }}
+-                className={cn(
+-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+-                  theme === 'dark' &&
+-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-                )}
+-              >
+-                <Moon className="w-4 h-4" />
+-                {t('settings.themeOptions.dark')}
+-              </button>
+-              <button
+-                onClick={() => {
+-                  setTheme('system');
+-                  setThemeOpen(false);
+-                }}
+-                className={cn(
+-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+-                  theme === 'system' &&
+-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-                )}
+-              >
+-                <Monitor className="w-4 h-4" />
+-                {t('settings.themeOptions.system')}
+-              </button>
+-            </div>
+-          )}
+-        </div>
++        {/* Theme Selector — hidden when a host supplies `?theme=`. */}
++        {!embedded && (
++          <div className="relative">
++            <button
++              onClick={() => {
++                setThemeOpen(!themeOpen);
++              }}
++              className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
++            >
++              {theme === 'light' && <Sun className="w-4 h-4" />}
++              {theme === 'dark' && <Moon className="w-4 h-4" />}
++              {theme === 'system' && <Monitor className="w-4 h-4" />}
++            </button>
++            {themeOpen && (
++              <div className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50 min-w-[140px]">
++                <button
++                  onClick={() => {
++                    setTheme('light');
++                    setThemeOpen(false);
++                  }}
++                  className={cn(
++                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
++                    theme === 'light' &&
++                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                  )}
++                >
++                  <Sun className="w-4 h-4" />
++                  {t('settings.themeOptions.light')}
++                </button>
++                <button
++                  onClick={() => {
++                    setTheme('dark');
++                    setThemeOpen(false);
++                  }}
++                  className={cn(
++                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
++                    theme === 'dark' &&
++                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                  )}
++                >
++                  <Moon className="w-4 h-4" />
++                  {t('settings.themeOptions.dark')}
++                </button>
++                <button
++                  onClick={() => {
++                    setTheme('system');
++                    setThemeOpen(false);
++                  }}
++                  className={cn(
++                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
++                    theme === 'system' &&
++                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                  )}
++                >
++                  <Monitor className="w-4 h-4" />
++                  {t('settings.themeOptions.system')}
++                </button>
++              </div>
++            )}
++          </div>
++        )}
+ 
+         <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
+ 
+-        {/* Settings Button */}
++        {/* Settings Button — kept: the only route to provider configuration. */}
+         <div className="relative">
+           <button
+             onClick={() => setSettingsOpen(true)}
+diff --git a/components/language-switcher.tsx b/components/language-switcher.tsx
+index 9cbc8e4b..ddce62d5 100644
+--- a/components/language-switcher.tsx
++++ b/components/language-switcher.tsx
+@@ -1,5 +1,6 @@
+ 'use client';
+ 
++import { useIsEmbedded } from '@/lib/hooks/use-embed';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { supportedLocales } from '@/lib/i18n';
+ import { cn } from '@/lib/utils';
+@@ -23,6 +24,12 @@ interface LanguageSwitcherProps {
+  */
+ export function LanguageSwitcher({ onOpen }: LanguageSwitcherProps) {
+   const { locale, setLocale } = useI18n();
++  const embedded = useIsEmbedded();
++
++  // Gated here rather than at each call site: this pill is rendered from the
++  // home page, the classroom header and the Pro rail, and a host that supplied
++  // `?lang=` wants it gone from all three.
++  if (embedded) return null;
+ 
+   return (
+     <DropdownMenu
+diff --git a/components/site-header/theme-toggle.tsx b/components/site-header/theme-toggle.tsx
+index e9c15c55..d9a7f975 100644
+--- a/components/site-header/theme-toggle.tsx
++++ b/components/site-header/theme-toggle.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useState, useRef, useEffect } from 'react';
+ import { Sun, Moon, Monitor } from 'lucide-react';
++import { useIsEmbedded } from '@/lib/hooks/use-embed';
+ import { useTheme } from '@/lib/hooks/use-theme';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { cn } from '@/lib/utils';
+@@ -18,6 +19,7 @@ export function ThemeToggle() {
+   const { t } = useI18n();
+   const [open, setOpen] = useState(false);
+   const ref = useRef<HTMLDivElement>(null);
++  const embedded = useIsEmbedded();
+ 
+   useEffect(() => {
+     if (!open) return;
+@@ -28,6 +30,9 @@ export function ThemeToggle() {
+     return () => document.removeEventListener('mousedown', onDown);
+   }, [open]);
+ 
++  // A host that supplied `?theme=` owns this setting; see useIsEmbedded.
++  if (embedded) return null;
++
+   const ActiveIcon = OPTIONS.find((o) => o.value === theme)?.icon ?? Monitor;
+ 
+   return (
+diff --git a/components/stage/header-controls.tsx b/components/stage/header-controls.tsx
+index ae21bfe6..ac6af293 100644
+--- a/components/stage/header-controls.tsx
++++ b/components/stage/header-controls.tsx
+@@ -26,6 +26,8 @@ import { isVideoExportEnabled } from '@/lib/config/feature-flags';
+ import { useVideoRenderStore } from '@/lib/store/video-render';
+ import { CircularProgress } from '@/components/ui/circular-progress';
+ import { VideoExportDialog } from './video-export-dialog';
++import { useIsEmbedded } from '@/lib/hooks/use-embed';
++
+ import { LanguageSwitcher } from '../language-switcher';
+ import { SettingsDialog } from '../settings';
+ import {
+@@ -82,6 +84,7 @@ export function HeaderControls({
+   const { theme, setTheme } = useTheme();
+   const [settingsOpen, setSettingsOpen] = useState(false);
+   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
++  const embedded = useIsEmbedded();
+ 
+   // Export plumbing — uses the stage / media task stores to check
+   // readiness, then hands off to the export hooks. Available in both
+@@ -151,56 +154,59 @@ export function HeaderControls({
+         <LanguageSwitcher />
+ 
+         {/* Theme — same Portal-backed DropdownMenu pattern. Non-modal keeps
+-            Radix from body scroll-locking a fixed-height classroom layout. */}
+-        <DropdownMenu modal={false}>
+-          <DropdownMenuTrigger asChild>
+-            <button
+-              className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+-              aria-label={t('settings.theme')}
+-            >
+-              {theme === 'light' && <Sun className="w-4 h-4" />}
+-              {theme === 'dark' && <Moon className="w-4 h-4" />}
+-              {theme === 'system' && <Monitor className="w-4 h-4" />}
+-            </button>
+-          </DropdownMenuTrigger>
+-          <DropdownMenuContent align="end" sideOffset={8} className="min-w-[140px]">
+-            <DropdownMenuItem
+-              onSelect={() => setTheme('light')}
+-              className={cn(
+-                'cursor-pointer gap-2',
+-                theme === 'light' &&
+-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-              )}
+-            >
+-              <Sun className="w-4 h-4" />
+-              {t('settings.themeOptions.light')}
+-            </DropdownMenuItem>
+-            <DropdownMenuItem
+-              onSelect={() => setTheme('dark')}
+-              className={cn(
+-                'cursor-pointer gap-2',
+-                theme === 'dark' &&
+-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-              )}
+-            >
+-              <Moon className="w-4 h-4" />
+-              {t('settings.themeOptions.dark')}
+-            </DropdownMenuItem>
+-            <DropdownMenuItem
+-              onSelect={() => setTheme('system')}
+-              className={cn(
+-                'cursor-pointer gap-2',
+-                theme === 'system' &&
+-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+-              )}
+-            >
+-              <Monitor className="w-4 h-4" />
+-              {t('settings.themeOptions.system')}
+-            </DropdownMenuItem>
+-          </DropdownMenuContent>
+-        </DropdownMenu>
++            Radix from body scroll-locking a fixed-height classroom layout.
++            Hidden when a host supplies `?theme=`; see useIsEmbedded. */}
++        {!embedded && (
++          <DropdownMenu modal={false}>
++            <DropdownMenuTrigger asChild>
++              <button
++                className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
++                aria-label={t('settings.theme')}
++              >
++                {theme === 'light' && <Sun className="w-4 h-4" />}
++                {theme === 'dark' && <Moon className="w-4 h-4" />}
++                {theme === 'system' && <Monitor className="w-4 h-4" />}
++              </button>
++            </DropdownMenuTrigger>
++            <DropdownMenuContent align="end" sideOffset={8} className="min-w-[140px]">
++              <DropdownMenuItem
++                onSelect={() => setTheme('light')}
++                className={cn(
++                  'cursor-pointer gap-2',
++                  theme === 'light' &&
++                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                )}
++              >
++                <Sun className="w-4 h-4" />
++                {t('settings.themeOptions.light')}
++              </DropdownMenuItem>
++              <DropdownMenuItem
++                onSelect={() => setTheme('dark')}
++                className={cn(
++                  'cursor-pointer gap-2',
++                  theme === 'dark' &&
++                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                )}
++              >
++                <Moon className="w-4 h-4" />
++                {t('settings.themeOptions.dark')}
++              </DropdownMenuItem>
++              <DropdownMenuItem
++                onSelect={() => setTheme('system')}
++                className={cn(
++                  'cursor-pointer gap-2',
++                  theme === 'system' &&
++                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
++                )}
++              >
++                <Monitor className="w-4 h-4" />
++                {t('settings.themeOptions.system')}
++              </DropdownMenuItem>
++            </DropdownMenuContent>
++          </DropdownMenu>
++        )}
+ 
+-        {/* Settings */}
++        {/* Settings — kept when embedded: the only route to provider config. */}
+         <button
+           onClick={() => setSettingsOpen(true)}
+           className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+diff --git a/lib/hooks/use-embed.ts b/lib/hooks/use-embed.ts
+new file mode 100644
+index 00000000..c60aadec
+--- /dev/null
++++ b/lib/hooks/use-embed.ts
+@@ -0,0 +1,35 @@
++'use client';
++
++import { useEffect, useState } from 'react';
++
++/** Query parameter a host sets when it frames the app: `?embed=1`. */
++export const EMBED_QUERY_PARAM = 'embed';
++
++/**
++ * True when the app is running inside a host that owns its own chrome.
++ *
++ * A host embedding OpenMAIC in an iframe already renders a language menu and a
++ * theme switch of its own, and with `?lang=` and `?theme=` it decides what this
++ * app starts with. Leaving our copies of those controls on screen gives the
++ * reader two switches for one setting — and the one they reach for first is the
++ * one that loses on the next load, because the host reapplies its choice.
++ *
++ * Resolved after mount rather than during render. The server has no query
++ * string to read, so branching on it inline would hydrate differently than it
++ * rendered; a first paint that shows the controls and then hides them is the
++ * lesser problem and the one React can express.
++ *
++ * Deliberately narrow. This hides controls a host has taken over — it is not a
++ * kiosk mode, and it does not touch Settings (the only route to provider
++ * configuration, which a host cannot offer on our behalf) or the project's
++ * attribution.
++ */
++export function useIsEmbedded(): boolean {
++  const [embedded, setEmbedded] = useState(false);
++
++  useEffect(() => {
++    setEmbedded(new URLSearchParams(window.location.search).get(EMBED_QUERY_PARAM) === '1');
++  }, []);
++
++  return embedded;
++}

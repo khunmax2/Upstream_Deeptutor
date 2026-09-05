@@ -53,6 +53,11 @@ PROFILES: dict[str, set[str]] = {
         "next.config.ts",
         "lib/hooks/use-i18n.tsx",
         "lib/hooks/use-theme.tsx",
+        "lib/hooks/use-embed.ts",
+        "components/language-switcher.tsx",
+        "components/site-header/theme-toggle.tsx",
+        "components/stage/header-controls.tsx",
+        "app/page.tsx",
     },
     # PR 1 — Thai script support. Nothing in this project's font stack covers
     # Thai, and the video-export registry enumerates only cyrillic and arabic.

@@ -17,6 +17,34 @@ upstream.
 
 ---
 
+## Embed mode for OpenMAIC — `?embed=1` — 2026-09-06
+
+`0005-embed-mode.patch` completes the pair started by `0004`. Once a host
+decides the language and theme, the app's own language menu and theme switch
+become a second set of controls for settings it no longer owns — and the one a
+reader reaches for first is the one that loses on the next load.
+
+Scoped on purpose. Settings stays, because it is the only route to provider
+configuration and a host cannot offer that on the app's behalf; attribution
+stays untouched. This hides two controls, not the product's identity.
+
+The language gate went inside `LanguageSwitcher` rather than at its call sites:
+the pill is rendered from the home page, the classroom header and the Pro rail,
+and one edit covers all three. Theme has no equivalent single component — the
+Pro rail uses `ThemeToggle` while the home page and classroom header each build
+an inline menu — so all three were gated separately. That asymmetry cost a round
+of rework: the first attempt patched only the classroom header and had no effect
+on the home screen, which is the first thing anyone sees.
+
+Verified with `?lang=th&theme=dark&embed=1`: the control pill goes from three
+buttons to one, while the Thai locale and dark class both remain applied.
+
+The patch queue now stands at five, and every one is generic — none mentions
+DeepTutor, so all five sit in the upstream-candidate group rather than as
+integration adapters.
+
+---
+
 ## Embedding seams for OpenMAIC, kept generic enough to upstream — 2026-09-06
 
 Two patches that let a host embed OpenMAIC properly, neither of which mentions
