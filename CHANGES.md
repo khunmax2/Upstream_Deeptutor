@@ -896,6 +896,19 @@ the collapsed-rail tooltips wrap to two lines unclipped.
   Files: `CLAUDE.md` (dev baseline + reason), `pyproject.toml`,
   `requirements/dev.txt`.
 
+- **2026-09-05 — `CLAUDE.md`: the CI matrix line called 3.14 best-effort; it
+  gates.** The architecture summary read "import-check + pytest across Python
+  3.11–3.13 (3.14 best-effort)", and two agents in a row repeated it back as a
+  reason to keep a dev machine off 3.14. The workflow does not support the claim:
+  `.github/workflows/tests.yml` carries no `continue-on-error`, `experimental` or
+  allow-failure marker on any job, and `test-summary` declares `needs: [lint,
+  web-tests, multi-worker-web, import-check, python-tests]` — so a 3.14 failure is
+  a red build like any other. 3.14 is in fact the *most* covered version in the
+  matrix: import-check runs it on ubuntu, macOS and windows-latest, where
+  3.11–3.13 each run on ubuntu alone, and the job-level `PYTHONIOENCODING: utf-8`
+  exists precisely because of the Windows + 3.14 row. The line now states the real
+  matrix and that every entry gates.
+
 - **2026-09-04 — `docs/reports/REPORT_uat_2026-09-04.md`: first full-system UAT
   sweep of the fork, and the 13 findings it produced.** Eight waves against build
   `507b2ea8` / v1.6.4: CI gate, boot + auth across the four accounts, chat-turn

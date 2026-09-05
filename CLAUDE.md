@@ -89,7 +89,11 @@ npm run i18n:check              # i18n parity + audit (relevant to this fork's T
 ```
 
 CI (`.github/workflows/tests.yml`) gates on: ruff lint+format, `web/` node tests,
-import-check + pytest across Python 3.11–3.13 (3.14 best-effort).
+import-check + pytest across Python 3.11–3.14. **Every matrix entry gates** — the
+workflow carries no `continue-on-error` anywhere, and `test-summary` requires all
+five jobs. 3.14 is the widest-covered version, not the weakest: import-check runs
+it on ubuntu, macOS *and* windows-latest, while 3.11–3.13 each run on ubuntu
+alone.
 
 ## Fork policy for AI agents
 
