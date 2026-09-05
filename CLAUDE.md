@@ -45,8 +45,18 @@ Domain documentation uses a single-context layout with root `CONTEXT.md` and `do
 
 The repo has a local `.venv`; activate it or prefix commands with `python -m`.
 
+**Build the local `.venv` on Python 3.13, not 3.14.** CI tests 3.11–3.14 and the
+app runs on all of them, but 3.14 removes two RAG subsystems from a developer's
+machine *without an error*: `graphrag` cannot be installed at all (every release
+ever published caps at `Requires-Python <3.14`, and `pip install -e ".[graphrag]"`
+answers exit 0 with zero packages because the extra is marker-guarded), and BM25
+hybrid retrieval degrades to vector-only (`llama-index-retrievers-bm25` carries
+the same marker — PyStemmer 2.x has no 3.14 wheel). Both failures are silent at
+install time. See the 2026-09-05 entry under "Documentation" in `CHANGES.md`.
+
 ```bash
 # Install for development (source, with dev tooling)
+python3.13 -m venv .venv       # or: uv venv --python 3.13 .venv
 pip install -e ".[all]"        # everything; or .[dev] for just test/lint tooling
 
 # Run the app

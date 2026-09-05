@@ -268,6 +268,14 @@ dev = [
     "deeptutor[server]",
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
+    # Ruff is configured in [tool.ruff] below but was declared nowhere, so a
+    # fresh `pip install -e ".[all]"` produced a venv in which
+    # `scripts/precheck.sh` exited on its own `ruff` guard before running a
+    # single check. Pinned to the version CI installs
+    # (.github/workflows/tests.yml) and the pre-commit hook pins
+    # (.pre-commit-config.yaml) — a drift between the three is invisible until
+    # one formats a file the other rejects.
+    "ruff==0.16.0",
     "pre-commit>=3.0.0",
     "safety<3.0.0",
     "bandit>=1.8.0",

@@ -800,6 +800,62 @@ the collapsed-rail tooltips wrap to two lines unclipped.
 
 ## Documentation
 
+- **2026-09-05 — Local development is pinned to Python 3.13: on 3.14 two RAG
+  subsystems disappear, and neither failure announces itself.** `README.md` tells
+  contributors to use "Python 3.11–3.14" and CI genuinely tests all four, so 3.14
+  reads like a safe choice for a dev machine. It is not.
+
+  **GraphRAG cannot be installed at all.** Every release ever published, from
+  `0.1.1` to `3.1.2`, carries `Requires-Python <3.14`; pip answers `No matching
+  distribution found`, and pinning an older version makes it worse because the
+  pre-3.0 line caps at `<3.13`. The trap is that `pip install -e ".[graphrag]"`
+  never says so: the extra is guarded by the environment marker
+  `python_version < '3.14'`, so on 3.14 it resolves to zero packages and exits 0.
+  `services/rag/preflight.py` then reports "GraphRAG package installed: no" with
+  the remediation `pip install 'deeptutor[graphrag]'` — a loop with no exit.
+  (`--ignore-requires-python` does resolve the whole tree from 3.14 wheels, but
+  it bypasses a cap upstream set deliberately, nothing verifies graphrag *runs*
+  there, and the flag is lost on every venv rebuild.)
+
+  **BM25 hybrid retrieval degrades to vector-only.**
+  `llama-index-retrievers-bm25` carries the same marker because PyStemmer 2.x
+  ships no 3.14 wheel, so `build_retriever` returns a plain vector retriever
+  instead of the `QueryFusionRetriever` over `[VectorIndexRetriever,
+  BM25Retriever]` — while `retrieval_profile: "hybrid"` in
+  `data/user/settings/llamaindex.json` keeps claiming otherwise. It had been
+  working locally only because PyStemmer was once compiled from source by hand,
+  which any venv rebuild silently discards.
+
+  Rebuilt the local `.venv` on 3.13: **234 packages against the previous 203**.
+  That gap was not only the BM25 trio — four *declared core* dependencies were
+  missing as well (`pyte`, `youtube-transcript-api`, `redis`, `scipy`), plus the
+  whole Manim stack, `matrix-nio`, `bandit` and `import-linter`.
+
+  Verified equivalent rather than merely different. `pytest -q tests
+  deeptutor/learning/tests` returns **27 failed, 7022 passed, 47 skipped, 6
+  xfailed, 2 xpassed** — the identical counts on 3.14 and on 3.13 — and those 27
+  are local-settings noise, not code: under `scripts/precheck.sh`, which runs
+  pytest against CI's minimal `DEEPTUTOR_HOME`, the suite is **7049 passed, 47
+  skipped, 0 failed**, with ruff, ruff-format and the full `web` check green.
+  `lint-imports` keeps all three contracts. Resolving all 20 extras for both
+  interpreters showed no package that 3.13 downgrades — the `[all]` set is
+  byte-identical on 3.14 and 3.13.
+
+  One trade-off is worth knowing before installing GraphRAG: it pins
+  `nltk==3.9.1`, which drags `llama-index-core` from 0.14.24 back to 0.14.19.
+  On 3.13 that cost applies only if the extra is actually installed, so GraphRAG
+  belongs in its own venv rather than in the everyday `[all]` install.
+
+  Also fixed here: **`ruff` was configured in `[tool.ruff]` but declared as a
+  dependency nowhere.** CI installs it as its own step and pre-commit fetches its
+  own hook environment, so a fresh `pip install -e ".[all]"` produced a venv in
+  which `scripts/precheck.sh` exited on its own `ruff` guard before running a
+  single check. Added `ruff==0.16.0` to `[project.optional-dependencies].dev` and
+  `requirements/dev.txt`, matching the CI pin and the pre-commit `rev`.
+
+  Files: `CLAUDE.md` (dev baseline + reason), `pyproject.toml`,
+  `requirements/dev.txt`.
+
 - **2026-09-04 — `docs/reports/REPORT_uat_2026-09-04.md`: first full-system UAT
   sweep of the fork, and the 13 findings it produced.** Eight waves against build
   `507b2ea8` / v1.6.4: CI gate, boot + auth across the four accounts, chat-turn
