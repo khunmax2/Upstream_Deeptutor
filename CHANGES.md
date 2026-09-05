@@ -87,6 +87,17 @@ back to HKUDS; once merged upstream the divergence is removed.
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
 
+- **2026-09-05 — Working rule reversed: no more commits on `main`.** Every
+  change now starts on a branch and merges through a PR once CI is green;
+  `scripts/precheck.sh` stays as the fast local signal, not a replacement for
+  CI. Prompted by `main` sitting red for ~40 minutes that morning over a test
+  that was green on every dev machine and red on all four CI Python versions.
+  Recorded as `CLAUDE.md` §5, with the two traps that mislead agents here:
+  pushing a bare branch triggers no workflow (only `push` to `main`/`dev` and
+  `pull_request` do), and the `paths:` filter means a docs-only PR correctly
+  shows no Tests run at all. The stale note under §4 is corrected too —
+  `graphify-out/` is gitignored, decision made (`CLAUDE.md`).
+
 - **2026-09-05 — `.gitattributes` now normalises every tracked file to LF.**
   Upstream's rules cover `.py`, `.sh`, `.md`, `.json`, `.yaml` and `.toml`
   (2,015 files) but never `.ts`, `.tsx`, `.mjs`, `.css` or `.js` — 984 files

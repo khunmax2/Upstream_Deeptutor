@@ -157,6 +157,38 @@ Prefer it over blind `grep`/file-reading when answering "where/how does X work" 
   alongside the modification-logging in §1.
 - When the user types **`/graphify`**, invoke the `graphify` skill first.
 
-> Note: `graphify-out/` is generated output. Decide once whether to commit it (so agents
-> get the graph on a fresh clone) or gitignore it (smaller repo, regenerate locally). The
-> earlier `.gitignore` entry for it was lost in a re-branch — re-add the decision explicitly.
+> Note: `graphify-out/` is generated output and is **gitignored** (`.gitignore:335`) —
+> the decision that an earlier re-branch had lost. Regenerate it locally with
+> `graphify update .`; do not commit it.
+
+## 5. Branch workflow — never commit on `main`
+
+Adopted 2026-09-05, replacing the earlier "push straight to `main`" habit.
+
+Every change starts on a branch off `main` (`fix/…`, `feat:…`, `chore/…`), goes
+up as a PR, and merges only once CI is green. **Do not commit or push on
+`main`.**
+
+```bash
+git checkout -b fix/<topic>
+./scripts/precheck.sh          # fast local signal — still required
+git push -u origin fix/<topic>
+gh pr create --repo khunmax2/Upstream_Deeptutor --base main
+```
+
+Three things that trip agents up here:
+
+- **`precheck.sh` does not replace CI.** It runs one Python version on one OS;
+  CI runs 3.11–3.14 on Ubuntu plus a Windows import check. On 2026-09-05 a test
+  was green on every dev machine and red on all four CI versions, because CI's
+  `python-tests` job never runs `pip install -e .` and entry-point plugins
+  therefore do not resolve there. The branch is what keeps that off `main`.
+- **Pushing a bare branch triggers nothing.** `.github/workflows/tests.yml`
+  fires on `push` to `main`/`dev` and on `pull_request` — the PR is the only way
+  to get CI before merge.
+- **A docs- or config-only PR shows no Tests run.** The workflow has a `paths:`
+  filter (`deeptutor/**`, `tests/**`, `web/**`, `pyproject.toml`, …). No run is
+  the correct outcome, not a stuck check — don't wait on it.
+
+`gh` resolves the default repo to `HKUDS/DeepTutor` (the public upstream), so
+every `gh pr` / `gh run` command needs `--repo khunmax2/Upstream_Deeptutor`.
