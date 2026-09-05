@@ -64,6 +64,45 @@ services:
       - deeptutor-network
     restart: unless-stopped
 
+  # Verifies the DeepTutor session before anything reaches OpenMAIC, and strips
+  # `dt_token` on the way through so OpenMAIC never holds a session token that
+  # belongs to another application. nginx terminates TLS on :10330 and forwards
+  # here; see deploy/nginx-openmaic.locations.conf.
+  gatekeeper:
+    image: node:22-alpine
+    container_name: deeptutor-openmaic-gatekeeper
+    command: ["node", "/app/gatekeeper.mjs"]
+    working_dir: /app
+    volumes:
+      - ./openmaic-gatekeeper:/app:ro
+    ports:
+      # Loopback only: nginx is the sole route in. Publishing this on 0.0.0.0
+      # would expose the gate's own port and defeat the TLS termination above.
+      - "127.0.0.1:10331:10331"
+    environment:
+      - PORT=10331
+      - OPENMAIC_UPSTREAM=http://openmaic:3000
+      # Must point at a DeepTutor that can see the same cookie. On the current
+      # host that is the IP with its subpath, because there is no domain.
+      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:-https://203.185.144.41/deepwitya2/api/auth/status}
+      - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-https://203.185.144.41/deepwitya2/login}
+      - AUTH_CACHE_TTL_MS=${GATEKEEPER_AUTH_TTL_MS:-30000}
+    depends_on:
+      - openmaic
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:10331/__gatekeeper/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
   # Optional: durable server-side sessions for OpenMAIC's Pro agent workbench.
   # `lib/server/agent-runtime/store.ts` rejects outright without DATABASE_URL.
   openmaic-postgres:

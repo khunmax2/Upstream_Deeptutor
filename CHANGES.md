@@ -17,6 +17,49 @@ upstream.
 
 ---
 
+## An auth gate in front of the embedded OpenMAIC — 2026-09-06
+
+Framing OpenMAIC never protected it. Its requests go to its own origin and never
+pass through `web/proxy.ts`, so anyone who learned the address reached the app
+directly — measured earlier in this work: a plain GET with no cookie answered
+200. The usual answer, nginx `auth_request`, does not exist on the target host,
+which has no forward-auth anywhere in its config.
+
+**New: `deploy/openmaic-gatekeeper/`** — a dependency-free Node process that
+verifies the DeepTutor session before anything reaches OpenMAIC.
+
+What makes it cheap is a property of DeepTutor's own cookie. `dt_token` is
+host-only with `path=/` and `SameSite=None; Secure`, and cookies ignore the port,
+so a request to OpenMAIC on any port of the same host already carries it. That
+is a leak — an app that should not hold that token gets one on every request —
+and the gatekeeper turns it into the mechanism while closing it: it reads the
+cookie to decide, then strips it before forwarding.
+
+Three outcomes rather than two, because "the checker is down" must not be
+reported as "you are not signed in": 401 `not_signed_in` / 401 `session_invalid`
+/ **503 `auth_unavailable`**, plus 500 when its own configuration is missing —
+refusing rather than passing everything through.
+
+`gatekeeper.test.mjs` covers all of it against stubs, including the two that
+matter: `dt_token` is absent upstream while unrelated cookies survive, and an
+unreachable auth service yields 503 rather than 401. Stubs on purpose — pointed
+at a live DeepTutor the test could only confirm the happy path, and a gate never
+observed refusing anything is not a gate. 12 checks, all passing.
+
+Also new: `deploy/nginx-openmaic.locations.conf` (TLS on :10330, and
+`frame-ancestors` naming DeepTutor, with no `X-Frame-Options` beside it since
+that header cannot express a different port), and a `gatekeeper` service in the
+compose overlay. OpenMAIC itself now publishes **no host port at all** — the
+gate cannot be walked around from the host.
+
+Not solved, and stated plainly in the README: `dt_token` stays readable by
+anything else on that host. Cookies are scoped by host and path and ignore the
+port, so this keeps the token from OpenMAIC but not from a third application
+deployed beside it. A real domain and a separate subdomain is the structural
+fix; the host currently has an IP-SAN certificate and no domain at all.
+
+---
+
 ## Embed mode for OpenMAIC — `?embed=1` — 2026-09-06
 
 `0005-embed-mode.patch` completes the pair started by `0004`. Once a host
