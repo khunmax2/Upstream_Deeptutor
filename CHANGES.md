@@ -43,6 +43,12 @@ under `/api/*`, which `web/lib/proxy-policy.ts` forwards wholesale to FastAPI.
   workbench requires).
 - `deploy/OPENMAIC_EMBED.md` — the two deployment shapes, and the limitations
   this first cut knowingly ships with.
+- `docs/planning/PLAN_openmaic_thai_i18n.md` — measured plan for giving OpenMAIC
+  a Thai locale *upstream* rather than in our copy, so it survives every sync.
+  Sized from OpenMAIC's own source: 1,800 keys / 6,429 words in the main locale
+  plus 247 in the Pro workbench, 106 keys carrying interpolation, and two things
+  Vietnamese did not need — no font in the project covers Thai script, and the
+  video-export font registry knows only cyrillic and arabic.
 
 **Changed upstream files** (kept to three, each a single insertion)
 
