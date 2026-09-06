@@ -239,6 +239,39 @@ back to HKUDS; once merged upstream the divergence is removed.
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
 
+- **2026-09-06 — The eight bundled prompt templates now speak Thai.** The
+  "Soul library" and "Clone a persona" pickers in the partner wizard showed
+  English to Thai users no matter the interface language, because their content
+  is a *prompt*, not a label: three `PERSONA.md` presets and five
+  `DEFAULT_SOUL_TEMPLATES` entries, seeded to disk once and never revisited.
+  `locales/th/app.json` cannot reach either.
+
+  Thai variants live beside the originals — `presets/<name>/PERSONA.th.md` and a
+  new `soul_templates_th.py` — so upstream's own files stay almost untouched.
+  Two new fork modules, `services/persona/localization.py` and
+  `services/partners/soul_localization.py`, pick the variant and keep it in
+  sync; the four upstream call sites change by a line each.
+
+  Switching the interface language switches the templates *both ways*, and only
+  while a template is still byte-identical to something we ship in one of the
+  known languages. Edit one and it is yours, in whatever language you left it —
+  the same "provably untouched" rule as upstream's `_refresh_stale_default_souls`,
+  which this deliberately mirrors. A language with no complete translation falls
+  back to English rather than shipping a half-translated prompt. Both hooks sit
+  on the read path (`list_souls`, `list_personas`, `get_detail`), so no settings
+  endpoint and no write path changes.
+
+  Per the fork's translation rule, genuinely technical terms stay English —
+  "Socratic", "primary source", "trade-off", "edge case", "API" — and the tests
+  pin that so it cannot quietly regress. 18 new tests across
+  `tests/services/persona/test_persona_localization.py` and
+  `tests/services/partners/test_soul_localization.py`.
+
+  One consequence worth recording: `list_souls` now reads
+  `data/user/settings/interface.json`, so an assertion about a seeded soul used
+  to pass on an English machine and fail on a Thai one. The partners suite pins
+  the language in its `conftest.py` rather than encoding whoever ran it last.
+
 - **2026-09-05 — Working rule reversed: no more commits on `main`.** Every
   change now starts on a branch and merges through a PR once CI is green;
   `scripts/precheck.sh` stays as the fast local signal, not a replacement for

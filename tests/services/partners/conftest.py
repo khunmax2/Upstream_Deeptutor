@@ -15,6 +15,22 @@ import pytest
 from deeptutor.core.stream import StreamEvent
 
 
+@pytest.fixture(autouse=True)
+def _pin_interface_language(monkeypatch):
+    """Fork: keep the soul library out of the developer's own UI language.
+
+    ``list_souls`` now rewrites untouched seeds into the interface language
+    (see ``deeptutor/services/partners/soul_localization.py``), which reads
+    ``data/user/settings/interface.json``. Without this pin, every assertion
+    about a seeded soul passes on an English machine and fails on a Thai one —
+    the suite would encode whoever ran it last. Tests that care about the
+    language pass it explicitly instead.
+    """
+    from deeptutor.services.partners import soul_localization
+
+    monkeypatch.setattr(soul_localization, "current_language", lambda *_a, **_k: "en")
+
+
 @pytest.fixture
 def partners_root(tmp_path, monkeypatch) -> Path:
     """Redirect the admin workspace (and multi-user roots) under ``tmp_path``.
