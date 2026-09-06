@@ -17,6 +17,46 @@ upstream.
 
 ---
 
+## A check for the Thai gaps a translation cannot close — 2026-09-07
+
+**New: `deploy/openmaic-patches/check_openmaic_i18n_gaps.py`**, wired into
+`OPENMAIC_SYNC.md` as step 5b so it runs on every upstream update.
+
+Three Thai gaps have been found so far — a hardcoded English toast, a hardcoded
+Chinese dev chip, and an ASR language list offering `zh`, `en`, `ja`, `hi` and
+ten others but not `th` — and **every one was found by using the app**, never by
+a check. Coverage read 93.8%, `build_th_locale.py` passed, and OpenMAIC's own
+`check-i18n-keys.mjs` passed, because none of them looks at the place those come
+from. Leaving that to whoever happens to click the right thing is how the next
+one gets missed.
+
+It reports four kinds: UI text passed to `toast.*` as a literal; Chinese string
+literals in components; Chinese literals on server routes and agent files, which
+are model prompts rather than screen text and are a different problem; and arrays
+of language codes carrying `zh` and `en` but no `th` — the label already exists
+(`settings.lang_th` is "ไทย" in every locale), so what is missing is an option,
+and an option is data that no translation file can add.
+
+Validated the only way that means anything: it finds all three known cases at
+their exact lines, `app/page.tsx:293` and `:992` and
+`lib/hooks/use-home-discovery.tsx:139` and `lib/audio/constants.ts:51`.
+
+Getting there took four passes of removing noise, and the noise is worth
+recording because each round would have been reported as a finding:
+`lib/i18n/workbench.ts` is a locale table written in TypeScript, so its 245
+Chinese strings are correct code; Azure's voice names (`晓晓 (女)`) are proper
+nouns; Chinese comments are not shipped to anyone. A first version reported 568
+findings and would have been switched off by the second person to run it.
+
+One self-inflicted bug on the way, fixed: filtering comments early made the
+English-toast check conditional on a line containing Chinese, which silently
+dropped all eight of them.
+
+Files: `deploy/openmaic-patches/check_openmaic_i18n_gaps.py` (new),
+`deploy/OPENMAIC_SYNC.md`.
+
+---
+
 ## The container could not write to its own data directory — 2026-09-07
 
 **New: `deploy/openmaic-patches/0008-data-volume-ownership.patch`.** OpenMAIC's

@@ -111,6 +111,25 @@ upstream. New keys need no action to keep the app working — they render in
 English through the autofill, never in Chinese — so this is a backlog, not an
 outage. Translate them into `th-TH.partial.json` when convenient.
 
+### 5b. Look for gaps the translation cannot close
+
+```bash
+python deploy/openmaic-patches/check_openmaic_i18n_gaps.py --openmaic ../OpenMAIC
+```
+
+Step 5 checks the translation. This checks everything Thai needs that a
+translation file cannot supply: UI text hardcoded in source, Chinese literals in
+components, and language option lists with no `th` in them.
+
+It exists because all three kinds were found by *using the app*, not by any
+check — the coverage number was 93.8% and both gates were green while the screen
+still showed a Chinese chip and an English toast. Judgement finds these on the
+days somebody happens to click the right thing; a check finds them every time.
+
+Findings are not automatically work. Each is a source change, so each is a
+patch — and each is an upstream candidate, since none is about DeepTutor. What
+matters is that a new one is seen on the update that introduced it.
+
 ### 6. Build and verify
 
 ```bash
