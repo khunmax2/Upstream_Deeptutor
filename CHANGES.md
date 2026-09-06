@@ -239,6 +239,18 @@ back to HKUDS; once merged upstream the divergence is removed.
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
 
+- **2026-09-07 — `AGENTS.md` now points at `CLAUDE.md`.** `CLAUDE.md` tells
+  agents to read `AGENTS.md` first, but `AGENTS.md` carried no reference back —
+  an agent that starts from the architecture file (Codex reads it by default)
+  never learned the fork rules at all, including the Apache-2.0 §4(b)
+  modification logging in §1 and the branch-and-PR rule adopted in §5 the day
+  before. A short blockquote under the H1 closes the loop (`AGENTS.md`).
+
+  Found while clearing three June 2026 stashes: one of them held this same
+  pointer, written and then lost when the branch it sat on disappeared. Its
+  other changes — gitignoring `CLAUDE.md` and a local-only `CHANGELOG.md` —
+  are the approach §1 now warns against, so only the pointer was recovered.
+
 - **2026-09-07 — A fresh clone now comes up in Thai, and the last four partner
   strings are translated.** `data/` is gitignored, so a clone carries no
   `interface.json` and the defaults in `deeptutor/services/setup/init.py` are
