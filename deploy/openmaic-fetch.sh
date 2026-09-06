@@ -25,6 +25,13 @@
 #   ./deploy/openmaic-fetch.sh                 # prepare ../OpenMAIC
 #   ./deploy/openmaic-fetch.sh --dest /srv/x   # somewhere else
 #   ./deploy/openmaic-fetch.sh --host-pnpm     # use the host's pnpm instead
+#   ./deploy/openmaic-fetch.sh --strict        # also refuse on untracked files
+#
+# Untracked files in the checkout are reported and then tolerated: they cannot
+# be built over, and on a working machine they are ordinary debris. Modified
+# tracked files are refused, because those are edits to upstream source that a
+# build would silently absorb. --strict refuses on both, which is what you want
+# before generating a patch or opening an upstream PR.
 #
 # Then, from the repository root:
 #
@@ -40,13 +47,15 @@ PIN="$PATCH_DIR/openmaic-pin.json"
 DEST="$REPO_ROOT/../OpenMAIC"
 USE_HOST_PNPM=0
 SKIP_DEPS=0
+STRICT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dest) DEST="$2"; shift 2 ;;
     --host-pnpm) USE_HOST_PNPM=1; shift ;;
     --skip-deps) SKIP_DEPS=1; shift ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --strict) STRICT=1; shift ;;
+    -h|--help) sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -101,16 +110,40 @@ else
         'pnpm-lock.yaml'
     } | sort -u | sed 's/[].[^$\\*/]/\\&/g' | paste -sd'|' -
   )"
-  FOREIGN="$(git -C "$DEST" status --porcelain | sed 's/^...//' \
+  # Modified and untracked are not the same risk, and treating them alike was
+  # wrong. A *modified* tracked file is somebody's edit to upstream source: build
+  # over it and their change is in the image with no record of it, so that is
+  # worth stopping for. An *untracked* file cannot be built over — it can only be
+  # added — and on a working machine these are ordinary debris: editor backups,
+  # a local compose override, an agent's notes. Refusing on those turns the guard
+  # into something to be worked around, which is how a guard stops being read.
+  #
+  # Untracked files are still named, because an untracked *source* file can
+  # genuinely change a Next build — a stray `app/**/page.tsx` becomes a route.
+  # Being told is the point; being blocked is not.
+  STATUS="$(git -C "$DEST" status --porcelain)"
+  FOREIGN_MOD="$(printf '%s\n' "$STATUS" | grep -v '^??' | sed 's/^...//' \
       | grep -Ev "^($OURS_RE)$" || true)"
-  if [ -n "$FOREIGN" ]; then
-    printf '\n'
-    printf '%s\n' "$FOREIGN" | while IFS= read -r f; do printf '    %s\n' "$f"; done
-    die "the checkout carries changes this script did not make.
+  FOREIGN_NEW="$(printf '%s\n' "$STATUS" | grep '^??' | sed 's/^...//' \
+      | grep -Ev "^($OURS_RE)$" || true)"
 
-Building over them would fold somebody's work into the image without a record
-of it. Deal with them deliberately — this script will not run 'git checkout --'
-or 'git reset --hard' on your behalf.
+  if [ -n "$FOREIGN_NEW" ]; then
+    printf '\n\033[33m    untracked files present — not built over, but they are in the build context:\033[0m\n'
+    printf '%s\n' "$FOREIGN_NEW" | while IFS= read -r f; do printf '      %s\n' "$f"; done
+    printf '    (pass --strict to refuse on these too, e.g. before an upstream PR)\n'
+    if [ "$STRICT" = "1" ]; then
+      die "--strict given, and the checkout carries untracked files that are not ours."
+    fi
+  fi
+
+  if [ -n "$FOREIGN_MOD" ]; then
+    printf '\n'
+    printf '%s\n' "$FOREIGN_MOD" | while IFS= read -r f; do printf '    %s\n' "$f"; done
+    die "the checkout has modified files this script did not make.
+
+These are edits to upstream source. Building over them would fold somebody's
+work into the image with no record of it. Deal with them deliberately — this
+script will not run 'git checkout --' or 'git reset --hard' on your behalf.
 
 To reverse only what this script applied:
 

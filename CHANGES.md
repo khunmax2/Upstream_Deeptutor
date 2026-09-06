@@ -17,6 +17,36 @@ upstream.
 
 ---
 
+## The fetch guard refused on things it had no business refusing — 2026-09-06
+
+`openmaic-fetch.sh` treated every local change in the OpenMAIC checkout alike and
+refused on all of them. On a real working machine that meant refusing over editor
+backups, a local `docker-compose.override.yml` and an agent's `CLAUDE.md` — none
+of which the script could build over, because untracked files can only be added.
+
+That is the failure mode where a guard stops being read. Anything that blocks on
+ordinary debris becomes something to work around, and then it is not protecting
+anything.
+
+Split by risk instead:
+
+- **modified** tracked files outside the patch set — refuse. These are edits to
+  upstream source, and a build absorbs them silently.
+- **untracked** files — name them and continue. Named rather than ignored,
+  because an untracked *source* file can still change a Next build: a stray
+  `app/**/page.tsx` becomes a route.
+- `--strict` refuses on both, for the case the original behaviour was actually
+  right for: preparing a patch or an upstream PR, where anything foreign rides
+  along.
+
+Verified against a real clone in all four states: untracked only (warns,
+continues), `--strict` on the same (refuses), a foreign modified file (refuses
+without `--strict`), and restored (continues).
+
+Files: `deploy/openmaic-fetch.sh`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
 ## A runbook for the Docker bring-up — 2026-09-06
 
 **New: `deploy/OPENMAIC_RUNBOOK.md`.** The sequence that was actually run, from a

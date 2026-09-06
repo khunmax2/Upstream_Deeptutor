@@ -88,9 +88,19 @@ Expected output ends with:
     ../OpenMAIC is at d4ef5faa... with 6 patch(es) applied.
 ```
 
-Safe to re-run. It recognises patches it already applied, and refuses if the
-checkout carries a change **it did not make** rather than building over someone
-else's work.
+Safe to re-run. It recognises patches it already applied.
+
+It treats two kinds of local change differently, because they are not the same
+risk. A **modified** tracked file is an edit to upstream source: building over it
+folds somebody's work into the image with no record of it, so the script refuses.
+An **untracked** file cannot be built over — only added — so it is named and
+tolerated, since on any working machine these are ordinary debris (editor
+backups, a local compose override, an agent's notes). They are still named
+because an untracked *source* file can genuinely change a Next build: a stray
+`app/**/page.tsx` becomes a route.
+
+`--strict` refuses on both. Use it before generating a patch or opening an
+upstream PR, where anything foreign would ride along.
 
 > **Why step 4 is not optional.** Patch `0002` adds a dependency but deliberately
 > leaves `pnpm-lock.yaml` out of the patch — that one package churns 2,934 lines
