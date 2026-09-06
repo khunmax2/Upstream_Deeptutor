@@ -17,6 +17,60 @@ upstream.
 
 ---
 
+## 0004 and 0005 were inert: the host never sent what they read — 2026-09-06
+
+Both patches let a host choose OpenMAIC's language, theme and chrome through
+query parameters (`?lang=`, `?theme=`, `?embed=1`). Nothing in DeepTutor ever
+sent them. `MaicWorkspace` framed the bare URL, and `normalizeEmbedUrl` rebuilds
+its result as `origin + pathname`, so a query string added by an operator was
+discarded too. The receiving half existed; the sending half was never written,
+and the whole "reads as one product" result did nothing in the actual product.
+
+Found by running the two apps on genuinely different origins for the first time
+— DeepTutor on `127.0.0.1:3200`, OpenMAIC on `localhost:3100` — rather than
+loading OpenMAIC's dev server with hand-typed parameters, which is what the
+patches' own "verified" notes describe.
+
+**New in `web/components/maic/MaicWorkspace.tsx`:**
+
+- the frame's src carries `embed=1`, `lang`, and `theme` from `useAppShell()`,
+  so the panel opens in the language and theme the reader is already using
+- DeepTutor's four themes map onto OpenMAIC's two by what they *render as*:
+  `glass` sets the `dark` class, `snow` is the pure-white default. Collapsing
+  four onto two also means `dark` -> `glass` changes nothing here, so the frame
+  is not reloaded for a switch it cannot represent
+- the open-in-new-tab link carries `lang` and `theme` but **not** `embed=1`: a
+  tab of its own should have back the controls this app was standing in for
+- nothing is framed until `languageReady`, and the spinner tracks *which* src
+  finished loading rather than a bare boolean. Rendering first and correcting
+  after would load OpenMAIC twice, the first time in the wrong language
+
+OpenMAIC reads all three once on mount, so changing either value reloads the
+frame. That cost is accepted — a language change is deliberate and infrequent —
+but it is a cost: a course generation running at that moment is lost.
+
+**Verified across two real origins**, with `contentDocument` blocked by the
+browser as proof the origins are genuinely separate:
+
+| | |
+|---|---|
+| `?lang=th` | OpenMAIC renders Thai inside the frame |
+| `?theme=dark` / `snow` -> `light` | frame follows the host both ways |
+| `?embed=1` | framed shows only the settings gear; the same build opened directly shows the full language/theme/settings pill |
+
+`ALLOWED_FRAME_ANCESTORS` is required for any of this to be visible at all —
+without it OpenMAIC sends `frame-ancestors 'self'` plus `X-Frame-Options:
+SAMEORIGIN` and the frame is blocked. `deploy/docker-compose.openmaic.yml`
+already sets it; this run confirmed what the failure looks like when it is
+missing.
+
+The two known upstream i18n gaps were confirmed visually in a Thai session: the
+hardcoded English persistence toast, and the hardcoded Chinese dev chip.
+
+Files: `web/components/maic/MaicWorkspace.tsx`.
+
+---
+
 ## The nginx block would not have loaded on the target host — 2026-09-06
 
 `deploy/nginx-openmaic.locations.conf` used `http2 on;`, the standalone directive

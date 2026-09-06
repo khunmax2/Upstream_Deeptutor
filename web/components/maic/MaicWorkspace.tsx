@@ -5,12 +5,62 @@ import { ExternalLink, Loader2, PlugZap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { withBasePath } from "@/lib/basePath";
+import { useAppShell } from "@/context/AppShellContext";
+import type { Theme } from "@/lib/theme";
+import type { AppLanguage } from "@/context/app-shell-storage";
 
 interface MaicWorkspaceProps {
   /** Resolved by the server page; "" when OpenMAIC is not configured. */
   url: string;
   /** True when `url` is a path on this origin rather than an absolute URL. */
   sameOrigin: boolean;
+}
+
+/**
+ * DeepTutor has four themes; OpenMAIC has light and dark. Map by what the theme
+ * actually renders as rather than by name: `glass` sets the `dark` class too, and
+ * `snow` is the pure-white default. Getting this backwards would put a white
+ * panel inside a dark page, which is the exact seam this work exists to remove.
+ *
+ * Collapsing four onto two also means `dark` -> `glass` produces no change here,
+ * so the frame is not reloaded for a switch it cannot represent.
+ */
+function toEmbedTheme(theme: Theme): "dark" | "light" {
+  return theme === "dark" || theme === "glass" ? "dark" : "light";
+}
+
+/**
+ * Hand the host's language and theme to OpenMAIC as query parameters.
+ *
+ * This is the sending half of the arrangement OpenMAIC's `?lang=`/`?theme=`/
+ * `?embed=1` support was added for. Query parameters rather than shared storage
+ * because the two apps are deliberately on different origins: OpenMAIC cannot
+ * read this app's localStorage, and arranging for it to be able to would merge
+ * every other key along with these two.
+ *
+ * `embed=1` additionally tells OpenMAIC to hide its own language and theme
+ * controls, since this app already renders those and two sets of them in one
+ * window is how an embed announces itself as a second application.
+ *
+ * OpenMAIC reads all three once on mount, so changing either value changes this
+ * URL and reloads the frame. That is a real cost — a course generation running
+ * at that moment is lost — accepted because changing language or theme is a
+ * deliberate, infrequent act, and the alternative is a panel that stays in the
+ * wrong language until something else happens to reload it.
+ */
+function withHostPreferences(
+  src: string,
+  language: AppLanguage,
+  theme: Theme,
+  { embedded }: { embedded: boolean },
+): string {
+  const separator = src.includes("?") ? "&" : "?";
+  const params = new URLSearchParams({ lang: language, theme: toEmbedTheme(theme) });
+  // Only the framed copy is embedded. Opening OpenMAIC in its own tab should
+  // give back the controls this app is standing in for, while still landing in
+  // the language and theme the reader was just using.
+  if (embedded) params.set("embed", "1");
+  return `${src}${separator}${params.toString()}`;
 }
 
 /**
@@ -24,7 +74,8 @@ interface MaicWorkspaceProps {
  */
 export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
   const { t } = useTranslation();
-  const [loaded, setLoaded] = useState(false);
+  const { theme, language, languageReady } = useAppShell();
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   if (!url) {
     return (
@@ -64,7 +115,9 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
 
   // Only a same-origin path needs the reverse-proxy prefix; an absolute URL is
   // already complete, and withBasePath leaves it alone anyway.
-  const src = sameOrigin ? withBasePath(url) : url;
+  const base = sameOrigin ? withBasePath(url) : url;
+  const frameSrc = withHostPreferences(base, language, theme, { embedded: true });
+  const tabSrc = withHostPreferences(base, language, theme, { embedded: false });
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -79,7 +132,7 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
           {t("OpenMAIC course studio")}
         </span>
         <a
-          href={src}
+          href={tabSrc}
           target="_blank"
           rel="noopener noreferrer"
           title={t("Open OpenMAIC in a new tab")}
@@ -91,7 +144,7 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
       </div>
 
       <div className="relative min-h-0 flex-1">
-        {!loaded ? (
+        {loadedSrc !== frameSrc ? (
           <div className="absolute inset-0 flex items-center justify-center bg-[var(--background)]">
             <Loader2
               size={22}
@@ -100,13 +153,21 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
           </div>
         ) : null}
 
-        <iframe
-          src={src}
-          title={t("OpenMAIC course studio")}
-          onLoad={() => setLoaded(true)}
-          allow="clipboard-write; fullscreen; microphone"
-          className="h-full w-full border-0"
-        />
+        {/* Nothing is framed until the stored language has been read. Rendering
+            first and correcting after would load OpenMAIC twice, and the first
+            load would be the wrong language — visibly, for as long as it takes
+            to start. Tracking which src finished loading, rather than a bare
+            boolean, keeps the spinner honest when a preference change reloads
+            the frame. */}
+        {languageReady ? (
+          <iframe
+            src={frameSrc}
+            title={t("OpenMAIC course studio")}
+            onLoad={() => setLoadedSrc(frameSrc)}
+            allow="clipboard-write; fullscreen; microphone"
+            className="h-full w-full border-0"
+          />
+        ) : null}
       </div>
     </div>
   );
