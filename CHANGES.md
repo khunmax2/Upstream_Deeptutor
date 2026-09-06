@@ -17,6 +17,45 @@ upstream.
 
 ---
 
+## One place to configure providers, and no patch needed — 2026-09-07
+
+**New: `deploy/openmaic-patches/build_server_providers.py`**, mounted read-only by
+the compose overlay and documented as runbook step 4b.
+
+Two applications side by side, each with its own provider settings, is the seam a
+customer notices before any other: nobody expects to type the same API key twice.
+It turned out to need no source change at all. OpenMAIC already reads a
+server-side `server-providers.yml` covering `providers` (LLM), `tts`, `asr`,
+`pdf`, `image`, `video` and `web-search`, and its own `docker-compose.yml` carries
+the mount line commented out. What was missing was something to write the file.
+
+This reads DeepTutor's `data/user/settings/model_catalog.json` and writes it —
+the *active* profile per service, not merely the first one. Three things it has
+to get right:
+
+- **Container addresses.** A base URL of `http://localhost:11434` works in
+  DeepTutor's settings page and points at the container itself once OpenMAIC
+  reads it. Loopback hosts are rewritten to `host.docker.internal`, and the
+  rewrite is reported rather than done quietly.
+- **Names differ per capability.** The same vendor is `openai` for LLM,
+  `openai-tts` for speech and `openai-whisper` for recognition. A first version
+  used one mapping table and emitted `openai` in all three; OpenMAIC's loader
+  ignores ids it does not know, so the TTS and ASR entries would have vanished in
+  silence and the file would have looked entirely correct. Caught by checking the
+  ids against `provider-config.ts`'s own env maps — the script's own comment had
+  warned about exactly this failure and the first version still walked into it.
+- **The output holds secrets.** Written under `data/` (gitignored), and nothing
+  prints a key: `--dry-run` masks every credential.
+
+Verified by asking OpenMAIC rather than by reading the file back: with it
+mounted, `/api/server-providers` reports `providers.google` with the Gemini
+model, `tts.openai-tts`, `asr.openai-whisper` and `webSearch.tavily`.
+
+Files: `deploy/openmaic-patches/build_server_providers.py` (new),
+`deploy/docker-compose.openmaic.yml`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
 ## The PCM patch assumed a byte order — 2026-09-07
 
 `0007` wrapped raw PCM in a WAV header and left the samples as they arrived.

@@ -96,6 +96,15 @@ services:
       - NODE_ENV=production
     volumes:
       - openmaic-data:/app/data
+      # Provider credentials, generated from DeepTutor's own settings by
+      # deploy/openmaic-patches/build_server_providers.py. Read-only, and absent
+      # until that script has been run — OpenMAIC treats a missing file as "no
+      # server-side providers" and falls back to whatever each browser has, which
+      # is the behaviour before this bridge existed.
+      #
+      # Regenerate and restart `openmaic` after changing a provider in DeepTutor;
+      # the file is read once at startup.
+      - ./data/user/openmaic/server-providers.yml:/app/server-providers.yml:ro
     networks:
       - deeptutor-network
     restart: unless-stopped

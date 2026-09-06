@@ -215,6 +215,36 @@ word.
 page reads this per request — `force-dynamic` — so no rebuild or restart of
 DeepTutor is needed.
 
+## 4b. Hand OpenMAIC the providers DeepTutor already has
+
+```bash
+python3 deploy/openmaic-patches/build_server_providers.py --dry-run   # keys masked
+python3 deploy/openmaic-patches/build_server_providers.py
+```
+
+Without this, an operator configures every API key twice — once in DeepTutor and
+again inside the embedded app — which is the seam a customer notices before any
+other. It needs no patch: OpenMAIC already reads a server-side
+`server-providers.yml` covering LLM, TTS, ASR, PDF, image, video and web search,
+and its own compose file carries the mount line commented out. What was missing
+was something to write the file, which is what this does, from
+`data/user/settings/model_catalog.json`.
+
+The compose overlay mounts it read-only. It contains credentials and lives under
+`data/`, which is gitignored. Re-run it after changing a provider in DeepTutor
+and restart `openmaic` — the file is read once at startup.
+
+Confirm OpenMAIC agrees, rather than assuming the mount was enough:
+
+```bash
+docker exec deeptutor-openmaic node -e "fetch('http://127.0.0.1:3000/api/server-providers').then(r=>r.json()).then(d=>console.log(Object.keys(d.providers),Object.keys(d.tts),Object.keys(d.asr)))"
+```
+
+Anything missing there was skipped, and the script says why on the line above.
+A provider id OpenMAIC does not recognise is ignored **in silence** — the same
+vendor is `openai` for LLM, `openai-tts` for speech and `openai-whisper` for
+recognition, and getting that wrong looks exactly like success.
+
 ## 5. Start it
 
 ```bash
