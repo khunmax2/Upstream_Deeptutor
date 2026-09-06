@@ -47,6 +47,11 @@ import {
 /**
  * Default supported languages for custom OpenAI-compatible ASR providers.
  * A practical subset of commonly used languages + auto-detect.
+ *
+ * These are the choices offered, not a claim about any one model — a provider
+ * that cannot handle a language declares its own `supportedLanguages`, as
+ * `funasr` does. Whisper, which is what most OpenAI-compatible endpoints serve,
+ * transcribes every entry here.
  */
 export const CUSTOM_ASR_DEFAULT_LANGUAGES = [
   'auto',
@@ -62,6 +67,7 @@ export const CUSTOM_ASR_DEFAULT_LANGUAGES = [
   'pt',
   'it',
   'hi',
+  'th',
 ];
 
 /**
