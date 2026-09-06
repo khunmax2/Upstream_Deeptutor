@@ -1,5 +1,22 @@
 # DeepTutor — Agent-Native Architecture
 
+> **This is a fork. Read [CLAUDE.md](CLAUDE.md) before you change anything.**
+>
+> `AGENTS.md` describes the architecture and stops there. The rules every agent
+> working in this repository must follow — whichever tool you are — live in
+> `CLAUDE.md`:
+>
+> - **§1 Modification logging (required).** Apache-2.0 §4(b): every change is
+>   recorded in `CHANGES.md`, and multi-step work also gets a
+>   `docs/reports/REPORT_*.md`. Skipping this breaks the licence compliance the
+>   fork depends on.
+> - **§2 Upstream sync.** Impact analysis before merge; never sync onto a
+>   red-CI upstream release.
+> - **§3 Keep customizations mergeable.** Prefer a new file over editing an
+>   upstream one.
+> - **§5 Branch workflow.** Never commit on `main` — branch, PR, CI green,
+>   merge.
+
 ## Overview
 
 DeepTutor is an **agent-native** intelligent learning companion organized
