@@ -17,6 +17,25 @@ upstream.
 
 ---
 
+## The nginx block would not have loaded on the target host — 2026-09-06
+
+`deploy/nginx-openmaic.locations.conf` used `http2 on;`, the standalone directive
+introduced in nginx 1.25. The target host runs 1.24, where it is an unknown
+directive and `nginx -t` rejects the entire configuration — so the one step that
+needs someone's `sudo` would have failed at the moment they ran it.
+
+Found by syntax-checking the file offline against `nginx:1.24-alpine` with the
+certificate paths pointed at a throwaway self-signed pair. It had never been run
+through nginx at all before; it was written to be correct rather than checked.
+
+**Fixed** — `listen 10330 ssl http2;`. Now passes `nginx -t` on 1.24 and on 1.27,
+the latter with a deprecation warning noted inline for whenever the host moves
+past 1.25.
+
+Files: `deploy/nginx-openmaic.locations.conf`.
+
+---
+
 ## The gatekeeper read the wrong field, found by testing against a real DeepTutor — 2026-09-06
 
 `deploy/openmaic-gatekeeper/gatekeeper.mjs` decided access from
