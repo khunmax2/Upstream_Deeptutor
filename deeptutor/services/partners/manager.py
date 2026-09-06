@@ -35,6 +35,10 @@ from deeptutor.services.partners.runtime_status import (
     get_partner_runtime_status_repository,
 )
 from deeptutor.services.partners.sessions import PartnerSessionStore
+from deeptutor.services.partners.soul_localization import (
+    localized_soul_templates,
+    relocalize_seed_souls,
+)
 from deeptutor.services.partners.workspace import (
     DEFAULT_SOUL,
     ensure_partner_workspace,
@@ -1366,8 +1370,15 @@ class PartnerManager:
             return []
         refreshed = _refresh_stale_default_souls(souls)
         if refreshed is not None:
-            self._save_souls(refreshed)
-            return refreshed
+            souls = refreshed
+        # Fork: untouched seeds follow the interface language. Runs after the
+        # upstream upgrade above so a legacy alias is collapsed onto its
+        # canonical id first, then translated.
+        localized = relocalize_seed_souls(souls, DEFAULT_SOUL_TEMPLATES)
+        if localized is not None:
+            souls = localized
+        if refreshed is not None or localized is not None:
+            self._save_souls(souls)
         return souls
 
     def _save_souls(self, souls: list[dict[str, str]]) -> None:
@@ -1378,7 +1389,10 @@ class PartnerManager:
         )
 
     def _seed_default_souls(self) -> None:
-        self._save_souls([dict(entry) for entry in DEFAULT_SOUL_TEMPLATES])
+        # Fork: seed in the interface language (see soul_localization).
+        self._save_souls(
+            [dict(entry) for entry in localized_soul_templates(DEFAULT_SOUL_TEMPLATES)]
+        )
 
     def list_souls(self) -> list[dict[str, str]]:
         return self._load_souls()
