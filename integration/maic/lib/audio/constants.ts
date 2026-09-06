@@ -53,6 +53,31 @@ import {
  * `funasr` does. Whisper, which is what most OpenAI-compatible endpoints serve,
  * transcribes every entry here.
  */
+/**
+ * The language to fall back to when the chosen one is not offered by a provider.
+ *
+ * `supportedLanguages[0]` was the old answer, and for `browser-native` that is
+ * `zh-CN` — so a reader who had picked Thai and switched recogniser was quietly
+ * moved to Chinese. Whisper obliges a language it is told, so the symptom is not
+ * an error: Thai speech comes back as fluent Chinese text.
+ *
+ * Preference order, and why each:
+ *   auto            let the recogniser decide — the only answer right for every
+ *                   reader, so it wins wherever a provider offers it
+ *   same language   `th` and `th-TH` are one request spelled two ways; a provider
+ *                   that spells it differently should not change what was asked
+ *   first offered   nothing better remains
+ */
+export function fallbackASRLanguage(current: string, supported: readonly string[]): string {
+  if (supported.includes('auto')) return 'auto';
+  const base = (current || '').split('-')[0].toLowerCase();
+  if (base) {
+    const sameLanguage = supported.find((code) => code.toLowerCase().split('-')[0] === base);
+    if (sameLanguage) return sameLanguage;
+  }
+  return supported[0] || 'auto';
+}
+
 export const CUSTOM_ASR_DEFAULT_LANGUAGES = [
   'auto',
   'zh',

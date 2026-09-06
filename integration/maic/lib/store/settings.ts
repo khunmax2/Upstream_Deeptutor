@@ -24,6 +24,7 @@ import {
   isQwenCatalogVoice,
   isQwenVoiceCloneModel,
   TTS_PROVIDERS,
+  fallbackASRLanguage,
 } from '@/lib/audio/constants';
 import { DEFAULT_VOXCPM_BACKEND, VOXCPM_MODEL_ID, VOXCPM_VLLM_MODEL_ID } from '@/lib/audio/voxcpm';
 import { PDF_PROVIDERS } from '@/lib/pdf/constants';
@@ -479,7 +480,7 @@ const getDefaultAudioConfig = () => ({
   ttsVoice: 'default',
   ttsSpeed: 1.0,
   asrProviderId: 'browser-native' as ASRProviderId,
-  asrLanguage: 'zh',
+  asrLanguage: 'auto',
   ttsProvidersConfig: {
     // Built-in providers default enabled:true — they only ever surface once
     // configured (API key or server-managed), so "enabled" is a user opt-OUT,
@@ -1096,7 +1097,9 @@ export const useSettingsStore = create<SettingsState>()(
             const isLanguageValid = supportedLanguages.includes(state.asrLanguage);
             return {
               asrProviderId: providerId,
-              ...(isLanguageValid ? {} : { asrLanguage: supportedLanguages[0] || 'auto' }),
+              ...(isLanguageValid
+                ? {}
+                : { asrLanguage: fallbackASRLanguage(state.asrLanguage, supportedLanguages) }),
             };
           }),
 
@@ -1357,7 +1360,7 @@ export const useSettingsStore = create<SettingsState>()(
               asrProvidersConfig: rest as typeof state.asrProvidersConfig,
               ...(state.asrProviderId === id && {
                 asrProviderId: 'browser-native' as ASRProviderId,
-                asrLanguage: 'zh',
+                asrLanguage: 'auto',
               }),
             };
           }),
