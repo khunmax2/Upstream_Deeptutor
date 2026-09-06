@@ -27,6 +27,13 @@ const faces = [
     family: 'OpenMAIC Noto Sans Arabic',
     filename: 'noto-sans-arabic-arabic-400-normal.woff2',
   },
+  {
+    script: 'thai',
+    package: 'noto-sans-thai',
+    subset: 'thai',
+    family: 'OpenMAIC Noto Sans Thai',
+    filename: 'noto-sans-thai-thai-400-normal.woff2',
+  },
 ];
 const outputPath = path.join(
   root,
@@ -138,7 +145,7 @@ const faceCss = Object.fromEntries(
   facesWithUnicodeRanges.map((face) => [face.filename, cssFor(face)]),
 );
 const scriptCssTemplates = Object.fromEntries(
-  ['cyrillic', 'arabic'].map((script) => [
+  ['cyrillic', 'arabic', 'thai'].map((script) => [
     script,
     facesWithUnicodeRanges
       .filter((face) => face.script === script)
@@ -147,7 +154,7 @@ const scriptCssTemplates = Object.fromEntries(
   ]),
 );
 const scriptCoverage = Object.fromEntries(
-  ['cyrillic', 'arabic'].map((script) => [
+  ['cyrillic', 'arabic', 'thai'].map((script) => [
     script,
     compactRanges(
       facesWithUnicodeRanges
@@ -157,7 +164,7 @@ const scriptCoverage = Object.fromEntries(
   ]),
 );
 const scriptAssets = Object.fromEntries(
-  ['cyrillic', 'arabic'].map((script) => [
+  ['cyrillic', 'arabic', 'thai'].map((script) => [
     script,
     facesWithUnicodeRanges
       .filter((face) => face.script === script)

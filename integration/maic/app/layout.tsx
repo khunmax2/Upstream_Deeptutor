@@ -28,6 +28,14 @@ import { ProSwapWatcher } from '@/components/workbench/ProSwapWatcher';
 // next/font's generated class.
 import '@fontsource-variable/inter';
 
+// Inter carries latin, latin-ext, greek, cyrillic and vietnamese, but no Thai,
+// so Thai UI text fell back to whatever font the OS happened to supply. These
+// two files declare Noto Sans Thai with `unicode-range` per subset, exactly as
+// Inter does above, so the browser fetches the Thai face only when Thai glyphs
+// actually appear and falls through per glyph in mixed Thai/Latin runs.
+import '@fontsource/noto-sans-thai/400.css';
+import '@fontsource/noto-sans-thai/700.css';
+
 export const metadata: Metadata = {
   title: 'OpenMAIC',
   description:
