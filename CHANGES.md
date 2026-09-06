@@ -17,6 +17,74 @@ upstream.
 
 ---
 
+## A runbook for the Docker bring-up — 2026-09-06
+
+**New: `deploy/OPENMAIC_RUNBOOK.md`.** The sequence that was actually run, from a
+machine with no containers, no images and no `../OpenMAIC`, plus the ten problems
+it hit on the way. Written so that following it reproduces the same result rather
+than a similar one — every step carries the check that tells you it worked, and
+the failure it looks like when it did not.
+
+The problems are recorded because most of them are invisible from the outside: a
+blank iframe has a dozen possible causes that look identical, a dead gatekeeper
+and a permissive one are indistinguishable from `curl`, and an edit that never
+reached its file reads exactly like a fix that did not work.
+
+Its own verification commands were run before committing it, and two were
+rewritten as a result: the image name is derived from the compose project rather
+than hardcoded (it follows the directory name, so a differently named clone
+produces a differently named image), and the `python3`/`python` split on Windows
+is called out where those one-liners are used.
+
+Files: `deploy/OPENMAIC_RUNBOOK.md` (new).
+
+---
+
+## Where OpenMAIC's source comes from at deploy time — 2026-09-06
+
+`deploy/docker-compose.openmaic.yml` builds from `context: ../OpenMAIC`, a
+sibling checkout. On a deploy host that directory does not exist, and there is
+no second repository to clone it from — OpenMAIC is kept as a pristine mirror of
+upstream precisely so that `git pull` there stays a fast-forward, which means
+none of our work can live in it.
+
+So the source had no stated origin. `docker compose build` on a fresh host fails
+on a missing context, or — worse — succeeds against an unpatched tree and ships
+an image with no Thai and no embed support.
+
+**New: `deploy/openmaic-fetch.sh`.** Clones upstream at the commit in
+`openmaic-pin.json`, applies every patch in order, generates the Thai locale,
+and reconciles the lockfile. The host needs **git and docker only**: the
+`pnpm install` step runs in a throwaway `node:22-alpine` container, because a
+deploy host should not have to carry a Node toolchain to fix a lockfile.
+
+Deliberately not a fork of OpenMAIC. Committing our changes into that checkout
+would turn every future release into a merge with conflicts — the position this
+fork is already in with HKUDS — and would throw away the property that all six
+patches are upstream candidates that can simply be deleted if accepted.
+
+Re-running is safe. The dirty-tree check asks whether anything is dirty *that is
+not ours*, deriving "ours" from the patches themselves so it cannot drift out of
+step with the patch set; already-applied patches are recognised and skipped, and
+anything else makes it refuse rather than build over someone's work.
+
+Three things the first runs found, none of which reading could have:
+
+- `command -v python3` succeeds on Windows for a Microsoft Store stub that then
+  refuses to execute. The check now asks the interpreter to run, not to exist.
+- Git Bash rewrote the container-side `-w /w` into `W:/`, and docker refused it.
+- The pin is doing real work: upstream `main` had already moved past it, so a
+  plain clone would have built a different commit than the one verified.
+
+Also updated: the compose file names the script at the point where the missing
+directory would otherwise be discovered, and `OPENMAIC_SYNC.md` separates
+*getting* a checkout from *updating* one.
+
+Files: `deploy/openmaic-fetch.sh` (new), `deploy/docker-compose.openmaic.yml`,
+`deploy/OPENMAIC_SYNC.md`.
+
+---
+
 ## The container build depended on files that were in no repository — 2026-09-06
 
 `deploy/docker-compose.openmaic.yml` builds OpenMAIC from `context: ../OpenMAIC`,

@@ -41,6 +41,16 @@ services:
       # file), not to this file's own `deploy/` directory — so this resolves
       # to a sibling checkout of the repo, e.g. D:/Vscode/OpenMAIC next to
       # D:/Vscode/Upstream_Deeptutor. Verified with `docker compose config`.
+      #
+      # That directory does not exist on a fresh host, and there is no second
+      # repository to clone it from: OpenMAIC stays a pristine mirror of
+      # upstream and everything of ours is a patch in this repo. Create it with
+      #
+      #     ./deploy/openmaic-fetch.sh
+      #
+      # which clones upstream at the pinned commit, applies every patch, and
+      # reconciles the lockfile. Running `build` before that fails on a missing
+      # context, or — worse — succeeds against an unpatched tree.
       context: ../OpenMAIC
       args:
         # Compiled into the browser bundle at build time. Without our origin

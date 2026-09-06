@@ -26,6 +26,25 @@ Everything in `deploy/openmaic-patches/`:
 Nothing of ours is committed inside the OpenMAIC checkout. A patch is applied
 long enough to build or test, then reversed with `git apply -R`.
 
+## Getting the checkout in the first place
+
+On a machine that has never had one — a deploy host, a new laptop — there is no
+`../OpenMAIC` to update, and no repository of ours to clone it from. One command
+builds it:
+
+```bash
+./deploy/openmaic-fetch.sh
+```
+
+It clones upstream at the commit in `openmaic-pin.json`, applies every patch in
+order, generates the Thai locale, and reconciles the lockfile in a throwaway
+container so the host needs no Node toolchain — only git and docker. Re-running
+it is safe: patches already applied are recognised, and it refuses rather than
+building over a change it did not make.
+
+The rest of this document is for **updating** an existing checkout to a newer
+OpenMAIC, which is a different job with different risks.
+
 ## The procedure
 
 Run from this repository's root, with OpenMAIC checked out as a sibling
