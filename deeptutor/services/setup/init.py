@@ -18,7 +18,15 @@ _setup_logger = None
 DEFAULT_INTERFACE_SETTINGS = {
     # "snow" is the pure-white neutral theme, shown as "Default" in the UI.
     "theme": "snow",
-    "language": "en",
+    # Fork: this build ships for Thai learners, so a fresh install comes up in
+    # Thai rather than English. `data/` is gitignored, so a clone has no
+    # interface.json at all and this default is the only thing a first run
+    # sees — which is why cloning the repo onto a second machine showed an
+    # English UI while the original machine, with its own saved settings, was
+    # Thai. It also decides which language the soul and persona templates are
+    # seeded in (see services/partners/soul_localization.py). Switching the
+    # language in Settings still overrides it, both ways.
+    "language": "th",
     "sidebar_description": "✨ Data Intelligence Lab @ HKU",
     "sidebar_nav_order": {
         "start": ["/", "/history", "/knowledge-bases", "/notebooks"],
@@ -28,7 +36,8 @@ DEFAULT_INTERFACE_SETTINGS = {
 
 DEFAULT_MAIN_SETTINGS = {
     "system": {
-        "language": "en",
+        # Fork: matches DEFAULT_INTERFACE_SETTINGS above.
+        "language": "th",
     },
     "logging": {
         "level": "WARNING",

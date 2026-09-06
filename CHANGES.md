@@ -239,6 +239,24 @@ back to HKUDS; once merged upstream the divergence is removed.
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
 
+- **2026-09-07 — A fresh clone now comes up in Thai, and the last four partner
+  strings are translated.** `data/` is gitignored, so a clone carries no
+  `interface.json` and the defaults in `deeptutor/services/setup/init.py` are
+  the only thing a first run sees. They said `en`, which is why cloning this
+  repo onto a second machine showed an English partner wizard while the
+  original machine — carrying its own saved settings — was Thai. Both
+  `DEFAULT_INTERFACE_SETTINGS["language"]` and
+  `DEFAULT_MAIN_SETTINGS["system"]["language"]` are now `th`, pinned by
+  `tests/services/test_fork_default_language.py` because an upstream sync will
+  offer `en` back every time.
+
+  The default also decides which language the soul and persona templates seed
+  in, so a first run gets the Thai ones end to end.
+
+  Separately, an audit of all 316 `t()` literals across the 35 partner modules
+  found the wizard already fully translated except for four keys, now filled
+  in: `Soul` → จิตวิญญาณ (the step label in the wizard header), `Groups` → กลุ่ม,
+  `Members` → สมาชิก, `Archive` → เก็บเข้าคลัง (`web/locales/th/app.json`).
 - **2026-09-06 — The eight bundled prompt templates now speak Thai.** The
   "Soul library" and "Clone a persona" pickers in the partner wizard showed
   English to Thai users no matter the interface language, because their content
