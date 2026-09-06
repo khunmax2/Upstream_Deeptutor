@@ -1,6 +1,16 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Subpath this app is served under when a reverse proxy routes a prefix to it
+  // (e.g. nginx `location /maic-app` -> this container), or unset when it owns
+  // the domain root. Next cannot serve a subpath without it: every /_next/ asset
+  // URL is generated from this, so without it the framed app 404s on its own
+  // chunks.
+  //
+  // Structural, so it has to be baked at build time rather than read per
+  // request. Empty string is normalised to undefined because Next rejects '' but
+  // an unset env var reads as ''.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   output: process.env.VERCEL ? undefined : 'standalone',
   outputFileTracingIncludes: {
     '/*': [
