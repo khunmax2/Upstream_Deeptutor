@@ -1,12 +1,20 @@
 # dependencies
+# Docker matches .dockerignore patterns from the context root, not at every
+# level like .gitignore, so the nested workspace copies need explicit globs.
+# On a Windows host pnpm writes them as absolute D:/... symlinks, which are
+# dead inside the container and shadow the ones the deps stage built.
 node_modules
+**/node_modules
 .pnpm-store
 
 # build output
+# Package dist/ is rebuilt by the deps stage postinstall; copying the host copy
+# only risks staleness.
 .next
 out
 build
 dist
+**/dist
 
 # git
 .git
