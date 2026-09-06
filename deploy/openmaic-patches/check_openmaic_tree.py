@@ -59,6 +59,14 @@ PROFILES: dict[str, set[str]] = {
         "components/stage/header-controls.tsx",
         "app/page.tsx",
     },
+    # Container build fixes (0006). These were sitting in the checkout as
+    # uncommitted edits and this guard was calling them foreign — telling the
+    # reader to revert the one thing the image build needs. They are ours, they
+    # are a patch, and they are upstream candidates.
+    "docker-build": {
+        "Dockerfile",
+        ".dockerignore",
+    },
     # PR 1 — Thai script support. Nothing in this project's font stack covers
     # Thai, and the video-export registry enumerates only cyrillic and arabic.
     "th-font": {

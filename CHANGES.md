@@ -17,6 +17,40 @@ upstream.
 
 ---
 
+## The container build depended on files that were in no repository — 2026-09-06
+
+`deploy/docker-compose.openmaic.yml` builds OpenMAIC from `context: ../OpenMAIC`,
+a sibling checkout. Two files there had been edited by hand to make the image
+build at all — `.dockerignore` needed `**/node_modules` and `**/dist` globs
+(Docker matches patterns only at the context root, and pnpm on Windows writes
+nested `node_modules` as absolute `D:/...` symlinks that are dead in the image
+and shadow the ones the deps stage built), and the `Dockerfile` needed an
+ARG/ENV pair for `NEXT_PUBLIC_PRO_WORKBENCH_ENABLED`, which Next can only inline
+at build time.
+
+Neither was committed anywhere. They existed in exactly one working tree.
+
+Two consequences worth stating plainly:
+
+- **The "image builds" result recorded on 2026-09-06 was not reproducible.** It
+  was measured on a tree containing these edits, and reported as though the
+  repository were sufficient.
+- **`check_openmaic_tree.py` was actively steering toward losing them.** It
+  bucketed both as *foreign — revert or stash*, which for the one change the
+  build needs is the wrong instruction.
+
+**New: `deploy/openmaic-patches/0006-docker-build-fixes.patch`** — verified to
+apply to a pristine `d4ef5faa` checkout. Both changes are upstream candidates:
+neither mentions DeepTutor, and the `.dockerignore` one is a plain bug for
+anyone building this on Windows.
+
+The guard gains a `docker-build` profile so it recognises them as ours.
+
+Files: `deploy/openmaic-patches/0006-docker-build-fixes.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
 ## 0004 and 0005 were inert: the host never sent what they read — 2026-09-06
 
 Both patches let a host choose OpenMAIC's language, theme and chrome through
