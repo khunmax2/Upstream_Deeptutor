@@ -179,7 +179,28 @@ def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
             continue
 
         binding = (profile.get("binding") or profile.get("provider") or "").strip().lower()
-        provider_id = BINDING_TO_PROVIDER.get(section, {}).get(binding)
+        raw_base = (profile.get("base_url") or "").strip()
+
+        # A vendor's own id and its OpenAI-compatible shim are different
+        # protocols wearing the same name. DeepTutor talks to Gemini through
+        # `.../v1beta/openai/`; OpenMAIC's `google` provider is `type: 'google'`
+        # and appends native Gemini paths to whatever base it is given, so it
+        # built `.../v1beta/openai/models/...` and every call returned
+        # `AI_APICallError: Not Found`.
+        #
+        # The URL says which protocol is meant, so read it rather than the name:
+        # a base ending in `/openai` is the compatible shim, and OpenMAIC models
+        # exactly that as its generic `openai` provider.
+        compat = raw_base.rstrip("/").endswith("/openai")
+        if compat and section == "providers":
+            provider_id = "openai"
+            notes.append(
+                f"{service_name}: base URL is an OpenAI-compatible endpoint, so it is "
+                f"configured as 'openai' rather than '{binding}' — the native provider "
+                f"would append its own paths and 404."
+            )
+        else:
+            provider_id = BINDING_TO_PROVIDER.get(section, {}).get(binding)
         if not provider_id:
             notes.append(
                 f"skipped {service_name}: binding '{binding}' has no OpenMAIC id in section "
@@ -189,7 +210,7 @@ def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
             continue
 
         api_key = (profile.get("api_key") or "").strip()
-        base_url, rewritten = container_reachable((profile.get("base_url") or "").strip(), host_alias)
+        base_url, rewritten = container_reachable(raw_base, host_alias)
         if rewritten:
             notes.append(f"{service_name}: rewrote a loopback base_url to {host_alias}")
 

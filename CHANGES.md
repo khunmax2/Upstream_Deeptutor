@@ -17,6 +17,38 @@ upstream.
 
 ---
 
+## The provider bridge sent Gemini down the wrong protocol — 2026-09-07
+
+Every LLM call from the embedded OpenMAIC failed with `AI_APICallError: Not
+Found`, and course generation with it. The bridge had copied DeepTutor's base URL
+— `https://generativelanguage.googleapis.com/v1beta/openai/` — into OpenMAIC's
+`google` provider, which is `type: 'google'` and appends *native* Gemini paths to
+whatever base it is given. The result was
+`.../v1beta/openai/models/…:generateContent`, which does not exist.
+
+A vendor's own id and its OpenAI-compatible shim are two protocols wearing one
+name, and the mapping table only knew the name. The URL is the part that says
+which is meant, so the bridge now reads it: a base ending in `/openai` is the
+compatible endpoint and is configured as OpenMAIC's generic `openai` provider
+instead, keeping the URL that already worked.
+
+Verified from inside the container against the real endpoint: `HTTP 200` and a
+reply from `models/gemini-3.1-flash-lite`, where the same key and URL under the
+`google` id returned `Not Found`.
+
+**Also diagnosed, not a defect of ours:** the classroom made no speech request at
+all, because `ttsEnabled` is off and OpenMAIC's auto-enable is guarded by
+`autoConfigApplied`, a flag it sets once and never revisits
+(`lib/store/settings.ts:1761`). A browser that opened the app before the bridge
+existed spent that one chance when there were no server providers to find, so
+the switch stays off until somebody turns it on by hand. Worth knowing before
+concluding the bridge failed: it is a first-run flag meeting a
+configured-afterwards deployment.
+
+Files: `deploy/openmaic-patches/build_server_providers.py`.
+
+---
+
 ## Speech recognition no longer assumes Chinese — 2026-09-07
 
 `asrLanguage` defaulted to `'zh'` and is sent with every request, so Whisper was
