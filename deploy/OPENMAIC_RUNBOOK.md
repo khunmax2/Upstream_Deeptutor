@@ -225,6 +225,22 @@ DEEPTUTOR_LOGIN_URL=https://203.185.144.41/deepwitya2/login \
   up -d openmaic gatekeeper
 ```
 
+**`DEEPTUTOR_AUTH_URL` has no default, on purpose.** Compose refuses to start
+without it. It used to fall back to the production URL, which meant a
+`docker compose up` from a laptop, a CI runner or anyone else's checkout quietly
+began sending whatever cookies arrived to the live server, with nobody having
+chosen that. It is not a dangerous endpoint — `/api/auth/status` is a public
+read — but the destination of a request should be a decision, not a leftover.
+
+Two things about that URL:
+
+- it is resolved **from inside the container**, so `localhost` there is the
+  gatekeeper itself, not your machine. Use `host.docker.internal` (mapped for
+  you) or the host's LAN address.
+- the gatekeeper prints which URL it is verifying against on startup. When the
+  gate behaves oddly, `docker logs deeptutor-openmaic-gatekeeper | head -3`
+  settles it faster than anything else.
+
 Add `--profile openmaic-persistence` to bring up OpenMAIC's own Postgres, which
 the Pro agent workbench needs. It joins the compose network and publishes no
 host port, so it cannot collide with anything already on `5432`.

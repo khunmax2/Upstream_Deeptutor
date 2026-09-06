@@ -95,10 +95,20 @@ services:
     environment:
       - PORT=10331
       - OPENMAIC_UPSTREAM=http://openmaic:3000
-      # Must point at a DeepTutor that can see the same cookie. On the current
-      # host that is the IP with its subpath, because there is no domain.
-      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:-https://203.185.144.41/deepwitya2/api/auth/status}
-      - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-https://203.185.144.41/deepwitya2/login}
+      # Must point at a DeepTutor that can see the same cookie, and is resolved
+      # from *inside* this container — `localhost` here is the gatekeeper itself.
+      #
+      # Deliberately no default. It used to fall back to the production URL,
+      # which meant any `docker compose up` from this repository — a laptop, a
+      # CI runner, someone else's machine — silently began sending whatever
+      # cookies arrived to the live server, with nobody having chosen that.
+      # Unset, the gatekeeper refuses every request with `gatekeeper_misconfigured`
+      # rather than guessing, so the destination is always somebody's decision.
+      #
+      #   local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
+      #   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:?set it explicitly — see the comment above}
+      - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}
       - AUTH_CACHE_TTL_MS=${GATEKEEPER_AUTH_TTL_MS:-30000}
       # The documented escape hatch for a local trial, and it was missing from
       # this list — so `ALLOW_ANONYMOUS=1` reached the process from nowhere and

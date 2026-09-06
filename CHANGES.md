@@ -17,6 +17,41 @@ upstream.
 
 ---
 
+## The compose file defaulted to the production auth endpoint — 2026-09-06
+
+`DEEPTUTOR_AUTH_URL` fell back to `https://203.185.144.41/deepwitya2/api/auth/status`
+when unset. Any `docker compose up` from this repository — a laptop, a CI runner,
+somebody else's checkout — therefore began sending whatever `dt_token` arrived to
+the live server, with nobody having decided that. Noticed after doing it here:
+restarting the gatekeeper without the environment silently repointed it at
+production.
+
+Assessed rather than assumed, and it is **not** a production compromise:
+`/api/auth/status` answers `200` to an unauthenticated request, so it is a public
+read and the gate gains no access anyone else lacks; it only reads; TLS
+verification is on and passed against the IP-SAN certificate; and the only header
+sent is the `dt_token` that came from that server in the first place. The
+exposure runs the other way — a valid production session would open the *local*
+OpenMAIC — and the gatekeeper binds `127.0.0.1` only.
+
+The defect is the defaulting, not the traffic. A request's destination should be
+a decision. `DEEPTUTOR_AUTH_URL` now has no default and compose refuses to start
+without it, naming both the local and deployed forms; the gatekeeper already
+fails closed on unset with `gatekeeper_misconfigured`, so an incomplete
+configuration cannot serve anything either.
+
+`LOGIN_URL` loses its production default for the same reason.
+
+Verified afterwards by repointing the running stack at a local DeepTutor: the
+gate reports `verifying against http://host.docker.internal:3782/...`, holds zero
+references to the production host, and answers `auth_disabled_upstream` — which
+is correct for a local instance with auth off, and is the one code path the
+runbook walkthrough never reached.
+
+Files: `deploy/docker-compose.openmaic.yml`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
 ## The runbook was walked by someone else, and it did not hold — 2026-09-06
 
 `deploy/OPENMAIC_RUNBOOK.md` was handed to a fresh session with no access to
