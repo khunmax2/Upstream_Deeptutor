@@ -17,6 +17,63 @@ upstream.
 
 ---
 
+## The runbook was walked by someone else, and it did not hold — 2026-09-06
+
+`deploy/OPENMAIC_RUNBOOK.md` was handed to a fresh session with no access to
+`CHANGES.md`, `docs/reports/` or the commit history, and instructions to follow
+it literally and record every point where it had to guess. It guessed six times
+and never reached the end. Five defects, all real, all in code or docs written
+here — and all in the parts that had been *described* rather than *walked*.
+
+**Step 2 aborted on any machine that had run OpenMAIC before.** A `node_modules`
+built by a pnpm on the host records a store path that does not exist inside the
+`node:22-alpine` container; pnpm wants to replace the directory, asks for
+confirmation, finds no TTY, and stops with
+`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`. The script passed `HOME` and
+`COREPACK_ENABLE_DOWNLOAD_PROMPT` into the container but not `CI=true`. Every
+earlier run of this script here was against a *fresh clone*, which is the one
+state where the bug cannot appear — and the runbook's own "Trying it locally
+first" section is an instruction for producing the state that triggers it.
+
+**`ALLOW_ANONYMOUS` was never passed through compose.** The gatekeeper's
+`environment:` block listed five variables and not that one, so the escape hatch
+the documentation recommends *twice* reached the process from nowhere. Now
+`GATEKEEPER_ALLOW_ANONYMOUS`, empty by default; verified end to end, `"gated":
+false` and `200` without a cookie, then verified gated again.
+
+**`host.docker.internal` did not resolve**, because the compose file mapped no
+`host-gateway`. From inside the gatekeeper that is indistinguishable from
+DeepTutor being down. Added; it now resolves.
+
+**The 503 advice was wrong in the way the document itself warns against.** It
+said `503` means `auth_disabled_upstream`. `auth_unavailable` — the gate could
+not reach DeepTutor at all — is also `503`, and on a machine whose `auth.json`
+says `"enabled": false` a reader is *expecting* the first and will accept the
+second as confirmation. The runbook teaches "a dead gatekeeper and a permissive
+one are indistinguishable from `curl` alone" and then had the reader distinguish
+two states by status code. Now a table of every `code`, and the instruction to
+read the body.
+
+**The CSP verification command produced no output on Git Bash.** `curl -sI |
+grep -i -e A -e B` gives curl exit 23 and grep abort 134 — silence, which reads
+exactly like a missing header, which is the failure the check exists to detect.
+The multiple-`-e` form is what breaks; `grep -iE` is fine. Rewritten to write
+headers to a file and `|| cat` them on no match.
+
+Also fixed from the same report: the "Expected output" block did not show the
+yellow untracked-files warning a reader actually sees, so the first thing they
+compare against lacks it; step 4's `cat >` replaced an existing
+`openmaic.json` without a word; `--host-pnpm` is now flagged as the trap it is on
+Windows, where it hung at rollup and cut 1,934 lines from `pnpm-lock.yaml` — the
+same damage this file already records under a different heading; and "Trying it
+locally first" now carries copy-pasteable commands rather than a comparison
+table, since the local path has more traps than the deployed one.
+
+Files: `deploy/openmaic-fetch.sh`, `deploy/docker-compose.openmaic.yml`,
+`deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
 ## The fetch guard refused on things it had no business refusing — 2026-09-06
 
 `openmaic-fetch.sh` treated every local change in the OpenMAIC checkout alike and

@@ -100,6 +100,17 @@ services:
       - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:-https://203.185.144.41/deepwitya2/api/auth/status}
       - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-https://203.185.144.41/deepwitya2/login}
       - AUTH_CACHE_TTL_MS=${GATEKEEPER_AUTH_TTL_MS:-30000}
+      # The documented escape hatch for a local trial, and it was missing from
+      # this list — so `ALLOW_ANONYMOUS=1` reached the process from nowhere and
+      # the one route past the gate that the docs offer twice did not exist.
+      # Empty by default: the gate is on unless somebody says otherwise out loud.
+      - ALLOW_ANONYMOUS=${GATEKEEPER_ALLOW_ANONYMOUS:-}
+    # host.docker.internal is how a container reaches a DeepTutor running on the
+    # host, which is the normal shape of a local trial. On Linux it does not
+    # exist unless mapped, and without this the name simply fails to resolve —
+    # indistinguishable, from inside the gatekeeper, from DeepTutor being down.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - openmaic
     healthcheck:

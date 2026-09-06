@@ -225,6 +225,14 @@ fi
 # match package.json. So the lockfile has to be reconciled here, before build.
 #
 # Done in a container by default so a deploy host needs no Node toolchain.
+#
+# CI=true is load-bearing, not decoration. When `node_modules` was created by a
+# pnpm running on the host — which is the normal state of any machine that
+# followed "Trying it locally first" — the store path recorded inside it is a
+# host path that does not exist in the container. pnpm wants to remove and
+# rebuild the directory, asks for confirmation, finds no TTY, and aborts with
+# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY. CI=true is how pnpm is told there
+# is nobody to ask. Found by someone following the runbook, not by writing it.
 # ---------------------------------------------------------------------------
 if [ "$SKIP_DEPS" = "1" ]; then
   say "Skipping dependencies (--skip-deps)"
@@ -234,6 +242,18 @@ else
   DEPS_CMD='corepack enable && pnpm install --no-frozen-lockfile && pnpm run gen:video-export-noto-script-fonts'
   if [ "$USE_HOST_PNPM" = "1" ]; then
     command -v pnpm >/dev/null || die "--host-pnpm given but pnpm is not on PATH"
+    # Measured, not cautionary: on Windows this path hung at rollup for thirteen
+    # minutes at 0% CPU and left pnpm-lock.yaml 1,934 lines shorter. The
+    # container path exists because it is the one that works, not because it is
+    # tidier.
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        printf '
+[33m    --host-pnpm on Windows has hung at rollup and damaged pnpm-lock.yaml.[0m
+'
+        printf '    The containerised path is the supported one. Continuing because you asked.
+' ;;
+    esac
     ( cd "$DEST" && pnpm install --no-frozen-lockfile && pnpm run gen:video-export-noto-script-fonts )
   else
     command -v docker >/dev/null || die "docker is required (or pass --host-pnpm)"
@@ -245,7 +265,7 @@ else
     # on "the working directory 'W:/' is invalid". Ignored everywhere else.
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
     docker run --rm "${USER_FLAG[@]}" \
-      -e HOME=/tmp -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+      -e HOME=/tmp -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 -e CI=true \
       -v "$DEST:/openmaic" -w /openmaic node:22-alpine sh -c "$DEPS_CMD"
   fi
 fi
