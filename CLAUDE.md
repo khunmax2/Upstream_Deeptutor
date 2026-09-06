@@ -131,6 +131,27 @@ under **"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`.
 > Note: `main` currently carries fork customizations (Thai i18n was merged in), so an
 > upstream sync is a real **merge-with-conflicts**, not a fast-forward.
 
+### `integration/maic` is out of scope for this sync
+
+That directory is **OpenMAIC** (THU-MAIC/OpenMAIC, MIT), vendored as a squashed
+git subtree. It has nothing to do with HKUDS and must not be touched by a
+DeepTutor upstream sync — do not merge into it, do not resolve conflicts in it,
+and exclude it from any diff or impact analysis of an HKUDS release:
+
+```bash
+git diff <upstream> -- . ':(exclude)integration/maic'
+```
+
+It has its own update path, which is the only command that should ever write
+there:
+
+```bash
+git subtree pull --prefix=integration/maic     https://github.com/THU-MAIC/OpenMAIC main --squash
+```
+
+Everything else about it — why it is vendored rather than patched, what our
+changes to it are, how the embed is deployed — is in `deploy/OPENMAIC_*.md`.
+
 ## 3. Keep customizations mergeable
 
 Prefer **adding new files** over editing upstream files (use extension points such as
