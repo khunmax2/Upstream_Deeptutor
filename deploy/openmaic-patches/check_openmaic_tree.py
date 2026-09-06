@@ -59,6 +59,13 @@ PROFILES: dict[str, set[str]] = {
         "components/stage/header-controls.tsx",
         "app/page.tsx",
     },
+    # Raw-PCM speech responses (0007). A provider answering /v1/audio/speech
+    # with audio/L16 handed the browser samples labelled as MP3; nothing could
+    # play them. Touches the shared response decoder and its test only.
+    "pcm-audio": {
+        "lib/audio/tts-providers.ts",
+        "tests/audio/pcm-wav.test.ts",
+    },
     # Container build fixes (0006). These were sitting in the checkout as
     # uncommitted edits and this guard was calling them foreign — telling the
     # reader to revert the one thing the image build needs. They are ours, they

@@ -1,0 +1,240 @@
+Play speech responses that arrive as raw PCM
+
+`/v1/audio/speech` does not oblige a provider to return a container, and several
+OpenAI-compatible servers answer `audio/L16` — bare PCM16 samples, no header.
+`getAudioResponseFormat` does not recognise those media types and falls through
+to its `mp3` default, so the bytes reach the browser labelled as MP3. Every
+consumer then fails identically, because `new Audio(URL.createObjectURL(blob))`
+cannot decode them:
+
+    TTS test failed: Failed to load because no supported source was found.
+
+which is the browser's own message and says nothing about the cause. Measured
+against such a server: `content-type: audio/L16;rate=24000;channels=1`, and the
+first bytes carry neither a RIFF nor an ID3 magic.
+
+This adds the missing step. `decodeAudioResponse` parses the media type for
+`audio/l16`, `audio/pcm` and `audio/x-pcm` — taking `rate` and `channels` from
+its parameters, defaulting to 24 kHz mono when they are absent — and prepends
+the 44-byte RIFF/WAVE header that makes the same samples playable. Anything
+already in a container is returned untouched.
+
+Done here rather than at each player so that preview, regeneration and classroom
+playback are fixed together, and so the rule stays in one place: everything past
+this function is in a container. The three provider paths that read a response
+body (OpenAI, Lemonade, VoxCPM) had identical five-line endings and now share it.
+
+Verified two ways: five unit tests over the header fields, the media-type
+parameters and the pass-through cases; and a real response from such a server
+(16,384 bytes of L16) converted and then opened by an independent decoder —
+Python's `wave` module reports 1 channel, 16-bit, 24 kHz, 8,192 frames.
+
+diff --git a/lib/audio/tts-providers.ts b/lib/audio/tts-providers.ts
+index e8fe2304..a13a4d98 100644
+--- a/lib/audio/tts-providers.ts
++++ b/lib/audio/tts-providers.ts
+@@ -302,11 +302,7 @@ async function generateOpenAITTS(
+ 
+   const arrayBuffer = await response.arrayBuffer();
+   const contentType = response.headers.get('content-type') || '';
+-  const format = getAudioResponseFormat(contentType);
+-  return {
+-    audio: new Uint8Array(arrayBuffer),
+-    format,
+-  };
++  return decodeAudioResponse(arrayBuffer, contentType);
+ }
+ 
+ /**
+@@ -347,10 +343,7 @@ async function generateLemonadeTTS(
+ 
+   const arrayBuffer = await response.arrayBuffer();
+   const contentType = response.headers.get('content-type') || '';
+-  return {
+-    audio: new Uint8Array(arrayBuffer),
+-    format: getAudioResponseFormat(contentType),
+-  };
++  return decodeAudioResponse(arrayBuffer, contentType);
+ }
+ 
+ /**
+@@ -419,11 +412,7 @@ async function generateVoxCPMTTS(
+ 
+   const arrayBuffer = await response.arrayBuffer();
+   const contentType = response.headers.get('content-type') || '';
+-  const format = getAudioResponseFormat(contentType);
+-  return {
+-    audio: new Uint8Array(arrayBuffer),
+-    format,
+-  };
++  return decodeAudioResponse(arrayBuffer, contentType);
+ }
+ 
+ function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
+@@ -435,6 +424,94 @@ function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
+   return prompt ? `(${prompt})${text}` : text;
+ }
+ 
++/** Content types that carry PCM samples with no container around them. */
++const RAW_PCM_MEDIA_TYPES = new Set(['audio/l16', 'audio/pcm', 'audio/x-pcm']);
++
++/**
++ * RFC 2586 leaves the rate out of the media type when it is the default, but
++ * every OpenAI-compatible server met so far states it. 24 kHz mono is what they
++ * emit when they do not, and matches the rate `audio/L16` is used at in practice.
++ */
++const DEFAULT_PCM_SAMPLE_RATE = 24_000;
++const DEFAULT_PCM_CHANNELS = 1;
++
++/** `(sampleRate, channels)` when the response is headerless PCM, else null. */
++function parsePcmContentType(
++  contentType: string,
++): { sampleRate: number; channels: number } | null {
++  const [mediaType, ...params] = (contentType || '').split(';');
++  if (!RAW_PCM_MEDIA_TYPES.has(mediaType.trim().toLowerCase())) return null;
++
++  let sampleRate = DEFAULT_PCM_SAMPLE_RATE;
++  let channels = DEFAULT_PCM_CHANNELS;
++  for (const param of params) {
++    const eq = param.indexOf('=');
++    if (eq === -1) continue;
++    const key = param.slice(0, eq).trim().toLowerCase();
++    const parsed = Number.parseInt(param.slice(eq + 1).trim().replace(/^"|"$/g, ''), 10);
++    if (!Number.isFinite(parsed) || parsed <= 0) continue;
++    if (key === 'rate' || key === 'sample-rate' || key === 'samplerate') sampleRate = parsed;
++    else if (key === 'channels' || key === 'channel') channels = parsed;
++  }
++  return { sampleRate, channels };
++}
++
++/** Prepend the 44-byte RIFF/WAVE header that turns PCM16 into a playable file. */
++function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: number): Uint8Array {
++  const bytesPerSample = 2;
++  const blockAlign = channels * bytesPerSample;
++  const out = new Uint8Array(44 + pcm.length);
++  const view = new DataView(out.buffer);
++  const ascii = (offset: number, text: string) => {
++    for (let i = 0; i < text.length; i++) out[offset + i] = text.charCodeAt(i);
++  };
++
++  ascii(0, 'RIFF');
++  view.setUint32(4, 36 + pcm.length, true);
++  ascii(8, 'WAVE');
++  ascii(12, 'fmt ');
++  view.setUint32(16, 16, true); // PCM header length
++  view.setUint16(20, 1, true); // format 1 = uncompressed PCM
++  view.setUint16(22, channels, true);
++  view.setUint32(24, sampleRate, true);
++  view.setUint32(28, sampleRate * blockAlign, true); // byte rate
++  view.setUint16(32, blockAlign, true);
++  view.setUint16(34, 8 * bytesPerSample, true);
++  ascii(36, 'data');
++  view.setUint32(40, pcm.length, true);
++  out.set(pcm, 44);
++  return out;
++}
++
++/**
++ * Turn a speech response into something an `<audio>` element can actually play.
++ *
++ * Providers that answer `/v1/audio/speech` are not obliged to return a container,
++ * and several return `audio/L16` — bare PCM samples. `getAudioResponseFormat`
++ * did not recognise those and fell through to its `mp3` default, so the bytes
++ * reached the browser labelled as MP3 and every consumer failed the same way:
++ * `new Audio(URL.createObjectURL(blob))` cannot decode them, and the only
++ * symptom is the browser's own "no supported source was found".
++ *
++ * Wrapping here rather than at each player fixes preview, regeneration and
++ * classroom playback at once, and keeps the rule in one place: everything past
++ * this function is in a container.
++ */
++export function decodeAudioResponse(
++  arrayBuffer: ArrayBuffer,
++  contentType: string,
++): TTSGenerationResult {
++  const bytes = new Uint8Array(arrayBuffer);
++  const pcm = parsePcmContentType(contentType);
++  if (pcm) {
++    return {
++      audio: pcm16ToWav(bytes, pcm.sampleRate, pcm.channels),
++      format: 'wav',
++    };
++  }
++  return { audio: bytes, format: getAudioResponseFormat(contentType) };
++}
++
+ function getAudioResponseFormat(contentType: string): string {
+   if (contentType.includes('audio/wav') || contentType.includes('audio/x-wav')) return 'wav';
+   if (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) return 'mp3';
+diff --git a/tests/audio/pcm-wav.test.ts b/tests/audio/pcm-wav.test.ts
+new file mode 100644
+index 00000000..09774c63
+--- /dev/null
++++ b/tests/audio/pcm-wav.test.ts
+@@ -0,0 +1,66 @@
++import { describe, expect, it } from 'vitest';
++
++import { decodeAudioResponse } from '@/lib/audio/tts-providers';
++
++/** Read a little-endian field the way a WAV parser would. */
++const u32 = (b: Uint8Array, o: number) => new DataView(b.buffer, b.byteOffset).getUint32(o, true);
++const u16 = (b: Uint8Array, o: number) => new DataView(b.buffer, b.byteOffset).getUint16(o, true);
++const tag = (b: Uint8Array, o: number) => String.fromCharCode(...b.slice(o, o + 4));
++
++/** 100 frames of silence — content does not matter, only the framing does. */
++const pcm = () => new Uint8Array(200).buffer;
++
++describe('decodeAudioResponse', () => {
++  it('wraps audio/L16 in a WAV container', () => {
++    const { audio, format } = decodeAudioResponse(pcm(), 'audio/L16;rate=24000;channels=1');
++
++    expect(format).toBe('wav');
++    expect(audio.length).toBe(244); // 44-byte header + 200 bytes of samples
++    expect(tag(audio, 0)).toBe('RIFF');
++    expect(tag(audio, 8)).toBe('WAVE');
++    expect(tag(audio, 12)).toBe('fmt ');
++    expect(tag(audio, 36)).toBe('data');
++    expect(u32(audio, 4)).toBe(236); // 36 + data length
++    expect(u16(audio, 20)).toBe(1); // uncompressed PCM
++    expect(u16(audio, 22)).toBe(1); // channels
++    expect(u32(audio, 24)).toBe(24_000); // sample rate
++    expect(u32(audio, 28)).toBe(48_000); // byte rate = rate * channels * 2
++    expect(u16(audio, 32)).toBe(2); // block align
++    expect(u16(audio, 34)).toBe(16); // bits per sample
++    expect(u32(audio, 40)).toBe(200); // data length
++  });
++
++  it('honours rate and channels from the media type', () => {
++    const { audio } = decodeAudioResponse(pcm(), 'audio/pcm; rate=48000; channels=2');
++    expect(u32(audio, 24)).toBe(48_000);
++    expect(u16(audio, 22)).toBe(2);
++    expect(u32(audio, 28)).toBe(192_000); // 48000 * 2 channels * 2 bytes
++    expect(u16(audio, 32)).toBe(4);
++  });
++
++  it('falls back to 24 kHz mono when the media type omits them', () => {
++    const { audio } = decodeAudioResponse(pcm(), 'audio/x-pcm');
++    expect(u32(audio, 24)).toBe(24_000);
++    expect(u16(audio, 22)).toBe(1);
++  });
++
++  it('leaves container formats alone', () => {
++    for (const [type, expected] of [
++      ['audio/mpeg', 'mp3'],
++      ['audio/wav', 'wav'],
++      ['audio/ogg', 'ogg'],
++    ] as const) {
++      const { audio, format } = decodeAudioResponse(pcm(), type);
++      expect(format).toBe(expected);
++      expect(audio.length).toBe(200); // untouched — no header prepended
++    }
++  });
++
++  it('does not mistake a container type that merely mentions pcm', () => {
++    // The guard matches the media type, not a substring: `audio/wav` carrying
++    // PCM samples is already a container and must not be wrapped twice.
++    const { audio, format } = decodeAudioResponse(pcm(), 'audio/wav; codec=pcm');
++    expect(format).toBe('wav');
++    expect(audio.length).toBe(200);
++  });
++});

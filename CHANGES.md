@@ -17,6 +17,47 @@ upstream.
 
 ---
 
+## Speech that arrives as raw PCM now plays — 2026-09-06
+
+**New: `deploy/openmaic-patches/0007-pcm-audio-responses.patch`.** A custom TTS
+provider configured against an OpenAI-compatible server failed every test with
+
+    TTS test failed: Failed to load because no supported source was found.
+
+which is the browser's own message and names nothing. The server was answering
+`content-type: audio/L16;rate=24000;channels=1` — bare PCM16 samples, no
+container; the first bytes carry neither a RIFF nor an ID3 magic.
+`getAudioResponseFormat` does not know those media types and falls through to
+its `mp3` default, so `new Audio(URL.createObjectURL(blob))` was handed PCM
+labelled as MP3 and could not decode it.
+
+Worth stating because it looked like an integration problem and was not: the
+same server plays fine through DeepTutor, which requests a format *and* then
+repairs the answer — `_parse_pcm_content_type` and `_pcm16_to_wav` in
+`deeptutor/api/routers/voice.py` wrap the samples server-side whatever the
+provider actually sent. OpenMAIC had the request half and not the repair.
+
+`decodeAudioResponse` adds it: parse `audio/l16` / `audio/pcm` / `audio/x-pcm`,
+take `rate` and `channels` from the media-type parameters (24 kHz mono when
+absent, matching DeepTutor), and prepend the 44-byte RIFF/WAVE header. Anything
+already in a container passes through untouched. Placed at the single point all
+three provider paths converge on, so preview, regeneration and classroom playback
+are fixed together.
+
+Verified twice over: five unit tests on the header fields, the media-type
+parameters and the pass-through cases, plus a real 16,384-byte response from that
+server converted and then opened by an **independent** decoder — Python's `wave`
+module reports 1 channel, 16-bit, 24 kHz, 8,192 frames, 0.341 s. OpenMAIC's own
+`tests/audio/` suite stays green at 228.
+
+An upstream candidate like the rest: it mentions nothing of DeepTutor, and any
+embedder pointing OpenMAIC at such a server hits it.
+
+Files: `deploy/openmaic-patches/0007-pcm-audio-responses.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
 ## The compose file defaulted to the production auth endpoint — 2026-09-06
 
 `DEEPTUTOR_AUTH_URL` fell back to `https://203.185.144.41/deepwitya2/api/auth/status`
