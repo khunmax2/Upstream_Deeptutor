@@ -17,6 +17,31 @@ upstream.
 
 ---
 
+## Thai can be chosen for speech recognition — 2026-09-07
+
+**New: `deploy/openmaic-patches/0009-thai-asr-language.patch`.**
+`CUSTOM_ASR_DEFAULT_LANGUAGES` — the menu a custom OpenAI-compatible speech
+provider offers — carried twelve languages and no `th`, so Thai could not be
+selected. The default is `zh` (`lib/store/settings.ts:482`) and it is sent with
+the request (`lib/audio/asr-providers.ts:235`), so Whisper was told the audio was
+Chinese and obliged: Thai speech came back as `我愛你`. That reads like a broken
+model and is the API doing exactly what it was asked.
+
+Nothing else was missing — `settings.lang_th` is already "ไทย" in all thirteen
+locale files. The label had been waiting for an option to attach to, and an
+option is an array entry, which no locale file can add. Found by the gap checker
+added in the previous entry, at the line it named.
+
+`funasr`'s own `supportedLanguages` is left alone on purpose: SenseVoice really
+cannot transcribe Thai, and adding it there would move the failure from a missing
+menu item to a wrong answer. It is recorded in the checker's `KNOWN` set as
+correct-as-written rather than as a gap.
+
+Files: `deploy/openmaic-patches/0009-thai-asr-language.patch` (new),
+`deploy/openmaic-patches/check_openmaic_i18n_gaps.py`.
+
+---
+
 ## A check for the Thai gaps a translation cannot close — 2026-09-07
 
 **New: `deploy/openmaic-patches/check_openmaic_i18n_gaps.py`**, wired into

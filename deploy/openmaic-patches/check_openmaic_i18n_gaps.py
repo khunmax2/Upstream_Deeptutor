@@ -76,6 +76,9 @@ KNOWN = {
     ("app/page.tsx", "cjk-literal"),
     ("app/page.tsx", "hardcoded"),
     ("lib/hooks/use-home-discovery.tsx", "hardcoded"),
+    # `funasr` declares what SenseVoice can actually transcribe, and Thai is not
+    # on that list. Correct as written: adding `th` would turn a missing menu
+    # entry into a wrong answer. Carried here so --strict stays usable.
     ("lib/audio/constants.ts", "language-list"),
 }
 
