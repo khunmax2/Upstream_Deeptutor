@@ -36,6 +36,24 @@ Verified from inside the container against the real endpoint: `HTTP 200` and a
 reply from `models/gemini-3.1-flash-lite`, where the same key and URL under the
 `google` id returned `Not Found`.
 
+**A second mapping the bridge should not have made.** It also carried DeepTutor's
+custom speech endpoint into OpenMAIC's built-in `openai-tts`, and course
+generation then failed outright — "สร้างเสียงพูดไม่สำเร็จ" — with
+
+    provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+
+`ServerProviderEntry` carries apiKey, baseUrl, models and proxy, and **no voice**.
+So a server whose only voice is `dr_wit` was called with `alloy`, the built-in
+default, and refused. The mechanism cannot express a custom voice, and emitting
+the entry anyway produced a provider that looked configured, was auto-selected
+ahead of the one that worked, and failed on its first call — worse than not
+being there.
+
+It is now skipped with the reason stated, and the note names the voices it found
+so the message says what to do rather than only what went wrong. OpenMAIC's own
+custom-provider UI does carry a voice table; that is where such an endpoint
+belongs, and the reader already had it configured there.
+
 **Also diagnosed, not a defect of ours:** the classroom made no speech request at
 all, because `ttsEnabled` is off and OpenMAIC's auto-enable is guarded by
 `autoConfigApplied`, a flag it sets once and never revisits
