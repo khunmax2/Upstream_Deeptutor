@@ -91,6 +91,61 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-06 — A scanned PDF is readable in Immersive Reading instead of
+  refused at upload.** `extract_material` read a PDF through PyMuPDF and
+  nothing else, so an image-only scan — every page a picture, no text layer —
+  came back as a document of empty pages and was rejected outright:
+  *"no readable text could be extracted. A scanned document needs OCR before it
+  can be read here."* The message was accurate and the dead end was total:
+  there was no OCR anywhere on the reading path, even though the repo already
+  ships OCR-capable parse engines (`deeptutor/services/parsing/engines/`,
+  MinerU and Docling) — they were wired only into the RAG pipelines, never into
+  `deeptutor/reading/`. Reported against a five-page Thai
+  *หนังสือส่งมอบงาน* (a signed, scanned handover letter).
+
+  A PDF that yields no text now goes through a recovery pass before it is
+  refused (new file `deeptutor/reading/ocr.py`; three lines of hook in
+  `extract.py`, one in `store.py`). Two things had to hold:
+
+  1. **The page grid is the locator space.** A PDF is the one format the reader
+     renders faithfully, so `locator == physical page number` and every
+     annotation is stored normalised against that page's box. A recovery
+     returning flat markdown would put unit 7 on page 3 and land every
+     highlight in the wrong place. Every provider therefore emits *exactly*
+     `page_count` units in page order, or declines — MinerU/Docling blocks are
+     grouped by their `page_idx`, and blocks outside the range are dropped
+     rather than clamped (the same rule `_pdf_outline` already applies to stale
+     bookmarks).
+  2. **Selection happens in the browser.** `PdfPage.tsx` builds its selection
+     surface from pdf.js `getTextContent()`, so text known only server-side
+     would leave select → highlight → ask dead on precisely these documents.
+     The Tesseract provider therefore rebuilds the PDF with an invisible OCR
+     text layer welded in, and `store.ingest` writes those bytes for the raw
+     view. The material id still hashes the *upload*, so re-uploading the same
+     scan stays idempotent.
+
+  Providers, in order: the operator's configured parse engine when it is one
+  that actually OCRs (MinerU, Docling), then PyMuPDF's built-in Tesseract
+  binding — which costs no new Python dependency, because PyMuPDF is already
+  core. A heavy engine that is misconfigured or missing its models *declines*
+  rather than raising, so it can never cost the user the Tesseract path that
+  would have worked. When nothing can run, the original two sentences are kept
+  verbatim and the operator-facing fix is appended (`brew install tesseract` /
+  `apt install tesseract-ocr-tha`, or pick an engine in Settings → Document
+  Parsing).
+
+  Configuration is environment-only on purpose: this path runs *only* for a
+  document that would otherwise be rejected, so there is no default to protect.
+  `DEEPTUTOR_READING_OCR` (off switch), `..._LANGUAGE` (defaults to the
+  interface language + English, so a Thai install asks for `tha+eng`),
+  `..._DPI` (300), `..._MAX_SECONDS` (300 — the upload is synchronous, so the
+  budget bounds what the caller waits for).
+
+  Verified end to end on the reported file: 5 pages, `tha+eng`, 6.5 s, 3,573
+  characters recovered, 86 selectable words on page 1 of the stored PDF.
+  21 tests in `tests/reading/test_ocr.py`; the one that needs a real OCR engine
+  skips itself where Tesseract is absent.
+
 - **2026-09-05 — The web contract tests compare `/`-separated paths against a
   file walker that returns `\` on Windows, so five of them can never pass
   there.** `web/tests/architecture-contracts.test.ts`,

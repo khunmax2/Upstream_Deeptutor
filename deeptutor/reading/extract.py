@@ -28,7 +28,7 @@ more branch here without touching a single consumer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import logging
 from pathlib import Path
 import re
@@ -71,6 +71,11 @@ class Extraction:
     outline: tuple[OutlineEntry, ...] = field(default_factory=tuple)
     render_mode: RenderMode = "text"
     unit_refs: tuple[UnitReference, ...] = field(default_factory=tuple)
+    # Set only when a recovery pass rebuilt the source file (today: the OCR
+    # fallback, which writes an invisible text layer into a scanned PDF). The
+    # store persists these bytes for the raw view instead of the upload, so the
+    # browser gets the selection surface the original never had.
+    raw_bytes: bytes | None = None
 
     @property
     def char_count(self) -> int:
@@ -99,11 +104,32 @@ def extract_material(path: str | Path) -> Extraction:
         extraction = _extract_sections(source)
 
     if not any(unit.strip() for unit in extraction.units):
-        raise ReadingError(
-            f"{source.name}: no readable text could be extracted. "
-            "A scanned document needs OCR before it can be read here."
-        )
+        if suffix != ".pdf":
+            raise ReadingError(
+                f"{source.name}: no readable text could be extracted. "
+                "A scanned document needs OCR before it can be read here."
+            )
+        extraction = _recover_pdf_with_ocr(source, extraction)
     return extraction
+
+
+def _recover_pdf_with_ocr(source: Path, extraction: Extraction) -> Extraction:
+    """Refill an image-only PDF's empty units from OCR, page for page.
+
+    Only the units, the extractor label and the raw bytes change: unit kind,
+    outline and render mode are already correct for a PDF, and keeping them is
+    what guarantees an OCR'd scan stays addressable by physical page number
+    exactly like every other PDF.
+    """
+    from deeptutor.reading.ocr import recover_with_ocr
+
+    recovered = recover_with_ocr(source, len(extraction.units))
+    return replace(
+        extraction,
+        units=recovered.units,
+        extractor=f"{extraction.extractor}+ocr:{recovered.engine}",
+        raw_bytes=recovered.searchable_pdf,
+    )
 
 
 # ---------------------------------------------------------------------------
