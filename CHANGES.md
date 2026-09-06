@@ -17,6 +17,45 @@ upstream.
 
 ---
 
+## The gatekeeper read the wrong field, found by testing against a real DeepTutor — 2026-09-06
+
+`deploy/openmaic-gatekeeper/gatekeeper.mjs` decided access from
+`/api/auth/status`'s `authenticated` field alone. That endpoint also returns
+`enabled`, and when DeepTutor's own auth is switched off it answers
+`authenticated: true` to every caller regardless of cookie:
+
+```
+$ curl -H 'Cookie: dt_token=totally-made-up-garbage' .../api/auth/status
+{"enabled":false,"authenticated":true,"user_id":"local-admin",...}
+```
+
+`data/user/settings/auth.json` ships with `"enabled": false`. Against such an
+instance the gate meant "present any cookie named `dt_token`" — a forged one
+returned `200` and reached OpenMAIC. Measured against a live backend, not
+reasoned about. It also misdiagnosed the honest case: with auth off DeepTutor
+never sets the cookie, so real readers were told to sign in at a login page that
+does not exist.
+
+**Fixed** — the gate reads `enabled` first and refuses with a fifth outcome,
+`auth_disabled_upstream` (503), rather than serving OpenMAIC openly on the
+strength of a setting nobody made about OpenMAIC. `ALLOW_ANONYMOUS=1` remains the
+way to ask for that deliberately. The websocket upgrade path inherits the same
+verdict. `deploy/docker-compose.openmaic.yml` was already correct — it never set
+`ALLOW_ANONYMOUS`, so the gate is on by default.
+
+**Why twelve green checks missed it.** `gatekeeper.test.mjs` stubbed the endpoint
+as `{authenticated: <depends on the token>}` — the shape the code assumed. Stub
+and code agreed about a case neither had ever seen. The suite now serves payloads
+copied verbatim from a live instance and covers the disabled-auth state
+explicitly; 12 checks became 21. `deploy/openmaic-gatekeeper/README.md` records
+both the hole and the reason the original test could not have found it.
+
+Files: `deploy/openmaic-gatekeeper/gatekeeper.mjs`,
+`deploy/openmaic-gatekeeper/gatekeeper.test.mjs`,
+`deploy/openmaic-gatekeeper/README.md`.
+
+---
+
 ## The OpenMAIC stack, built and run rather than described — 2026-09-06
 
 "Anything never built is not deployable." The compose overlay had been written,

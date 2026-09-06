@@ -60,6 +60,13 @@ const AUTH_TIMEOUT_MS = 5_000;
  */
 const verdicts = new Map();
 
+/**
+ * Sentinel key for "is DeepTutor's auth even switched on". Cached in the same
+ * map and under the same TTL as a session verdict, so an anonymous flood costs
+ * one auth call per TTL rather than one per request.
+ */
+const MODE_KEY = '\0auth-mode';
+
 function cachedVerdict(token) {
   const hit = verdicts.get(token);
   if (!hit) return null;
@@ -100,11 +107,25 @@ function stripCookie(header, name) {
 }
 
 /**
- * Three outcomes, not two. "Authorized" and "not authorized" are the easy pair;
- * the third is that the checker itself could not be reached, and answering 401
+ * Four outcomes, not two. "Authorized" and "not authorized" are the easy pair.
+ * The third is that the checker itself could not be reached, and answering 401
  * there would tell a signed-in reader they are signed out and send them to a
- * login page that will not help. That distinction is the difference between a
- * gate that fails closed and one that fails closed *and* says why.
+ * login page that will not help.
+ *
+ * The fourth was found by pointing this at a real DeepTutor instead of a stub.
+ * `/api/auth/status` carries `enabled` as well as `authenticated`, and when
+ * DeepTutor's own auth is switched off it answers `authenticated: true` to
+ * every caller — no cookie, junk cookie, any cookie:
+ *
+ *   $ curl -H 'Cookie: dt_token=totally-made-up-garbage' .../api/auth/status
+ *   {"enabled":false,"authenticated":true,"user_id":"local-admin",...}
+ *
+ * Reading `authenticated` alone therefore turns this gate into "present any
+ * cookie named dt_token", which is one line of JavaScript to satisfy. It also
+ * misdiagnoses the honest case: with auth off DeepTutor never sets the cookie
+ * at all, so real readers get `not_signed_in` and a login link that cannot help.
+ * Both go away by reading the field that says whether there is anything to
+ * verify against.
  */
 async function verify(token) {
   const cached = cachedVerdict(token);
@@ -114,17 +135,26 @@ async function verify(token) {
   const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
   try {
     const response = await fetch(AUTH_URL, {
-      headers: { cookie: `${COOKIE_NAME}=${token}` },
+      // A token of null is the anonymous probe: it asks only whether auth is on.
+      headers: token === null ? {} : { cookie: `${COOKIE_NAME}=${token}` },
       redirect: 'manual',
       signal: controller.signal,
     });
     if (!response.ok) {
-      remember(token, false);
+      if (token !== null) remember(token, false);
       return 'deny';
     }
     const body = await response.json();
     // Unwrap either shape: the payload directly, or wrapped in `data`.
     const status = body?.data ?? body;
+
+    if (status?.enabled === false) {
+      remember(MODE_KEY, false);
+      return 'auth_disabled';
+    }
+    remember(MODE_KEY, true);
+    if (token === null) return 'deny';
+
     const ok = status?.authenticated === true;
     remember(token, ok);
     return ok ? 'allow' : 'deny';
@@ -137,6 +167,19 @@ async function verify(token) {
   }
 }
 
+/**
+ * Whether DeepTutor's auth is on, for the no-cookie path. Answers from cache
+ * when it can, so an anonymous flood does not become an auth call per request.
+ */
+async function authIsEnabled() {
+  const cached = cachedVerdict(MODE_KEY);
+  if (cached !== null) return cached;
+  const verdict = await verify(null);
+  if (verdict === 'auth_disabled') return false;
+  if (verdict === 'unavailable') return null;
+  return true;
+}
+
 function refuse(res, status, code, message) {
   const body = JSON.stringify({ error: { code, message } });
   res.writeHead(status, {
@@ -144,6 +187,32 @@ function refuse(res, status, code, message) {
     'cache-control': 'no-store',
   });
   res.end(body);
+}
+
+function refuseUnavailable(res) {
+  return refuse(
+    res,
+    503,
+    'auth_unavailable',
+    'Could not reach DeepTutor to verify the session. This is not a permission problem — retry shortly.',
+  );
+}
+
+/**
+ * Refusing here is the deliberate choice. DeepTutor with auth off has no
+ * sessions to check, so serving OpenMAIC anyway would mean serving it to the
+ * whole internet on the strength of a setting nobody made about OpenMAIC. If
+ * that is genuinely what is wanted, `ALLOW_ANONYMOUS=1` says so out loud.
+ */
+function refuseAuthDisabled(res) {
+  return refuse(
+    res,
+    503,
+    'auth_disabled_upstream',
+    "DeepTutor has authentication switched off, so this gate cannot identify anyone and will " +
+      'not serve OpenMAIC openly by accident. Enable auth in DeepTutor, or set ALLOW_ANONYMOUS=1 ' +
+      'here to serve OpenMAIC without a gate on purpose.',
+  );
 }
 
 function forward(req, res) {
@@ -196,6 +265,12 @@ const server = http.createServer(async (req, res) => {
 
   const token = readCookie(req.headers.cookie, COOKIE_NAME);
   if (!token) {
+    // Ask *why* there is no cookie before blaming the reader: with DeepTutor's
+    // auth off there is no login to send them to, and "sign in first" would be
+    // a wrong answer dressed as a helpful one.
+    const enabled = await authIsEnabled();
+    if (enabled === false) return refuseAuthDisabled(res);
+    if (enabled === null) return refuseUnavailable(res);
     return refuse(
       res,
       401,
@@ -208,15 +283,8 @@ const server = http.createServer(async (req, res) => {
 
   const verdict = await verify(token);
   if (verdict === 'allow') return forward(req, res);
-  if (verdict === 'unavailable') {
-    return refuse(
-      res,
-      503,
-      'auth_unavailable',
-      'Could not reach DeepTutor to verify the session. This is not a permission problem — ' +
-        'retry shortly.',
-    );
-  }
+  if (verdict === 'auth_disabled') return refuseAuthDisabled(res);
+  if (verdict === 'unavailable') return refuseUnavailable(res);
   return refuse(
     res,
     401,
