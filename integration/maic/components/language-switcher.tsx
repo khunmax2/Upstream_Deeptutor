@@ -1,5 +1,6 @@
 'use client';
 
+import { useIsEmbedded } from '@/lib/hooks/use-embed';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { supportedLocales } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,12 @@ interface LanguageSwitcherProps {
  */
 export function LanguageSwitcher({ onOpen }: LanguageSwitcherProps) {
   const { locale, setLocale } = useI18n();
+  const embedded = useIsEmbedded();
+
+  // Gated here rather than at each call site: this pill is rendered from the
+  // home page, the classroom header and the Pro rail, and a host that supplied
+  // `?lang=` wants it gone from all three.
+  if (embedded) return null;
 
   return (
     <DropdownMenu

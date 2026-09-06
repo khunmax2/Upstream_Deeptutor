@@ -26,6 +26,8 @@ import { isVideoExportEnabled } from '@/lib/config/feature-flags';
 import { useVideoRenderStore } from '@/lib/store/video-render';
 import { CircularProgress } from '@/components/ui/circular-progress';
 import { VideoExportDialog } from './video-export-dialog';
+import { useIsEmbedded } from '@/lib/hooks/use-embed';
+
 import { LanguageSwitcher } from '../language-switcher';
 import { SettingsDialog } from '../settings';
 import {
@@ -82,6 +84,7 @@ export function HeaderControls({
   const { theme, setTheme } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const embedded = useIsEmbedded();
 
   // Export plumbing — uses the stage / media task stores to check
   // readiness, then hands off to the export hooks. Available in both
@@ -151,56 +154,59 @@ export function HeaderControls({
         <LanguageSwitcher />
 
         {/* Theme — same Portal-backed DropdownMenu pattern. Non-modal keeps
-            Radix from body scroll-locking a fixed-height classroom layout. */}
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
-              aria-label={t('settings.theme')}
-            >
-              {theme === 'light' && <Sun className="w-4 h-4" />}
-              {theme === 'dark' && <Moon className="w-4 h-4" />}
-              {theme === 'system' && <Monitor className="w-4 h-4" />}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={8} className="min-w-[140px]">
-            <DropdownMenuItem
-              onSelect={() => setTheme('light')}
-              className={cn(
-                'cursor-pointer gap-2',
-                theme === 'light' &&
-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-              )}
-            >
-              <Sun className="w-4 h-4" />
-              {t('settings.themeOptions.light')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => setTheme('dark')}
-              className={cn(
-                'cursor-pointer gap-2',
-                theme === 'dark' &&
-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-              )}
-            >
-              <Moon className="w-4 h-4" />
-              {t('settings.themeOptions.dark')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => setTheme('system')}
-              className={cn(
-                'cursor-pointer gap-2',
-                theme === 'system' &&
-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-              )}
-            >
-              <Monitor className="w-4 h-4" />
-              {t('settings.themeOptions.system')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            Radix from body scroll-locking a fixed-height classroom layout.
+            Hidden when a host supplies `?theme=`; see useIsEmbedded. */}
+        {!embedded && (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+                aria-label={t('settings.theme')}
+              >
+                {theme === 'light' && <Sun className="w-4 h-4" />}
+                {theme === 'dark' && <Moon className="w-4 h-4" />}
+                {theme === 'system' && <Monitor className="w-4 h-4" />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="min-w-[140px]">
+              <DropdownMenuItem
+                onSelect={() => setTheme('light')}
+                className={cn(
+                  'cursor-pointer gap-2',
+                  theme === 'light' &&
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                )}
+              >
+                <Sun className="w-4 h-4" />
+                {t('settings.themeOptions.light')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setTheme('dark')}
+                className={cn(
+                  'cursor-pointer gap-2',
+                  theme === 'dark' &&
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                )}
+              >
+                <Moon className="w-4 h-4" />
+                {t('settings.themeOptions.dark')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setTheme('system')}
+                className={cn(
+                  'cursor-pointer gap-2',
+                  theme === 'system' &&
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                )}
+              >
+                <Monitor className="w-4 h-4" />
+                {t('settings.themeOptions.system')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
-        {/* Settings */}
+        {/* Settings — kept when embedded: the only route to provider config. */}
         <button
           onClick={() => setSettingsOpen(true)}
           className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"

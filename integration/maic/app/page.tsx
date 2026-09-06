@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { useIsEmbedded } from '@/lib/hooks/use-embed';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
@@ -165,6 +166,7 @@ function HomePage() {
   }, [router, workbenchEntryEnabled]);
   const [form, setForm] = useState<FormState>(initialFormState);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const embedded = useIsEmbedded();
   const [settingsSection, setSettingsSection] = useState<
     import('@/lib/types/settings').SettingsSection | undefined
   >(undefined);
@@ -728,71 +730,73 @@ function HomePage() {
         {/* Language Selector */}
         <LanguageSwitcher onOpen={() => setThemeOpen(false)} />
 
+        {!embedded && <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />}
+
+        {/* Theme Selector — hidden when a host supplies `?theme=`. */}
+        {!embedded && (
+          <div className="relative">
+            <button
+              onClick={() => {
+                setThemeOpen(!themeOpen);
+              }}
+              className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
+            >
+              {theme === 'light' && <Sun className="w-4 h-4" />}
+              {theme === 'dark' && <Moon className="w-4 h-4" />}
+              {theme === 'system' && <Monitor className="w-4 h-4" />}
+            </button>
+            {themeOpen && (
+              <div className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50 min-w-[140px]">
+                <button
+                  onClick={() => {
+                    setTheme('light');
+                    setThemeOpen(false);
+                  }}
+                  className={cn(
+                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+                    theme === 'light' &&
+                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                  )}
+                >
+                  <Sun className="w-4 h-4" />
+                  {t('settings.themeOptions.light')}
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('dark');
+                    setThemeOpen(false);
+                  }}
+                  className={cn(
+                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+                    theme === 'dark' &&
+                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                  )}
+                >
+                  <Moon className="w-4 h-4" />
+                  {t('settings.themeOptions.dark')}
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('system');
+                    setThemeOpen(false);
+                  }}
+                  className={cn(
+                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
+                    theme === 'system' &&
+                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                  )}
+                >
+                  <Monitor className="w-4 h-4" />
+                  {t('settings.themeOptions.system')}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
 
-        {/* Theme Selector */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              setThemeOpen(!themeOpen);
-            }}
-            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
-          >
-            {theme === 'light' && <Sun className="w-4 h-4" />}
-            {theme === 'dark' && <Moon className="w-4 h-4" />}
-            {theme === 'system' && <Monitor className="w-4 h-4" />}
-          </button>
-          {themeOpen && (
-            <div className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50 min-w-[140px]">
-              <button
-                onClick={() => {
-                  setTheme('light');
-                  setThemeOpen(false);
-                }}
-                className={cn(
-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
-                  theme === 'light' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-                )}
-              >
-                <Sun className="w-4 h-4" />
-                {t('settings.themeOptions.light')}
-              </button>
-              <button
-                onClick={() => {
-                  setTheme('dark');
-                  setThemeOpen(false);
-                }}
-                className={cn(
-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
-                  theme === 'dark' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-                )}
-              >
-                <Moon className="w-4 h-4" />
-                {t('settings.themeOptions.dark')}
-              </button>
-              <button
-                onClick={() => {
-                  setTheme('system');
-                  setThemeOpen(false);
-                }}
-                className={cn(
-                  'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
-                  theme === 'system' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
-                )}
-              >
-                <Monitor className="w-4 h-4" />
-                {t('settings.themeOptions.system')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
-
-        {/* Settings Button */}
+        {/* Settings Button — kept: the only route to provider configuration. */}
         <div className="relative">
           <button
             onClick={() => setSettingsOpen(true)}

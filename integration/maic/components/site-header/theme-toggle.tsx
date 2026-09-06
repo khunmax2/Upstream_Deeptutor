@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Sun, Moon, Monitor } from 'lucide-react';
+import { useIsEmbedded } from '@/lib/hooks/use-embed';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ export function ThemeToggle() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const embedded = useIsEmbedded();
 
   useEffect(() => {
     if (!open) return;
@@ -27,6 +29,9 @@ export function ThemeToggle() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // A host that supplied `?theme=` owns this setting; see useIsEmbedded.
+  if (embedded) return null;
 
   const ActiveIcon = OPTIONS.find((o) => o.value === theme)?.icon ?? Monitor;
 
