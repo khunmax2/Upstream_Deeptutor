@@ -107,6 +107,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Create the data directory as the runtime user before dropping privileges.
+# docker-compose.yml mounts a named volume here, and Docker seeds a fresh named
+# volume with the ownership of the image path it covers — so when that path does
+# not exist in the image, the mount point is created root-owned and `nextjs`
+# cannot write to its own data directory. Classrooms, materials and usage all
+# land here, and every write fails with EACCES.
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
+
 USER nextjs
 
 EXPOSE 3000
