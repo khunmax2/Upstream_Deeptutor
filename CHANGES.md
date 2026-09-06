@@ -91,6 +91,52 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-06 — A picture-only slide deck is readable too, and an extractor
+  error no longer says the filename twice.** Follow-up to the scanned-PDF entry
+  below, from a second report against the same screen: an 11.6 MB PPTX was
+  refused with *"PageIndex_Vectorless_RAG_Architecture.pptx:
+  PageIndex_Vectorless_RAG_Architecture.pptx: no extractable text"*. Two
+  separate defects in one message.
+
+  **The deck.** Ten slides, ten PNGs, and every `slideN.xml` a 921-byte shell
+  holding a single full-bleed `<p:pic>` — a deck exported from a design tool,
+  where the slides *are* pictures. The same shape as the scanned PDF, in a
+  different format, and it took the same dead end: `_extract_slides` calls the
+  shared extractor, which finds no text run and raises before
+  `extract_material`'s empty-unit check (and therefore its OCR recovery) is ever
+  reached.
+
+  Recovery now reads the pictures straight out of the OOXML package and OCRs
+  them, one unit per slide. No rendering, so no LibreOffice on the host — for a
+  deck whose every slide is already an image, rendering would only redraw what
+  is sitting in `ppt/media/`. Two details carry the correctness:
+
+  * **Slide order comes from `sldIdLst`, not the `slideN.xml` file names.**
+    Those numbers are creation order; a deck whose slides were reordered would
+    otherwise attribute each slide's text to the wrong locator — the same
+    misalignment the PDF path refuses to risk. File order is the fallback, and
+    it sorts numerically so slide10 follows slide9.
+  * **Only "this file holds no text" routes to OCR.** `_shared_extract`
+    re-raises `from exc`, so the extractor's own exception type is still on the
+    chain: an `EmptyDocumentError` recovers, while a corrupt package still
+    reports being corrupt. Read from the chain rather than matched against the
+    message, which is user-facing copy and free to change.
+
+  Pictures are upscaled to a 2400 px target width before OCR: `get_pixmap`
+  renders an image at its *declared* size at 72 dpi, which for a slide picture
+  is well under its own pixel count, and small text OCRs better upscaled.
+
+  **The doubled filename** was a separate, pre-existing wart, visible in the
+  screenshot and found while writing the tests for the PDF work. Every
+  `DocumentExtractionError` message already opens with the filename, and
+  `_shared_extract` prefixed it again. It now prefixes only when the message
+  does not already start with the name.
+
+  Verified on the reported deck: 10 slides, `tha+eng`, 9.7 s, 4,654 characters —
+  *"สถาปัตยกรรม RAG ไร้เวกเตอร์"*, *"ความคล้ายคลึง(Similarity) ≠
+  ความเกี่ยวข้อง(Relevance)"*, *"การจัดทำดัชนีด้วยโครงสร้างต้นไม้"* all recovered.
+  `tests/reading/test_ocr.py` grows from 21 tests to 32.
+
 - **2026-09-06 — A scanned PDF is readable in Immersive Reading instead of
   refused at upload.** `extract_material` read a PDF through PyMuPDF and
   nothing else, so an image-only scan — every page a picture, no text layer —
