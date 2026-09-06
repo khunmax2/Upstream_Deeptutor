@@ -17,6 +17,42 @@ upstream.
 
 ---
 
+## The container could not write to its own data directory — 2026-09-07
+
+**New: `deploy/openmaic-patches/0008-data-volume-ownership.patch`.** OpenMAIC's
+own `docker-compose.yml` mounts a named volume at `/app/data`, and the app writes
+classrooms, classroom jobs, uploaded materials and usage records under it. The
+Dockerfile never creates that path, so Docker created the mount point while
+seeding the volume — and a fresh named volume covering a path absent from the
+image comes up root-owned, while the process runs as `nextjs` (uid 1001):
+
+    drwxr-xr-x 2 root root /app/data
+    uid=1001(nextjs) gid=65533(nogroup)
+
+Every write failed, once every few seconds in a running container:
+
+    [WARN] [UsageStorage] Failed to record usage (ignored):
+      Error: EACCES: permission denied, mkdir '/app/data/usage'
+
+Usage records are swallowed with a warning, which is how this stays invisible;
+the classroom and material paths sit on the same directory.
+
+Creating the directory as the runtime user before `USER nextjs` fixes new
+deployments, since Docker seeds a volume with the ownership of the image path it
+covers. The volume already created here was repaired in place with a one-off
+`chown -R 1001:1001` from a privileged container rather than deleted, so nothing
+saved was lost; verified afterwards — the directory reads `nextjs:nodejs`, a
+write test succeeds, and `EACCES` is gone from the log.
+
+An upstream bug rather than one of ours: it is their compose file, their
+Dockerfile and their storage paths, and any deployment of theirs using that
+volume has it.
+
+Files: `deploy/openmaic-patches/0008-data-volume-ownership.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
 ## Speech that arrives as raw PCM now plays — 2026-09-06
 
 **New: `deploy/openmaic-patches/0007-pcm-audio-responses.patch`.** A custom TTS

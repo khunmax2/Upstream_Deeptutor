@@ -35,6 +35,20 @@
 # ============================================
 
 services:
+  # Extends the base file's `deeptutor` service; nothing here replaces it.
+  # Both settings only matter once DeepTutor is containerised, which is how it
+  # is deployed — running it on the host hides both.
+  deeptutor:
+    # Inside a container `localhost` is the container. Anything DeepTutor is
+    # pointed at that lives on the host — Ollama, MinerU, a TTS server — needs
+    # this name instead, and without the mapping the name does not resolve.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Where the /maic page sends the browser. A browser-side URL, so this one
+      # really is localhost: it is resolved by the reader's machine, not here.
+      - DEEPTUTOR_OPENMAIC_URL=${DEEPTUTOR_OPENMAIC_URL:-}
+
   openmaic:
     build:
       # Relative to the PROJECT directory (the repo root, from the first -f
@@ -61,7 +75,21 @@ services:
     # No `ports` on purpose. Reachable only from the compose network, so the
     # only route in is the gatekeeper. Publishing a port here — even on
     # loopback — is a way around the gate for anything already on the host.
+    # Same mapping as the gatekeeper: without it `host.docker.internal` does not
+    # resolve here either, and a self-hosted model or parser running on the host
+    # is unreachable no matter how the URL is written.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
+      # OpenMAIC's SSRF guard (lib/server/ssrf-guard.ts) refuses private and
+      # loopback targets, which is right for a public deployment and wrong for
+      # one whose model server, MinerU or TTS lives beside it. Off by default;
+      # `OPENMAIC_ALLOW_LOCAL_NETWORKS=true` opts in deliberately.
+      #
+      # It removes a real protection: with it on, anything that can reach this
+      # container can ask it to fetch internal addresses. Set it only where the
+      # gate in front is what keeps strangers out.
+      - ALLOW_LOCAL_NETWORKS=${OPENMAIC_ALLOW_LOCAL_NETWORKS:-}
       # Leave ACCESS_CODE unset: OpenMAIC's access cookie is SameSite=Lax and
       # does not survive a cross-origin frame, so enabling it here locks the
       # embed out rather than securing it.

@@ -74,6 +74,11 @@ PROFILES: dict[str, set[str]] = {
         "Dockerfile",
         ".dockerignore",
     },
+    # Data-volume ownership (0008). Same file as 0006 but a different concern:
+    # the container could not write to the directory its own compose file mounts.
+    "data-volume": {
+        "Dockerfile",
+    },
     # PR 1 — Thai script support. Nothing in this project's font stack covers
     # Thai, and the video-export registry enumerates only cyrillic and arabic.
     "th-font": {
