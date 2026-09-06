@@ -17,6 +17,43 @@ upstream.
 
 ---
 
+## Speech recognition no longer assumes Chinese — 2026-09-07
+
+`asrLanguage` defaulted to `'zh'` and is sent with every request, so Whisper was
+told the audio was Chinese and obliged. Thai speech came back as fluent Chinese —
+`字幕志愿者 李宗盛` in the settings test, `《無憂》《鳥》` typed into the home page by
+voice input. It reads like a broken model and is the API doing what it was asked.
+
+Patch `0009` had added `th` to the *list* of choices and stopped there. The
+default was the other half, and without it nothing changed for anyone who had not
+gone looking for the setting.
+
+**The fallback was Chinese too, and that was the subtler half.** When a provider
+does not offer the chosen language the store reset to `supportedLanguages[0]` —
+and for `browser-native`, the default recogniser, that is `zh-CN`, because its
+49-entry list happens to begin with the Chinese variants. Picking Thai and
+switching recogniser moved you back to Chinese by way of an array index.
+`fallbackASRLanguage` now prefers `auto`, then the same language spelled the
+provider's way (`th` to `th-TH`, which browser-native does list), and only then
+the first on offer. A test sweeps the real provider table asserting that no
+provider lands a Thai reader on Chinese while something better was available.
+
+**What was checked and found fine**, since the question was whether anything else
+defaults to Chinese: the settings store holds no other Chinese default
+(`ttsProviderId` and `asrProviderId` are `browser-native`, `ttsVoice` is
+`default`); `defaultLocale` is `zh-CN` but never surfaces, because our
+`th-TH.json` carries all 1,797 keys with gaps filled from English; and the eight
+Chinese strings in `en-US.json` that our Thai file inherits are language
+*endonyms* — the same convention that makes `settings.lang_th` read "ไทย".
+Upstream does leave 32 untranslated Chinese strings in each of ar-SA, de-DE,
+es-MX, fr-FR, ko-KR, pt-BR, ru-RU and vi-VN; ours is not among them.
+
+Files: `integration/maic/lib/audio/constants.ts`,
+`integration/maic/lib/store/settings.ts`,
+`integration/maic/tests/audio/asr-language-fallback.test.ts` (new).
+
+---
+
 ## OpenMAIC is vendored at `integration/maic` — 2026-09-07
 
 The patch queue is gone. OpenMAIC is now a **squashed git subtree** at
@@ -278,8 +315,14 @@ are fixed together.
 Verified twice over: five unit tests on the header fields, the media-type
 parameters and the pass-through cases, plus a real 16,384-byte response from that
 server converted and then opened by an **independent** decoder — Python's `wave`
-module reports 1 channel, 16-bit, 24 kHz, 8,192 frames, 0.341 s. OpenMAIC's own
-`tests/audio/` suite stays green at 228.
+module reports 1 channel, 16-bit, 24 kHz, 8,192 frames, 0.341 s.
+
+> **Correction.** This entry said OpenMAIC's own `tests/audio/` suite "stays green
+> at 228". That was one lucky run. `tests/audio/narrator-pin-fallback.test.ts`
+> fails two or three of its six, and does so in upstream's own code: with our
+> changes and without them, in the subtree and in the sibling checkout, and with
+> `tts-providers.ts` restored to pristine. A single passing run was reported as a
+> property of the suite.
 
 An upstream candidate like the rest: it mentions nothing of DeepTutor, and any
 embedder pointing OpenMAIC at such a server hits it.
