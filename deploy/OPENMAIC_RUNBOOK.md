@@ -225,8 +225,10 @@ DEEPTUTOR_LOGIN_URL=https://203.185.144.41/deepwitya2/login \
   up -d openmaic gatekeeper
 ```
 
-**`DEEPTUTOR_AUTH_URL` has no default, on purpose.** Compose refuses to start
-without it. It used to fall back to the production URL, which meant a
+**`DEEPTUTOR_AUTH_URL` is empty by default, on purpose** — never the production
+URL. Left empty, the gatekeeper refuses every request with
+`gatekeeper_misconfigured`, so an unconfigured stack serves nothing and calls
+nothing. It used to fall back to the production URL, which meant a
 `docker compose up` from a laptop, a CI runner or anyone else's checkout quietly
 began sending whatever cookies arrived to the live server, with nobody having
 chosen that. It is not a dangerous endpoint — `/api/auth/status` is a public

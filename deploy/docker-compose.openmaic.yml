@@ -98,16 +98,22 @@ services:
       # Must point at a DeepTutor that can see the same cookie, and is resolved
       # from *inside* this container — `localhost` here is the gatekeeper itself.
       #
-      # Deliberately no default. It used to fall back to the production URL,
-      # which meant any `docker compose up` from this repository — a laptop, a
-      # CI runner, someone else's machine — silently began sending whatever
-      # cookies arrived to the live server, with nobody having chosen that.
-      # Unset, the gatekeeper refuses every request with `gatekeeper_misconfigured`
-      # rather than guessing, so the destination is always somebody's decision.
+      # Empty by default, never the production URL. It used to fall back to the
+      # live endpoint, so any `docker compose up` from this repository — a
+      # laptop, a CI runner, someone else's machine — silently began sending
+      # whatever cookies arrived to the real server with nobody having chosen
+      # that. Empty, the gatekeeper refuses every request with
+      # `gatekeeper_misconfigured`, so an unconfigured stack serves nothing and
+      # calls nothing; the destination is always somebody's decision.
+      #
+      # Empty rather than compose's `:?` required-variable form, which was tried
+      # first and is too blunt: it makes the variable a precondition of *every*
+      # compose command, so `build` and `down` fail too, neither of which has
+      # anything to do with an auth endpoint.
       #
       #   local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
       #   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
-      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:?set it explicitly — see the comment above}
+      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:-}
       - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}
       - AUTH_CACHE_TTL_MS=${GATEKEEPER_AUTH_TTL_MS:-30000}
       # The documented escape hatch for a local trial, and it was missing from

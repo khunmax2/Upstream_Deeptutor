@@ -76,10 +76,17 @@ exposure runs the other way — a valid production session would open the *local
 OpenMAIC — and the gatekeeper binds `127.0.0.1` only.
 
 The defect is the defaulting, not the traffic. A request's destination should be
-a decision. `DEEPTUTOR_AUTH_URL` now has no default and compose refuses to start
-without it, naming both the local and deployed forms; the gatekeeper already
-fails closed on unset with `gatekeeper_misconfigured`, so an incomplete
-configuration cannot serve anything either.
+a decision. `DEEPTUTOR_AUTH_URL` now defaults to **empty** rather than to the
+production URL, and the gatekeeper already fails closed on unset with
+`gatekeeper_misconfigured` — so an unconfigured stack serves nothing and calls
+nothing.
+
+> **Correction.** This first used compose's `:?` required-variable form, and this
+> entry said "compose refuses to start without it". That was too blunt and the
+> claim was wrong about the consequence: compose interpolates the whole file for
+> *every* command, so `docker compose build` and `down` failed too, neither of
+> which has anything to do with an auth endpoint. Caught by the next build.
+> The reason not to use `:?` is now recorded in the compose file itself.
 
 `LOGIN_URL` loses its production default for the same reason.
 
