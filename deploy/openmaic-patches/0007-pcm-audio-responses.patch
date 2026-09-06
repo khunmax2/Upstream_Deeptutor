@@ -13,24 +13,37 @@ which is the browser's own message and says nothing about the cause. Measured
 against such a server: `content-type: audio/L16;rate=24000;channels=1`, and the
 first bytes carry neither a RIFF nor an ID3 magic.
 
-This adds the missing step. `decodeAudioResponse` parses the media type for
+`decodeAudioResponse` adds the missing step. It parses the media type for
 `audio/l16`, `audio/pcm` and `audio/x-pcm` — taking `rate` and `channels` from
-its parameters, defaulting to 24 kHz mono when they are absent — and prepends
-the 44-byte RIFF/WAVE header that makes the same samples playable. Anything
-already in a container is returned untouched.
+its parameters, defaulting to 24 kHz mono when absent — and prepends the 44-byte
+RIFF/WAVE header that makes the same samples playable. Anything already in a
+container is returned untouched.
 
-Done here rather than at each player so that preview, regeneration and classroom
-playback are fixed together, and so the rule stays in one place: everything past
-this function is in a container. The three provider paths that read a response
-body (OpenAI, Lemonade, VoxCPM) had identical five-line endings and now share it.
+**Byte order is measured, not assumed.** RFC 2586 defines `audio/L16` as
+big-endian and `audio/pcm` as little, and real gateways disagree with the spec
+often enough that either default produces noise on the other half of them — the
+server this was first tested against sends little-endian under an `audio/L16`
+label. So for L16 the samples are read both ways and the smoother reading wins:
+speech is a continuous waveform, and the wrong byte order swaps each sample's
+high and low halves, turning every step into a jump. On that server the two
+readings differed by a factor of thirteen. Silence and clips too short to measure
+fall back to the specification, and `TTS_L16_BYTE_ORDER` forces the choice for a
+gateway that is known. `audio/pcm` is little-endian by definition and skips the
+measurement entirely.
 
-Verified two ways: five unit tests over the header fields, the media-type
-parameters and the pass-through cases; and a real response from such a server
-(16,384 bytes of L16) converted and then opened by an independent decoder —
-Python's `wave` module reports 1 channel, 16-bit, 24 kHz, 8,192 frames.
+Done at the single point the three provider paths converge on (OpenAI, Lemonade,
+VoxCPM had identical five-line endings), so preview, regeneration and classroom
+playback are fixed together and the rule stays in one place: everything past this
+function is in a container, little-endian.
+
+Verified two ways: ten unit tests over the header fields, the media-type
+parameters, both byte orders, the short-clip and silence fallbacks and the
+pass-through cases; and a real 16,384-byte response from such a server, whose
+byte order the detector reads correctly and whose output an independent decoder
+opens — Python's `wave` module reports 1 channel, 16-bit, 24 kHz, 8,192 frames.
 
 diff --git a/lib/audio/tts-providers.ts b/lib/audio/tts-providers.ts
-index e8fe2304..a13a4d98 100644
+index e8fe2304..acfd7300 100644
 --- a/lib/audio/tts-providers.ts
 +++ b/lib/audio/tts-providers.ts
 @@ -302,11 +302,7 @@ async function generateOpenAITTS(
@@ -71,7 +84,7 @@ index e8fe2304..a13a4d98 100644
  }
  
  function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
-@@ -435,6 +424,94 @@ function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
+@@ -435,6 +424,156 @@ function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
    return prompt ? `(${prompt})${text}` : text;
  }
  
@@ -105,6 +118,63 @@ index e8fe2304..a13a4d98 100644
 +    else if (key === 'channels' || key === 'channel') channels = parsed;
 +  }
 +  return { sampleRate, channels };
++}
++
++/**
++ * Which byte order the samples are in.
++ *
++ * RFC 2586 defines `audio/L16` as **big**-endian, and `audio/pcm` as little.
++ * Real gateways disagree with the spec often enough that trusting either default
++ * produces noise on the other half of them — the server this was first tested
++ * against labels its output `audio/L16;rate=24000;channels=1` and sends
++ * little-endian.
++ *
++ * So measure instead of assuming. Speech is a continuous waveform: read with the
++ * right byte order consecutive samples move smoothly, and with the wrong one the
++ * high and low bytes swap and every step becomes a jump. On that first server the
++ * two readings differed by a factor of thirteen, which is not a close call.
++ *
++ * `TTS_L16_BYTE_ORDER` forces the choice when a gateway is known and the audio is
++ * too short or too quiet to measure.
++ */
++function detectByteOrder(pcm: Uint8Array, mediaType: string): 'little' | 'big' {
++  const forced = process.env.TTS_L16_BYTE_ORDER;
++  if (forced === 'little' || forced === 'big') return forced;
++
++  // audio/pcm and audio/x-pcm are little-endian by definition; only L16 is in
++  // doubt, so only L16 pays for the measurement.
++  if (mediaType !== 'audio/l16') return 'little';
++
++  const frames = Math.floor(pcm.length / 2);
++  // Too little to judge: fall back to what the specification says.
++  if (frames < 64) return 'big';
++
++  const view = new DataView(pcm.buffer, pcm.byteOffset, frames * 2);
++  let littleSteps = 0;
++  let bigSteps = 0;
++  let previousLittle = view.getInt16(0, true);
++  let previousBig = view.getInt16(0, false);
++  // Every eighth frame is plenty and keeps this off the critical path.
++  for (let i = 8; i < frames; i += 8) {
++    const little = view.getInt16(i * 2, true);
++    const big = view.getInt16(i * 2, false);
++    littleSteps += Math.abs(little - previousLittle);
++    bigSteps += Math.abs(big - previousBig);
++    previousLittle = little;
++    previousBig = big;
++  }
++  if (littleSteps === 0 && bigSteps === 0) return 'big'; // silence — nothing to measure
++  return littleSteps <= bigSteps ? 'little' : 'big';
++}
++
++/** Swap every 16-bit pair, in place. WAV is little-endian; big-endian PCM is not. */
++function swapBytes(pcm: Uint8Array): Uint8Array {
++  const out = new Uint8Array(pcm.length - (pcm.length % 2));
++  for (let i = 0; i + 1 < pcm.length; i += 2) {
++    out[i] = pcm[i + 1];
++    out[i + 1] = pcm[i];
++  }
++  return out;
 +}
 +
 +/** Prepend the 44-byte RIFF/WAVE header that turns PCM16 into a playable file. */
@@ -155,8 +225,13 @@ index e8fe2304..a13a4d98 100644
 +  const bytes = new Uint8Array(arrayBuffer);
 +  const pcm = parsePcmContentType(contentType);
 +  if (pcm) {
++    const mediaType = (contentType || '').split(';')[0].trim().toLowerCase();
++    // WAV stores samples little-endian, so big-endian PCM has to be swapped
++    // rather than merely wrapped — a header alone would describe it wrongly.
++    const samples =
++      detectByteOrder(bytes, mediaType) === 'big' ? swapBytes(bytes) : bytes;
 +    return {
-+      audio: pcm16ToWav(bytes, pcm.sampleRate, pcm.channels),
++      audio: pcm16ToWav(samples, pcm.sampleRate, pcm.channels),
 +      format: 'wav',
 +    };
 +  }
@@ -168,10 +243,10 @@ index e8fe2304..a13a4d98 100644
    if (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) return 'mp3';
 diff --git a/tests/audio/pcm-wav.test.ts b/tests/audio/pcm-wav.test.ts
 new file mode 100644
-index 00000000..09774c63
+index 00000000..2bf69886
 --- /dev/null
 +++ b/tests/audio/pcm-wav.test.ts
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,116 @@
 +import { describe, expect, it } from 'vitest';
 +
 +import { decodeAudioResponse } from '@/lib/audio/tts-providers';
@@ -183,6 +258,56 @@ index 00000000..09774c63
 +
 +/** 100 frames of silence — content does not matter, only the framing does. */
 +const pcm = () => new Uint8Array(200).buffer;
++
++/** A smooth 200 Hz ramp — what speech looks like: consecutive samples move little. */
++function tone(order: 'little' | 'big', frames = 400): ArrayBuffer {
++  const buf = new ArrayBuffer(frames * 2);
++  const view = new DataView(buf);
++  for (let i = 0; i < frames; i++) {
++    view.setInt16(i * 2, Math.round(8000 * Math.sin((i / 60) * Math.PI)), order === 'little');
++  }
++  return buf;
++}
++
++describe('decodeAudioResponse byte order', () => {
++  const samples = (wav: Uint8Array) =>
++    new DataView(wav.buffer, wav.byteOffset + 44).getInt16(0, true);
++
++  it('leaves little-endian L16 alone — what real gateways send', () => {
++    const { audio } = decodeAudioResponse(tone('little'), 'audio/L16;rate=24000');
++    // First sample is sin(0) = 0 either way; check a later one that is not.
++    const v = new DataView(audio.buffer, audio.byteOffset + 44).getInt16(30 * 2, true);
++    expect(Math.abs(v)).toBeLessThan(9000);
++  });
++
++  it('swaps big-endian L16 — what RFC 2586 actually specifies', () => {
++    const { audio } = decodeAudioResponse(tone('big'), 'audio/L16;rate=24000');
++    const v = new DataView(audio.buffer, audio.byteOffset + 44).getInt16(30 * 2, true);
++    expect(Math.abs(v)).toBeLessThan(9000);
++  });
++
++  it('never swaps audio/pcm, which is little-endian by definition', () => {
++    const buf = tone('big');
++    const { audio } = decodeAudioResponse(buf, 'audio/pcm;rate=24000');
++    expect(new Uint8Array(audio.buffer, audio.byteOffset + 44, 4)).toEqual(
++      new Uint8Array(buf, 0, 4),
++    );
++  });
++
++  it('falls back to the specification when there is too little to measure', () => {
++    const buf = tone('big', 8);
++    const { audio, format } = decodeAudioResponse(buf, 'audio/L16');
++    expect(format).toBe('wav');
++    expect(audio.length).toBe(44 + 16);
++  });
++
++  it('does not choke on silence', () => {
++    const { format } = decodeAudioResponse(new ArrayBuffer(400), 'audio/L16');
++    expect(format).toBe('wav');
++  });
++
++  void samples;
++});
 +
 +describe('decodeAudioResponse', () => {
 +  it('wraps audio/L16 in a WAV container', () => {

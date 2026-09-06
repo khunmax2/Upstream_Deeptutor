@@ -17,6 +17,44 @@ upstream.
 
 ---
 
+## The PCM patch assumed a byte order — 2026-09-07
+
+`0007` wrapped raw PCM in a WAV header and left the samples as they arrived.
+That is right only if they are little-endian, and **RFC 2586 defines `audio/L16`
+as big-endian**. A spec-compliant server would have been described wrongly by the
+header we wrote, and played as noise.
+
+Found by reading a parallel experiment in another checkout, which had hit the same
+provider and handled the spec correctly. Not taken on trust — measured against the
+bytes the server actually sends, by reading them both ways and comparing how far
+consecutive samples move, since speech is continuous and a wrong byte order turns
+every step into a jump:
+
+    little-endian   average step   1,238     <- smooth, speech
+    big-endian      average step  16,874     <- noise
+
+So that server sends **little**-endian under an `audio/L16` label: `0007` was
+right about this server by luck, and wrong about the specification.
+
+Neither default is safe, so the byte order is now measured rather than assumed —
+the same comparison, in the decoder. `audio/pcm` and `audio/x-pcm` are
+little-endian by definition and skip it; silence and clips shorter than 64 frames
+fall back to what the spec says; `TTS_L16_BYTE_ORDER` forces the choice for a
+known gateway. Five more unit tests cover both orders and both fallbacks, and the
+real server's response is still read as little-endian and still opens in Python's
+`wave` module.
+
+**A second thing this turned up.** Running `pnpm install` inside a container —
+which `openmaic-fetch.sh` does so a deploy host needs no Node toolchain — leaves
+`node_modules` full of POSIX symlinks and no `.cmd` shims, so host-side `npx` and
+`node` cannot use it afterwards. Not a defect, but a consequence worth knowing:
+after a containerised install, run the test suite in a container too. That is how
+these ten tests were run.
+
+Files: `deploy/openmaic-patches/0007-pcm-audio-responses.patch`.
+
+---
+
 ## Thai can be chosen for speech recognition — 2026-09-07
 
 **New: `deploy/openmaic-patches/0009-thai-asr-language.patch`.**
