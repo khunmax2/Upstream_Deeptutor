@@ -77,23 +77,57 @@ def count_leaves(node: Any) -> int:
     return 1
 
 
+def subtree_import_commit(repo_root: Path) -> str | None:
+    """The upstream commit `integration/maic` was last imported from.
+
+    `git subtree add|pull --squash` records it in the squash commit's subject, and
+    that is the only durable statement of where the vendored copy came from —
+    there is no second checkout with a HEAD to read any more.
+    """
+    import re as _re
+    import subprocess as _sp
+
+    result = _sp.run(
+        ["git", "-C", str(repo_root), "log", "--format=%H%x1f%s", "--all"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        return None
+    pattern = _re.compile(r"^Squashed 'integration/maic/?' content from commit ([0-9a-f]+)")
+    for line in result.stdout.splitlines():
+        _, _, subject = line.partition("")
+        match = pattern.match(subject)
+        if match:
+            return match.group(1)
+    return None
+
+
 def offline_checks(repo: Path, pin: dict[str, Any], report: Report) -> None:
     print("\n[contract] checkout")
 
-    head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    # OpenMAIC is vendored at integration/maic, so there is no second checkout
+    # whose HEAD says where it came from. `git subtree` records that in the squash
+    # commit, and comparing it to the pin answers the question that matters:
+    # has somebody pulled a newer OpenMAIC without re-verifying against it?
+    imported = subtree_import_commit(repo.parent.parent)
     pinned = pin["commit"]
-    if head == pinned:
-        report.ok("version pin", f"at the verified commit {pin['commit_short']}")
-    else:
-        # Not a failure on its own — moving forward is the point. It is a cue to
-        # re-run the guard and re-measure before trusting the patches again.
+    if imported is None:
         report.fail(
             "version pin",
-            f"HEAD {head[:8]} != pinned {pin['commit_short']} — re-verify, then bump the pin",
+            "no subtree import commit found — is integration/maic still a git subtree?",
+        )
+    elif pinned.startswith(imported) or imported.startswith(pinned):
+        report.ok("version pin", f"subtree imported at the verified commit {pin['commit_short']}")
+    else:
+        # Not a failure of the code — moving forward is the point. It is a cue to
+        # re-measure before trusting the vendored copy again.
+        report.fail(
+            "version pin",
+            f"subtree imported at {imported[:8]} != verified {pin['commit_short']} — "
+            "re-run the checks, then bump the pin",
         )
 
     source = repo / "lib" / "i18n" / "locales" / "en-US.json"
@@ -185,10 +219,13 @@ def main() -> int:
         f"verified {pin['verified']}"
     )
 
-    if (args.openmaic / ".git").exists():
+    # A vendored subtree has no `.git` of its own -- it is part of this repository --
+    # so the presence of package.json is what says "the source is here", and the
+    # checks read git from the enclosing repository instead.
+    if (args.openmaic / "package.json").is_file():
         offline_checks(args.openmaic, pin, report)
     else:
-        print(f"\n[contract] checkout\n  SKIP  not a git checkout: {args.openmaic}")
+        print(f"\n[contract] checkout\n  SKIP  no OpenMAIC source at {args.openmaic}")
 
     if args.url:
         runtime_checks(args.url, args.origin, report)

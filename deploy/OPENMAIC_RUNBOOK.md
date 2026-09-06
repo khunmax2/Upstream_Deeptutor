@@ -56,95 +56,17 @@ cd Upstream_Deeptutor
 Everything of ours is here — the Thai translation, all six patches, the
 gatekeeper, the compose overlay, the nginx block.
 
-## 2. Prepare the OpenMAIC source
+## 2. There is no step 2
 
-```bash
-./deploy/openmaic-fetch.sh
-```
+OpenMAIC is at `integration/maic`, vendored as a squashed git subtree, so the
+clone in step 1 already contains it — patched, translated, with its lockfile
+reconciled. Nothing to fetch, nothing to assemble, no pinned commit to resolve.
 
-This is the step with no obvious alternative, so it is worth saying what it does
-and why it exists. `deploy/docker-compose.openmaic.yml` builds OpenMAIC from
-`context: ../OpenMAIC` — a sibling checkout that does not exist yet, and that
-cannot be cloned from any repository of ours, because **OpenMAIC is deliberately
-kept as a pristine mirror of upstream**. Committing our changes into it would
-turn every future OpenMAIC release into a merge with conflicts. So the script
-assembles it instead:
-
-1. clones `THU-MAIC/OpenMAIC` and checks out the commit pinned in
-   `deploy/openmaic-patches/openmaic-pin.json`
-2. applies patches `0001`–`0006` in order
-3. generates `lib/i18n/locales/th-TH.json` (1,689 translated keys, the rest
-   filled from English so nothing falls back to Chinese)
-4. runs `pnpm install` **inside a `node:22-alpine` container** and generates the
-   Thai font asset
-
-Expected output ends with:
-
-```
-==> Applying patches
-    applied   0001-register-th-TH-locale.patch
-    ... six in total
-==> Ready
-    ../OpenMAIC is at d4ef5faa... with 6 patch(es) applied.
-```
-
-On a checkout that already exists you will also see this, in yellow, before the
-patches. **It is not an error** — the run continues:
-
-```
-    untracked files present — not built over, but they are in the build context:
-      .dockerignore.bak
-      CLAUDE.md
-    (pass --strict to refuse on these too, e.g. before an upstream PR)
-```
-
-Safe to re-run. It recognises patches it already applied.
-
-It treats two kinds of local change differently, because they are not the same
-risk. A **modified** tracked file is an edit to upstream source: building over it
-folds somebody's work into the image with no record of it, so the script refuses.
-An **untracked** file cannot be built over — only added — so it is named and
-tolerated, since on any working machine these are ordinary debris (editor
-backups, a local compose override, an agent's notes). They are still named
-because an untracked *source* file can genuinely change a Next build: a stray
-`app/**/page.tsx` becomes a route.
-
-`--strict` refuses on both. Use it before generating a patch or opening an
-upstream PR, where anything foreign would ride along.
-
-### If step 2 fails
-
-The script takes `--dest PATH` (prepare somewhere else), `--skip-deps` (stop
-before `pnpm install`), `--host-pnpm` (use the host's pnpm) and `--strict`.
-`./deploy/openmaic-fetch.sh --help` lists them.
-
-**`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`** — the one you are most likely to
-hit, and only on a machine that has run OpenMAIC before. A `node_modules` built
-by a pnpm on the *host* records a store path that does not exist inside the
-container; pnpm wants to replace the directory, asks, finds no TTY, and stops.
-The script now passes `CI=true` so pnpm proceeds without asking. If you are on a
-version from before that fix, delete the directory and re-run:
-
-```bash
-rm -rf ../OpenMAIC/node_modules && ./deploy/openmaic-fetch.sh
-```
-
-**Do not reach for `--host-pnpm` to get past it on Windows.** Measured: it hung
-at rollup for thirteen minutes at 0% CPU and left `pnpm-lock.yaml` 1,934 lines
-shorter — the same damage described under "`pnpm install` rewrote the lockfile"
-below. The containerised path is the supported one because it is the one that
-works, not because it is tidier.
-
-"Safe to re-run" assumes the previous run got far enough to leave a consistent
-tree. A run that died inside `pnpm install` has not, and repeating it without
-clearing `node_modules` repeats the failure.
-
-> **Why step 4 is not optional.** Patch `0002` adds a dependency but deliberately
-> leaves `pnpm-lock.yaml` out of the patch — that one package churns 2,934 lines
-> of lockfile, and lockfile hunks conflict on every upstream dependency change.
-> The Dockerfile then runs `pnpm install --frozen-lockfile`, which fails on a
-> lockfile that does not match `package.json`. Skipping this step does not
-> degrade the build; it breaks it.
+This used to be the longest step in the document: a script that cloned upstream,
+applied nine patches, generated the Thai locale and reconciled a lockfile in a
+throwaway container, with its own failure mode for a `node_modules` built by the
+wrong pnpm. All of that is now somebody else's problem exactly once, when they
+run `git subtree pull` — see `OPENMAIC_SYNC.md`.
 
 ## 3. Build the image
 

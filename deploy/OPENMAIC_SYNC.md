@@ -1,212 +1,168 @@
 # Following OpenMAIC upstream
 
-How to take a new OpenMAIC release. This is deliberately short: unlike the
-HKUDS sync, there is nothing to merge, because our checkout of OpenMAIC is a
-**pristine mirror of upstream** and everything of ours lives in this repository.
+OpenMAIC lives at `integration/maic` as a **squashed git subtree**. A clone of
+this repository is the whole thing: no sibling checkout, no fetch step, nothing
+to assemble before a build.
 
-If that stops being true, this document stops working — so the first step is a
-check, not a pull.
+That has one consequence worth stating before anything else. **`git subtree pull`
+is the only command that should ever write to `integration/maic`.** A DeepTutor
+upstream sync must leave it alone — it comes from THU-MAIC, not HKUDS — and
+`CLAUDE.md` §2 says so where every agent will read it.
 
 ---
 
-## What we own
+## Why a subtree and not patches
 
-Everything in `deploy/openmaic-patches/`:
+It was a patch queue first: nine `.patch` files applied to a sibling checkout to
+build and reversed afterwards, which kept that checkout a pristine mirror and
+kept every change independently sendable upstream. That was the right shape while
+every change was one upstream might accept.
 
-| | |
-|---|---|
-| `th-TH.partial.json` | the Thai translation, 1,689 keys |
-| `build_th_locale.py` | merges it over `en-US.json` into a complete locale file |
-| `0001-register-th-TH-locale.patch` | 3 lines: registers the locale |
-| `0002-thai-script-support.patch` | the Thai font, UI and video export |
-| `check_openmaic_tree.py` | guard — nothing foreign may ride along |
-| `check_openmaic_contract.py` | the five runtime assumptions, plus drift |
-| `openmaic-pin.json` | the commit all of the above was verified against |
+It stopped being the right shape when the work turned to things upstream never
+will: removing OpenMAIC's branding, laying the classroom out for an iframe,
+reading configuration from DeepTutor. A patch nobody upstream will take is a
+patch you carry for ever, and carrying a growing stack of those against a moving
+target costs more than merging does.
 
-Nothing of ours is committed inside the OpenMAIC checkout. A patch is applied
-long enough to build or test, then reversed with `git apply -R`.
+What the subtree gives up is that the patches were *self-evidently* ours — a
+directory of files, each one a change. `export_upstream_patches.py` gives that
+back on demand, so the commits stay the single source of truth.
 
-## Getting the checkout in the first place
+## Updating to a newer OpenMAIC
 
-On a machine that has never had one — a deploy host, a new laptop — there is no
-`../OpenMAIC` to update, and no repository of ours to clone it from. One command
-builds it:
+### 1. See what is coming
 
 ```bash
-./deploy/openmaic-fetch.sh
+git fetch https://github.com/THU-MAIC/OpenMAIC main
+git log --oneline HEAD..FETCH_HEAD | head -40
+git diff --stat HEAD FETCH_HEAD -- lib/i18n lib/audio app/page.tsx Dockerfile
 ```
 
-It clones upstream at the commit in `openmaic-pin.json`, applies every patch in
-order, generates the Thai locale, and reconciles the lockfile in a throwaway
-container so the host needs no Node toolchain — only git and docker. Re-running
-it is safe: patches already applied are recognised, and it refuses rather than
-building over a change it did not make.
-
-The rest of this document is for **updating** an existing checkout to a newer
-OpenMAIC, which is a different job with different risks.
-
-## The procedure
-
-Run from this repository's root, with OpenMAIC checked out as a sibling
-directory (`../OpenMAIC`).
-
-### 1. Check before you pull
-
-```bash
-python deploy/openmaic-patches/check_openmaic_tree.py --openmaic ../OpenMAIC
-```
-
-Anything in the **foreign** bucket is a local change that would otherwise be
-carried into the pull — a Dockerfile experiment, a leftover `.bak`. Deal with it
-first. A pull onto a dirty tree is where the "pristine mirror" property quietly
-dies.
+The third command is the whole risk assessment. Ours touch i18n registration, the
+audio provider paths, the embed hooks, `app/page.tsx` and the Dockerfile; upstream
+churn anywhere else merges without a thought.
 
 ### 2. Pull
 
 ```bash
-git -C ../OpenMAIC fetch origin
-git -C ../OpenMAIC merge --ff-only origin/main
+git subtree pull --prefix=integration/maic \
+    https://github.com/THU-MAIC/OpenMAIC main --squash
 ```
 
-`--ff-only` is the guard, not a preference: if it refuses, something was
-committed into that checkout and it is no longer a mirror. Find out what before
-going further.
+Conflicts here are ordinary merge conflicts in the files both sides touched, and
+they are resolved in `integration/maic` like any other merge. This is the step the
+patch queue used to make loud and now makes normal — which is the trade: less
+ceremony, and less of a guarantee that a change of ours cannot be quietly lost.
+Read the resolutions rather than accepting them.
 
-### 3. Measure the drift
+### 3. Re-check what upstream cannot know it broke
 
 ```bash
-python deploy/openmaic-patches/check_openmaic_contract.py --openmaic ../OpenMAIC
+python3 deploy/openmaic-patches/check_openmaic_contract.py --openmaic integration/maic
+python3 deploy/openmaic-patches/build_th_locale.py --openmaic integration/maic --check
+python3 deploy/openmaic-patches/check_openmaic_i18n_gaps.py --openmaic integration/maic
 ```
 
-Two things fail here, and both are expected after a real update:
+- **contract** — the runtime assumptions the embed depends on, plus whether the
+  subtree is still at the commit these were verified against. It fails on the pin
+  straight after a pull; that is the cue to re-verify, not a defect.
+- **th locale** — coverage, and any key we translated that upstream removed. New
+  keys need no action to keep the app working: they render in English through the
+  fill, never in Chinese.
+- **i18n gaps** — the Thai problems no translation file can fix: UI text hardcoded
+  in source, Chinese literals in components, language lists with no `th`. Every one
+  found so far was found by *using the app*, which is why this exists.
 
-- **version pin** — HEAD moved past `openmaic-pin.json`. Expected; you bump it
-  at the end.
-- **locale key count** — upstream adds roughly 50-90 keys a week. The number in
-  the failure line is how many strings the Thai file is now missing.
-
-### 4. Re-check the patches
+### 4. Top up the translation
 
 ```bash
-git -C ../OpenMAIC apply --check deploy/openmaic-patches/0001-register-th-TH-locale.patch
-git -C ../OpenMAIC apply --check deploy/openmaic-patches/0002-thai-script-support.patch
+python3 deploy/openmaic-patches/build_th_locale.py \
+    --openmaic integration/maic \
+    --out integration/maic/lib/i18n/locales/th-TH.json
 ```
 
-`--check` changes nothing. A failure names the file and line, which is the whole
-reason our changes are patches rather than commits: they break loudly instead of
-merging into something subtly wrong.
+`th-TH.partial.json` in this directory is the translation itself; the builder
+merges it over `en-US.json` so untranslated keys fall back to English rather than
+to the project default, which is `zh-CN`. The result is **committed** — in this
+layout it is a locale file like the other twelve.
 
-Both are small and sit in stable places (the end of a locale array, an import
-list, a font-face table), so a conflict usually means upstream reorganised that
-file — re-generate the patch against the new source rather than hand-editing it.
-
-### 5. Top up the translation
+Upstream's own gate should then pass:
 
 ```bash
-python deploy/openmaic-patches/build_th_locale.py --openmaic ../OpenMAIC --check
+docker run --rm -v "$PWD/integration/maic:/w" -w /w node:22-alpine \
+    node scripts/check-i18n-keys.mjs      # expect: 13 locale files
 ```
 
-It prints coverage and fails on any key we translated that no longer exists
-upstream. New keys need no action to keep the app working — they render in
-English through the autofill, never in Chinese — so this is a backlog, not an
-outage. Translate them into `th-TH.partial.json` when convenient.
+### 5. Reconcile the lockfile, and build
 
-### 5b. Look for gaps the translation cannot close
-
-```bash
-python deploy/openmaic-patches/check_openmaic_i18n_gaps.py --openmaic ../OpenMAIC
-```
-
-Step 5 checks the translation. This checks everything Thai needs that a
-translation file cannot supply: UI text hardcoded in source, Chinese literals in
-components, and language option lists with no `th` in them.
-
-It exists because all three kinds were found by *using the app*, not by any
-check — the coverage number was 93.8% and both gates were green while the screen
-still showed a Chinese chip and an English toast. Judgement finds these on the
-days somebody happens to click the right thing; a check finds them every time.
-
-Findings are not automatically work. Each is a source change, so each is a
-patch — and each is an upstream candidate, since none is about DeepTutor. What
-matters is that a new one is seen on the update that introduced it.
-
-### 6. Build and verify
+The Thai font change adds a dependency, so `pnpm-lock.yaml` has to be updated
+whenever `package.json` changes — and the Dockerfile runs
+`pnpm install --frozen-lockfile`, which fails on a mismatch.
 
 ```bash
-git -C ../OpenMAIC apply deploy/openmaic-patches/0001-register-th-TH-locale.patch
-git -C ../OpenMAIC apply deploy/openmaic-patches/0002-thai-script-support.patch
-python deploy/openmaic-patches/build_th_locale.py \
-    --openmaic ../OpenMAIC --out ../OpenMAIC/lib/i18n/locales/th-TH.json
-cd ../OpenMAIC && pnpm install && pnpm run gen:video-export-noto-script-fonts
-node scripts/check-i18n-keys.mjs     # their gate: expect 13 locale files
-```
+docker run --rm -e HOME=/tmp -e CI=true \
+    -v "$PWD/integration/maic:/w" -w /w node:22-alpine \
+    sh -c 'corepack enable && pnpm install --no-frozen-lockfile'
+git add integration/maic/pnpm-lock.yaml
+git commit -m "chore(maic): reconcile the lockfile"
 
-`pnpm install` there is not optional and not a habit. `0002` adds a dependency
-while deliberately leaving `pnpm-lock.yaml` out of the patch (one package churned
-2,934 lines of it, and lockfile hunks conflict on every upstream dependency
-change). The Dockerfile runs `pnpm install --frozen-lockfile`, so without this
-step the image build fails on a lockfile that does not match `package.json`.
-
-To build the container image:
-
-```bash
 docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml build openmaic
 ```
 
-Start it, then check the runtime contract against a running instance:
+`CI=true` is load-bearing: without a TTY pnpm refuses to replace a `node_modules`
+built elsewhere and stops with `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`.
+
+> After a containerised install, `node_modules` holds POSIX symlinks and no `.cmd`
+> shims, so host-side `npx` cannot use it. Run the test suite in a container too.
+
+### 6. Bump the pin
+
+`openmaic-pin.json` records the upstream commit the checks were last verified
+against. Update `commit`, `commit_date`, `commit_subject`, `verified` and
+`locale_keys_en_us`, then confirm:
 
 ```bash
-python deploy/openmaic-patches/check_openmaic_contract.py \
-    --openmaic ../OpenMAIC \
-    --url http://localhost:3100 \
-    --origin http://localhost:3782
+python3 deploy/openmaic-patches/check_openmaic_contract.py --openmaic integration/maic
 ```
 
-This is the check that earns its keep. A blank iframe has a dozen possible
-causes and they all look identical; this names the one that actually happened —
-a renamed `ALLOWED_FRAME_ANCESTORS`, an `X-Frame-Options` header that reappeared,
-an access gate that switched on.
+It compares that pin against the commit `git subtree` recorded in its squash
+message, so it answers the question that matters: did somebody pull a newer
+OpenMAIC and not re-verify?
 
-### 7. Put the checkout back, and bump the pin
+Close with a `CHANGES.md` entry, as every change to this fork needs.
+
+## Sending our changes upstream
+
+Every commit of ours in `integration/maic` can be offered to THU-MAIC, and
+several should be — the raw-PCM audio fix and the Thai ASR language entry are
+plain bugs for anyone, not integration work.
 
 ```bash
-git -C ../OpenMAIC apply -R deploy/openmaic-patches/0002-thai-script-support.patch
-git -C ../OpenMAIC apply -R deploy/openmaic-patches/0001-register-th-TH-locale.patch
-rm ../OpenMAIC/lib/i18n/locales/th-TH.json
-rm ../OpenMAIC/public/vendor/video-export/fonts/noto-sans-thai-thai-400-normal.woff2
-cd ../OpenMAIC && pnpm run gen:video-export-noto-script-fonts && pnpm install --frozen-lockfile
+python3 deploy/openmaic-patches/export_upstream_patches.py            # list
+python3 deploy/openmaic-patches/export_upstream_patches.py --out /tmp/pr
 ```
 
-Then update `commit`, `commit_date`, `commit_subject`, `verified` and
-`locale_keys_en_us` in `openmaic-pin.json`, and confirm:
+Paths inside are rewritten relative to the OpenMAIC root, so they apply to a plain
+THU-MAIC checkout with `git am`. Read one before sending it: a commit message
+written for this repository is not the message an upstream reviewer should get.
 
-```bash
-python deploy/openmaic-patches/check_openmaic_tree.py --openmaic ../OpenMAIC
-```
-
-Clean means the mirror survived the round trip.
+If upstream takes one, drop our commit on the next pull rather than carrying it —
+that is the whole reason for keeping them separable.
 
 ## Two things not to do
 
-**Do not commit inside `../OpenMAIC`.** That is the single decision that turns a
-`git pull` into a merge with conflicts, which is exactly the position this fork
-is already in with HKUDS — see the note under §5 in `CLAUDE.md`.
-
-**Do not use `git checkout --` or `git reset --hard` to tidy that checkout.** To
-restore one file to its committed state, write it back instead:
+**Do not edit `integration/maic` from a DeepTutor upstream sync.** Exclude it:
 
 ```bash
-git -C ../OpenMAIC show HEAD:pnpm-lock.yaml > ../OpenMAIC/pnpm-lock.yaml
+git diff <hkuds-release> -- . ':(exclude)integration/maic'
 ```
 
-That is how the lockfile was recovered after `pnpm install` rewrote 1,934 lines
+**Do not `git checkout --` or `git reset --hard` to tidy it.** To restore one file
+to its committed state, write it back instead:
+
+```bash
+git show HEAD:integration/maic/pnpm-lock.yaml > integration/maic/pnpm-lock.yaml
+```
+
+That is how the lockfile was recovered after a `pnpm install` rewrote 1,934 lines
 of it during the font work.
-
-## If upstream merges our work
-
-The Thai locale is offered to THU-MAIC rather than kept here — see
-`docs/planning/PLAN_openmaic_thai_i18n.md` for why, and for the evidence that
-outside language PRs do get merged there. If `th-TH` lands upstream, delete
-`0001-register-th-TH-locale.patch` and `th-TH.partial.json`: every later release
-then carries Thai for us, because their own `check-i18n-keys` gate forces new
-keys to be filled in for every locale.

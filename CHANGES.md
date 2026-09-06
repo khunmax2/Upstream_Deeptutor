@@ -17,6 +17,59 @@ upstream.
 
 ---
 
+## OpenMAIC is vendored at `integration/maic` — 2026-09-07
+
+The patch queue is gone. OpenMAIC is now a **squashed git subtree** at
+`integration/maic`, its nine patches are commits there, and a clone of this
+repository is everything an image build needs — no sibling checkout, no fetch
+script, no pinned commit to resolve.
+
+**Why the shape changed.** Patches were right while every change was one upstream
+might accept, and all nine were. They stopped being right when the work turned to
+changes upstream never will: removing OpenMAIC's branding, laying the classroom
+out for an iframe, reading configuration from DeepTutor. A patch nobody upstream
+will take is one you carry for ever, and a growing stack of those against a moving
+target costs more than merging. The trigger was not a patch count — an earlier
+note here proposed fifteen to twenty, which was the wrong measure — it was the
+first change that could not go upstream, and branding work in a parallel checkout
+had already crossed it.
+
+**What the subtree gives up, and how it is given back.** The patch files were
+self-evidently ours: a directory where each file was one change.
+`export_upstream_patches.py` regenerates that on demand from the commits, with
+paths rewritten relative to the OpenMAIC root so they apply to a plain THU-MAIC
+checkout with `git am`. Verified rather than asserted: all ten exported patches
+apply in sequence to a pristine `d4ef5faa` worktree and reproduce the subtree
+exactly, modulo the line endings git normalises.
+
+**Committed rather than generated:** the Thai locale, the reconciled lockfile and
+the video-export font assets. Each used to be produced by a step between a clone
+and a build, and each is now simply present — which is what this layout is for.
+The Docker build never ran the font generator, so an image built without those
+assets exported video with no Thai glyphs and nothing to say why.
+
+Removed as obsolete: the nine `.patch` files, `openmaic-fetch.sh` (nothing to
+assemble), and `check_openmaic_tree.py` (no mirror left to guard).
+`check_openmaic_contract.py` now reads the commit `git subtree` recorded in its
+squash message instead of a second checkout's HEAD, which turns its version check
+into a better question: has somebody pulled a newer OpenMAIC without re-verifying?
+
+`CLAUDE.md` §2 keeps the directory out of HKUDS syncs — it comes from THU-MAIC,
+and `git subtree pull` is the only command that should write there.
+`OPENMAIC_SYNC.md` is rewritten around that, and the runbook's longest step is now
+"There is no step 2".
+
+Verified end to end: `docker compose build openmaic` from the subtree alone
+succeeds with `--frozen-lockfile`, the image carries `th-TH.json` at 152,341
+bytes, and the running stack still refuses an unauthenticated request.
+
+Files: `integration/maic/**` (new, 2,827 files), `deploy/OPENMAIC_SYNC.md`,
+`deploy/OPENMAIC_RUNBOOK.md`, `deploy/docker-compose.openmaic.yml`, `CLAUDE.md`,
+`deploy/openmaic-patches/{export_upstream_patches.py,check_openmaic_contract.py}`,
+`.gitignore`.
+
+---
+
 ## One place to configure providers, and no patch needed — 2026-09-07
 
 **New: `deploy/openmaic-patches/build_server_providers.py`**, mounted read-only by
