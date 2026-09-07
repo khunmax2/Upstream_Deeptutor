@@ -13,6 +13,8 @@
  * restart.
  */
 
+import { asset } from '@/lib/base-path';
+
 export interface BrandConfig {
   /** Full product name (page titles, logo alt text). */
   productName: string;
@@ -36,9 +38,9 @@ const name = process.env.NEXT_PUBLIC_BRAND_NAME?.trim() || 'DeepWitya';
 export const DEFAULT_BRAND: BrandConfig = {
   productName: name,
   shortName: process.env.NEXT_PUBLIC_BRAND_SHORT_NAME?.trim() || name,
-  logoSrc: process.env.NEXT_PUBLIC_BRAND_LOGO?.trim() || '/brand-wordmark.png',
+  logoSrc: asset(process.env.NEXT_PUBLIC_BRAND_LOGO?.trim() || '/brand-wordmark.png'),
   logoHasWordmark: true,
-  markSrc: process.env.NEXT_PUBLIC_BRAND_MARK?.trim() || '/brand-mark.png',
+  markSrc: asset(process.env.NEXT_PUBLIC_BRAND_MARK?.trim() || '/brand-mark.png'),
   themeColor: process.env.NEXT_PUBLIC_BRAND_THEME_COLOR?.trim() || '#b0501e',
   tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE?.trim() || 'Agent-Native Learning',
 };

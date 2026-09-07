@@ -142,6 +142,61 @@ If you see `frame-ancestors 'self'` alone plus `X-Frame-Options: SAMEORIGIN`,
 the build argument did not reach the build. Rebuild; do not try to fix it with a
 runtime variable.
 
+## 3b. If a second port cannot be opened
+
+Everything above assumes the studio gets a port of its own. On a host where the
+firewall will not open one, serve it under a **path** on the 443 that is already
+open, beside DeepTutor.
+
+Three things change; nothing else in this runbook does.
+
+**Build it for the path.** `NEXT_PUBLIC_BASE_PATH` is compiled into the bundle,
+not read at runtime, because Next generates every `/_next/` asset URL from it:
+
+```bash
+OPENMAIC_BASE_PATH=/course-studio-app DEEPTUTOR_PUBLIC_ORIGIN=https://203.185.144.41   docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml   build openmaic
+```
+
+**Use the other nginx file** in §7 — `deploy/nginx-openmaic-subpath.locations.conf`
+instead of `deploy/nginx-openmaic.locations.conf`. It is a `location` block for
+the existing 443 server, not a new `server` block, and it adds no port.
+
+**Point `embed_url` at the path** in §4: `https://203.185.144.41/course-studio-app`,
+with no port.
+
+### Why this is not only an nginx change
+
+Next's `basePath` prefixes `<Link>`, the router and `/_next/` assets. It does not
+prefix a URL the app writes itself, and the studio writes 74 `fetch('/api/...')`
+calls across 44 files plus three `EventSource` streams. Under a path prefix every
+one of them leaves for the **root** of the host instead.
+
+The host this was built for already serves `/sansarnnews`, `/research-helper`,
+`/dol`, `/deepwitya`, `/opdc-assistant` and `/deepwitya2`, so `/api` at its root
+is not ours to claim and nginx cannot rescue this. The app prefixes its own URLs
+instead — `integration/maic/components/base-path-bridge.tsx`, which patches
+`fetch` and `EventSource` once and is inert when the variable is unset.
+
+The first symptom when this goes wrong is not a network error. It is the studio
+showing **an access-code login box nobody configured**: `/api/access-code/status`
+fails, and the guard treats an error as locked, which is the right default and a
+confusing one to debug.
+
+### What it costs
+
+Same origin as DeepTutor means one `localStorage`. The studio keeps
+`providersConfig` there, which can hold provider API keys, so an XSS anywhere in
+DeepTutor could read them. Nothing breaks today — the key names do not overlap
+(DeepTutor namespaces everything `deeptutor-*` / `deeptutor:*` / `panel:*`) —
+but the isolation the port shape gives for free is gone. Providers configured
+through §4b live in `server-providers.yml` on the server and never reach the
+browser, so this is only a risk if someone types a key into the studio's own
+settings panel.
+
+What it buys, beyond reachability: theme and language sync between the two apps
+with no patch at all, because on one origin they are the same `localStorage`
+keys.
+
 ## 4. Point DeepTutor at it
 
 Fork-owned settings file, because `integrations.json` is normalised against a
@@ -313,6 +368,11 @@ gatekeeper prints which URL it is verifying against on startup —
 fastest way to settle it.
 
 ## 7. nginx (needs sudo)
+
+Serving under a path instead of a port (§3b)? Use
+`deploy/nginx-openmaic-subpath.locations.conf` here instead — same two commands,
+different file — and skip the `server_name` / `frame-ancestors` edit below,
+which that file does not have.
 
 ```bash
 sudo cp deploy/nginx-openmaic.locations.conf /etc/nginx/sites-available/openmaic

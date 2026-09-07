@@ -64,6 +64,12 @@ services:
         # here, OpenMAIC's own `frame-ancestors 'self'` refuses the iframe and
         # the page renders blank with only a console error.
         - ALLOWED_FRAME_ANCESTORS=${DEEPTUTOR_PUBLIC_ORIGIN:-http://localhost:3782}
+        # Set this only when the studio is served under a path prefix instead of
+        # a port of its own — e.g. OPENMAIC_BASE_PATH=/course-studio-app behind
+        # an nginx `location` that keeps the prefix. Empty is the default and
+        # means the container owns its root, which is what the port-10330 shape
+        # in OPENMAIC_RUNBOOK.md does.
+        - NEXT_PUBLIC_BASE_PATH=${OPENMAIC_BASE_PATH:-}
     container_name: deeptutor-openmaic
     # No `ports` on purpose. Reachable only from the compose network, so the
     # only route in is the gatekeeper. Publishing a port here — even on

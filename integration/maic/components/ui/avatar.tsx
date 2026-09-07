@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Avatar as AvatarPrimitive } from 'radix-ui';
 
+import { asset } from '@/lib/base-path';
 import { cn } from '@/lib/utils';
 
 function Avatar({
@@ -25,11 +26,20 @@ function Avatar({
   );
 }
 
-function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+function AvatarImage({
+  className,
+  src,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
       className={cn('rounded-full aspect-square size-full object-cover', className)}
+      // Avatars are files under /public addressed root-absolutely, from a
+      // dozen call sites across agents, roundtable and the editor. Next does
+      // not prefix those, and prefixing them here covers all of them at once.
+      // `asset` is a no-op when the app owns its domain root.
+      src={typeof src === 'string' ? asset(src) : src}
       {...props}
     />
   );

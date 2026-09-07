@@ -5,6 +5,10 @@ import './globals.css';
 import '@openmaic/renderer/fonts.css';
 import 'animate.css';
 import 'katex/dist/katex.min.css';
+// Before the providers, because this one patches `fetch` and `EventSource`
+// while its module is evaluated and everything else reaches them later, from
+// an effect. Inert unless NEXT_PUBLIC_BASE_PATH is set.
+import { BasePathBridge } from '@/components/base-path-bridge';
 import { ThemeProvider } from '@/lib/hooks/use-theme';
 import { I18nProvider } from '@/lib/hooks/use-i18n';
 import { Toaster } from '@/components/ui/sonner';
@@ -53,6 +57,7 @@ export default function RootLayout({
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
         suppressHydrationWarning
       >
+        <BasePathBridge />
         <ThemeProvider>
           <I18nProvider>
             <ServerProvidersInit />
