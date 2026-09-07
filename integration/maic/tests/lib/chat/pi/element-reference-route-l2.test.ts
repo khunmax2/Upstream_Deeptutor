@@ -262,7 +262,7 @@ describe('PPT element reference Route → Director → real call_agent L2', () =
     const stream = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.callAgentExecutions).toBe(1);
     expect(mocks.directorPrompts.join('\n')).toContain('Evaporation removes heat.');
     expect(mocks.legacyChildPrompts.join('\n')).toContain('Evaporation removes heat.');
@@ -282,7 +282,7 @@ describe('PPT element reference Route → Director → real call_agent L2', () =
     const stream = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.callAgentExecutions).toBe(1);
     expect(mocks.nativeChildPrompts.join('\n')).toContain('Evaporation removes heat.');
     expect(stream).toContain('Native grounded answer.');
@@ -301,7 +301,7 @@ describe('PPT element reference Route → Director → real call_agent L2', () =
     const stream = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.callAgentExecutions).toBe(2);
     expect(mocks.legacyChildPrompts).toHaveLength(2);
     expect(mocks.legacyChildPrompts[0]).toContain('Evaporation removes heat.');
@@ -320,7 +320,7 @@ describe('PPT element reference Route → Director → real call_agent L2', () =
     const stream = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.callAgentExecutions).toBe(2);
     expect(mocks.nativeChildPrompts).toHaveLength(2);
     expect(mocks.nativeChildPrompts[0]).toContain('Evaporation removes heat.');

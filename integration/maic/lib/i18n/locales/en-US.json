@@ -10,7 +10,6 @@
     "close": "Close"
   },
   "home": {
-    "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
     "greetingWithName": "Hi, {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "Classroom imported successfully",
     "pptxSuccess": "PPTX parsed successfully ({{count}} slides, output logged to console)",
     "error": {
-      "invalidZip": "Invalid file. Please select a valid .maic.zip file.",
+      "invalidZip": "Invalid file. Please select a valid .classroom.zip file.",
       "invalidPptx": "Failed to parse PPTX. Please check the file is valid.",
       "parserUnavailable": "PPTX import is unavailable: the parser bundle is not deployed. Re-run install/sync.",
       "invalidManifest": "Invalid classroom file: manifest.json is missing or corrupted.",
@@ -531,7 +530,7 @@
       "panRight": "Pan right",
       "collapseAxis": "Collapse to axis",
       "expandTrack": "Expand track",
-      "emptyHint": "Drag actions onto the axis to start, or let MAIC Agent generate narration.",
+      "emptyHint": "Drag actions onto the axis to start, or let the AI agent generate narration.",
       "speechPlaceholder": "Enter this narration line…",
       "reorder": "Drag to reorder",
       "moveLeft": "Move left",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Encyclopedia entries from Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Academic papers from Baidu Scholar.",
-    "viewDocs": "API Docs",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "Server-side search API key is configured",
     "optional": "Optional",
@@ -1861,7 +1859,7 @@
       "download": "Download",
       "detailFailed": "Could not load the skill details",
       "contentLabel": "Content",
-      "builtinDetailNote": "This skill ships with OpenMAIC. Download it to import into another agent workspace.",
+      "builtinDetailNote": "This skill is built in. Download it to import into another agent workspace.",
       "upload": "Upload",
       "uploading": "Uploading…",
       "uploadFailed": "Could not upload the skill. Check the file and try again.",

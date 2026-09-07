@@ -10,7 +10,6 @@
     "close": "Fermer"
   },
   "home": {
-    "slogan": "L’apprentissage génératif en classe interactive multi-agents",
     "greetingWithName": "Bonjour, {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "Classe importée avec succès",
     "pptxSuccess": "PPTX analysé avec succès ({{count}} diapositives, résultat consigné dans la console)",
     "error": {
-      "invalidZip": "Fichier invalide. Veuillez sélectionner un fichier .maic.zip valide.",
+      "invalidZip": "Fichier invalide. Veuillez sélectionner un fichier .classroom.zip valide.",
       "invalidPptx": "Échec de l’analyse du PPTX. Vérifiez que le fichier est valide.",
       "parserUnavailable": "L’import PPTX est indisponible : le module d’analyse n’est pas déployé. Relancez l’installation ou la synchronisation.",
       "invalidManifest": "Fichier de classe invalide : manifest.json est absent ou corrompu.",
@@ -531,7 +530,7 @@
       "panRight": "Défiler vers la droite",
       "collapseAxis": "Réduire à l’axe",
       "expandTrack": "Déplier la piste",
-      "emptyHint": "Faites glisser des actions sur l’axe pour commencer, ou laissez l’agent MAIC générer la narration.",
+      "emptyHint": "Faites glisser des actions sur l’axe pour commencer, ou laissez l’agent IA générer la narration.",
       "speechPlaceholder": "Saisissez cette réplique de narration…",
       "reorder": "Faire glisser pour réordonner",
       "moveLeft": "Déplacer vers la gauche",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Articles encyclopédiques issus de Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Articles universitaires issus de Baidu Scholar.",
-    "viewDocs": "Documentation de l’API",
     "webSearchBaseUrl": "URL de base",
     "webSearchServerConfigured": "Une clé d’API de recherche est configurée côté serveur",
     "optional": "Facultatif",
@@ -1861,7 +1859,7 @@
       "download": "Télécharger",
       "detailFailed": "Impossible de charger les détails du skill",
       "contentLabel": "Contenu",
-      "builtinDetailNote": "Ce skill est fourni avec OpenMAIC. Téléchargez-le pour l’importer dans un autre espace de travail d’agent.",
+      "builtinDetailNote": "Ce skill est intégré. Téléchargez-le pour l’importer dans un autre espace de travail d’agent.",
       "upload": "Importer",
       "uploading": "Importation…",
       "uploadFailed": "Impossible d’importer le skill. Vérifiez le fichier et réessayez.",

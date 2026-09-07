@@ -8,7 +8,7 @@
  *    renderer emits `data-element-id` / `data-select-element-id` /
  *    `data-context-element-id`, and it is behind a flag — so on the DEFAULT
  *    legacy canvas (and on every playback screen) the hit-test found nothing
- *    and picking looked broken. `data-maic-element-id`, stamped by both
+ *    and picking looked broken. `data-element-id`, stamped by both
  *    app-owned hosts, is the renderer-agnostic answer; the package attributes
  *    stay in the list so the flagged path keeps working.
  *
@@ -20,7 +20,7 @@
  *    0×0 rect at the canvas origin.
  */
 import {
-  MAIC_ELEMENT_ID_ATTRIBUTE,
+  ELEMENT_ID_ATTRIBUTE,
   editableElementDomId,
   screenElementDomId,
 } from './renderer-element-dom';
@@ -31,7 +31,7 @@ import {
  * they agree, and when only one is, the walk finds it either way.
  */
 export const INTERACTION_ELEMENT_ID_ATTRIBUTES = [
-  MAIC_ELEMENT_ID_ATTRIBUTE,
+  ELEMENT_ID_ATTRIBUTE,
   'data-element-id',
   'data-select-element-id',
   'data-context-element-id',

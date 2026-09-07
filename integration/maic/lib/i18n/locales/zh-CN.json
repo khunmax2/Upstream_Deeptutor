@@ -10,7 +10,6 @@
     "close": "关闭"
   },
   "home": {
-    "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
     "greetingWithName": "嗨，{{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "课堂导入成功",
     "pptxSuccess": "PPTX 解析成功（共 {{count}} 页，输出已打印到控制台）",
     "error": {
-      "invalidZip": "无效文件，请选择有效的 .maic.zip 文件。",
+      "invalidZip": "无效文件，请选择有效的 .classroom.zip 文件。",
       "invalidPptx": "PPTX 解析失败，请检查文件是否有效。",
       "parserUnavailable": "PPTX 导入不可用：解析器未部署。请重新执行安装/同步步骤。",
       "invalidManifest": "无效课堂文件：manifest.json 缺失或已损坏。",
@@ -531,7 +530,7 @@
       "panRight": "右移视口",
       "collapseAxis": "收起为轴线",
       "expandTrack": "展开轨道",
-      "emptyHint": "把上方的动作拖到轴上开始编排，或让 MAIC Agent 生成讲解。",
+      "emptyHint": "把上方的动作拖到轴上开始编排，或让 AI 智能体 生成讲解。",
       "speechPlaceholder": "输入这一句讲解…",
       "reorder": "拖动重排",
       "moveLeft": "左移",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "使用百度百科获取词条摘要。",
     "baiduSubSourceScholar": "百度学术",
     "baiduSubSourceScholarDescription": "使用百度学术获取论文结果。",
-    "viewDocs": "API 文档",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "服务端已配置搜索 API Key",
     "optional": "可选",
@@ -1861,7 +1859,7 @@
       "download": "下载",
       "detailFailed": "技能详情加载失败",
       "contentLabel": "正文",
-      "builtinDetailNote": "该技能随 OpenMAIC 提供。下载后可导入其他智能体工作台。",
+      "builtinDetailNote": "该技能为内置技能。下载后可导入其他智能体工作台。",
       "upload": "上传",
       "uploading": "正在上传…",
       "uploadFailed": "技能上传失败。请检查文件后重试。",

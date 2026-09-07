@@ -26,7 +26,7 @@ const CHART_LEGEND_LIMIT = 20;
 const CHART_SERIES_LIMIT = 20;
 const CHART_POINT_LIMIT = 100;
 
-export const ELEMENT_REFERENCE_ACCEPTED_HEADER = 'X-OpenMAIC-Element-Reference-Accepted';
+export const ELEMENT_REFERENCE_ACCEPTED_HEADER = 'X-Element-Reference-Accepted';
 
 export type MediaReferenceKind = 'absent' | 'embedded' | 'local' | 'external' | 'reference';
 

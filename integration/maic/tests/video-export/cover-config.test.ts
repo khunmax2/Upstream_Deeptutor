@@ -21,8 +21,8 @@ const BIDI_CONTROL_CASES = [
 ] as const;
 
 describe('resolveVideoExportCta', () => {
-  it.each([undefined, '', '   '])('defaults an absent or blank value (%j)', (raw) => {
-    expect(resolveVideoExportCta(raw)).toEqual({ destination: 'open.maic.chat' });
+  it.each([undefined, '', '   '])('yields no CTA for an absent or blank value (%j)', (raw) => {
+    expect(resolveVideoExportCta(raw)).toBeNull();
   });
 
   it.each(['off', 'OFF', ' Off '])('disables the CTA for %j', (raw) => {
@@ -31,7 +31,7 @@ describe('resolveVideoExportCta', () => {
 
   it.each([
     ['https://Example.COM/learn/', 'example.com/learn'],
-    ['http://open.maic.chat/', 'open.maic.chat'],
+    ['http://learn.example.org/', 'learn.example.org'],
     ['courses.example.com/start/', 'courses.example.com/start'],
   ])('normalizes %j to the display destination %j', (raw, destination) => {
     expect(resolveVideoExportCta(raw)).toEqual({ destination });
@@ -208,6 +208,11 @@ describe('getVideoExportCoverLabels', () => {
       quizCtaPrompt: 'هل تريد تجربة اختبار تفاعلي؟',
       pblCtaPrompt: 'هل تريد استكشاف التعلم القائم على المشاريع؟',
       ctaVisit: 'تفضل بزيارة',
+    },
+    'th-TH': {
+      quizCtaPrompt: 'อยากลองทำแบบทดสอบแบบโต้ตอบไหม',
+      pblCtaPrompt: 'อยากลองเรียนรู้ผ่านโครงงานไหม',
+      ctaVisit: 'เยี่ยมชม',
     },
   };
 

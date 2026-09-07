@@ -14,7 +14,8 @@ import zhCN from '@/lib/i18n/locales/zh-CN.json';
 import zhTW from '@/lib/i18n/locales/zh-TW.json';
 import type { VideoExportLabels, VideoExportCta } from '@/lib/video-export';
 
-const DEFAULT_DESTINATION = 'open.maic.chat';
+// No default destination: an exported cover carries a CTA only when the
+// operator sets NEXT_PUBLIC_VIDEO_EXPORT_CTA_DESTINATION.
 const MAX_RAW_DESTINATION_LENGTH = 96;
 const ASCII_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const BIDI_CONTROL_CHARACTER = /[\u061c\u200e-\u200f\u202a-\u202e\u2066-\u2069]/;
@@ -68,7 +69,7 @@ const LOCALE_RESOURCES: Record<Locale, Record<string, unknown>> = {
 export function resolveVideoExportCta(raw: string | undefined): VideoExportCta | null {
   const input = raw ?? '';
   const value = input.trim();
-  if (!value) return { destination: DEFAULT_DESTINATION };
+  if (!value) return null;
   if (value.toLowerCase() === 'off') return null;
   if (
     input.length > MAX_RAW_DESTINATION_LENGTH ||

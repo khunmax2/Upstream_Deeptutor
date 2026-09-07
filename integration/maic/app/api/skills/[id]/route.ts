@@ -1,4 +1,4 @@
-/** Download the OpenMAIC skill, a builtin agent skill, or one owner skill as zip. */
+/** Download the bundled skill, a builtin agent skill, or one owner skill as zip. */
 import type { NextRequest } from 'next/server';
 
 import { isAgentRuntimeConfigured } from '@/lib/config/feature-flags';

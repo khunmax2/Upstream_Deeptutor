@@ -4,7 +4,7 @@ import { shouldClearDraftElementReference } from '@/components/chat/element-refe
 function response(status: number, accepted?: string) {
   return new Response(null, {
     status,
-    headers: accepted ? { 'X-OpenMAIC-Element-Reference-Accepted': accepted } : undefined,
+    headers: accepted ? { 'X-Element-Reference-Accepted': accepted } : undefined,
   });
 }
 

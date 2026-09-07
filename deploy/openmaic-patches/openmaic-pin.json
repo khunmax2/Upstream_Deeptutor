@@ -11,10 +11,10 @@
   "commit_short": "d4ef5faa",
   "commit_date": "2026-09-01",
   "commit_subject": "fix: replace rm -rf with cross-platform fs.rmSync in package scripts (#1338)",
-  "verified": "2026-09-06",
+  "verified": "2026-09-07",
   "verified_against": {
-    "locale_keys_en_us": 1800,
-    "locale_keys_translated": 1689,
+    "locale_keys_en_us": 1798,
+    "locale_keys_translated": 1687,
     "patches": [
       "0001-register-th-TH-locale.patch",
       "0002-thai-script-support.patch"

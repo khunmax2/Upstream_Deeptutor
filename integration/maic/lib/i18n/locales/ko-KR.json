@@ -10,7 +10,6 @@
     "close": "닫기"
   },
   "home": {
-    "slogan": "멀티 에이전트 인터랙티브 교실에서 펼치는 생성형 학습",
     "greetingWithName": "안녕하세요, {{name}}!"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "교실을 성공적으로 가져왔습니다",
     "pptxSuccess": "PPTX 파싱 완료 (슬라이드 {{count}}개, 결과는 콘솔에서 확인)",
     "error": {
-      "invalidZip": "유효하지 않은 파일입니다. 올바른 .maic.zip 파일을 선택하세요.",
+      "invalidZip": "유효하지 않은 파일입니다. 올바른 .classroom.zip 파일을 선택하세요.",
       "invalidPptx": "PPTX 파싱에 실패했습니다. 파일이 유효한지 확인하세요.",
       "parserUnavailable": "PPTX 가져오기를 사용할 수 없습니다: 파서 번들이 배포되지 않았습니다. install/sync를 다시 실행하세요.",
       "invalidManifest": "유효하지 않은 교실 파일: manifest.json이 없거나 손상되었습니다.",
@@ -458,7 +457,7 @@
       "panRight": "오른쪽으로 이동",
       "collapseAxis": "축으로 접기",
       "expandTrack": "트랙 펼치기",
-      "emptyHint": "위의 동작을 축으로 끌어 시작하거나, MAIC Agent가 내레이션을 생성하도록 하세요.",
+      "emptyHint": "위의 동작을 축으로 끌어 시작하거나, AI 에이전트가 내레이션을 생성하도록 하세요.",
       "speechPlaceholder": "이 내레이션을 입력하세요…",
       "reorder": "끌어서 순서 변경",
       "moveLeft": "왼쪽으로",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "바이두 바이커의 백과사전 항목입니다.",
     "baiduSubSourceScholar": "바이두 스칼라",
     "baiduSubSourceScholarDescription": "바이두 스칼라의 학술 논문입니다.",
-    "viewDocs": "API 문서",
     "webSearchBaseUrl": "기본 URL",
     "webSearchServerConfigured": "서버 측 검색 API 키가 설정되어 있습니다",
     "optional": "선택 사항",
@@ -1861,7 +1859,7 @@
       "download": "다운로드",
       "detailFailed": "스킬 상세를 불러오지 못했습니다",
       "contentLabel": "내용",
-      "builtinDetailNote": "이 스킬은 OpenMAIC에 포함되어 있습니다. 다른 에이전트 작업공간으로 가져오려면 다운로드하세요.",
+      "builtinDetailNote": "이 스킬은 기본 제공됩니다. 다른 에이전트 작업공간으로 가져오려면 다운로드하세요.",
       "upload": "업로드",
       "uploading": "업로드 중…",
       "uploadFailed": "스킬을 업로드하지 못했습니다. 파일을 확인하고 다시 시도하세요.",

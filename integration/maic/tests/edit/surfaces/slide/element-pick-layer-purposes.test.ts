@@ -6,7 +6,7 @@ import { ElementPickLayer } from '@/components/edit/surfaces/slide/ElementPickLa
 import { CANVAS_OVERLAY_Z } from '@/components/edit/surfaces/slide/CanvasOverlayPortal';
 import { ElementRefPinLayer } from '@/components/edit/surfaces/slide/ElementRefPinLayer';
 import {
-  MAIC_ELEMENT_ID_ATTRIBUTE,
+  ELEMENT_ID_ATTRIBUTE,
   editableElementDomId,
 } from '@/components/edit/surfaces/slide/renderer-element-dom';
 import { useCanvasStore } from '@/lib/store/canvas';
@@ -62,7 +62,7 @@ const scene = {
 
 /**
  * A LEGACY editor host: a `#editable-element-{id}` wrapper carrying only
- * `data-maic-element-id`, with the painted box on `.element-content`. This is
+ * `data-element-id`, with the painted box on `.element-content`. This is
  * the DEFAULT canvas, and before the shared DOM contract it emitted neither the
  * attribute the hit-test looks for nor a paint node the layer knew about — so
  * picking silently found nothing on it.
@@ -70,7 +70,7 @@ const scene = {
 function mountLegacyHost(elementId: string, top: number) {
   const host = document.createElement('div');
   host.id = editableElementDomId(elementId);
-  host.setAttribute(MAIC_ELEMENT_ID_ATTRIBUTE, elementId);
+  host.setAttribute(ELEMENT_ID_ATTRIBUTE, elementId);
   host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 }) as DOMRect;
   const paint = document.createElement('div');
   paint.className = 'element-content';

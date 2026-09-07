@@ -10,7 +10,6 @@
     "close": "Закрыть"
   },
   "home": {
-    "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
     "greetingWithName": "Привет, {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "Класс успешно импортирован",
     "pptxSuccess": "PPTX успешно проанализирован ({{count}} слайдов, вывод в консоли)",
     "error": {
-      "invalidZip": "Недопустимый файл. Выберите корректный файл .maic.zip.",
+      "invalidZip": "Недопустимый файл. Выберите корректный файл .classroom.zip.",
       "invalidPptx": "Не удалось проанализировать PPTX. Проверьте, что файл корректен.",
       "parserUnavailable": "Импорт PPTX недоступен: парсер не развёрнут. Повторите установку/синхронизацию.",
       "invalidManifest": "Недопустимый файл класса: manifest.json отсутствует или повреждён.",
@@ -531,7 +530,7 @@
       "panRight": "Прокрутить вправо",
       "collapseAxis": "Свернуть до оси",
       "expandTrack": "Развернуть дорожку",
-      "emptyHint": "Перетащите действия на ось, чтобы начать, или позвольте MAIC Agent сгенерировать закадровый текст.",
+      "emptyHint": "Перетащите действия на ось, чтобы начать, или позвольте ИИ-агенту сгенерировать закадровый текст.",
       "speechPlaceholder": "Введите эту реплику…",
       "reorder": "Перетащите для изменения порядка",
       "moveLeft": "Влево",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Энциклопедические статьи из Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Научные публикации из Baidu Scholar.",
-    "viewDocs": "API документация",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "Серверный API-ключ поиска настроен",
     "optional": "Необязательно",
@@ -1861,7 +1859,7 @@
       "download": "Скачать",
       "detailFailed": "Не удалось загрузить сведения о навыке",
       "contentLabel": "Содержимое",
-      "builtinDetailNote": "Этот навык поставляется с OpenMAIC. Скачайте его, чтобы импортировать в другое рабочее пространство агента.",
+      "builtinDetailNote": "Этот навык встроенный. Скачайте его, чтобы импортировать в другое рабочее пространство агента.",
       "upload": "Загрузить",
       "uploading": "Загрузка…",
       "uploadFailed": "Не удалось загрузить навык. Проверьте файл и повторите попытку.",

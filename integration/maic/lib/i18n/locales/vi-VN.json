@@ -10,7 +10,6 @@
     "close": "Đóng"
   },
   "home": {
-    "slogan": "Học tập sinh tạo trong lớp học tương tác đa tác nhân",
     "greetingWithName": "Chào {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "Đã nhập lớp học thành công",
     "pptxSuccess": "Đã đọc PPTX thành công ({{count}} slide, kết quả ghi ra console)",
     "error": {
-      "invalidZip": "Tệp không hợp lệ. Vui lòng chọn tệp .maic.zip đúng định dạng.",
+      "invalidZip": "Tệp không hợp lệ. Vui lòng chọn tệp .classroom.zip đúng định dạng.",
       "invalidPptx": "Không đọc được PPTX. Vui lòng kiểm tra lại tệp.",
       "parserUnavailable": "Không dùng được chức năng nhập PPTX: chưa triển khai gói bộ đọc. Hãy chạy lại install/sync.",
       "invalidManifest": "Tệp lớp học không hợp lệ: thiếu hoặc hỏng manifest.json.",
@@ -531,7 +530,7 @@
       "panRight": "Trượt sang phải",
       "collapseAxis": "Thu về trục",
       "expandTrack": "Mở rộng dải",
-      "emptyHint": "Kéo các hành động lên trục để bắt đầu, hoặc để MAIC Agent tự viết lời giảng.",
+      "emptyHint": "Kéo các hành động lên trục để bắt đầu, hoặc để tác nhân AI tự viết lời giảng.",
       "speechPlaceholder": "Nhập câu giảng này…",
       "reorder": "Kéo để sắp xếp lại",
       "moveLeft": "Chuyển sang trái",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Các mục từ điển bách khoa Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Các bài báo học thuật từ Baidu Scholar.",
-    "viewDocs": "Tài liệu API",
     "webSearchBaseUrl": "Địa chỉ gốc",
     "webSearchServerConfigured": "Máy chủ đã cấu hình khóa API tìm kiếm",
     "optional": "Không bắt buộc",
@@ -1861,7 +1859,7 @@
       "download": "Tải xuống",
       "detailFailed": "Không thể tải chi tiết skill",
       "contentLabel": "Nội dung",
-      "builtinDetailNote": "Skill này đi kèm với OpenMAIC. Tải xuống để nhập vào không gian làm việc của agent khác.",
+      "builtinDetailNote": "Skill này được tích hợp sẵn. Tải xuống để nhập vào không gian làm việc của agent khác.",
       "upload": "Tải lên",
       "uploading": "Đang tải lên…",
       "uploadFailed": "Không thể tải skill lên. Hãy kiểm tra tệp và thử lại.",

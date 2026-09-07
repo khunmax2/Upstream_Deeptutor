@@ -10,7 +10,6 @@
     "close": "閉じる"
   },
   "home": {
-    "slogan": "マルチエージェント対話型教室で生成的に学ぶ",
     "greetingWithName": "こんにちは、{{name}}さん"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "教室のインポートが完了しました",
     "pptxSuccess": "PPTX を解析しました（{{count}} ページ、出力をコンソールに表示しました）",
     "error": {
-      "invalidZip": "無効なファイルです。有効な .maic.zip ファイルを選択してください。",
+      "invalidZip": "無効なファイルです。有効な .classroom.zip ファイルを選択してください。",
       "invalidPptx": "PPTX の解析に失敗しました。ファイルが有効か確認してください。",
       "parserUnavailable": "PPTX インポートは利用できません：パーサーがデプロイされていません。インストール／同期を再実行してください。",
       "invalidManifest": "無効な教室ファイル：manifest.json が見つからないか破損しています。",
@@ -531,7 +530,7 @@
       "panRight": "右にスクロール",
       "collapseAxis": "軸に折りたたむ",
       "expandTrack": "トラックを展開",
-      "emptyHint": "上のアクションを軸にドラッグして開始するか、MAIC Agent にナレーションを生成させましょう。",
+      "emptyHint": "上のアクションを軸にドラッグして開始するか、AI エージェント にナレーションを生成させましょう。",
       "speechPlaceholder": "このナレーションを入力…",
       "reorder": "ドラッグして並べ替え",
       "moveLeft": "左へ移動",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Baidu Baikeの百科事典エントリ。",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Baidu Scholarの学術論文。",
-    "viewDocs": "APIドキュメント",
     "webSearchBaseUrl": "ベースURL",
     "webSearchServerConfigured": "サーバー側で検索APIキーが設定済みです",
     "optional": "任意",
@@ -1861,7 +1859,7 @@
       "download": "ダウンロード",
       "detailFailed": "スキル詳細を読み込めませんでした",
       "contentLabel": "内容",
-      "builtinDetailNote": "このスキルは OpenMAIC に同梱されています。他のエージェントワークスペースにインポートするにはダウンロードしてください。",
+      "builtinDetailNote": "このスキルは標準で組み込まれています。他のエージェントワークスペースにインポートするにはダウンロードしてください。",
       "upload": "アップロード",
       "uploading": "アップロード中…",
       "uploadFailed": "スキルをアップロードできませんでした。ファイルを確認して再試行してください。",

@@ -73,7 +73,6 @@ export async function searchWithMiniMax(params: {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
-      'MM-API-Source': 'OpenMAIC',
     },
     body: JSON.stringify({ q: query }),
     ...(signal ? { signal } : {}),

@@ -20,7 +20,7 @@ import {
   WEB_SEARCH_PROVIDERS,
 } from '@/lib/web-search/constants';
 import type { BaiduSubSources, WebSearchProviderId } from '@/lib/web-search/types';
-import { ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface WebSearchSettingsProps {
   selectedProviderId: WebSearchProviderId;
@@ -198,20 +198,7 @@ export function WebSearchSettings({ selectedProviderId }: WebSearchSettingsProps
                 >
                   <div className="min-w-0 space-y-0.5">
                     <div className="text-sm font-medium">{t(meta.labelKey)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(meta.descriptionKey)}
-                      {meta.docsUrl && (
-                        <a
-                          href={meta.docsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 ml-1.5 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
-                        >
-                          {t('settings.viewDocs')}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{t(meta.descriptionKey)}</div>
                   </div>
                   <Switch
                     checked={enabled}

@@ -17,6 +17,82 @@ upstream.
 
 ---
 
+## The embedded classroom no longer carries OpenMAIC's brand — 2026-09-07
+
+The embed still announced itself as a second product. The browser tab said
+`OpenMAIC`, the home hero showed OpenMAIC's wordmark over a tagline that spells
+the name out — *Generative Learning in **M**ulti-**A**gent **I**nteractive
+**C**lassroom* — the footer read "OpenMAIC Open Source Project", and the
+classroom sidebar, the PBL workspace header and the access-code gate each showed
+the mark again. Reading the app told you it was two systems glued together
+before anything about it did.
+
+`lib/brand/brand-config.ts` already existed as the one place a brand is
+declared, and three surfaces already read it. The rest hardcoded the logo path
+and the string `OpenMAIC` beside it, so the config was a single source of truth
+that four screens ignored. Those four now read it too, the config defaults to the
+host product (`DeepWitya`, its own `banner.png` and `logo.png` resized in), and
+every field is overridable through `NEXT_PUBLIC_BRAND_*` — inlined at build time,
+so a change there needs a rebuild rather than a restart.
+
+`public/logo-horizontal.png` and `public/openmaic-mark.png` are deleted, and the
+favicon and apple-icon regenerated from the host mark.
+
+**The brand also left the app.** Three places carried it outward, where removing
+the logo would not have reached:
+
+- `lib/web-search/searxng.ts` sent `User-Agent: Mozilla/5.0 (compatible;
+  OpenMAIC/1.0; +https://github.com/THU-MAIC/OpenMAIC)` to every SearXNG
+  instance queried.
+- `lib/web-search/minimax.ts` sent `MM-API-Source: OpenMAIC` to MiniMax.
+- `lib/video-export-app/cover-config.ts` printed `open.maic.chat` on the cover of
+  every exported video, as the default when the operator set no destination.
+  There is no default now: a cover carries a CTA only when
+  `NEXT_PUBLIC_VIDEO_EXPORT_CTA_DESTINATION` is set.
+
+And every course a user exports was named `<name>.maic.zip`.
+`CLASSROOM_ZIP_EXTENSION` is now `.classroom.zip`. Import is unaffected — the
+picker accepts `.zip` and never compared against that constant — so files
+exported before today still open.
+
+**Outbound links.** `components/ai-elements/open-in-chat.tsx` shipped six links
+out to ChatGPT, Claude, T3, Scira, v0 and Cursor; `sources.tsx` shipped a
+seventh. Nothing imported either file. Both are deleted rather than hidden.
+Settings' Baidu sub-source rows linked to three `cloud.baidu.com` /
+`ai.baidu.com` doc pages; those anchors and the `docsUrl` field behind them are
+gone. What remains clickable in the shipped chrome is internal navigation.
+
+**Translations.** The brand was in the strings too, in all thirteen languages:
+the tagline, "This skill ships with OpenMAIC", "OpenMAIC official skill" in the
+workbench overlay, "MAIC Agent" on the timeline hint, and `.maic.zip` in an error
+message. 80 translated strings changed. `home.slogan` and `settings.viewDocs`
+lost their last readers and are removed from every locale — hence 1798 keys where
+the pin recorded 1800, which is why the pin moved.
+
+**Two wire identifiers**, visible only with devtools open but shipped all the
+same: the DOM attribute `data-maic-element-id` stamped on every rendered slide
+element, and the HTTP response header `X-OpenMAIC-Element-Reference-Accepted`.
+Renamed to `data-element-id` and `X-Element-Reference-Accepted` across 14 files.
+
+**Deliberately left.** The `@openmaic/*` workspace package names, the
+`OPENMAIC_*` / `NEXT_PUBLIC_MAIC_*` environment variables, the internal provider
+id `maic-connector`, and source comments. None is visible to a reader of the app;
+renaming the env vars would break every existing deployment, and renaming the
+packages would make every future `git subtree pull` a merge conflict for no gain.
+
+Verified against the running container: the home page returns `title: DeepWitya`,
+zero case-insensitive matches for `maic` anywhere in its HTML, zero external
+links, `/brand-wordmark.png` 200 and `/logo-horizontal.png` 404; `/workspace` the
+same. `tsc --noEmit` clean, eslint clean, upstream's `check-i18n-keys.mjs` green
+at 13 locale files, and `check_openmaic_contract.py` green after the pin bump.
+
+`tests/video-export/cover-config.test.ts` also gained the `th-TH` row it had been
+missing since Thai joined the `Locale` union — that fixture is keyed by `Locale`,
+so `tsc` had been red on it before any of this.
+
+MIT attribution is unaffected: `integration/maic/LICENSE` is untouched, and MIT
+requires the notice in the distribution, not in the UI.
+
 ## The provider bridge sent Gemini down the wrong protocol — 2026-09-07
 
 Every LLM call from the embedded OpenMAIC failed with `AI_APICallError: Not

@@ -10,7 +10,6 @@
     "close": "ปิด"
   },
   "home": {
-    "slogan": "การเรียนรู้เชิงสร้างสรรค์ในห้องเรียนโต้ตอบหลายเอเจนต์",
     "greetingWithName": "สวัสดี {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "นำเข้าห้องเรียนสำเร็จ",
     "pptxSuccess": "แยกวิเคราะห์ PPTX สำเร็จ ({{count}} สไลด์ บันทึกผลลัพธ์ไว้ใน console)",
     "error": {
-      "invalidZip": "ไฟล์ไม่ถูกต้อง กรุณาเลือกไฟล์ .maic.zip ที่ถูกต้อง",
+      "invalidZip": "ไฟล์ไม่ถูกต้อง กรุณาเลือกไฟล์ .classroom.zip ที่ถูกต้อง",
       "invalidPptx": "แยกวิเคราะห์ PPTX ไม่สำเร็จ กรุณาตรวจสอบว่าไฟล์ถูกต้อง",
       "parserUnavailable": "นำเข้า PPTX ไม่ได้: ยังไม่ได้ติดตั้งชุดตัวแยกวิเคราะห์ กรุณารัน install/sync อีกครั้ง",
       "invalidManifest": "ไฟล์ห้องเรียนไม่ถูกต้อง: ไม่พบ manifest.json หรือไฟล์เสียหาย",
@@ -531,7 +530,7 @@
       "panRight": "เลื่อนไปทางขวา",
       "collapseAxis": "ย่อเหลือแกนเวลา",
       "expandTrack": "ขยายแทร็ก",
-      "emptyHint": "ลากการกระทำมาวางบนแกนเวลาเพื่อเริ่ม หรือให้ MAIC Agent สร้างคำบรรยายให้",
+      "emptyHint": "ลากการกระทำมาวางบนแกนเวลาเพื่อเริ่ม หรือให้ เอเจนต์ AI สร้างคำบรรยายให้",
       "speechPlaceholder": "ใส่คำบรรยายบรรทัดนี้…",
       "reorder": "ลากเพื่อจัดลำดับ",
       "moveLeft": "เลื่อนไปทางซ้าย",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "รายการสารานุกรมจาก Baidu Baike",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "บทความวิชาการจาก Baidu Scholar",
-    "viewDocs": "เอกสาร API",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "เซิร์ฟเวอร์ตั้ง API key ของการค้นหาไว้แล้ว",
     "optional": "ไม่บังคับ",
@@ -1861,7 +1859,7 @@
       "download": "ดาวน์โหลด",
       "detailFailed": "โหลดรายละเอียดสกิลไม่สำเร็จ",
       "contentLabel": "เนื้อหา",
-      "builtinDetailNote": "สกิลนี้มาพร้อมกับ OpenMAIC ดาวน์โหลดเพื่อนำเข้าไปใช้ในพื้นที่ทำงานของเอเจนต์อื่น",
+      "builtinDetailNote": "สกิลนี้มีมาให้ในตัว ดาวน์โหลดเพื่อนำเข้าไปใช้ในพื้นที่ทำงานของเอเจนต์อื่น",
       "upload": "อัปโหลด",
       "uploading": "กำลังอัปโหลด…",
       "uploadFailed": "อัปโหลดสกิลไม่สำเร็จ กรุณาตรวจสอบไฟล์แล้วลองใหม่",

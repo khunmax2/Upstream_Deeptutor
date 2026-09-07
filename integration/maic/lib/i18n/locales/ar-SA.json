@@ -10,7 +10,6 @@
     "close": "إغلاق"
   },
   "home": {
-    "slogan": "التعلّم التوليدي في فصل تفاعلي متعدد الوكلاء",
     "greetingWithName": "مرحبًا، {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "تم استيراد الفصل بنجاح",
     "pptxSuccess": "تم تحليل PPTX بنجاح ({{count}} شرائح، تم طباعة الإخراج في وحدة التحكم)",
     "error": {
-      "invalidZip": "ملف غير صالح. يرجى اختيار ملف .maic.zip صالح.",
+      "invalidZip": "ملف غير صالح. يرجى اختيار ملف .classroom.zip صالح.",
       "invalidPptx": "فشل تحليل PPTX. يرجى التحقق من صحة الملف.",
       "parserUnavailable": "استيراد PPTX غير متاح: لم يتم نشر المحلّل. أعد تشغيل خطوة التثبيت/المزامنة.",
       "invalidManifest": "ملف فصل غير صالح: ملف manifest.json مفقود أو تالف.",
@@ -531,7 +530,7 @@
       "panRight": "تحريك لليمين",
       "collapseAxis": "طي إلى المحور",
       "expandTrack": "توسيع المسار",
-      "emptyHint": "اسحب الإجراءات إلى المحور للبدء، أو دع MAIC Agent يولّد السرد.",
+      "emptyHint": "اسحب الإجراءات إلى المحور للبدء، أو دع وكيل الذكاء الاصطناعي يولّد السرد.",
       "speechPlaceholder": "أدخل سطر السرد هذا…",
       "reorder": "اسحب لإعادة الترتيب",
       "moveLeft": "تحريك لليسار",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "مقالات موسوعية من Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "أبحاث أكاديمية من Baidu Scholar.",
-    "viewDocs": "مستندات API",
     "webSearchBaseUrl": "العنوان الأساسي",
     "webSearchServerConfigured": "تم تكوين مفتاح API للبحث على الخادم",
     "optional": "اختياري",
@@ -1861,7 +1859,7 @@
       "download": "تنزيل",
       "detailFailed": "تعذّر تحميل تفاصيل المهارة",
       "contentLabel": "المحتوى",
-      "builtinDetailNote": "هذه المهارة مرفقة مع OpenMAIC. نزّلها لاستيرادها إلى مساحة عمل وكيل أخرى.",
+      "builtinDetailNote": "هذه المهارة مضمّنة. نزّلها لاستيرادها إلى مساحة عمل وكيل أخرى.",
       "upload": "رفع",
       "uploading": "جارٍ الرفع…",
       "uploadFailed": "تعذّر رفع المهارة. تحقّق من الملف وحاول مرة أخرى.",

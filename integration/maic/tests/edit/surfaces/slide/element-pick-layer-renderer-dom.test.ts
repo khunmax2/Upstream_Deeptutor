@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ElementPickLayer } from '@/components/edit/surfaces/slide/ElementPickLayer';
 import {
   editableElementDomId,
-  maicElementIdAttributes,
+  elementIdAttributes,
 } from '@/components/edit/surfaces/slide/renderer-element-dom';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useStageStore } from '@/lib/store/stage';
@@ -70,7 +70,7 @@ describe('ElementPickLayer renderer DOM integration', () => {
 
     const rendererHost = document.createElement('div');
     rendererHost.id = editableElementDomId('title-1');
-    for (const [name, value] of Object.entries(maicElementIdAttributes('title-1'))) {
+    for (const [name, value] of Object.entries(elementIdAttributes('title-1'))) {
       rendererHost.setAttribute(name, value);
     }
     rendererHost.getBoundingClientRect = () =>

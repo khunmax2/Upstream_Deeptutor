@@ -10,7 +10,6 @@
     "close": "Cerrar"
   },
   "home": {
-    "slogan": "Aprendizaje generativo en un aula interactiva multiagente",
     "greetingWithName": "Hola, {{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "Aula importada correctamente",
     "pptxSuccess": "PPTX analizado correctamente ({{count}} diapositivas, salida registrada en la consola)",
     "error": {
-      "invalidZip": "Archivo no válido. Selecciona un archivo .maic.zip válido.",
+      "invalidZip": "Archivo no válido. Selecciona un archivo .classroom.zip válido.",
       "invalidPptx": "No se pudo analizar el PPTX. Verifica que el archivo sea válido.",
       "parserUnavailable": "La importación de PPTX no está disponible: el paquete del analizador no está desplegado. Vuelve a ejecutar install/sync.",
       "invalidManifest": "Archivo de aula no válido: falta manifest.json o está dañado.",
@@ -531,7 +530,7 @@
       "panRight": "Desplazar a la derecha",
       "collapseAxis": "Contraer al eje",
       "expandTrack": "Expandir pista",
-      "emptyHint": "Arrastra acciones al eje para empezar, o deja que MAIC Agent genere la narración.",
+      "emptyHint": "Arrastra acciones al eje para empezar, o deja que el agente de IA genere la narración.",
       "speechPlaceholder": "Escribe esta línea de narración…",
       "reorder": "Arrastra para reordenar",
       "moveLeft": "Mover a la izquierda",
@@ -1790,7 +1789,6 @@
     "baiduSubSourceBaikeDescription": "Entradas de enciclopedia de Baidu Baike.",
     "baiduSubSourceScholar": "Baidu Scholar",
     "baiduSubSourceScholarDescription": "Artículos académicos de Baidu Scholar.",
-    "viewDocs": "Docs de la API",
     "webSearchBaseUrl": "URL base",
     "webSearchServerConfigured": "La clave API de búsqueda está configurada en el servidor",
     "optional": "Opcional",
@@ -1861,7 +1859,7 @@
       "download": "Descargar",
       "detailFailed": "No se pudieron cargar los detalles del skill",
       "contentLabel": "Contenido",
-      "builtinDetailNote": "Este skill viene incluido con OpenMAIC. Descárgalo para importarlo a otro espacio de trabajo de agente.",
+      "builtinDetailNote": "Este skill viene integrado. Descárgalo para importarlo a otro espacio de trabajo de agente.",
       "upload": "Subir",
       "uploading": "Subiendo…",
       "uploadFailed": "No se pudo subir el skill. Revisa el archivo e inténtalo de nuevo.",

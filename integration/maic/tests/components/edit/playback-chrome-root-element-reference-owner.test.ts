@@ -406,7 +406,7 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
     });
     act(() =>
       options.onResponseAccepted(
-        new Response(null, { headers: { 'X-OpenMAIC-Element-Reference-Accepted': '1' } }),
+        new Response(null, { headers: { 'X-Element-Reference-Accepted': '1' } }),
       ),
     );
     expect(container.querySelector('[data-testid="owner-pill"]')).toBeNull();
@@ -427,7 +427,7 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
     });
     act(() =>
       options.onResponseAccepted(
-        new Response(null, { headers: { 'X-OpenMAIC-Element-Reference-Accepted': '1' } }),
+        new Response(null, { headers: { 'X-Element-Reference-Accepted': '1' } }),
       ),
     );
 

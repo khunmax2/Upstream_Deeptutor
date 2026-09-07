@@ -156,22 +156,19 @@ export function buildWebSearchFallbackOrder(
 
 export const BAIDU_SUB_SOURCES: Record<
   keyof BaiduSubSources,
-  { labelKey: string; descriptionKey: string; docsUrl?: string }
+  { labelKey: string; descriptionKey: string }
 > = {
   webSearch: {
     labelKey: 'settings.baiduSubSourceWeb',
     descriptionKey: 'settings.baiduSubSourceWebDescription',
-    docsUrl: 'https://cloud.baidu.com/doc/qianfan/s/Mmh4sv6ec',
   },
   baike: {
     labelKey: 'settings.baiduSubSourceBaike',
     descriptionKey: 'settings.baiduSubSourceBaikeDescription',
-    docsUrl: 'https://ai.baidu.com/ai-doc/AppBuilder/rmckc6mtu',
   },
   scholar: {
     labelKey: 'settings.baiduSubSourceScholar',
     descriptionKey: 'settings.baiduSubSourceScholarDescription',
-    docsUrl: 'https://cloud.baidu.com/doc/qianfan/s/Amkw9qpzd',
   },
 };
 

@@ -54,7 +54,6 @@ describe('searchWithMiniMax', () => {
         headers: {
           'Content-Type': 'application/json',
           Authorization: 'Bearer minimax-key',
-          'MM-API-Source': 'OpenMAIC',
         },
         body: JSON.stringify({ q: 'MiniMax Token Plan' }),
       }),

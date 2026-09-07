@@ -9,7 +9,7 @@ import type { Action } from '@/lib/types/action';
 import type { AgentVoiceConfig, Slide, VoiceDesign } from '@openmaic/dsl';
 
 export const CLASSROOM_ZIP_FORMAT_VERSION = 1;
-export const CLASSROOM_ZIP_EXTENSION = '.maic.zip';
+export const CLASSROOM_ZIP_EXTENSION = '.classroom.zip';
 
 export interface ClassroomManifest {
   formatVersion: number;

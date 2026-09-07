@@ -10,7 +10,6 @@
     "close": "關閉"
   },
   "home": {
-    "slogan": "多智能體互動課室中的生成式學習",
     "greetingWithName": "嗨，{{name}}"
   },
   "toolbar": {
@@ -113,7 +112,7 @@
     "success": "課堂匯入成功",
     "pptxSuccess": "PPTX 解析成功（{{count}} 張投影片，輸出已記錄至主控台）",
     "error": {
-      "invalidZip": "檔案無效，請選擇有效的 .maic.zip 檔案。",
+      "invalidZip": "檔案無效，請選擇有效的 .classroom.zip 檔案。",
       "invalidPptx": "PPTX 解析失敗，請檢查檔案是否有效。",
       "parserUnavailable": "PPTX 匯入功能不可用：解析器套件未部署，請重新執行安裝/同步。",
       "invalidManifest": "課堂檔案無效：manifest.json 遺失或損毀。",
@@ -459,7 +458,7 @@
       "panRight": "向右平移",
       "collapseAxis": "收合至時間軸",
       "expandTrack": "展開音軌",
-      "emptyHint": "將動作拖曳至時間軸以開始，或讓 MAIC Agent 生成旁白。",
+      "emptyHint": "將動作拖曳至時間軸以開始，或讓 AI 智能體 生成旁白。",
       "speechPlaceholder": "輸入此旁白內容…",
       "reorder": "拖曳以重新排序",
       "moveLeft": "左移",
@@ -1775,7 +1774,6 @@
     "baiduSubSourceBaikeDescription": "使用百度百科取得條目摘要。",
     "baiduSubSourceScholar": "百度學術",
     "baiduSubSourceScholarDescription": "使用百度學術取得論文結果。",
-    "viewDocs": "API 文檔",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "已設定服務端 Tavily API Key",
     "optional": "選填",
@@ -1846,7 +1844,7 @@
       "download": "下載",
       "detailFailed": "技能詳情載入失敗",
       "contentLabel": "正文",
-      "builtinDetailNote": "該技能隨 OpenMAIC 提供。下載後可匯入其他智能體工作台。",
+      "builtinDetailNote": "該技能為內建技能。下載後可匯入其他智能體工作台。",
       "upload": "上傳",
       "uploading": "正在上傳…",
       "uploadFailed": "技能上傳失敗。請檢查檔案後重試。",

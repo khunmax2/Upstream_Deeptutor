@@ -205,7 +205,7 @@ describe('POST /api/chat/pi model and thinking resolution', () => {
     await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.runPiDirectorLoop).toHaveBeenCalledWith(
       expect.objectContaining({
         elementReference: expect.objectContaining({
@@ -245,7 +245,7 @@ describe('POST /api/chat/pi model and thinking resolution', () => {
     await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBe('1');
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBe('1');
     expect(mocks.runPiDirectorLoop).toHaveBeenCalledWith(
       expect.objectContaining({
         elementReference: expect.objectContaining({
@@ -273,7 +273,7 @@ describe('POST /api/chat/pi model and thinking resolution', () => {
     const response = await POST(makeRequest(body));
 
     expect(response.status).toBe(400);
-    expect(response.headers.get('X-OpenMAIC-Element-Reference-Accepted')).toBeNull();
+    expect(response.headers.get('X-Element-Reference-Accepted')).toBeNull();
     expect(mocks.resolveModel).not.toHaveBeenCalled();
     expect(mocks.runPiDirectorLoop).not.toHaveBeenCalled();
   });

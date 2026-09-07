@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   EDITABLE_ELEMENT_ID_PREFIX,
-  MAIC_ELEMENT_ID_ATTRIBUTE,
+  ELEMENT_ID_ATTRIBUTE,
   SCREEN_ELEMENT_ID_PREFIX,
   editableElementDomId,
-  maicElementIdAttributes,
+  elementIdAttributes,
   screenElementDomId,
 } from '@/components/edit/surfaces/slide/renderer-element-dom';
 import { INTERACTION_ELEMENT_ID_ATTRIBUTES } from '@/components/edit/surfaces/slide/element-hit-test';
@@ -21,9 +21,9 @@ describe('renderer editor DOM contract', () => {
   });
 
   it('stamps the renderer-agnostic pick attribute accepted by hit-testing', () => {
-    expect(MAIC_ELEMENT_ID_ATTRIBUTE).toBe('data-maic-element-id');
-    expect(maicElementIdAttributes('title-1')).toEqual({ 'data-maic-element-id': 'title-1' });
-    expect(INTERACTION_ELEMENT_ID_ATTRIBUTES[0]).toBe(MAIC_ELEMENT_ID_ATTRIBUTE);
+    expect(ELEMENT_ID_ATTRIBUTE).toBe('data-element-id');
+    expect(elementIdAttributes('title-1')).toEqual({ 'data-element-id': 'title-1' });
+    expect(INTERACTION_ELEMENT_ID_ATTRIBUTES[0]).toBe(ELEMENT_ID_ATTRIBUTE);
     expect(INTERACTION_ELEMENT_ID_ATTRIBUTES).toContain('data-element-id');
     expect(INTERACTION_ELEMENT_ID_ATTRIBUTES).toContain('data-select-element-id');
     expect(INTERACTION_ELEMENT_ID_ATTRIBUTES).toContain('data-context-element-id');

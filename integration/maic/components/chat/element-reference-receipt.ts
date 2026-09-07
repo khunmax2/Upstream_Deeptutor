@@ -5,7 +5,7 @@ export function shouldClearDraftElementReference(
 ): boolean {
   return (
     response.ok &&
-    response.headers.get('X-OpenMAIC-Element-Reference-Accepted') === '1' &&
+    response.headers.get('X-Element-Reference-Accepted') === '1' &&
     currentSelectionVersion === sentSelectionVersion
   );
 }
