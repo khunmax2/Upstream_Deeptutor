@@ -64,6 +64,16 @@ cat > "$SNIP_SSL" <<'CONF'
 # or /deepwitya2/_next/... resolves to nothing.
 location /deepwitya2 {
     proxy_pass http://127.0.0.1:10320;
+
+    # Immersive reading accepts documents up to 200 MB (MAX_MATERIAL_BYTES ==
+    # DocumentValidator.MAX_FILE_SIZE). nginx defaults to 1m, so anything larger
+    # died as a bare nginx 413 HTML page — the browser showed "Request failed:
+    # 413" and the app never saw the request, so its own friendly size message
+    # could never fire. Matching the app's ceiling puts the error back in the
+    # app's hands. Verified: /api/reading/materials is NOT excluded from the
+    # Next middleware matcher, but the middleware streams 58 MB without
+    # capping, so nginx was the only ceiling.
+    client_max_body_size 200m;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";

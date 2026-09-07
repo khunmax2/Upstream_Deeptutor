@@ -80,6 +80,19 @@ reaches it. Two sides that pull in opposite directions:
   `next` would resolve to `/deepwitya2/deepwitya2` after signing in. The
   middleware already emits a stripped `next`, so both paths now agree.
 
+**Upload ceiling (`deploy/nginx-deepwitya2.locations.conf`)** — immersive
+reading rejected anything over ~1 MB with a bare `Request failed: 413`. The app
+allows 200 MB (`MAX_MATERIAL_BYTES`), but the location block never set
+`client_max_body_size`, so nginx's 1 MB default cut the request off before the
+app ever saw it — which is also why the app's own "exceeds the 200 MB limit"
+message could never appear. Raised to `200m` to match the app.
+
+Measured rather than assumed: 500 KB reached the app (401), 2 MB came back as
+`server: nginx` / `text/html` 413. `/api/reading/materials` is *not* excluded
+from the Next middleware matcher the way the knowledge-base upload routes are,
+so the middleware was the other suspect — but posting straight to the frontend
+port streamed 58 MB through it untouched, leaving nginx as the only ceiling.
+
 **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
 HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
 `/login` with basePath preserved, APIs 401), and a full streaming turn over
