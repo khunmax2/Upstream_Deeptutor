@@ -46,7 +46,9 @@ def test_openrouter_maps_to_its_own_openmaic_id() -> None:
 
 
 def test_an_openrouter_catalog_produces_a_provider() -> None:
-    sections, notes = build(_catalog("openrouter", "https://openrouter.ai/api/v1"), "host.docker.internal")
+    sections, notes = build(
+        _catalog("openrouter", "https://openrouter.ai/api/v1"), "host.docker.internal"
+    )
 
     assert "openrouter" in sections.get("providers", {}), (
         f"OpenRouter was dropped from the generated config; notes were: {notes}"
@@ -56,7 +58,9 @@ def test_an_openrouter_catalog_produces_a_provider() -> None:
 
 def test_an_unknown_binding_is_skipped_with_a_note() -> None:
     """The skip path stays intact — this is not a licence to map everything."""
-    sections, notes = build(_catalog("no-such-vendor", "https://example.invalid/v1"), "host.docker.internal")
+    sections, notes = build(
+        _catalog("no-such-vendor", "https://example.invalid/v1"), "host.docker.internal"
+    )
 
     assert "providers" not in sections
     assert any("no-such-vendor" in note for note in notes)
