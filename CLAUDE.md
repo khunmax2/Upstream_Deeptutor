@@ -89,6 +89,15 @@ ruff format --check .           # ruff format (without --check) to autofix
 # All pre-commit hooks (ruff, prettier, detect-secrets, bandit, mypy)
 pre-commit run --all-files
 
+# The embedded course studio (in integration/maic/) — pnpm, not npm
+# A Docker build does this itself; these are for working on it directly.
+cd integration/maic
+corepack enable && pnpm install --frozen-lockfile
+pnpm test                       # vitest
+node scripts/check-i18n-keys.mjs   # upstream's own locale gate (expects 13 files)
+# Note: after a containerised install, node_modules holds POSIX symlinks and no
+# .cmd shims, so host-side npx cannot use it — run the suite in a container too.
+
 # Frontend (in web/)
 cd web && npm ci --legacy-peer-deps
 npm run dev                     # Next.js dev server

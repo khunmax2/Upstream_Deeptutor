@@ -201,8 +201,11 @@ storage boundary and a proxy rule that has to be right.
 docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml up -d
 ```
 
-Local dev, without Docker (OpenMAIC checked out beside this repo):
+Local dev, without Docker — the source is in this repository, so there is
+nothing to check out:
 
 ```bash
-cd ../OpenMAIC && ALLOWED_FRAME_ANCESTORS=http://localhost:3782 pnpm exec next dev -p 3100
+cd integration/maic
+corepack enable && pnpm install --frozen-lockfile
+ALLOWED_FRAME_ANCESTORS=http://localhost:3782 pnpm exec next dev -p 3100
 ```

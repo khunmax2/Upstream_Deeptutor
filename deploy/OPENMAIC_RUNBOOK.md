@@ -1,7 +1,7 @@
 # Bringing up the OpenMAIC embed with Docker
 
 What was actually run, in order, and every problem it hit. Written to be
-followed from a clean machine — no containers, no images, no `../OpenMAIC` — so
+followed from a clean machine — no containers, no images, nothing cloned — so
 that following it reproduces the same result rather than a similar one.
 
 Companion documents: `OPENMAIC_EMBED.md` (why the design is shaped this way),
@@ -16,7 +16,7 @@ Companion documents: `OPENMAIC_EMBED.md` (why the design is shaped this way),
 browser
   │
   ├── https://HOST/deepwitya2      DeepTutor            (existing)
-  │       └── /maic  ──frames──┐
+  │       └── /course-studio ──frames──┐
   │                            │
   └── https://HOST:10330  ─────┘   nginx, TLS
           └── 127.0.0.1:10331      gatekeeper — checks the DeepTutor session,
@@ -32,12 +32,13 @@ route in is the gatekeeper.
 |---|---|
 | `git`, `docker`, `docker compose` | required |
 | Node / pnpm / python on the host | **not** required — the one step that needs Node runs in a throwaway container |
-| Network access to `github.com` | required at prepare time (clones OpenMAIC) |
+| Network access to `github.com` | to clone this repository, and nothing after |
 | Free ports | `10330` (nginx), `10331` (loopback only) |
 | `sudo` | only for the nginx block, at the very end |
 
-Disk: the OpenMAIC clone plus `node_modules` is roughly 2 GB, and the image
-build needs headroom on top.
+Disk: this repository carries OpenMAIC's source, and its `node_modules`
+comes to roughly 2 GB inside the build. Leave headroom on top of that for the
+image.
 
 The verification snippets below call `python3`, which is right on the Linux
 target. **On Windows use `python`** — `python3` there resolves to a Microsoft
@@ -275,7 +276,8 @@ version on the target host) and `1.27-alpine`. Edit `server_name` and the
 
 ## 8. End to end
 
-Open DeepTutor → **Course Studio**. Expect OpenMAIC framed, in the same language
+Open DeepTutor → **Course Studio** (`/course-studio`; `/maic` still redirects).
+Expect the studio framed, in the same language
 and light/dark theme as DeepTutor, with its own language and theme controls
 hidden and only its settings gear showing.
 
@@ -291,7 +293,7 @@ identical to a dozen other causes from the outside.
 `./openmaic-gatekeeper` in a file that lives in `deploy/` resolves to
 `<repo>/openmaic-gatekeeper`, which does not exist. The container restart-looped
 on `MODULE_NOT_FOUND`. Correct value is `./deploy/openmaic-gatekeeper`. The same
-rule is why `build.context: ../OpenMAIC` means a sibling of the **repo**.
+rule is why `build.context: ./integration/maic` resolves inside the repo.
 
 ### An edit that silently never reached the file
 
@@ -352,7 +354,7 @@ though the repository sufficed. They are now patch `0006`.
 ### `pnpm install` rewrote the lockfile
 
 It removed 1,934 lines. Recovered by writing the committed version back —
-`git -C ../OpenMAIC show HEAD:pnpm-lock.yaml > ../OpenMAIC/pnpm-lock.yaml` —
+`git show HEAD:integration/maic/pnpm-lock.yaml > integration/maic/pnpm-lock.yaml` —
 **not** with `git checkout --` or `git reset --hard`, which would also have
 discarded unrelated work in that tree.
 
@@ -448,14 +450,12 @@ docker image rm "$(docker compose $COMPOSE config --format json \
 `down -v` removes the named volumes too, including any courses OpenMAIC saved.
 Drop the `-v` to keep them.
 
-To return the OpenMAIC checkout to a pristine mirror:
+There is no checkout to clean up. OpenMAIC's source is part of this repository
+now, and our changes to it are commits like any other — `git status` is the
+whole answer. To see what is ours rather than upstream's:
 
 ```bash
-for p in $(ls -r deploy/openmaic-patches/0*.patch); do
-    git -C ../OpenMAIC apply -R "$p" 2>/dev/null || true
-done
-rm -f ../OpenMAIC/lib/i18n/locales/th-TH.json
-python3 deploy/openmaic-patches/check_openmaic_tree.py --openmaic ../OpenMAIC
+python3 deploy/openmaic-patches/export_upstream_patches.py
 ```
 
 The guard reporting nothing foreign is what "still a mirror" means, and it is
