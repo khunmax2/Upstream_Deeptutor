@@ -17,6 +17,39 @@ upstream.
 
 ---
 
+## The course studio had no model to call — 2026-09-08
+
+Found by deploying it. `BINDING_TO_PROVIDER['providers']` in
+`deeptutor/services/config/openmaic_bridge.py` had no entry for `openrouter`, so
+a deployment whose LLM is OpenRouter — this one — generated a
+`server-providers.yml` with an empty `providers:` section. OpenMAIC read the
+file, found TTS, ASR, image and web search, and no model at all:
+
+```
+providers=[]  tts=['openai-tts']  asr=['openai-whisper']
+```
+
+Nothing failed. The settings save succeeded, the file was written, the studio
+loaded, and only an attempt to generate a course would have shown it — in front
+of a customer.
+
+**It maps to `openrouter`, not to `openai`.** OpenRouter is a first-class
+provider in OpenMAIC (`LLM_ENV_MAP.OPENROUTER` in
+`integration/maic/lib/server/provider-config.ts`), unlike `groq` and `custom`,
+which genuinely have no id of their own and are modelled there as `openai` with
+a different base URL. Flattening OpenRouter into `openai` would have worked over
+the wire and labelled it as something it is not.
+
+This was an oversight rather than a decision: the same file's `image` section
+already maps `openrouter` to `openai-image`, so the binding was known — it was
+missed in one section only.
+
+`tests/services/config/test_openmaic_bridge_bindings.py` pins it, along with the
+skip path (an unknown binding must still be dropped with a note) and a guard
+that every id the bridge emits is one OpenMAIC actually declares — a value it
+does not know would be dropped on its side instead of ours, which is the same
+silence one layer later.
+
 ## The docs still described the layout we replaced — 2026-09-08
 
 Before deploying, a read of what an agent or an operator would actually find.
