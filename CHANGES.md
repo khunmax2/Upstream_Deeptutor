@@ -91,6 +91,50 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-07 — No PDF text was selectable in Safari, silently, in every
+  document.** Reported as *"ถ้าเปิดกับ safari นั้น ไม่สามารถคลุมดำที่ตัวข้อความได้"*.
+  Driven and reproduced in Safari 26.6.2 (`AppleWebKit/605.1.15`) over Apple
+  Events: nine pages rendered, nine text layers present, and
+  `spans: [0,0,0,0,0,0,0,0,0]` — against `[19,126,…]` for the same document in
+  Chrome. **Two independent WebKit divergences**, stacked.
+
+  **1. `getTextContent()` threw.** pdf.js reads page text with
+  `for await (const chunk of this.streamTextContent(…))`, and WebKit has never
+  shipped `ReadableStream.prototype[Symbol.asyncIterator]` — confirmed
+  `undefined` in this Safari. The result is a bare
+  `TypeError: undefined is not a function (near '...t of e...')` thrown inside
+  the library. Fixed with a spec-shaped shim
+  (`web/lib/readable-stream-async-iterator.ts`) installed by the pdf.js loader
+  *before* the library loads: `values()`/`Symbol.asyncIterator` over
+  `getReader()`, cancelling on `return()` unless `preventCancel`, releasing the
+  lock on every exit path — including the final chunk, because pdf.js drains a
+  text stream and never calls `return()`. Feature-detected, so Chrome and
+  Firefox keep their native implementation.
+
+  **2. Every span was `font-size: 0`.** With text extraction fixed the spans
+  appeared but still could not be selected. pdf.js measures the smallest font
+  the browser will render — a `font-size: 1px; line-height: 1` div, measured
+  with `getBoundingClientRect().height` — and publishes it as
+  `--min-font-size`. Chrome measures **1**; Safari measures **0**. That makes
+  `--text-scale-factor: calc(scale * 0)`, so every span renders at
+  `font-size: 0` with `transform: scale(1 / 0)` — a fully populated, correctly
+  positioned text layer of zero-sized boxes, which cannot be selected. Repaired
+  after `layer.render()`, and only when the measurement is not positive, so
+  pdf.js's intent survives wherever the probe is right.
+
+  **Why it was invisible.** `PdfPage` renders canvas and text layer through
+  `Promise.allSettled` and reports failure only if *both* reject — deliberately,
+  since either half alone still leaves a usable page. But a text layer that
+  never built takes selection, highlighting, annotations and every
+  selection-gated reading action with it, while the page looks completely
+  normal. One-sided failures are now logged with the side and the page number;
+  the both-sides rule for showing an error is unchanged.
+
+  Verified in Safari after the fix: `--min-font-size` 0 → 1, span font-size
+  0px → 57.6px, span box NaN → 249×56, text selects, and all four
+  selection-gated buttons (three translations + vocabulary) go from `disabled`
+  to enabled. `web/tests/` gains 5 tests (1097 → 1102).
+
 - **2026-09-07 — "This reading action is temporarily unavailable" was
   permanent, and nothing was logged.** Reported as *"ทำไมปุ่มด้านบนกดไม่ได้"* —
   the Immersive Reading action bar answered a red banner and nothing else.

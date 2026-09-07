@@ -33,6 +33,29 @@ export interface PdfPageProps {
  * The page keeps its measured height while inactive, so deactivating it does not
  * collapse the scroll container and yank the reader's position.
  */
+/**
+ * Undo pdf.js's minimum-font-size probe when the browser answers 0.
+ *
+ * pdf.js measures the smallest font the browser will actually render, by
+ * appending a `font-size: 1px; line-height: 1` div and reading its height, then
+ * publishes it as `--min-font-size` on the text layer. Safari measures that box
+ * as **0** (Chrome and Firefox return 1), which makes
+ * `--text-scale-factor: calc(scale * 0)` — so every span lands at `font-size: 0`
+ * with `transform: scale(1 / 0)` — and a text layer of zero-sized spans cannot
+ * be selected, even though it is fully populated and correctly positioned.
+ *
+ * The value pdf.js writes is an inline style on the container, so it cannot be
+ * corrected from the stylesheet without `!important` overriding the cases where
+ * the probe is right. Repairing only a non-positive measurement keeps pdf.js's
+ * intent — compensating for a real browser minimum — wherever it works.
+ */
+function repairMinFontSize(container: HTMLElement): void {
+  const measured = Number.parseFloat(
+    container.style.getPropertyValue("--min-font-size"),
+  );
+  if (!(measured > 0)) container.style.setProperty("--min-font-size", "1");
+}
+
 export function PdfPage({
   doc,
   locator,
@@ -116,6 +139,7 @@ export function PdfPage({
           });
           textLayer = layer as unknown as { cancel: () => void };
           await layer.render();
+          repairMinFontSize(container);
         };
 
         // allSettled: a canvas failure must not cost the page its text layer,
@@ -126,13 +150,25 @@ export function PdfPage({
           buildTextLayer(),
         ]);
         if (cancelled) return;
-        const fatal = outcomes.every(
-          (outcome) =>
-            outcome.status === "rejected" &&
-            (outcome.reason as { name?: string } | null)?.name !==
-              "RenderingCancelledException",
-        );
-        setFailed(fatal);
+        const isRealFailure = (outcome: PromiseSettledResult<void>) =>
+          outcome.status === "rejected" &&
+          (outcome.reason as { name?: string } | null)?.name !==
+            "RenderingCancelledException";
+        // Half a page is still a page, so one side failing is not fatal — but it
+        // must not be silent either. A text layer that never built takes
+        // selection, highlighting and every selection-gated reading action with
+        // it, and the page still looks completely normal; that combination is
+        // why a browser-specific break here went unnoticed.
+        ["canvas", "text layer"].forEach((side, index) => {
+          const outcome = outcomes[index];
+          if (isRealFailure(outcome)) {
+            console.error(
+              `Reader: the ${side} failed on page ${locator}`,
+              (outcome as PromiseRejectedResult).reason,
+            );
+          }
+        });
+        setFailed(outcomes.every(isRealFailure));
       } catch (error) {
         // pdf.js throws RenderingCancelledException on a cancelled task — that
         // is the normal path when scrolling, not a failure to report.
