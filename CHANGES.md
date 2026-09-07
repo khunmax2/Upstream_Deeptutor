@@ -17,6 +17,51 @@ upstream.
 
 ---
 
+## A rotated key now reaches the course studio on its own — 2026-09-07
+
+The provider bridge was a script under `deploy/` plus a container restart. Both
+halves of that are things a user cannot do, and the person whose API key expires
+is a user with a settings page, not an operator with a shell. Their key runs
+out, they paste a new one into DeepTutor, and the embedded studio keeps using
+the dead one until somebody with SSH notices. The system is alive and broken at
+the same time.
+
+**The file is now written by the app.** The mapping moved out of
+`build_server_providers.py` into `deeptutor/services/config/openmaic_bridge.py`,
+which ships inside the image — `deploy/` does not — and `ModelCatalogService.save()`
+calls it. That method is the one place every settings path funnels through, so
+the settings page, the connection tester and the partner flows are all covered
+by hooking it once. It is best-effort by construction: a provider that maps to
+nothing, or a read-only data directory, is logged and skipped rather than
+costing the user the settings they just saved. `DEEPTUTOR_OPENMAIC_BRIDGE=0`
+turns it off for a deployment with no studio.
+
+**And OpenMAIC re-reads it.** `getConfig()` cached the parsed YAML for the life
+of the process, which is the wrong shape for a read-only mount that something
+else rewrites. It is now keyed on the file's mtime and size. A `statSync` per
+call is nothing beside the LLM round trip that follows, and a stale key costs
+far more.
+
+The script survives as a thin CLI over the same module — one implementation, two
+entry points — for a first bring-up before the app has saved anything, and for
+reading the mapping decisions with `--dry-run`.
+
+Verified end to end with no restart: change the model in DeepTutor, call `save()`,
+and `/api/server-providers` inside the studio returns the new model — while
+`docker inspect` reports `restarts: 0` and the log shows three separate
+"Loaded (server-providers.yml)" lines in one process, one per change.
+
+**Also carried in this round.** The bridge's `image` and `video` binding tables
+were empty, so a configured image provider was skipped with "binding has no
+OpenMAIC id" — image generation could not be bridged at all. Both are filled in
+now, including `openrouter`, which turned out to answer the same
+`/images/generations` contract OpenMAIC's `openai-image` adapter calls and to
+return `data[0].b64_json` exactly as it expects. Confirmed against the real
+endpoint at 1024x576, the 16:9 size slides ask for; only very wide sizes are
+refused and OpenMAIC never requests one. Worth noting because DeepTutor's own
+image path uses `/chat/completions` with `modalities: ["image","text"]`, which
+narrows its model choice considerably — the studio is not bound by that.
+
 ## Server TTS can name its own voices, and the editor speaks Thai — 2026-09-07
 
 Two things the UAT reported rather than fixed, both closed.

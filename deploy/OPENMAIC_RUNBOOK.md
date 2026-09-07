@@ -153,8 +153,20 @@ was something to write the file, which is what this does, from
 `data/user/settings/model_catalog.json`.
 
 The compose overlay mounts it read-only. It contains credentials and lives under
-`data/`, which is gitignored. Re-run it after changing a provider in DeepTutor
-and restart `openmaic` — the file is read once at startup.
+`data/`, which is gitignored.
+
+**You only need this command for a first bring-up.** After that DeepTutor
+rewrites the file itself, on every save of provider settings, and OpenMAIC
+re-reads it when its mtime changes — so a rotated key takes effect with no
+script and no restart. That matters more than convenience: the person whose key
+expires is a user with a settings page, not an operator with a shell, and the
+old arrangement left them with a dead course studio and no way to fix it.
+
+Set `DEEPTUTOR_OPENMAIC_BRIDGE=0` to turn the automatic refresh off (a
+deployment with no course studio), or `DEEPTUTOR_OPENMAIC_HOST_ALIAS` to change
+what a container should call the host. The refresh never raises: a provider
+that maps to nothing, or a read-only data directory, is logged and skipped
+rather than costing the user the settings they just saved.
 
 Confirm OpenMAIC agrees, rather than assuming the mount was enough:
 

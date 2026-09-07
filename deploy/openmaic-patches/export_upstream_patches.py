@@ -30,7 +30,6 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
-import sys
 
 PREFIX = "integration/maic"
 SQUASH_SUBJECT = re.compile(r"^Squashed '" + re.escape(PREFIX) + r"/?' content from commit")

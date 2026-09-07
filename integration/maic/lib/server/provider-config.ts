@@ -373,6 +373,8 @@ const BEDROCK_PROVIDER_ID = 'bedrock';
 
 /** Cache keyed by YAML filename (empty string = default file). */
 const _configs: Map<string, ServerConfig> = new Map();
+/** File identity the cached config was built from; '' before the first read. */
+let _configStamp = '';
 
 /**
  * AliDocMind is server-configured when AK/SK are provided via env
@@ -567,14 +569,39 @@ function logConfig(config: ServerConfig, label: string): void {
   }
 }
 
+/**
+ * A cheap identity for the config file: mtime + size, or '' when it is absent.
+ * Rewrites land as a whole new file (the writer replaces it atomically), so a
+ * changed stamp means changed content.
+ */
+function configStamp(filename: string): string {
+  try {
+    const s = fs.statSync(path.join(process.cwd(), filename));
+    return `${s.mtimeMs}:${s.size}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The parsed server config, re-read when the file behind it changes.
+ *
+ * Caching this for the life of the process meant a rotated key needed a
+ * container restart to take effect — and whoever owns the key is rarely
+ * whoever has a shell on the host. The file is a read-only mount that another
+ * process rewrites, so the cache is keyed on its mtime and size rather than
+ * held forever.
+ */
 function getConfig(): ServerConfig {
+  const stamp = configStamp(DEFAULT_FILENAME);
   const cached = _configs.get('');
-  if (cached) return cached;
+  if (cached && _configStamp === stamp) return cached;
 
   const yamlData = loadYamlFile(DEFAULT_FILENAME);
   const config = buildConfig(yamlData);
   logConfig(config, DEFAULT_FILENAME);
   _configs.set('', config);
+  _configStamp = stamp;
   return config;
 }
 
