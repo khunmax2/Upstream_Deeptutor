@@ -1,0 +1,201 @@
+# ============================================
+# OpenMAIC — sibling service for the /maic embed
+# ============================================
+# OpenMAIC (https://github.com/THU-MAIC/OpenMAIC, MIT) is framed by this app at
+# /maic. It is a whole second application, not a library: it cannot be merged
+# into web/ because it ships Tailwind v4 against our v3, and its 69 Next API
+# routes collide with `web/proxy.ts`, which forwards every /api/* path to
+# FastAPI. So it runs beside us and we point an iframe at it.
+#
+# Usage (from the repo root, with OpenMAIC checked out as a sibling directory):
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f deploy/docker-compose.openmaic.yml up -d
+#
+# Then tell the frontend where it lives, either with the environment variable
+#
+#   DEEPTUTOR_OPENMAIC_URL=http://localhost:3100
+#
+# or in data/user/settings/integrations.json:
+#
+#   "openmaic": { "embed_url": "http://localhost:3100" }
+#
+# ⚠️ Two things this file deliberately does NOT do — see deploy/OPENMAIC_EMBED.md
+#    before exposing any of this publicly:
+#
+#    1. (resolved) OpenMAIC used to be reachable without DeepTutor's auth gate:
+#       `web/proxy.ts` only guards routes Next serves, and a request sent
+#       straight to this container never passed through it. The `gatekeeper`
+#       service below now verifies the DeepTutor session in front of it — see
+#       deploy/openmaic-gatekeeper/README.md.
+#    2. It does not enable the Pro agent workbench. That needs DATABASE_URL and
+#       therefore the `server-persistence` profile below; the classic one-click
+#       generator works without it, browser-side.
+# ============================================
+
+services:
+  # Extends the base file's `deeptutor` service; nothing here replaces it.
+  # Both settings only matter once DeepTutor is containerised, which is how it
+  # is deployed — running it on the host hides both.
+  deeptutor:
+    # Inside a container `localhost` is the container. Anything DeepTutor is
+    # pointed at that lives on the host — Ollama, MinerU, a TTS server — needs
+    # this name instead, and without the mapping the name does not resolve.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Where the /maic page sends the browser. A browser-side URL, so this one
+      # really is localhost: it is resolved by the reader's machine, not here.
+      - DEEPTUTOR_OPENMAIC_URL=${DEEPTUTOR_OPENMAIC_URL:-}
+
+  openmaic:
+    build:
+      # In this repository, not beside it. OpenMAIC lives at integration/maic as
+      # a squashed git subtree, so a clone of this repo is everything the build
+      # needs — no sibling checkout, no fetch step, no pinned commit to resolve.
+      #
+      # Update it with `git subtree pull --prefix=integration/maic <url> main
+      # --squash`, which is the only command that touches it; DeepTutor's own
+      # upstream sync leaves that path alone.
+      context: ./integration/maic
+      args:
+        # Compiled into the browser bundle at build time. Without our origin
+        # here, OpenMAIC's own `frame-ancestors 'self'` refuses the iframe and
+        # the page renders blank with only a console error.
+        - ALLOWED_FRAME_ANCESTORS=${DEEPTUTOR_PUBLIC_ORIGIN:-http://localhost:3782}
+    container_name: deeptutor-openmaic
+    # No `ports` on purpose. Reachable only from the compose network, so the
+    # only route in is the gatekeeper. Publishing a port here — even on
+    # loopback — is a way around the gate for anything already on the host.
+    # Same mapping as the gatekeeper: without it `host.docker.internal` does not
+    # resolve here either, and a self-hosted model or parser running on the host
+    # is unreachable no matter how the URL is written.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # OpenMAIC's SSRF guard (lib/server/ssrf-guard.ts) refuses private and
+      # loopback targets, which is right for a public deployment and wrong for
+      # one whose model server, MinerU or TTS lives beside it. Off by default;
+      # `OPENMAIC_ALLOW_LOCAL_NETWORKS=true` opts in deliberately.
+      #
+      # It removes a real protection: with it on, anything that can reach this
+      # container can ask it to fetch internal addresses. Set it only where the
+      # gate in front is what keeps strangers out.
+      - ALLOW_LOCAL_NETWORKS=${OPENMAIC_ALLOW_LOCAL_NETWORKS:-}
+      # Leave ACCESS_CODE unset: OpenMAIC's access cookie is SameSite=Lax and
+      # does not survive a cross-origin frame, so enabling it here locks the
+      # embed out rather than securing it.
+      - NODE_ENV=production
+    volumes:
+      - openmaic-data:/app/data
+      # Provider credentials, generated from DeepTutor's own settings by
+      # deploy/openmaic-patches/build_server_providers.py. Read-only, and absent
+      # until that script has been run — OpenMAIC treats a missing file as "no
+      # server-side providers" and falls back to whatever each browser has, which
+      # is the behaviour before this bridge existed.
+      #
+      # Regenerate and restart `openmaic` after changing a provider in DeepTutor;
+      # the file is read once at startup.
+      - ./data/user/openmaic/server-providers.yml:/app/server-providers.yml:ro
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
+  # Verifies the DeepTutor session before anything reaches OpenMAIC, and strips
+  # `dt_token` on the way through so OpenMAIC never holds a session token that
+  # belongs to another application. nginx terminates TLS on :10330 and forwards
+  # here; see deploy/nginx-openmaic.locations.conf.
+  gatekeeper:
+    image: node:22-alpine
+    container_name: deeptutor-openmaic-gatekeeper
+    command: ["node", "/app/gatekeeper.mjs"]
+    working_dir: /app
+    volumes:
+      # Relative to the PROJECT directory (repo root), not to this file's own
+      # deploy/ directory — the same resolution rule noted on build.context
+      # above, and the same one that bit here first: ./openmaic-gatekeeper
+      # resolved to a path that does not exist and the container restart-looped
+      # on MODULE_NOT_FOUND.
+      - ./deploy/openmaic-gatekeeper:/app:ro
+    ports:
+      # Loopback only: nginx is the sole route in. Publishing this on 0.0.0.0
+      # would expose the gate's own port and defeat the TLS termination above.
+      - "127.0.0.1:10331:10331"
+    environment:
+      - PORT=10331
+      - OPENMAIC_UPSTREAM=http://openmaic:3000
+      # Must point at a DeepTutor that can see the same cookie, and is resolved
+      # from *inside* this container — `localhost` here is the gatekeeper itself.
+      #
+      # Empty by default, never the production URL. It used to fall back to the
+      # live endpoint, so any `docker compose up` from this repository — a
+      # laptop, a CI runner, someone else's machine — silently began sending
+      # whatever cookies arrived to the real server with nobody having chosen
+      # that. Empty, the gatekeeper refuses every request with
+      # `gatekeeper_misconfigured`, so an unconfigured stack serves nothing and
+      # calls nothing; the destination is always somebody's decision.
+      #
+      # Empty rather than compose's `:?` required-variable form, which was tried
+      # first and is too blunt: it makes the variable a precondition of *every*
+      # compose command, so `build` and `down` fail too, neither of which has
+      # anything to do with an auth endpoint.
+      #
+      #   local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
+      #   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+      - DEEPTUTOR_AUTH_URL=${DEEPTUTOR_AUTH_URL:-}
+      - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}
+      - AUTH_CACHE_TTL_MS=${GATEKEEPER_AUTH_TTL_MS:-30000}
+      # The documented escape hatch for a local trial, and it was missing from
+      # this list — so `ALLOW_ANONYMOUS=1` reached the process from nowhere and
+      # the one route past the gate that the docs offer twice did not exist.
+      # Empty by default: the gate is on unless somebody says otherwise out loud.
+      - ALLOW_ANONYMOUS=${GATEKEEPER_ALLOW_ANONYMOUS:-}
+    # host.docker.internal is how a container reaches a DeepTutor running on the
+    # host, which is the normal shape of a local trial. On Linux it does not
+    # exist unless mapped, and without this the name simply fails to resolve —
+    # indistinguishable, from inside the gatekeeper, from DeepTutor being down.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - openmaic
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:10331/__gatekeeper/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
+  # Optional: durable server-side sessions for OpenMAIC's Pro agent workbench.
+  # `lib/server/agent-runtime/store.ts` rejects outright without DATABASE_URL.
+  openmaic-postgres:
+    image: postgres:16
+    container_name: deeptutor-openmaic-postgres
+    profiles:
+      - openmaic-persistence
+    environment:
+      - POSTGRES_DB=openmaic
+      - POSTGRES_USER=openmaic
+      - POSTGRES_PASSWORD=${OPENMAIC_POSTGRES_PASSWORD:-openmaic-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmaic -d openmaic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - openmaic-postgres:/var/lib/postgresql/data
+    networks:
+      - deeptutor-network
+    restart: unless-stopped
+
+volumes:
+  openmaic-data:
+  openmaic-postgres:

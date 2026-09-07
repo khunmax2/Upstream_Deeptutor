@@ -337,3 +337,9 @@ graphify-out/
 # Local secret env files (e.g. .env.llm-proxy) — never commit keys
 .env.*
 !.env.*.example
+
+# The vendored OpenMAIC subtree builds in place; its caches are not ours to keep.
+integration/maic/.pnpm-store/
+
+# Writable pytest temp root — see the Windows note in CLAUDE.md
+.pytest-tmp/

@@ -4883,5 +4883,13 @@
   "Users": "Users",
   "{{count}} active": "{{count}} active",
   "{{count}} administrator account is excluded from the preset chart.": "{{count}} administrator account is excluded from the preset chart.",
-  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked."
+  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked.",
+  "Course Studio": "Course Studio",
+  "Course Studio tooltip": "Build a whole course",
+  "Set the environment variable": "Set the environment variable",
+  "or add this to data/user/settings/openmaic.json": "or add this to data/user/settings/openmaic.json",
+  "Course studio": "Course studio",
+  "Open the course studio in a new tab": "Open the course studio in a new tab",
+  "The course studio is not connected": "The course studio is not connected",
+  "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request.": "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request."
 }

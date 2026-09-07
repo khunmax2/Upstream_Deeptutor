@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -244,6 +245,9 @@ def _default_catalog() -> dict[str, Any]:
     }
 
 
+logger = logging.getLogger(__name__)
+
+
 class ModelCatalogService:
     _instances: dict[str, "ModelCatalogService"] = {}
 
@@ -306,7 +310,42 @@ class ModelCatalogService:
                 os.replace(temp_path, self.path)
             finally:
                 temp_path.unlink(missing_ok=True)
+            self._refresh_openmaic_providers(normalized)
             return normalized
+
+    def _refresh_openmaic_providers(self, catalog: dict[str, Any]) -> None:
+        """Mirror the provider settings into OpenMAIC's `server-providers.yml`.
+
+        The embedded course studio is a separate service with its own provider
+        configuration, and asking a user to type the same key twice is the seam
+        they notice first. This closes it from the side that owns the settings:
+        the file is rewritten on every save, and OpenMAIC re-reads it when the
+        mtime changes, so a rotated key takes effect without a restart or a
+        shell on the host.
+
+        Deliberately silent about failure beyond a log line. A provider that
+        does not map to OpenMAIC, or a read-only data directory, must never
+        cost the user the settings they just saved.
+        """
+        if os.environ.get("DEEPTUTOR_OPENMAIC_BRIDGE", "").strip().lower() in {
+            "0",
+            "false",
+            "off",
+            "no",
+        }:
+            return
+        try:
+            from deeptutor.services.config.openmaic_bridge import refresh_server_providers
+
+            out = self.path.parent.parent / "openmaic" / "server-providers.yml"
+            alias = os.environ.get("DEEPTUTOR_OPENMAIC_HOST_ALIAS", "host.docker.internal")
+            wrote, notes = refresh_server_providers(catalog, out, alias)
+            for note in notes:
+                logger.debug("openmaic bridge: %s", note)
+            if wrote:
+                logger.info("openmaic bridge: refreshed %s", out)
+        except Exception as exc:  # noqa: BLE001 - never break a settings save
+            logger.warning("openmaic bridge: skipped (%s)", exc)
 
     def update(self, mutator: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
         with self._lock:
