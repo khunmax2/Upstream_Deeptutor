@@ -49,7 +49,11 @@
     "previousScene": "上一幕",
     "nextScene": "下一幕",
     "autoPlay": "自动播放",
-    "toggleChat": "切换聊天"
+    "toggleChat": "切换聊天",
+    "play": "播放",
+    "pause": "暂停",
+    "mute": "静音",
+    "unmute": "取消静音"
   },
   "export": {
     "pptx": "导出 PPTX",

@@ -74,10 +74,12 @@ never that a `t()` call resolves, so nothing caught it.
 
 ### 6. English tooltips in the Thai classroom
 
-Six transport controls carried hardcoded English `aria-label`s — *Play*,
-*Mute*, *Previous scene*, *Next scene*, *Auto-play*, *Playback speed*,
-*Toggle chat*, *Toggle sidebar* — beside neighbours that were properly
-translated. Now translated in 13 languages.
+Eight transport controls carried English `aria-label`s beside neighbours that
+were properly translated: *Toggle sidebar*, *Playback speed*, *Previous scene*,
+*Next scene*, *Auto-play* and *Toggle chat* as string literals, plus *Play* /
+*Pause* and *Mute* / *Unmute* built from a ternary — which is why the first
+sweep for `aria-label="..."` walked past them and the re-test after the fix
+still showed two in English. All eight now translated in 13 languages.
 
 ### 7. A dead panel written entirely in Chinese
 

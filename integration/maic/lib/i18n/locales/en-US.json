@@ -49,7 +49,11 @@
     "previousScene": "Previous scene",
     "nextScene": "Next scene",
     "autoPlay": "Auto-play",
-    "toggleChat": "Toggle chat"
+    "toggleChat": "Toggle chat",
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute"
   },
   "export": {
     "pptx": "Export PPTX",

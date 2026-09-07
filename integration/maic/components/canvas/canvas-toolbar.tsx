@@ -214,7 +214,7 @@ export function CanvasToolbar({
                       ? 'text-red-500 dark:text-red-400'
                       : 'text-gray-500 dark:text-gray-400',
                 )}
-                aria-label={ttsMuted ? 'Unmute' : 'Mute'}
+                aria-label={ttsMuted ? t('toolbar.unmute') : t('toolbar.mute')}
               >
                 <VolumeIcon muted={!!ttsMuted} volume={ttsVolume} disabled={!ttsEnabled} />
               </button>
@@ -353,7 +353,7 @@ export function CanvasToolbar({
                   ? 'text-violet-600 dark:text-violet-400'
                   : 'text-gray-500 dark:text-gray-400',
               )}
-              aria-label={engineState === 'playing' ? 'Pause' : 'Play'}
+              aria-label={engineState === 'playing' ? t('toolbar.pause') : t('toolbar.play')}
             >
               {engineState === 'playing' ? (
                 <Pause className="w-3.5 h-3.5" />

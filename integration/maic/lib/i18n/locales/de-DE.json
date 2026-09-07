@@ -49,7 +49,11 @@
     "previousScene": "Vorherige Szene",
     "nextScene": "Nächste Szene",
     "autoPlay": "Automatische Wiedergabe",
-    "toggleChat": "Chat umschalten"
+    "toggleChat": "Chat umschalten",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "mute": "Stummschalten",
+    "unmute": "Stummschaltung aufheben"
   },
   "export": {
     "pptx": "PPTX exportieren",

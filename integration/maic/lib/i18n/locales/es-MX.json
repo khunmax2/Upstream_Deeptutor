@@ -49,7 +49,11 @@
     "previousScene": "Escena anterior",
     "nextScene": "Escena siguiente",
     "autoPlay": "Reproducción automática",
-    "toggleChat": "Mostrar u ocultar el chat"
+    "toggleChat": "Mostrar u ocultar el chat",
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "mute": "Silenciar",
+    "unmute": "Activar el sonido"
   },
   "export": {
     "pptx": "Exportar PPTX",

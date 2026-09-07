@@ -280,7 +280,11 @@
     "previousScene": "ฉากก่อนหน้า",
     "nextScene": "ฉากถัดไป",
     "autoPlay": "เล่นอัตโนมัติ",
-    "toggleChat": "สลับหน้าต่างแชท"
+    "toggleChat": "สลับหน้าต่างแชท",
+    "play": "เล่น",
+    "pause": "หยุดชั่วคราว",
+    "mute": "ปิดเสียง",
+    "unmute": "เปิดเสียง"
   },
   "actions": {
     "names": {
