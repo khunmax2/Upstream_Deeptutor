@@ -17,6 +17,7 @@ import {
   resolveTTSApiKey,
   resolveTTSBaseUrl,
   resolveTTSModel,
+  resolveTTSVoice,
   TTSModelNotAllowedError,
 } from '@/lib/server/provider-config';
 import type { TTSProviderId } from '@/lib/audio/types';
@@ -122,10 +123,13 @@ export async function POST(req: NextRequest) {
     const qwenCloneVoice = ttsProviderId === 'qwen-tts' && isQwenCloneVoice(ttsVoice);
     const requestedSpeed = ttsSpeed ?? 1.0;
     const resolvedModelId = resolveTTSModel(ttsProviderId, ttsModelId, ttsVoice);
+    // A voice declared by the server wins; with none declared this stays
+    // the client's own choice.
+    const resolvedVoice = resolveTTSVoice(ttsProviderId, ttsVoice) ?? ttsVoice;
     const config = {
       providerId: ttsProviderId as TTSProviderId,
       modelId: resolvedModelId,
-      voice: ttsVoice,
+      voice: resolvedVoice,
       speed: qwenCloneVoice ? 1 : requestedSpeed,
       apiKey,
       baseUrl,
@@ -136,7 +140,7 @@ export async function POST(req: NextRequest) {
     };
 
     log.info(
-      `Generating TTS: provider=${ttsProviderId}, model=${config.modelId || 'default'}, voice=${ttsVoice}, ` +
+      `Generating TTS: provider=${ttsProviderId}, model=${config.modelId || 'default'}, voice=${resolvedVoice}, ` +
         `registeredVoiceId=${voxcpmRegisteredVoiceId || 'none'}, audioId=${audioId}, textLen=${text.length}`,
     );
 

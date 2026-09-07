@@ -39,6 +39,8 @@ export interface TTSEnablementConfig {
   serverDisabled?: boolean;
   requiresApiKey?: boolean;
   customVoices?: Array<{ id: string; name: string }>;
+  /** Voice ids the server declared; they replace the built-in list. */
+  serverVoices?: string[];
 }
 
 type ConfigMap = Partial<Record<string, TTSEnablementConfig>>;

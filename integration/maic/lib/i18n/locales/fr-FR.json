@@ -2052,5 +2052,46 @@
       "recognitionError": "Erreur de reconnaissance vocale : {{code}}",
       "ttsUnsupported": "Votre navigateur ne prend pas en charge la synthèse vocale"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Déverrouiller",
+      "cut": "Couper",
+      "copy": "Copier",
+      "paste": "Coller",
+      "selectAll": "Tout sélectionner",
+      "lock": "Verrouiller",
+      "delete": "Supprimer",
+      "ungroup": "Dissocier",
+      "setLink": "Définir le lien",
+      "alignHorizontalCenter": "Centrer horizontalement",
+      "alignVerticalCenter": "Centrer verticalement",
+      "alignCenter": "Centrer",
+      "alignLeft": "Aligner à gauche",
+      "alignRight": "Aligner à droite",
+      "alignTop": "Aligner en haut",
+      "alignBottom": "Aligner en bas",
+      "bringToFront": "Mettre au premier plan",
+      "bringForward": "Avancer d’un plan",
+      "sendToBack": "Mettre à l’arrière-plan",
+      "sendBackward": "Reculer d’un plan",
+      "ruler": "Règle",
+      "gridLines": "Quadrillage",
+      "gridNone": "Aucun",
+      "gridSmall": "Petit",
+      "gridMedium": "Moyen",
+      "gridLarge": "Grand",
+      "resetPage": "Réinitialiser cette page",
+      "linePresets": "Préréglages de ligne",
+      "lineCubic": "Courbe cubique",
+      "lineCurve": "Courbe",
+      "lineDoublePolyline": "Double ligne brisée",
+      "linePolyline": "Ligne brisée",
+      "lineArrow": "Ligne fléchée",
+      "lineDotted": "Ligne pointée",
+      "lineDashed": "Ligne en tirets",
+      "lineStraight": "Ligne droite",
+      "group": "Grouper"
+    }
   }
 }

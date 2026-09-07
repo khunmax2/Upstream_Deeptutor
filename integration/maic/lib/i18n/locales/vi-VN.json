@@ -2052,5 +2052,46 @@
       "recognitionError": "Lỗi nhận dạng giọng nói: {{code}}",
       "ttsUnsupported": "Trình duyệt của bạn không hỗ trợ tổng hợp giọng nói"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Mở khoá",
+      "cut": "Cắt",
+      "copy": "Sao chép",
+      "paste": "Dán",
+      "selectAll": "Chọn tất cả",
+      "lock": "Khoá",
+      "delete": "Xoá",
+      "ungroup": "Bỏ nhóm",
+      "setLink": "Đặt liên kết",
+      "alignHorizontalCenter": "Căn giữa theo chiều ngang",
+      "alignVerticalCenter": "Căn giữa theo chiều dọc",
+      "alignCenter": "Căn giữa",
+      "alignLeft": "Căn trái",
+      "alignRight": "Căn phải",
+      "alignTop": "Căn trên",
+      "alignBottom": "Căn dưới",
+      "bringToFront": "Đưa lên trước",
+      "bringForward": "Đưa lên một lớp",
+      "sendToBack": "Đưa xuống dưới",
+      "sendBackward": "Đưa xuống một lớp",
+      "ruler": "Thước",
+      "gridLines": "Đường lưới",
+      "gridNone": "Không",
+      "gridSmall": "Nhỏ",
+      "gridMedium": "Vừa",
+      "gridLarge": "Lớn",
+      "resetPage": "Đặt lại trang này",
+      "linePresets": "Mẫu đường kẻ",
+      "lineCubic": "Đường cong bậc ba",
+      "lineCurve": "Đường cong",
+      "lineDoublePolyline": "Đường gấp khúc đôi",
+      "linePolyline": "Đường gấp khúc",
+      "lineArrow": "Đường có mũi tên",
+      "lineDotted": "Đường chấm tròn",
+      "lineDashed": "Đường nét đứt",
+      "lineStraight": "Đường thẳng",
+      "group": "Nhóm"
+    }
   }
 }

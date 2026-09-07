@@ -26,6 +26,13 @@ interface ServerProviderEntry {
   apiKey: string;
   baseUrl?: string;
   models?: string[];
+  /**
+   * TTS only: the voice ids this server actually serves. A self-hosted
+   * engine usually has one, and it is never the built-in default the
+   * client would send — so when this is set it is authoritative, exactly
+   * as `models` is.
+   */
+  voices?: string[];
   proxy?: string;
   /** Aliyun AccessKey ID (AliDocMind — uses AK/SK instead of a single apiKey). */
   accessKeyId?: string;
@@ -262,6 +269,7 @@ function loadEnvSection(
           apiKey: entry.apiKey || '',
           baseUrl: entry.baseUrl,
           models: normalizeModelList(entry.models),
+          voices: normalizeModelList(entry.voices),
           proxy: entry.proxy,
         };
       }
@@ -279,12 +287,20 @@ function loadEnvSection(
           .map((m) => m.trim())
           .filter(Boolean)
       : undefined;
+    const envVoicesStr = process.env[`${prefix}_VOICES`];
+    const envVoices = envVoicesStr
+      ? envVoicesStr
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean)
+      : undefined;
 
     if (result[providerId]) {
       // YAML entry exists — env vars override individual fields
       if (envApiKey) result[providerId].apiKey = envApiKey;
       if (envBaseUrl) result[providerId].baseUrl = envBaseUrl;
       if (envModels) result[providerId].models = envModels;
+      if (envVoices) result[providerId].voices = envVoices;
       continue;
     }
 
@@ -299,6 +315,7 @@ function loadEnvSection(
       apiKey: envApiKey || '',
       baseUrl: envBaseUrl,
       models: envModels,
+      voices: envVoices,
     };
   }
 
@@ -663,12 +680,32 @@ export function resolveProxy(providerId: string): string | undefined {
  * providers (`{ disabled: true }`). A force-disabled provider is reported as
  * disabled even when it is otherwise configured — disable wins (#665).
  */
-export function getServerTTSProviders(): Record<string, { disabled?: boolean }> {
+export function getServerTTSProviders(): Record<string, { disabled?: boolean; voices?: string[] }> {
   const cfg = getConfig();
-  const result: Record<string, { disabled?: boolean }> = {};
-  for (const id of Object.keys(cfg.tts)) result[id] = {};
+  const result: Record<string, { disabled?: boolean; voices?: string[] }> = {};
+  // Voices, unlike keys and base URLs, are safe to expose: they are the
+  // names of what the operator has made available, and the picker has to
+  // show them or it offers voices that do not exist.
+  for (const [id, entry] of Object.entries(cfg.tts)) {
+    const voices = entry?.voices?.filter(Boolean) ?? [];
+    result[id] = voices.length > 0 ? { voices } : {};
+  }
   for (const id of cfg.disabled.tts) result[id] = { disabled: true };
   return result;
+}
+
+/**
+ * Resolve the TTS voice, mirroring {@link resolveTTSModel}. When the server
+ * entry declares voices, they are what the engine has: the client's choice
+ * is honoured only if it is one of them, and otherwise the first declared
+ * voice wins rather than letting a built-in default reach an engine that
+ * has never heard of it.
+ */
+export function resolveTTSVoice(providerId: string, clientVoice?: string): string | undefined {
+  const declared = getConfig().tts[providerId]?.voices?.filter(Boolean) ?? [];
+  if (declared.length === 0) return clientVoice;
+  if (clientVoice && declared.includes(clientVoice)) return clientVoice;
+  return declared[0];
 }
 
 /**

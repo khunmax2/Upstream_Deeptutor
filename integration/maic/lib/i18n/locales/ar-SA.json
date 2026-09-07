@@ -2052,5 +2052,46 @@
       "recognitionError": "خطأ في التعرف على الكلام: {{code}}",
       "ttsUnsupported": "متصفحك لا يدعم تركيب الكلام"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "إلغاء القفل",
+      "cut": "قص",
+      "copy": "نسخ",
+      "paste": "لصق",
+      "selectAll": "تحديد الكل",
+      "lock": "قفل",
+      "delete": "حذف",
+      "ungroup": "فك التجميع",
+      "setLink": "تعيين رابط",
+      "alignHorizontalCenter": "توسيط أفقي",
+      "alignVerticalCenter": "توسيط رأسي",
+      "alignCenter": "توسيط",
+      "alignLeft": "محاذاة لليسار",
+      "alignRight": "محاذاة لليمين",
+      "alignTop": "محاذاة للأعلى",
+      "alignBottom": "محاذاة للأسفل",
+      "bringToFront": "إحضار إلى الأمام",
+      "bringForward": "إحضار للأمام",
+      "sendToBack": "إرسال إلى الخلف",
+      "sendBackward": "إرسال للخلف",
+      "ruler": "المسطرة",
+      "gridLines": "خطوط الشبكة",
+      "gridNone": "بلا",
+      "gridSmall": "صغيرة",
+      "gridMedium": "متوسطة",
+      "gridLarge": "كبيرة",
+      "resetPage": "إعادة تعيين هذه الصفحة",
+      "linePresets": "إعدادات الخط",
+      "lineCubic": "منحنى تكعيبي",
+      "lineCurve": "منحنى",
+      "lineDoublePolyline": "خط منكسر مزدوج",
+      "linePolyline": "خط منكسر",
+      "lineArrow": "خط بسهم",
+      "lineDotted": "خط منقّط",
+      "lineDashed": "خط متقطع",
+      "lineStraight": "خط مستقيم",
+      "group": "تجميع"
+    }
   }
 }

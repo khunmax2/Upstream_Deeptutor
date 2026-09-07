@@ -2052,5 +2052,46 @@
       "recognitionError": "語音辨識錯誤：{{code}}",
       "ttsUnsupported": "瀏覽器不支援語音合成"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "解鎖",
+      "cut": "剪下",
+      "copy": "複製",
+      "paste": "貼上",
+      "selectAll": "全選",
+      "lock": "鎖定",
+      "delete": "刪除",
+      "ungroup": "取消群組",
+      "setLink": "設定連結",
+      "alignHorizontalCenter": "水平置中",
+      "alignVerticalCenter": "垂直置中",
+      "alignCenter": "水平垂直置中",
+      "alignLeft": "靠左對齊",
+      "alignRight": "靠右對齊",
+      "alignTop": "靠上對齊",
+      "alignBottom": "靠下對齊",
+      "bringToFront": "移至最上層",
+      "bringForward": "上移一層",
+      "sendToBack": "移至最下層",
+      "sendBackward": "下移一層",
+      "ruler": "標尺",
+      "gridLines": "格線",
+      "gridNone": "無",
+      "gridSmall": "小",
+      "gridMedium": "中",
+      "gridLarge": "大",
+      "resetPage": "重設目前頁",
+      "linePresets": "線條預設",
+      "lineCubic": "三次曲線",
+      "lineCurve": "曲線",
+      "lineDoublePolyline": "雙折線",
+      "linePolyline": "折線",
+      "lineArrow": "箭頭直線",
+      "lineDotted": "圓點直線",
+      "lineDashed": "虛線",
+      "lineStraight": "直線",
+      "group": "組合"
+    }
   }
 }

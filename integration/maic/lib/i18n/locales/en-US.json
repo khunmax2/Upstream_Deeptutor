@@ -2052,5 +2052,46 @@
       "recognitionError": "Speech recognition error: {{code}}",
       "ttsUnsupported": "Your browser does not support speech synthesis"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Unlock",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "selectAll": "Select all",
+      "lock": "Lock",
+      "delete": "Delete",
+      "ungroup": "Ungroup",
+      "setLink": "Set link",
+      "alignHorizontalCenter": "Center horizontally",
+      "alignVerticalCenter": "Center vertically",
+      "alignCenter": "Center",
+      "alignLeft": "Align left",
+      "alignRight": "Align right",
+      "alignTop": "Align top",
+      "alignBottom": "Align bottom",
+      "bringToFront": "Bring to front",
+      "bringForward": "Bring forward",
+      "sendToBack": "Send to back",
+      "sendBackward": "Send backward",
+      "ruler": "Ruler",
+      "gridLines": "Grid lines",
+      "gridNone": "None",
+      "gridSmall": "Small",
+      "gridMedium": "Medium",
+      "gridLarge": "Large",
+      "resetPage": "Reset this page",
+      "linePresets": "Line presets",
+      "lineCubic": "Cubic curve",
+      "lineCurve": "Curve",
+      "lineDoublePolyline": "Double polyline",
+      "linePolyline": "Polyline",
+      "lineArrow": "Arrow line",
+      "lineDotted": "Dotted line",
+      "lineDashed": "Dashed line",
+      "lineStraight": "Straight line",
+      "group": "Group"
+    }
   }
 }

@@ -2052,5 +2052,46 @@
       "recognitionError": "音声認識エラー: {{code}}",
       "ttsUnsupported": "お使いのブラウザは音声合成に対応していません"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "ロック解除",
+      "cut": "切り取り",
+      "copy": "コピー",
+      "paste": "貼り付け",
+      "selectAll": "すべて選択",
+      "lock": "ロック",
+      "delete": "削除",
+      "ungroup": "グループ解除",
+      "setLink": "リンクを設定",
+      "alignHorizontalCenter": "左右中央揃え",
+      "alignVerticalCenter": "上下中央揃え",
+      "alignCenter": "中央揃え",
+      "alignLeft": "左揃え",
+      "alignRight": "右揃え",
+      "alignTop": "上揃え",
+      "alignBottom": "下揃え",
+      "bringToFront": "最前面へ",
+      "bringForward": "前面へ",
+      "sendToBack": "最背面へ",
+      "sendBackward": "背面へ",
+      "ruler": "ルーラー",
+      "gridLines": "グリッド線",
+      "gridNone": "なし",
+      "gridSmall": "小",
+      "gridMedium": "中",
+      "gridLarge": "大",
+      "resetPage": "このページをリセット",
+      "linePresets": "線のプリセット",
+      "lineCubic": "3次曲線",
+      "lineCurve": "曲線",
+      "lineDoublePolyline": "二重折れ線",
+      "linePolyline": "折れ線",
+      "lineArrow": "矢印付き直線",
+      "lineDotted": "点付き直線",
+      "lineDashed": "破線",
+      "lineStraight": "直線",
+      "group": "グループ化"
+    }
   }
 }

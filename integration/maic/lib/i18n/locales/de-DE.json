@@ -2052,5 +2052,46 @@
       "recognitionError": "Spracherkennungsfehler: {{code}}",
       "ttsUnsupported": "Dein Browser unterstützt keine Sprachausgabe"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Entsperren",
+      "cut": "Ausschneiden",
+      "copy": "Kopieren",
+      "paste": "Einfügen",
+      "selectAll": "Alles auswählen",
+      "lock": "Sperren",
+      "delete": "Löschen",
+      "ungroup": "Gruppierung aufheben",
+      "setLink": "Link festlegen",
+      "alignHorizontalCenter": "Horizontal zentrieren",
+      "alignVerticalCenter": "Vertikal zentrieren",
+      "alignCenter": "Zentrieren",
+      "alignLeft": "Linksbündig",
+      "alignRight": "Rechtsbündig",
+      "alignTop": "Oben ausrichten",
+      "alignBottom": "Unten ausrichten",
+      "bringToFront": "In den Vordergrund",
+      "bringForward": "Eine Ebene nach vorn",
+      "sendToBack": "In den Hintergrund",
+      "sendBackward": "Eine Ebene nach hinten",
+      "ruler": "Lineal",
+      "gridLines": "Gitternetzlinien",
+      "gridNone": "Keine",
+      "gridSmall": "Klein",
+      "gridMedium": "Mittel",
+      "gridLarge": "Groß",
+      "resetPage": "Diese Seite zurücksetzen",
+      "linePresets": "Linienvorlagen",
+      "lineCubic": "Kubische Kurve",
+      "lineCurve": "Kurve",
+      "lineDoublePolyline": "Doppelte Polylinie",
+      "linePolyline": "Polylinie",
+      "lineArrow": "Pfeillinie",
+      "lineDotted": "Punktlinie",
+      "lineDashed": "Gestrichelte Linie",
+      "lineStraight": "Gerade Linie",
+      "group": "Gruppieren"
+    }
   }
 }

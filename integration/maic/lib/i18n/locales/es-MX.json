@@ -2052,5 +2052,46 @@
       "recognitionError": "Error de reconocimiento de voz: {{code}}",
       "ttsUnsupported": "Tu navegador no admite la síntesis de voz"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Desbloquear",
+      "cut": "Cortar",
+      "copy": "Copiar",
+      "paste": "Pegar",
+      "selectAll": "Seleccionar todo",
+      "lock": "Bloquear",
+      "delete": "Eliminar",
+      "ungroup": "Desagrupar",
+      "setLink": "Establecer enlace",
+      "alignHorizontalCenter": "Centrar horizontalmente",
+      "alignVerticalCenter": "Centrar verticalmente",
+      "alignCenter": "Centrar",
+      "alignLeft": "Alinear a la izquierda",
+      "alignRight": "Alinear a la derecha",
+      "alignTop": "Alinear arriba",
+      "alignBottom": "Alinear abajo",
+      "bringToFront": "Traer al frente",
+      "bringForward": "Traer adelante",
+      "sendToBack": "Enviar al fondo",
+      "sendBackward": "Enviar atrás",
+      "ruler": "Regla",
+      "gridLines": "Cuadrícula",
+      "gridNone": "Ninguna",
+      "gridSmall": "Pequeña",
+      "gridMedium": "Mediana",
+      "gridLarge": "Grande",
+      "resetPage": "Restablecer esta página",
+      "linePresets": "Ajustes de línea",
+      "lineCubic": "Curva cúbica",
+      "lineCurve": "Curva",
+      "lineDoublePolyline": "Polilínea doble",
+      "linePolyline": "Polilínea",
+      "lineArrow": "Línea con flecha",
+      "lineDotted": "Línea de puntos",
+      "lineDashed": "Línea discontinua",
+      "lineStraight": "Línea recta",
+      "group": "Agrupar"
+    }
   }
 }

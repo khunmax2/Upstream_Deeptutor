@@ -17,6 +17,51 @@ upstream.
 
 ---
 
+## Server TTS can name its own voices, and the editor speaks Thai — 2026-09-07
+
+Two things the UAT reported rather than fixed, both closed.
+
+**The deployment had no server TTS at all, and that was our own doing.**
+`server-providers.yml` reported `1 LLM, 0 TTS, 1 ASR` — speech worked on the one
+browser that had configured it by hand, and on no other, because TTS settings
+live in a per-browser store. The bridge had been made to emit nothing for TTS
+because `ServerProviderEntry` carried apiKey, baseUrl, models and proxy and **no
+voice**: a self-hosted engine whose only voice is `dr_wit`, mapped onto the
+built-in `openai-tts`, was called with that provider's default and refused —
+
+    provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+
+Emitting nothing was better than emitting that, but it left the product
+incomplete: a new user got a course with no narration.
+
+`voices:` closes it, mirroring `models:` exactly — declared in the YAML (or
+`${PREFIX}_VOICES`), carried through the same merge, authoritative over the
+client's choice via a new `resolveTTSVoice`, and surfaced to the picker so the
+UI names the voice the request will actually use rather than offering `alloy`
+for an engine that has never heard of it. The merge itself needed the change
+too: it copied four named fields, so an unlisted one was silently dropped.
+
+Verified from a browser with its storage cleared — the closest thing to a user
+who has never touched settings: `1 TTS` loaded, `/api/server-providers` returns
+`{"openai-tts":{"voices":["dr_wit"]}}`, and course generation made **nine** TTS
+calls, every one `voice=dr_wit`, with zero errors.
+
+**The slide editor's context menus were Chinese**, all 43 of them — cut, copy,
+paste, the align and layer submenus, the grid and ruler toggles, the line
+presets. Empirically unreachable today (`NEXT_PUBLIC_MAIC_EDITOR_ENABLED` is off
+and there is no edit affordance anywhere in the classroom), but one environment
+variable from being the entire right-click menu. 37 keys under `editor.menu.*`,
+translated into 13 languages and wired through `t()`.
+
+Two of them hid in ternary else-branches (`组合`, `直线`) where a sweep for quoted
+literals in a menu table does not look — the same shape as the `Play`/`Pause`
+labels earlier today. That is twice in one day; a literal-only grep is not a
+sufficient check for hardcoded copy.
+
+Chinese literals in user-facing code: 68 → 25, and what remains is correct —
+Azure's own voice names, the Chinese sample sentence for the Chinese voice,
+strings matched *against* scraped pages, and comments.
+
 ## A UAT of the course studio, and the Chinese defaults it found — 2026-09-07
 
 Clicking every control and walking a course from an empty library to a playing

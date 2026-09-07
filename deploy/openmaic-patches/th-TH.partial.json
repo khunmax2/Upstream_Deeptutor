@@ -1933,5 +1933,46 @@
       "recognitionError": "รู้จำเสียงพูดผิดพลาด: {{code}}",
       "ttsUnsupported": "เบราว์เซอร์ของคุณไม่รองรับการอ่านออกเสียง"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "ปลดล็อก",
+      "cut": "ตัด",
+      "copy": "คัดลอก",
+      "paste": "วาง",
+      "selectAll": "เลือกทั้งหมด",
+      "lock": "ล็อก",
+      "delete": "ลบ",
+      "ungroup": "ยกเลิกกลุ่ม",
+      "setLink": "ตั้งค่าลิงก์",
+      "alignHorizontalCenter": "จัดกึ่งกลางแนวนอน",
+      "alignVerticalCenter": "จัดกึ่งกลางแนวตั้ง",
+      "alignCenter": "จัดกึ่งกลางทั้งสองแกน",
+      "alignLeft": "ชิดซ้าย",
+      "alignRight": "ชิดขวา",
+      "alignTop": "ชิดบน",
+      "alignBottom": "ชิดล่าง",
+      "bringToFront": "ขึ้นบนสุด",
+      "bringForward": "ขึ้นหนึ่งชั้น",
+      "sendToBack": "ลงล่างสุด",
+      "sendBackward": "ลงหนึ่งชั้น",
+      "ruler": "ไม้บรรทัด",
+      "gridLines": "เส้นตาราง",
+      "gridNone": "ไม่มี",
+      "gridSmall": "เล็ก",
+      "gridMedium": "กลาง",
+      "gridLarge": "ใหญ่",
+      "resetPage": "รีเซ็ตหน้านี้",
+      "linePresets": "ค่าตั้งต้นของเส้น",
+      "lineCubic": "เส้นโค้งลูกบาศก์",
+      "lineCurve": "เส้นโค้ง",
+      "lineDoublePolyline": "เส้นหักสองท่อน",
+      "linePolyline": "เส้นหัก",
+      "lineArrow": "เส้นตรงมีหัวลูกศร",
+      "lineDotted": "เส้นตรงจุดกลม",
+      "lineDashed": "เส้นประ",
+      "lineStraight": "เส้นตรง",
+      "group": "จัดกลุ่ม"
+    }
   }
 }

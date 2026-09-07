@@ -110,6 +110,8 @@ export interface SettingsState {
       isServerConfigured?: boolean;
       /** Admin/server-level force-off (server-providers.yml / env). Overrides `enabled`. */
       serverDisabled?: boolean;
+      /** Voice ids the server declared for this provider; authoritative when present. */
+      serverVoices?: string[];
       // Custom provider fields
       customName?: string;
       customDefaultBaseUrl?: string;
@@ -1409,7 +1411,7 @@ export const useSettingsStore = create<SettingsState>()(
             // admin/server-level force-off (#665).
             const data = (await res.json()) as {
               providers: Record<string, { models?: string[] }>;
-              tts: Record<string, { disabled?: boolean }>;
+              tts: Record<string, { disabled?: boolean; voices?: string[] }>;
               asr: Record<string, { disabled?: boolean }>;
               pdf: Record<string, Record<string, never>>;
               image: Record<string, { models?: string[]; disabled?: boolean }>;
@@ -1481,6 +1483,7 @@ export const useSettingsStore = create<SettingsState>()(
                     ...newTTSConfig[key],
                     isServerConfigured: false,
                     serverDisabled: false,
+                    serverVoices: undefined,
                   };
                 }
               }
@@ -1491,6 +1494,7 @@ export const useSettingsStore = create<SettingsState>()(
                     ...newTTSConfig[key],
                     isServerConfigured: !info.disabled,
                     serverDisabled: info.disabled === true,
+                    serverVoices: info.voices?.length ? info.voices : undefined,
                   };
                 }
               }

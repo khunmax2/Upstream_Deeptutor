@@ -213,6 +213,8 @@ export function getServerVoiceList(
       | undefined;
     return customVoices?.map((v) => v.id) || [];
   }
+  const declared = ttsProvidersConfig?.[providerId]?.serverVoices as string[] | undefined;
+  if (declared?.length) return declared;
   const provider = TTS_PROVIDERS[providerId as keyof typeof TTS_PROVIDERS];
   if (!provider) return [];
   return provider.voices.map((v) => v.id);
@@ -297,14 +299,15 @@ export function getEnabledProvidersWithVoices(
           }));
 
     {
-      const allVoices = [
-        ...config.voices.map((v) => ({
-          id: v.id,
-          name: v.name,
-          language: v.language,
-        })),
-        ...userVoices,
-      ];
+      // A server that declared its voices has replaced the built-in list:
+      // offering `alloy` for an engine that only knows `dr_wit` names a
+      // voice the request will never use.
+      const declared = providerConfig?.serverVoices?.filter(Boolean) ?? [];
+      const catalogue =
+        declared.length > 0
+          ? declared.map((id) => ({ id, name: id, language: undefined }))
+          : config.voices.map((v) => ({ id: v.id, name: v.name, language: v.language }));
+      const allVoices = [...catalogue, ...userVoices];
 
       // Build model groups
       const modelGroups: ModelVoiceGroup[] = [];

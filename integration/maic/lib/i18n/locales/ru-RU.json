@@ -2052,5 +2052,46 @@
       "recognitionError": "Ошибка распознавания речи: {{code}}",
       "ttsUnsupported": "Ваш браузер не поддерживает синтез речи"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "Разблокировать",
+      "cut": "Вырезать",
+      "copy": "Копировать",
+      "paste": "Вставить",
+      "selectAll": "Выделить всё",
+      "lock": "Заблокировать",
+      "delete": "Удалить",
+      "ungroup": "Разгруппировать",
+      "setLink": "Задать ссылку",
+      "alignHorizontalCenter": "Центрировать по горизонтали",
+      "alignVerticalCenter": "Центрировать по вертикали",
+      "alignCenter": "Центрировать",
+      "alignLeft": "По левому краю",
+      "alignRight": "По правому краю",
+      "alignTop": "По верхнему краю",
+      "alignBottom": "По нижнему краю",
+      "bringToFront": "На передний план",
+      "bringForward": "Переместить вперёд",
+      "sendToBack": "На задний план",
+      "sendBackward": "Переместить назад",
+      "ruler": "Линейка",
+      "gridLines": "Сетка",
+      "gridNone": "Нет",
+      "gridSmall": "Мелкая",
+      "gridMedium": "Средняя",
+      "gridLarge": "Крупная",
+      "resetPage": "Сбросить эту страницу",
+      "linePresets": "Пресеты линий",
+      "lineCubic": "Кубическая кривая",
+      "lineCurve": "Кривая",
+      "lineDoublePolyline": "Двойная ломаная",
+      "linePolyline": "Ломаная",
+      "lineArrow": "Линия со стрелкой",
+      "lineDotted": "Линия с точками",
+      "lineDashed": "Пунктирная линия",
+      "lineStraight": "Прямая линия",
+      "group": "Сгруппировать"
+    }
   }
 }

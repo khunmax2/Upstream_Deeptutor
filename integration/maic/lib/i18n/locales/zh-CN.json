@@ -2052,5 +2052,46 @@
       "recognitionError": "语音识别错误：{{code}}",
       "ttsUnsupported": "浏览器不支持语音合成"
     }
+  },
+  "editor": {
+    "menu": {
+      "unlock": "解锁",
+      "cut": "剪切",
+      "copy": "复制",
+      "paste": "粘贴",
+      "selectAll": "全选",
+      "lock": "锁定",
+      "delete": "删除",
+      "ungroup": "取消组合",
+      "setLink": "设置链接",
+      "alignHorizontalCenter": "水平居中",
+      "alignVerticalCenter": "垂直居中",
+      "alignCenter": "水平垂直居中",
+      "alignLeft": "左对齐",
+      "alignRight": "右对齐",
+      "alignTop": "顶部对齐",
+      "alignBottom": "底部对齐",
+      "bringToFront": "置于顶层",
+      "bringForward": "上移一层",
+      "sendToBack": "置于底层",
+      "sendBackward": "下移一层",
+      "ruler": "标尺",
+      "gridLines": "网格线",
+      "gridNone": "无",
+      "gridSmall": "小",
+      "gridMedium": "中",
+      "gridLarge": "大",
+      "resetPage": "重置当前页",
+      "linePresets": "线条预设",
+      "lineCubic": "三次曲线",
+      "lineCurve": "曲线",
+      "lineDoublePolyline": "双折线",
+      "linePolyline": "折线",
+      "lineArrow": "箭头直线",
+      "lineDotted": "圆点直线",
+      "lineDashed": "虚线",
+      "lineStraight": "直线",
+      "group": "组合"
+    }
   }
 }

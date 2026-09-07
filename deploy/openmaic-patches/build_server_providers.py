@@ -191,28 +191,6 @@ def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
         # The URL says which protocol is meant, so read it rather than the name:
         # a base ending in `/openai` is the compatible shim, and OpenMAIC models
         # exactly that as its generic `openai` provider.
-        # A custom speech endpoint cannot be expressed here, and saying so is
-        # better than emitting something that looks configured and fails.
-        # `ServerProviderEntry` carries apiKey, baseUrl, models and proxy — and no
-        # voice. So a custom server mapped onto the built-in `openai-tts` gets
-        # whatever voice that provider defaults to, `alloy`, which a server with
-        # its own voice list does not have:
-        #
-        #   provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
-        #
-        # OpenMAIC's own custom-provider UI does carry a voice table, so that is
-        # where such an endpoint belongs. Configure it there once, in the app.
-        if section == "tts" and binding in ("custom", "groq"):
-            voices = {m.get("voice") for m in (profile.get("models") or []) if m.get("voice")}
-            notes.append(
-                f"skipped {service_name}: '{binding}' is a custom speech endpoint"
-                + (f" using voice(s) {', '.join(sorted(voices))}" if voices else "")
-                + ". server-providers.yml has no voice field, so it would be served with"
-                " the built-in default and rejected. Add it as a custom TTS provider"
-                " inside OpenMAIC instead, where voices can be registered."
-            )
-            continue
-
         compat = raw_base.rstrip("/").endswith("/openai")
         if compat and section == "providers":
             provider_id = "openai"
@@ -249,6 +227,27 @@ def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
         models = [m for m in models if m]
         if models:
             entry["models"] = models
+
+        # Speech is the one section where the model does not settle the request.
+        # A self-hosted engine ships its own voices, and the built-in default the
+        # client would otherwise send — `alloy` for `openai-tts` — is a name it
+        # has never heard of:
+        #
+        #   provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+        #
+        # `voices:` is authoritative server-side and is surfaced to the picker,
+        # so the reader is offered the voice the request will actually use.
+        if section == "tts":
+            voices = [m.get("voice") for m in (profile.get("models") or []) if m.get("voice")]
+            voices = list(dict.fromkeys(v for v in voices if v))
+            if voices:
+                entry["voices"] = voices
+            else:
+                notes.append(
+                    f"{service_name}: no voice named in DeepTutor's profile, so the "
+                    "provider's own default will be used. If this endpoint has its own "
+                    "voice list, name one on the model in DeepTutor's settings."
+                )
 
         sections.setdefault(section, {})[provider_id] = entry
 
