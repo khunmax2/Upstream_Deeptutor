@@ -48,6 +48,73 @@ That check needed a correction of its own before it was worth printing:
 `docker exec deeptutor test -f …` runs `test` as a binary rather than a shell
 builtin and returns 1 for a file that is plainly there. Both tests go through
 `sh -c`, and the runbook says why so nobody simplifies it back.
+## The course studio had no model to call — 2026-09-08
+
+Found by deploying it. `BINDING_TO_PROVIDER['providers']` in
+`deeptutor/services/config/openmaic_bridge.py` had no entry for `openrouter`, so
+a deployment whose LLM is OpenRouter — this one — generated a
+`server-providers.yml` with an empty `providers:` section. OpenMAIC read the
+file, found TTS, ASR, image and web search, and no model at all:
+
+```
+providers=[]  tts=['openai-tts']  asr=['openai-whisper']
+```
+
+Nothing failed. The settings save succeeded, the file was written, the studio
+loaded, and only an attempt to generate a course would have shown it — in front
+of a customer.
+
+**It maps to `openrouter`, not to `openai`.** OpenRouter is a first-class
+provider in OpenMAIC (`LLM_ENV_MAP.OPENROUTER` in
+`integration/maic/lib/server/provider-config.ts`), unlike `groq` and `custom`,
+which genuinely have no id of their own and are modelled there as `openai` with
+a different base URL. Flattening OpenRouter into `openai` would have worked over
+the wire and labelled it as something it is not.
+
+This was an oversight rather than a decision: the same file's `image` section
+already maps `openrouter` to `openai-image`, so the binding was known — it was
+missed in one section only.
+
+`tests/services/config/test_openmaic_bridge_bindings.py` pins it, along with the
+skip path (an unknown binding must still be dropped with a note) and a guard
+that every id the bridge emits is one OpenMAIC actually declares — a value it
+does not know would be dropped on its side instead of ours, which is the same
+silence one layer later.
+## The OpenMAIC nginx block could not load on the target host — 2026-09-08
+
+Found by deploying it. `deploy/nginx-openmaic.locations.conf` carried
+
+```
+include /etc/letsencrypt/options-ssl-nginx.conf;
+ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+```
+
+and neither file exists on 203.185.144.41. Both ship with the
+`python3-certbot-nginx` plugin; this host obtains its certificate through snap
+certbot, so `/etc/letsencrypt/` holds only `accounts archive cli.ini live
+renewal renewal-hooks`. The already-working `sansarnnews-ssl` block on the same
+host does not reference them either — it sets the protocols inline, which is
+what this file now does.
+
+`nginx -t` refuses the **entire** configuration on a missing `include`, so this
+would have failed at the moment an operator ran it with `sudo` on a live web
+server — the same shape as the `http2 on;` problem the file's own comments
+record, and it survived for the same reason: the file had been checked for
+syntax against a container, but never against this host's `/etc/letsencrypt`.
+
+Verified both ways against `nginx:1.24-alpine`, the host's version — the shipped
+file fails with
+
+```
+[emerg] open() "/etc/letsencrypt/options-ssl-nginx.conf" failed (2: No such file
+or directory) in /t/conf.d/openmaic.conf:45
+```
+
+and the corrected one reports `test is successful`. The first attempt at that
+check passed both, because `include /etc/nginx/conf.d/*.conf` matched nothing
+and nginx treats a glob that matches nothing as success — the block under test
+was never read. A control case with a deliberately absent certificate is what
+exposed the check itself as broken.
 
 ## The docs still described the layout we replaced — 2026-09-08
 
