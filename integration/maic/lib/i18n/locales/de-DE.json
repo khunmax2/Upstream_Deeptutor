@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "Browserintegrierte TTS unterstützt die Audiofunktionen der Editor-Zeitleiste nicht (Vorschau, erneute Generierung und Sammelvertonung). Wechsle zu einem verwalteten TTS-Anbieter, um Audio für einzelne Zeilen zu generieren und zu verwalten.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "Die Bildgenerierung ist derzeit aus.",
+    "imageGenerationOffWhere": "Einschalten über die Medien-Schaltfläche neben dem Eingabefeld auf der Startseite."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "Modell",
     "voice": "Stimme",
     "speed": "Geschwindigkeit",
-    "language": "Sprache"
+    "language": "Sprache",
+    "providerReadyHint": "Ein Anbieter ist eingerichtet und bereit. Schalte dies ein, um ihn zu nutzen.",
+    "tabImage": "Bild",
+    "tabVideo": "Video",
+    "tabTts": "Sprache",
+    "tabAsr": "Spracheingabe"
   },
   "accessCode": {
     "title": "Zugangscode eingeben",

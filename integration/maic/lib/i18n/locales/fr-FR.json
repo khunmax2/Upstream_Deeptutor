@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "La synthèse vocale native du navigateur ne prend pas en charge les fonctions audio de la piste de l’éditeur (écoute, régénération et sonorisation groupée). Choisissez un fournisseur de synthèse vocale géré pour produire et gérer l’audio réplique par réplique.",
     "alidocmindAccessKeyId": "Identifiant de clé d’accès",
-    "alidocmindAccessKeySecret": "Secret de clé d’accès"
+    "alidocmindAccessKeySecret": "Secret de clé d’accès",
+    "imageGenerationOff": "La génération d’images est actuellement désactivée.",
+    "imageGenerationOffWhere": "Activez-la via le bouton média à côté du champ de saisie sur la page d’accueil."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "Modèle",
     "voice": "Voix",
     "speed": "Vitesse",
-    "language": "Langue"
+    "language": "Langue",
+    "providerReadyHint": "Un fournisseur est configuré et prêt. Activez ceci pour l’utiliser.",
+    "tabImage": "Image",
+    "tabVideo": "Vidéo",
+    "tabTts": "Lecture",
+    "tabAsr": "Dictée"
   },
   "accessCode": {
     "title": "Saisissez le code d’accès",

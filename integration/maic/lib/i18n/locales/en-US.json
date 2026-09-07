@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "Browser-native TTS doesn't support the editor timeline's audio features (preview, regenerate, and bulk voiceover). Switch to a managed TTS provider to generate and manage per-line audio.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "Image generation is currently off.",
+    "imageGenerationOffWhere": "Turn it on from the media button beside the prompt box on the home page."
   },
   "workspace": {
     "untitledCourse": "Untitled course",
@@ -2004,7 +2006,12 @@
     "model": "Model",
     "voice": "Voice",
     "speed": "Speed",
-    "language": "Language"
+    "language": "Language",
+    "providerReadyHint": "A provider is configured and ready. Turn this on to use it.",
+    "tabImage": "Image",
+    "tabVideo": "Video",
+    "tabTts": "Speech",
+    "tabAsr": "Voice"
   },
   "proMode": {
     "attach": "Attach material",

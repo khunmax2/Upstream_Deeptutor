@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "Встроенный в браузер TTS не поддерживает функции аудио на таймлайне редактора (прослушивание, повторная генерация и массовая озвучка). Переключитесь на управляемый TTS-провайдер, чтобы генерировать и управлять аудио для каждой строки.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "Генерация изображений сейчас выключена.",
+    "imageGenerationOffWhere": "Включите её кнопкой медиа рядом с полем ввода на главной странице."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "Модель",
     "voice": "Голос",
     "speed": "Скорость",
-    "language": "Язык"
+    "language": "Язык",
+    "providerReadyHint": "Провайдер настроен и готов. Включите, чтобы использовать.",
+    "tabImage": "Изображение",
+    "tabVideo": "Видео",
+    "tabTts": "Озвучка",
+    "tabAsr": "Голос"
   },
   "accessCode": {
     "title": "Введите код доступа",

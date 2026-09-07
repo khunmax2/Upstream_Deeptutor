@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "浏览器内置 TTS 不支持编辑器时间轴的音频功能（试听、重新生成、全部配音）。切换到托管 TTS 提供方即可逐句生成和管理音频。",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "图片生成当前处于关闭状态。",
+    "imageGenerationOffWhere": "可在首页输入框旁的媒体按钮中打开。"
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "模型",
     "voice": "音色",
     "speed": "语速",
-    "language": "语言"
+    "language": "语言",
+    "providerReadyHint": "已配置好可用的服务商，打开此开关即可使用。",
+    "tabImage": "图片",
+    "tabVideo": "视频",
+    "tabTts": "朗读",
+    "tabAsr": "语音"
   },
   "accessCode": {
     "title": "请输入访问码",

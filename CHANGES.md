@@ -17,6 +17,33 @@ upstream.
 
 ---
 
+## Saying when a capability is ready but switched off — 2026-09-07
+
+Configuring an image provider and switching image generation on are two
+different controls in two different places: the settings page owns the first,
+a popover beside the compose box owns the second. Nothing connected them. A
+credit key, a working provider, a bridge that carried it through — and courses
+still came out with no pictures, because `imageGenerationEnabled` defaults to
+false and the prompt never asks the model for an image while it is.
+
+That default is right; images cost money per call. The silence was not. Three
+places now say so:
+
+- **The popover's tab markers.** An enabled tab already carried a violet dot. A
+  tab whose provider is configured but switched off looked identical to one with
+  no provider at all, so it now carries a hollow dot — available, not on.
+- **The image tab itself**, when off with a usable provider: *a provider is
+  configured and ready; turn this on to use it.*
+- **The settings page**, where the provider was configured in the first place,
+  names the state and where the switch actually is — the two are far enough
+  apart that finding the second from the first was guesswork.
+
+Four keys, 13 languages, two files.
+
+**Found in passing.** The popover's own tab labels — `Image`, `Video`, `TTS`,
+`ASR` — were hardcoded English in every language, in the component being edited.
+Now `media.tab*`, translated with the rest.
+
 ## A rotated key now reaches the course studio on its own — 2026-09-07
 
 The provider bridge was a script under `deploy/` plus a container restart. Both

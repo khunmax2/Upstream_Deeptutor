@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "ブラウザ内蔵 TTS はエディターのタイムライン音声機能（試聴・再生成・一括音声生成）に対応していません。マネージド TTS プロバイダーに切り替えると、行ごとの音声を生成・管理できます。",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "画像生成は現在オフです。",
+    "imageGenerationOffWhere": "ホーム画面の入力欄の横にあるメディアボタンからオンにできます。"
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "モデル",
     "voice": "ボイス",
     "speed": "速度",
-    "language": "言語"
+    "language": "言語",
+    "providerReadyHint": "プロバイダーは設定済みで利用できます。オンにすると使えます。",
+    "tabImage": "画像",
+    "tabVideo": "動画",
+    "tabTts": "読み上げ",
+    "tabAsr": "音声入力"
   },
   "accessCode": {
     "title": "アクセスコードを入力",

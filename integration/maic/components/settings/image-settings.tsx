@@ -34,6 +34,7 @@ interface WorkflowEntry {
 
 export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
   const { t } = useI18n();
+  const imageGenerationEnabled = useSettingsStore((s) => s.imageGenerationEnabled);
 
   const imageModelId = useSettingsStore((state) => state.imageModelId);
   const imageProvidersConfig = useSettingsStore((state) => state.imageProvidersConfig);
@@ -178,6 +179,17 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Configuring a provider and switching the capability on are two
+          different controls in two different places — this page owns the
+          first, the media popover beside the compose box owns the second.
+          Saying so here is the difference between "not set up yet" and
+          "set up, and quietly doing nothing". */}
+      {!imageGenerationEnabled && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-300">
+          {t('settings.imageGenerationOff')} {t('settings.imageGenerationOffWhere')}
+        </div>
+      )}
+
       {/* Server-configured notice */}
       {isServerConfigured && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">

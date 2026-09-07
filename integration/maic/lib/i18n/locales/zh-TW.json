@@ -1867,7 +1867,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "瀏覽器內建 TTS 不支援編輯器時間軸的音訊功能（試聽、重新生成、全部配音）。切換到受管 TTS 供應商即可逐句生成和管理音訊。",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "圖片生成目前為關閉狀態。",
+    "imageGenerationOffWhere": "可在首頁輸入框旁的媒體按鈕中開啟。"
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -1989,7 +1991,12 @@
     "model": "模型",
     "voice": "聲線",
     "speed": "語速",
-    "language": "語言"
+    "language": "語言",
+    "providerReadyHint": "已設定好可用的服務商，開啟此開關即可使用。",
+    "tabImage": "圖片",
+    "tabVideo": "影片",
+    "tabTts": "朗讀",
+    "tabAsr": "語音"
   },
   "accessCode": {
     "title": "請輸入課堂碼",

@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "O TTS nativo do navegador não suporta os recursos de áudio da linha do tempo do editor (pré-visualizar, regenerar e narração em lote). Mude para um provedor de TTS gerenciado para gerar e gerenciar o áudio de cada linha.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "A geração de imagens está desativada.",
+    "imageGenerationOffWhere": "Ative pelo botão de mídia ao lado do campo de texto na página inicial."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "Modelo",
     "voice": "Voz",
     "speed": "Velocidade",
-    "language": "Idioma"
+    "language": "Idioma",
+    "providerReadyHint": "Há um provedor configurado e pronto. Ative para usá-lo.",
+    "tabImage": "Imagem",
+    "tabVideo": "Vídeo",
+    "tabTts": "Fala",
+    "tabAsr": "Ditado"
   },
   "accessCode": {
     "title": "Digite o Código de Acesso",

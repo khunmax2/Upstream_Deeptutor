@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "لا يدعم تحويل النص إلى كلام المدمج في المتصفح ميزات الصوت في الخط الزمني للمحرر (المعاينة وإعادة التوليد والتعليق الصوتي الجماعي). بدّل إلى مزود TTS مُدار لتوليد صوت كل سطر وإدارته.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "توليد الصور مُعطَّل حاليًا.",
+    "imageGenerationOffWhere": "فعّله من زر الوسائط بجانب حقل الإدخال في الصفحة الرئيسية."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "النموذج",
     "voice": "الصوت",
     "speed": "السرعة",
-    "language": "اللغة"
+    "language": "اللغة",
+    "providerReadyHint": "تم إعداد مزوّد وهو جاهز. فعّل هذا الخيار لاستخدامه.",
+    "tabImage": "صورة",
+    "tabVideo": "فيديو",
+    "tabTts": "نطق",
+    "tabAsr": "إملاء"
   },
   "accessCode": {
     "title": "أدخل رمز الوصول",

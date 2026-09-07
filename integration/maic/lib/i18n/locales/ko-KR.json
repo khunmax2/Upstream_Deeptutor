@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "브라우저 내장 TTS는 편집기 타임라인의 오디오 기능(미리듣기·다시 생성·전체 음성 생성)을 지원하지 않습니다. 관리형 TTS 공급자로 전환하면 줄별 오디오를 생성·관리할 수 있습니다.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "이미지 생성이 현재 꺼져 있습니다.",
+    "imageGenerationOffWhere": "홈 화면 입력창 옆의 미디어 버튼에서 켤 수 있습니다."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "모델",
     "voice": "음성",
     "speed": "속도",
-    "language": "언어"
+    "language": "언어",
+    "providerReadyHint": "제공자가 설정되어 사용할 수 있습니다. 켜면 사용됩니다.",
+    "tabImage": "이미지",
+    "tabVideo": "비디오",
+    "tabTts": "음성 출력",
+    "tabAsr": "음성 입력"
   },
   "accessCode": {
     "title": "접근 코드 입력",

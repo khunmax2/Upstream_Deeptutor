@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "El TTS nativo del navegador no admite las funciones de audio de la línea de tiempo del editor (vista previa, regenerar y voz en off masiva). Cambia a un proveedor de TTS administrado para generar y administrar el audio por línea.",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "La generación de imágenes está desactivada.",
+    "imageGenerationOffWhere": "Actívala con el botón de medios junto al campo de texto en la página de inicio."
   },
   "workspace": {
     "untitledCourse": "未命名课堂",
@@ -2004,7 +2006,12 @@
     "model": "Modelo",
     "voice": "Voz",
     "speed": "Velocidad",
-    "language": "Idioma"
+    "language": "Idioma",
+    "providerReadyHint": "Hay un proveedor configurado y listo. Actívalo para usarlo.",
+    "tabImage": "Imagen",
+    "tabVideo": "Video",
+    "tabTts": "Voz",
+    "tabAsr": "Dictado"
   },
   "accessCode": {
     "title": "Ingresa el código de acceso",

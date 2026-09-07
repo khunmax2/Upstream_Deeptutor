@@ -1882,7 +1882,9 @@
     },
     "ttsBrowserNativeTimelineNotice": "TTS ในเบราว์เซอร์ไม่รองรับความสามารถด้านเสียงของไทม์ไลน์ในตัวแก้ไข (ฟังตัวอย่าง สร้างใหม่ และพากย์เสียงเป็นชุด) กรุณาเปลี่ยนไปใช้ผู้ให้บริการ TTS แบบจัดการเต็มรูปแบบ เพื่อสร้างและจัดการเสียงรายบรรทัด",
     "alidocmindAccessKeyId": "AccessKey ID",
-    "alidocmindAccessKeySecret": "AccessKey Secret"
+    "alidocmindAccessKeySecret": "AccessKey Secret",
+    "imageGenerationOff": "การสร้างภาพยังปิดอยู่",
+    "imageGenerationOffWhere": "เปิดได้ที่ปุ่มสื่อ ข้างช่องพิมพ์ในหน้าแรก"
   },
   "workspace": {
     "untitledCourse": "คอร์สไม่มีชื่อ",
@@ -2004,7 +2006,12 @@
     "model": "โมเดล",
     "voice": "เสียง",
     "speed": "ความเร็ว",
-    "language": "ภาษา"
+    "language": "ภาษา",
+    "providerReadyHint": "ตั้งผู้ให้บริการไว้แล้วและพร้อมใช้ เปิดสวิตช์นี้เพื่อใช้งาน",
+    "tabImage": "ภาพ",
+    "tabVideo": "วิดีโอ",
+    "tabTts": "อ่านออกเสียง",
+    "tabAsr": "รู้จำเสียง"
   },
   "proMode": {
     "attach": "แนบเอกสาร",

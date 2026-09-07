@@ -57,11 +57,13 @@ const VIDEO_PROVIDER_ICONS: Record<string, string> = {
 
 type TabId = 'image' | 'video' | 'tts' | 'asr';
 
-const TABS: Array<{ id: TabId; icon: LucideIcon; label: string }> = [
-  { id: 'image', icon: ImageIcon, label: 'Image' },
-  { id: 'video', icon: Video, label: 'Video' },
-  { id: 'tts', icon: Volume2, label: 'TTS' },
-  { id: 'asr', icon: Mic, label: 'ASR' },
+// The label is a key, not a string: this table is module scope and `t` lives
+// in the component.
+const TABS: Array<{ id: TabId; icon: LucideIcon; labelKey: string }> = [
+  { id: 'image', icon: ImageIcon, labelKey: 'media.tabImage' },
+  { id: 'video', icon: Video, labelKey: 'media.tabVideo' },
+  { id: 'tts', icon: Volume2, labelKey: 'media.tabTts' },
+  { id: 'asr', icon: Mic, labelKey: 'media.tabAsr' },
 ];
 
 function providerModels<T extends { id: string; name: string }>(
@@ -187,6 +189,16 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
     [cfgOk, videoProvidersConfig],
   );
 
+  // A capability whose provider is configured but whose switch is off. The
+  // grouped-select lists are already filtered to usable providers, so a
+  // non-empty list is exactly "there is something here to turn on".
+  const readyMap: Record<TabId, boolean> = {
+    image: imageGroups.length > 0,
+    video: videoGroups.length > 0,
+    tts: ttsEnabled,
+    asr: asrEnabled,
+  };
+
   // ASR: built-in + custom providers
   const asrGroups = useMemo(() => {
     const groups: SelectGroupData[] = [];
@@ -273,10 +285,15 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
                   )}
                 >
                   <Icon className="size-3.5" />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  {isEnabled && !isActive && (
-                    <span className="absolute top-1 right-1 size-1.5 rounded-full bg-violet-500" />
-                  )}
+                  <span className="hidden sm:inline">{t(tab.labelKey)}</span>
+                  {!isActive &&
+                    (isEnabled ? (
+                      <span className="absolute top-1 right-1 size-1.5 rounded-full bg-violet-500" />
+                    ) : readyMap[tab.id] ? (
+                      // Ready but off: hollow, so it reads as "available" rather
+                      // than competing with the on state.
+                      <span className="absolute top-1 right-1 size-1.5 rounded-full border border-violet-400/70" />
+                    ) : null)}
                 </button>
               );
             })}
@@ -291,6 +308,11 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
               label={t('media.imageCapability')}
               enabled={imageGenerationEnabled}
               onToggle={setImageGenerationEnabled}
+              hint={
+                !imageGenerationEnabled && imageGroups.length > 0
+                  ? t('media.providerReadyHint')
+                  : undefined
+              }
             >
               <GroupedSelect
                 groups={imageGroups}
@@ -376,12 +398,15 @@ function TabPanel({
   label,
   enabled,
   onToggle,
+  hint,
   children,
 }: {
   icon: LucideIcon;
   label: string;
   enabled: boolean;
   onToggle: (v: boolean) => void;
+  /** Shown under the switch when the capability is off but usable. */
+  hint?: string;
   children?: React.ReactNode;
 }) {
   return (
@@ -407,6 +432,9 @@ function TabPanel({
           className="scale-[0.85] origin-right"
         />
       </div>
+      {hint ? (
+        <p className="text-[11px] leading-snug text-muted-foreground/80 -mt-1">{hint}</p>
+      ) : null}
       {enabled && children}
     </div>
   );
