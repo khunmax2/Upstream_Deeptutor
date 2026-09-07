@@ -45,8 +45,18 @@ Domain documentation uses a single-context layout with root `CONTEXT.md` and `do
 
 The repo has a local `.venv`; activate it or prefix commands with `python -m`.
 
+**Build the local `.venv` on Python 3.13, not 3.14.** CI tests 3.11–3.14 and the
+app runs on all of them, but 3.14 removes two RAG subsystems from a developer's
+machine *without an error*: `graphrag` cannot be installed at all (every release
+ever published caps at `Requires-Python <3.14`, and `pip install -e ".[graphrag]"`
+answers exit 0 with zero packages because the extra is marker-guarded), and BM25
+hybrid retrieval degrades to vector-only (`llama-index-retrievers-bm25` carries
+the same marker — PyStemmer 2.x has no 3.14 wheel). Both failures are silent at
+install time. See the 2026-09-05 entry under "Documentation" in `CHANGES.md`.
+
 ```bash
 # Install for development (source, with dev tooling)
+python3.13 -m venv .venv       # or: uv venv --python 3.13 .venv
 pip install -e ".[all]"        # everything; or .[dev] for just test/lint tooling
 
 # Run the app
@@ -79,7 +89,11 @@ npm run i18n:check              # i18n parity + audit (relevant to this fork's T
 ```
 
 CI (`.github/workflows/tests.yml`) gates on: ruff lint+format, `web/` node tests,
-import-check + pytest across Python 3.11–3.13 (3.14 best-effort).
+import-check + pytest across Python 3.11–3.14. **Every matrix entry gates** — the
+workflow carries no `continue-on-error` anywhere, and `test-summary` requires all
+five jobs. 3.14 is the widest-covered version, not the weakest: import-check runs
+it on ubuntu, macOS *and* windows-latest, while 3.11–3.13 each run on ubuntu
+alone.
 
 ## Fork policy for AI agents
 
@@ -147,6 +161,38 @@ Prefer it over blind `grep`/file-reading when answering "where/how does X work" 
   alongside the modification-logging in §1.
 - When the user types **`/graphify`**, invoke the `graphify` skill first.
 
-> Note: `graphify-out/` is generated output. Decide once whether to commit it (so agents
-> get the graph on a fresh clone) or gitignore it (smaller repo, regenerate locally). The
-> earlier `.gitignore` entry for it was lost in a re-branch — re-add the decision explicitly.
+> Note: `graphify-out/` is generated output and is **gitignored** (`.gitignore:335`) —
+> the decision that an earlier re-branch had lost. Regenerate it locally with
+> `graphify update .`; do not commit it.
+
+## 5. Branch workflow — never commit on `main`
+
+Adopted 2026-09-05, replacing the earlier "push straight to `main`" habit.
+
+Every change starts on a branch off `main` (`fix/…`, `feat:…`, `chore/…`), goes
+up as a PR, and merges only once CI is green. **Do not commit or push on
+`main`.**
+
+```bash
+git checkout -b fix/<topic>
+./scripts/precheck.sh          # fast local signal — still required
+git push -u origin fix/<topic>
+gh pr create --repo khunmax2/Upstream_Deeptutor --base main
+```
+
+Three things that trip agents up here:
+
+- **`precheck.sh` does not replace CI.** It runs one Python version on one OS;
+  CI runs 3.11–3.14 on Ubuntu plus a Windows import check. On 2026-09-05 a test
+  was green on every dev machine and red on all four CI versions, because CI's
+  `python-tests` job never runs `pip install -e .` and entry-point plugins
+  therefore do not resolve there. The branch is what keeps that off `main`.
+- **Pushing a bare branch triggers nothing.** `.github/workflows/tests.yml`
+  fires on `push` to `main`/`dev` and on `pull_request` — the PR is the only way
+  to get CI before merge.
+- **A docs- or config-only PR shows no Tests run.** The workflow has a `paths:`
+  filter (`deeptutor/**`, `tests/**`, `web/**`, `pyproject.toml`, …). No run is
+  the correct outcome, not a stuck check — don't wait on it.
+
+`gh` resolves the default repo to `HKUDS/DeepTutor` (the public upstream), so
+every `gh pr` / `gh run` command needs `--repo khunmax2/Upstream_Deeptutor`.

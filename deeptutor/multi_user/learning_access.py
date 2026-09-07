@@ -70,6 +70,34 @@ def assert_learning_surface(surface: str) -> None:
         raise PermissionError(f"This learning account cannot use the {target}.")
 
 
+def accessible_material_ids() -> set[str] | None:
+    """Reading material the current account may open.
+
+    ``None`` means unrestricted. Otherwise the set is the guardian's allowlist
+    (``reading.material_ids``) plus anything this account uploaded itself while
+    ``allow_upload`` was granted — an upload the learner cannot then open is
+    not an upload, which is what left "Allow learner uploads" inert.
+
+    Self-uploads are unioned in only while the permission stands, so revoking
+    it returns the account to exactly the guardian's list without deleting the
+    learner's own files; re-granting it brings them back.
+    """
+    policy = current_learning_policy()
+    if policy is None:
+        return None
+    reading = policy.get("reading")
+    if not isinstance(reading, dict):
+        return None
+    assigned = set(reading.get("material_ids") or [])
+    if "*" in assigned:
+        return None
+    if bool(reading.get("allow_upload")):
+        from .learner_uploads import self_uploaded_ids
+
+        assigned |= self_uploaded_ids()
+    return assigned
+
+
 def assert_learning_material(material_id: str, *, upload: bool = False) -> None:
     """Enforce upload and assigned-material policy in the authenticated scope."""
     policy = current_learning_policy()
@@ -81,8 +109,10 @@ def assert_learning_material(material_id: str, *, upload: bool = False) -> None:
         if has_reading and not bool(reading.get("allow_upload")):
             raise PermissionError("This learning account cannot upload reading materials.")
         return
-    assigned = set(reading.get("material_ids") or (["*"] if not has_reading else []))
-    if "*" not in assigned and str(material_id or "") not in assigned:
+    accessible = accessible_material_ids()
+    if accessible is None:
+        return
+    if str(material_id or "") not in accessible:
         raise PermissionError("This reading material is not assigned to this learning account.")
 
 
@@ -93,6 +123,14 @@ def assert_learning_material_mutation(material_id: str) -> None:
         return
     reading = policy.get("reading") if isinstance(policy.get("reading"), dict) else {}
     if not bool(reading.get("allow_upload")):
+        raise PermissionError("This learning account cannot modify assigned reading materials.")
+    # A learner deletes what a learner brought. Assigned material is the
+    # guardian's, and ``allow_upload`` is permission to add, never permission to
+    # remove someone else's assignment — which is what the docstring above has
+    # always promised and the assigned-material check alone did not deliver.
+    from .learner_uploads import self_uploaded_ids
+
+    if str(material_id or "") not in self_uploaded_ids():
         raise PermissionError("This learning account cannot modify assigned reading materials.")
     assert_learning_material(material_id)
 
@@ -108,6 +146,7 @@ def allowed_reading_extensions() -> set[str] | None:
 
 
 __all__ = [
+    "accessible_material_ids",
     "allowed_reading_extensions",
     "apply_learning_policy",
     "assert_learning_material",

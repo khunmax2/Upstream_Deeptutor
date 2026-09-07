@@ -91,6 +91,390 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-06 — A picture-only slide deck is readable too, and an extractor
+  error no longer says the filename twice.** Follow-up to the scanned-PDF entry
+  below, from a second report against the same screen: an 11.6 MB PPTX was
+  refused with *"PageIndex_Vectorless_RAG_Architecture.pptx:
+  PageIndex_Vectorless_RAG_Architecture.pptx: no extractable text"*. Two
+  separate defects in one message.
+
+  **The deck.** Ten slides, ten PNGs, and every `slideN.xml` a 921-byte shell
+  holding a single full-bleed `<p:pic>` — a deck exported from a design tool,
+  where the slides *are* pictures. The same shape as the scanned PDF, in a
+  different format, and it took the same dead end: `_extract_slides` calls the
+  shared extractor, which finds no text run and raises before
+  `extract_material`'s empty-unit check (and therefore its OCR recovery) is ever
+  reached.
+
+  Recovery now reads the pictures straight out of the OOXML package and OCRs
+  them, one unit per slide. No rendering, so no LibreOffice on the host — for a
+  deck whose every slide is already an image, rendering would only redraw what
+  is sitting in `ppt/media/`. Two details carry the correctness:
+
+  * **Slide order comes from `sldIdLst`, not the `slideN.xml` file names.**
+    Those numbers are creation order; a deck whose slides were reordered would
+    otherwise attribute each slide's text to the wrong locator — the same
+    misalignment the PDF path refuses to risk. File order is the fallback, and
+    it sorts numerically so slide10 follows slide9.
+  * **Only "this file holds no text" routes to OCR.** `_shared_extract`
+    re-raises `from exc`, so the extractor's own exception type is still on the
+    chain: an `EmptyDocumentError` recovers, while a corrupt package still
+    reports being corrupt. Read from the chain rather than matched against the
+    message, which is user-facing copy and free to change.
+
+  Pictures are upscaled to a 2400 px target width before OCR: `get_pixmap`
+  renders an image at its *declared* size at 72 dpi, which for a slide picture
+  is well under its own pixel count, and small text OCRs better upscaled.
+
+  **The doubled filename** was a separate, pre-existing wart, visible in the
+  screenshot and found while writing the tests for the PDF work. Every
+  `DocumentExtractionError` message already opens with the filename, and
+  `_shared_extract` prefixed it again. It now prefixes only when the message
+  does not already start with the name.
+
+  Verified on the reported deck: 10 slides, `tha+eng`, 9.7 s, 4,654 characters —
+  *"สถาปัตยกรรม RAG ไร้เวกเตอร์"*, *"ความคล้ายคลึง(Similarity) ≠
+  ความเกี่ยวข้อง(Relevance)"*, *"การจัดทำดัชนีด้วยโครงสร้างต้นไม้"* all recovered.
+  `tests/reading/test_ocr.py` grows from 21 tests to 32.
+
+- **2026-09-06 — A scanned PDF is readable in Immersive Reading instead of
+  refused at upload.** `extract_material` read a PDF through PyMuPDF and
+  nothing else, so an image-only scan — every page a picture, no text layer —
+  came back as a document of empty pages and was rejected outright:
+  *"no readable text could be extracted. A scanned document needs OCR before it
+  can be read here."* The message was accurate and the dead end was total:
+  there was no OCR anywhere on the reading path, even though the repo already
+  ships OCR-capable parse engines (`deeptutor/services/parsing/engines/`,
+  MinerU and Docling) — they were wired only into the RAG pipelines, never into
+  `deeptutor/reading/`. Reported against a five-page Thai
+  *หนังสือส่งมอบงาน* (a signed, scanned handover letter).
+
+  A PDF that yields no text now goes through a recovery pass before it is
+  refused (new file `deeptutor/reading/ocr.py`; three lines of hook in
+  `extract.py`, one in `store.py`). Two things had to hold:
+
+  1. **The page grid is the locator space.** A PDF is the one format the reader
+     renders faithfully, so `locator == physical page number` and every
+     annotation is stored normalised against that page's box. A recovery
+     returning flat markdown would put unit 7 on page 3 and land every
+     highlight in the wrong place. Every provider therefore emits *exactly*
+     `page_count` units in page order, or declines — MinerU/Docling blocks are
+     grouped by their `page_idx`, and blocks outside the range are dropped
+     rather than clamped (the same rule `_pdf_outline` already applies to stale
+     bookmarks).
+  2. **Selection happens in the browser.** `PdfPage.tsx` builds its selection
+     surface from pdf.js `getTextContent()`, so text known only server-side
+     would leave select → highlight → ask dead on precisely these documents.
+     The Tesseract provider therefore rebuilds the PDF with an invisible OCR
+     text layer welded in, and `store.ingest` writes those bytes for the raw
+     view. The material id still hashes the *upload*, so re-uploading the same
+     scan stays idempotent.
+
+  Providers, in order: the operator's configured parse engine when it is one
+  that actually OCRs (MinerU, Docling), then PyMuPDF's built-in Tesseract
+  binding — which costs no new Python dependency, because PyMuPDF is already
+  core. A heavy engine that is misconfigured or missing its models *declines*
+  rather than raising, so it can never cost the user the Tesseract path that
+  would have worked. When nothing can run, the original two sentences are kept
+  verbatim and the operator-facing fix is appended (`brew install tesseract` /
+  `apt install tesseract-ocr-tha`, or pick an engine in Settings → Document
+  Parsing).
+
+  Configuration is environment-only on purpose: this path runs *only* for a
+  document that would otherwise be rejected, so there is no default to protect.
+  `DEEPTUTOR_READING_OCR` (off switch), `..._LANGUAGE` (defaults to the
+  interface language + English, so a Thai install asks for `tha+eng`),
+  `..._DPI` (300), `..._MAX_SECONDS` (300 — the upload is synchronous, so the
+  budget bounds what the caller waits for).
+
+  Verified end to end on the reported file: 5 pages, `tha+eng`, 6.5 s, 3,573
+  characters recovered, 86 selectable words on page 1 of the stored PDF.
+  21 tests in `tests/reading/test_ocr.py`; the one that needs a real OCR engine
+  skips itself where Tesseract is absent.
+
+- **2026-09-05 — The web contract tests compare `/`-separated paths against a
+  file walker that returns `\` on Windows, so five of them can never pass
+  there.** `web/tests/architecture-contracts.test.ts`,
+  `internal-route-contract.test.ts` and `no-v1-chat-surface.test.ts` build their
+  allowlists as forward-slash literals (`"shared/api/client.ts"`,
+  `"components/voice/VoiceCallWidget.tsx"`) but look files up with
+  `path.relative()`, which yields `shared\api\client.ts` on Windows. The
+  allowlists therefore never match and every deliberately exempt file reads as a
+  violation. `internal-route-contract` fails harder: it selects route files with
+  `/\/page\.(?:ts|tsx|js|jsx)$/`, which matches nothing under
+  `app\chat\page.tsx`, so `pagePatterns` is empty and *every* internal link
+  resolves to "not a real page". Notably `pagePattern()` two lines above
+  already splits on `path.sep` correctly — the separator was handled in one
+  place and missed in the other.
+
+  Fixed by normalising to POSIX separators before every comparison, via a local
+  `toPosix = (p) => p.split(path.sep).join("/")`. Splitting on `path.sep` rather
+  than regex-replacing backslashes matters: a backslash is a legal character in a
+  POSIX filename, and replacing it there would corrupt the path — moving the bug
+  from Windows to macOS. On macOS and Linux `path.sep` is already `/`, so the
+  helper is the identity function and CI (`web-tests` runs on `ubuntu-latest`) is
+  unaffected. Test files only; no production code touched.
+
+  Effect on Windows: `npm run test:node` goes from 5 failures to **1097 pass / 0
+  fail**, and because `check:fast` chains with `&&`, the four gates that had never
+  run there — `test:unit`, `lint`, `i18n:check`, `build` + `perf:check` — now
+  execute and pass (`npm run check` exits 0; eslint 0 errors, 76 pre-existing
+  warnings; all route budgets OK).
+
+- **2026-09-04 — Learner surface audit: what an admin can grant vs. what a
+  learner can reach.** After the `allow_upload` fix below, the obvious question
+  was whether anything else an administrator hands a learning account is refused
+  the same way. Audited by walking a real `preset="learner"` account, logged in
+  with a real token, over HTTP against the full app.
+
+  **Reading is whole.** Upload, open, units, revisions, export, position,
+  highlight, list highlights, duplicate-check, URL import, delete, the
+  extension list and `read_aloud`, collections with tabs, reading conversations,
+  suggested openers — all answer. The admin-assign flow from the Learning Policy
+  screen works end to end: `_stage_assigned_materials` copies the material into
+  the learner workspace and the learner lists, opens and reads it. Chat's
+  permitted half (`/api/sessions`, `/api/settings/llm-options`,
+  `/api/question-notebook`, `/api/auth/*`, `/api/settings/ui`) answers too.
+
+  Denials that are *consistent* — hidden by `filterNavBySurfaces` and zeroed by
+  `apply_learning_policy` — are notebooks, memory, knowledge bases, skills,
+  system, video learning, mastery paths, co-writer and visualizers. Nothing to
+  do there.
+
+  Three places still contradict themselves. All three are the same defect as
+  `allow_upload`: `_learning_surface_for_path` is a hardcoded list of URL
+  prefixes, while permissions are granted through other systems entirely
+  (grants, `book_permission`, courses) that do not know it exists.
+
+  1. **Books assigned to a learner are unreachable.** There is a whole guardian
+     screen ("Approved materials"), an endpoint
+     (`PUT /api/multi-user/learners/{id}/materials`), a per-book `read` level
+     and an audit event (`guardian_material_assign`) — and every `/api/books*`
+     route answers 403 for any account carrying a learning policy. There is no
+     surface to grant either: `LEARNING_SURFACES` is `{"chat", "reading"}`, so
+     the assignment is structurally dead, not merely switched off.
+  2. **"Send reading notes to Notebook" is a dead end inside Reading.** The
+     button sits on the reading surface the admin enabled, but its dialog lists
+     notebooks through `/api/notebooks`, which is 403 — so the learner gets a
+     raw error string where the picker should be.
+  3. **Courses** — upstream
+     [#1228](https://github.com/HKUDS/DeepTutor/issues/1228), independently
+     reported. The sidebar half is already handled in this fork (a 403 in the
+     `Promise.all` used to discard the session list, so a learner saw "No
+     conversations yet" over a full history); what remains is the chat
+     composer's course pill offering "Manage courses" into a 403 page.
+
+  Learner Anima is *deliberately* off for policy-bound accounts
+  (`learningPolicyAccessFor` returns `allowsAnima: false`, matching the server's
+  403), so UI and server agree — worth revisiting as a product call, not a bug.
+
+  The audit is kept as `tests/multi_user/test_learner_surface_contract.py`:
+  four tests that log a real learner in and assert the reading and chat surfaces
+  answer end to end. It is the regression guard the earlier bugs lacked — each
+  layer was correct alone, and only an end-to-end walk showed the contradiction.
+
+  That test was red on all four Python versions in CI while green locally. The
+  reading extensions register through the `deeptutor.reading_extensions` entry
+  point group, and CI's `python-tests` job installs the requirements files but
+  never runs `pip install -e .`, so the registry came up empty and the policy
+  under test was rejected as `Unknown reading extensions`. The fixture now
+  builds the registry from the extension classes and **seeds
+  `deeptutor.reading.extensions._registry`** — patching only the accessor was
+  not enough, because `deeptutor/api/routers/multi_user.py` does
+  `from ... import get_reading_extension_registry` and so holds a binding of its
+  own that a patch on the defining module never reaches
+  (`tests/multi_user/test_learner_surface_contract.py`).
+
+- **2026-09-07 — `AGENTS.md` now points at `CLAUDE.md`.** `CLAUDE.md` tells
+  agents to read `AGENTS.md` first, but `AGENTS.md` carried no reference back —
+  an agent that starts from the architecture file (Codex reads it by default)
+  never learned the fork rules at all, including the Apache-2.0 §4(b)
+  modification logging in §1 and the branch-and-PR rule adopted in §5 the day
+  before. A short blockquote under the H1 closes the loop (`AGENTS.md`).
+
+  Found while clearing three June 2026 stashes: one of them held this same
+  pointer, written and then lost when the branch it sat on disappeared. Its
+  other changes — gitignoring `CLAUDE.md` and a local-only `CHANGELOG.md` —
+  are the approach §1 now warns against, so only the pointer was recovered.
+
+- **2026-09-07 — A fresh clone now comes up in Thai, and the last four partner
+  strings are translated.** `data/` is gitignored, so a clone carries no
+  `interface.json` and the defaults in `deeptutor/services/setup/init.py` are
+  the only thing a first run sees. They said `en`, which is why cloning this
+  repo onto a second machine showed an English partner wizard while the
+  original machine — carrying its own saved settings — was Thai. Both
+  `DEFAULT_INTERFACE_SETTINGS["language"]` and
+  `DEFAULT_MAIN_SETTINGS["system"]["language"]` are now `th`, pinned by
+  `tests/services/test_fork_default_language.py` because an upstream sync will
+  offer `en` back every time.
+
+  The default also decides which language the soul and persona templates seed
+  in, so a first run gets the Thai ones end to end.
+
+  Separately, an audit of all 316 `t()` literals across the 35 partner modules
+  found the wizard already fully translated except for four keys, now filled
+  in: `Soul` → จิตวิญญาณ (the step label in the wizard header), `Groups` → กลุ่ม,
+  `Members` → สมาชิก, `Archive` → เก็บเข้าคลัง (`web/locales/th/app.json`).
+- **2026-09-06 — The eight bundled prompt templates now speak Thai.** The
+  "Soul library" and "Clone a persona" pickers in the partner wizard showed
+  English to Thai users no matter the interface language, because their content
+  is a *prompt*, not a label: three `PERSONA.md` presets and five
+  `DEFAULT_SOUL_TEMPLATES` entries, seeded to disk once and never revisited.
+  `locales/th/app.json` cannot reach either.
+
+  Thai variants live beside the originals — `presets/<name>/PERSONA.th.md` and a
+  new `soul_templates_th.py` — so upstream's own files stay almost untouched.
+  Two new fork modules, `services/persona/localization.py` and
+  `services/partners/soul_localization.py`, pick the variant and keep it in
+  sync; the four upstream call sites change by a line each.
+
+  Switching the interface language switches the templates *both ways*, and only
+  while a template is still byte-identical to something we ship in one of the
+  known languages. Edit one and it is yours, in whatever language you left it —
+  the same "provably untouched" rule as upstream's `_refresh_stale_default_souls`,
+  which this deliberately mirrors. A language with no complete translation falls
+  back to English rather than shipping a half-translated prompt. Both hooks sit
+  on the read path (`list_souls`, `list_personas`, `get_detail`), so no settings
+  endpoint and no write path changes.
+
+  Per the fork's translation rule, genuinely technical terms stay English —
+  "Socratic", "primary source", "trade-off", "edge case", "API" — and the tests
+  pin that so it cannot quietly regress. 18 new tests across
+  `tests/services/persona/test_persona_localization.py` and
+  `tests/services/partners/test_soul_localization.py`.
+
+  One consequence worth recording: `list_souls` now reads
+  `data/user/settings/interface.json`, so an assertion about a seeded soul used
+  to pass on an English machine and fail on a Thai one. The partners suite pins
+  the language in its `conftest.py` rather than encoding whoever ran it last.
+
+- **2026-09-05 — Working rule reversed: no more commits on `main`.** Every
+  change now starts on a branch and merges through a PR once CI is green;
+  `scripts/precheck.sh` stays as the fast local signal, not a replacement for
+  CI. Prompted by `main` sitting red for ~40 minutes that morning over a test
+  that was green on every dev machine and red on all four CI Python versions.
+  Recorded as `CLAUDE.md` §5, with the two traps that mislead agents here:
+  pushing a bare branch triggers no workflow (only `push` to `main`/`dev` and
+  `pull_request` do), and the `paths:` filter means a docs-only PR correctly
+  shows no Tests run at all. The stale note under §4 is corrected too —
+  `graphify-out/` is gitignored, decision made (`CLAUDE.md`).
+
+- **2026-09-05 — `.gitattributes` now normalises every tracked file to LF.**
+  Upstream's rules cover `.py`, `.sh`, `.md`, `.json`, `.yaml` and `.toml`
+  (2,015 files) but never `.ts`, `.tsx`, `.mjs`, `.css` or `.js` — 984 files
+  that a Windows clone would check out as CRLF under git's default
+  `core.autocrlf=true`. That does not break CI (the `npm run check` chain has
+  no prettier step), but it breaks the `prettier` pre-commit hook, and any such
+  checkout committed back would rewrite every line of those files and make the
+  next upstream merge unresolvable.
+
+  A `* text=auto eol=lf` baseline is added **above** the existing rules, because
+  later lines win and `*.mp4`'s `-text` must keep overriding it. Explicit
+  `-text` guards for `.png/.jpg/.jpeg/.gif/.ico/.pdf/.woff/.woff2/.ttf/.otf/
+  .zip/.gz` follow it: one tracked fixture
+  (`tests/fixtures/lightrag_bridge/.../_origin.pdf`) is stored with CRLF and
+  git's auto-detection reads it as text, so an unguarded wildcard would
+  renormalise and corrupt it. Verified with `git add --renormalize .` — only
+  `.gitattributes` itself changes (`.gitattributes`).
+
+- **2026-09-04 — A second admin was handed the first admin's entire workspace,
+  chat history included.** Create an account, promote it to admin, and it sees
+  every conversation belonging to admin #1. The cause is one line in
+  `deeptutor/multi_user/paths.py`:
+
+  ```python
+  def scope_for_user(user_id: str, *, is_admin: bool) -> UserScope:
+      if is_admin:
+          return admin_scope()  # hardcodes LOCAL_ADMIN_ID + data/
+  ```
+
+  Every admin resolved to the identical root with their user id rewritten to
+  `local-admin`, so they shared one `data/user/chat_history.db` — and reading,
+  notebooks, memory and per-owner secrets with it. `GET /api/sessions` has no
+  owner filter because, until now, there was nothing to filter by.
+
+  Upstream [#1230](https://github.com/HKUDS/DeepTutor/issues/1230) (filed the
+  same day, by a different operator) is the same defect from the demotion side:
+  their child's history is stranded inside the admin workspace and the account
+  cannot be demoted back onto its own. Promote leaks the first admin's data in;
+  demote strands the account's data behind. `update_user_role` performs no
+  workspace migration at all.
+
+  `admin_scope()` is a *place* — the deployment tree holding the shared model
+  catalog, personas, skills, knowledge bases, partners and cron — not a role.
+  Privileges have always come from `role`, and every shared asset is addressed
+  explicitly through `get_admin_path_service()`, so exactly one account needs to
+  own `data/`. New `deeptutor/multi_user/primary_admin.py` records which one:
+  elected once from the earliest-created admin in the account store, written to
+  `data/system/auth/primary_admin.json`, and thereafter **sticky**. Every other
+  admin gets a private workspace like anybody else, and an account promoted to
+  admin keeps the workspace — and history — it already had.
+
+  The election is deliberately not re-derived on later reads. Re-deriving would
+  mean that deleting or demoting the primary admin silently moves another
+  admin's workspace out from under them, which is the failure the module exists
+  to prevent; a marker naming an account that is gone leaves `data/` waiting for
+  it instead. The `local-admin` and `env-admin` sentinels always resolve to
+  `data/`, so `AUTH_ENABLED=false` single-user runs and the env bootstrap admin
+  are untouched.
+
+  Fix-forward only: nothing is moved, copied or deleted on disk. A deployment
+  that already ran a second admin inside `data/` will find that admin starting
+  on a clean workspace, with its previous work still in `data/` and still
+  reachable by the primary admin. Splitting an already-interleaved
+  `chat_history.db` needs a per-session owner column and is not attempted here;
+  that, and the demotion migration #1230 asks for, remain open.
+
+  Covered by `tests/multi_user/test_admin_workspace_isolation.py` (8 tests:
+  workspace and chat-history separation, promotion preserving the account's own
+  workspace, the election and its stickiness across a deleted primary, both
+  sentinels, and a token round-trip asserting the second admin is still an
+  admin). `scope.kind` is read in only two places, both in `paths.py`, so the
+  blast radius is the routing decision itself. Full suite before and after:
+  28 pre-existing failures either way, 7009 → 7017 passing.
+
+- **2026-09-04 — "Allow learner uploads" was permission to upload and nothing
+  more, so the upload was invisible the moment it finished.** An administrator
+  ticks the box in the learning policy, the learner picks a file in Immersive
+  Reading, `POST /api/reading/materials` answers **200** — and every route that
+  would show the result answers **403 "This reading material is not assigned to
+  this learning account."** The learner reads that as "upload doesn't work",
+  which is the accurate description.
+
+  The cause is that one list did two jobs. `learning_policy.reading.material_ids`
+  is the *guardian's* allowlist — what an admin staged into the learner
+  workspace — and `assert_learning_material()` treated it as the complete set of
+  material the account may open. A learner's own upload is by definition not on
+  a list only an admin can write to, so it was filtered out of
+  `GET /materials`, out of `GET /library/materials` and its counts, out of the
+  workspace tabs (`_workspace_payload`), and refused by
+  `GET /materials/{id}` — the upload landed on disk in the learner's own
+  workspace and was unreachable from there.
+
+  Learner-owned uploads are now tracked separately, in
+  `deeptutor/multi_user/learner_uploads.py` (new file — a sidecar
+  `self_uploads.json` inside the learner's own `reading/` workspace, not a
+  column on upstream's catalog schema, and never a write to the account's own
+  grant). `learning_access.accessible_material_ids()` unions that set into the
+  allowlist while `allow_upload` stands, and every reading surface now asks that
+  one function — `reading.py::_assigned_material_ids()` delegates to it — so
+  listing, library, tabs and the per-material guards can no longer disagree.
+  Ids are recorded on all four ingest paths that pass the upload check (file,
+  deduplicated copy, media, and `library/import-urls`) and dropped on delete.
+
+  Revoking the permission returns the account to exactly the guardian's list
+  without deleting the learner's files; re-granting it brings them back.
+  `assert_learning_material_mutation()` was also honouring only half of its own
+  docstring: it promised to "protect administrator-assigned material from
+  learner-side deletion" but let a learner with `allow_upload` delete assigned
+  material, because assigned ids passed the check it delegated to. Deletion is
+  now restricted to what the learner uploaded themselves.
+
+  Covered by two tests in `tests/multi_user/test_learning_policy_http.py`
+  (upload round-trip and permission revocation); the existing
+  `allow_upload: False` test is unchanged, which is the point — the deny path
+  never moved.
+
 - **2026-09-04 — Every generated hint is written in the learner's own language,
   not just Chinese or English.** Third and last instance of the same defect, and
   the one that was visible in Immersive Reading: the suggested-question panel
@@ -687,6 +1071,75 @@ the collapsed-rail tooltips wrap to two lines unclipped.
   (900×233). All logo surfaces are now on the new brand.
 
 ## Documentation
+
+- **2026-09-05 — Local development is pinned to Python 3.13: on 3.14 two RAG
+  subsystems disappear, and neither failure announces itself.** `README.md` tells
+  contributors to use "Python 3.11–3.14" and CI genuinely tests all four, so 3.14
+  reads like a safe choice for a dev machine. It is not.
+
+  **GraphRAG cannot be installed at all.** Every release ever published, from
+  `0.1.1` to `3.1.2`, carries `Requires-Python <3.14`; pip answers `No matching
+  distribution found`, and pinning an older version makes it worse because the
+  pre-3.0 line caps at `<3.13`. The trap is that `pip install -e ".[graphrag]"`
+  never says so: the extra is guarded by the environment marker
+  `python_version < '3.14'`, so on 3.14 it resolves to zero packages and exits 0.
+  `services/rag/preflight.py` then reports "GraphRAG package installed: no" with
+  the remediation `pip install 'deeptutor[graphrag]'` — a loop with no exit.
+  (`--ignore-requires-python` does resolve the whole tree from 3.14 wheels, but
+  it bypasses a cap upstream set deliberately, nothing verifies graphrag *runs*
+  there, and the flag is lost on every venv rebuild.)
+
+  **BM25 hybrid retrieval degrades to vector-only.**
+  `llama-index-retrievers-bm25` carries the same marker because PyStemmer 2.x
+  ships no 3.14 wheel, so `build_retriever` returns a plain vector retriever
+  instead of the `QueryFusionRetriever` over `[VectorIndexRetriever,
+  BM25Retriever]` — while `retrieval_profile: "hybrid"` in
+  `data/user/settings/llamaindex.json` keeps claiming otherwise. It had been
+  working locally only because PyStemmer was once compiled from source by hand,
+  which any venv rebuild silently discards.
+
+  Rebuilt the local `.venv` on 3.13: **234 packages against the previous 203**.
+  That gap was not only the BM25 trio — four *declared core* dependencies were
+  missing as well (`pyte`, `youtube-transcript-api`, `redis`, `scipy`), plus the
+  whole Manim stack, `matrix-nio`, `bandit` and `import-linter`.
+
+  Verified equivalent rather than merely different. `pytest -q tests
+  deeptutor/learning/tests` returns **27 failed, 7022 passed, 47 skipped, 6
+  xfailed, 2 xpassed** — the identical counts on 3.14 and on 3.13 — and those 27
+  are local-settings noise, not code: under `scripts/precheck.sh`, which runs
+  pytest against CI's minimal `DEEPTUTOR_HOME`, the suite is **7049 passed, 47
+  skipped, 0 failed**, with ruff, ruff-format and the full `web` check green.
+  `lint-imports` keeps all three contracts. Resolving all 20 extras for both
+  interpreters showed no package that 3.13 downgrades — the `[all]` set is
+  byte-identical on 3.14 and 3.13.
+
+  One trade-off is worth knowing before installing GraphRAG: it pins
+  `nltk==3.9.1`, which drags `llama-index-core` from 0.14.24 back to 0.14.19.
+  On 3.13 that cost applies only if the extra is actually installed, so GraphRAG
+  belongs in its own venv rather than in the everyday `[all]` install.
+
+  Also fixed here: **`ruff` was configured in `[tool.ruff]` but declared as a
+  dependency nowhere.** CI installs it as its own step and pre-commit fetches its
+  own hook environment, so a fresh `pip install -e ".[all]"` produced a venv in
+  which `scripts/precheck.sh` exited on its own `ruff` guard before running a
+  single check. Added `ruff==0.16.0` to `[project.optional-dependencies].dev` and
+  `requirements/dev.txt`, matching the CI pin and the pre-commit `rev`.
+
+  Files: `CLAUDE.md` (dev baseline + reason), `pyproject.toml`,
+  `requirements/dev.txt`.
+
+- **2026-09-05 — `CLAUDE.md`: the CI matrix line called 3.14 best-effort; it
+  gates.** The architecture summary read "import-check + pytest across Python
+  3.11–3.13 (3.14 best-effort)", and two agents in a row repeated it back as a
+  reason to keep a dev machine off 3.14. The workflow does not support the claim:
+  `.github/workflows/tests.yml` carries no `continue-on-error`, `experimental` or
+  allow-failure marker on any job, and `test-summary` declares `needs: [lint,
+  web-tests, multi-worker-web, import-check, python-tests]` — so a 3.14 failure is
+  a red build like any other. 3.14 is in fact the *most* covered version in the
+  matrix: import-check runs it on ubuntu, macOS and windows-latest, where
+  3.11–3.13 each run on ubuntu alone, and the job-level `PYTHONIOENCODING: utf-8`
+  exists precisely because of the Windows + 3.14 row. The line now states the real
+  matrix and that every entry gates.
 
 - **2026-09-04 — `docs/reports/REPORT_uat_2026-09-04.md`: first full-system UAT
   sweep of the fork, and the 13 findings it produced.** Eight waves against build

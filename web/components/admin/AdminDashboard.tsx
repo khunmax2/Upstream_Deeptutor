@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { resolveUiLanguage } from "@/lib/ui-language";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -123,7 +124,7 @@ function formatDate(iso: string, lang: Language): string {
 export default function AdminDashboard() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const lang: Language = i18n.language?.startsWith("zh") ? "zh" : "en";
+  const lang: Language = resolveUiLanguage(i18n.language);
   const [data, setData] = useState<DashboardData>({
     users: [],
     summary: EMPTY_SUMMARY,
@@ -219,7 +220,10 @@ export default function AdminDashboard() {
     [data.grants, data.rawResources, data.relationships, data.users],
   );
   const assignments = useMemo(
-    () => (data.rawResources ? countAdminAssignments(data.grants) : EMPTY_ASSIGNMENTS),
+    () =>
+      data.rawResources
+        ? countAdminAssignments(data.grants)
+        : EMPTY_ASSIGNMENTS,
     [data.grants, data.rawResources],
   );
   const readinessRows = useMemo(
@@ -250,7 +254,9 @@ export default function AdminDashboard() {
               {t("Admin overview")}
             </h1>
             <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-              {t("Monitor accounts, assignments, and shared learning resources.")}
+              {t(
+                "Monitor accounts, assignments, and shared learning resources.",
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -273,7 +279,11 @@ export default function AdminDashboard() {
         {error ? (
           <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
             <span>{error}</span>
-            <button type="button" onClick={() => void load()} className="font-medium underline">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="font-medium underline"
+            >
               {t("Try again")}
             </button>
           </div>
@@ -291,7 +301,9 @@ export default function AdminDashboard() {
           <MetricCard
             label={t("Total accounts")}
             value={data.summary.totalAccounts}
-            detail={t("{{count}} active", { count: data.summary.activeAccounts })}
+            detail={t("{{count}} active", {
+              count: data.summary.activeAccounts,
+            })}
             icon={Users}
             tone="primary"
           />
@@ -382,10 +394,18 @@ function MetricCard({
   );
 }
 
-function CardHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+function CardHeader({
+  title,
+  action,
+}: {
+  title: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[var(--border)]/70 px-5 py-4">
-      <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
+      <h2 className="text-sm font-semibold text-[var(--foreground)]">
+        {title}
+      </h2>
       {action}
     </div>
   );
@@ -453,8 +473,12 @@ function ProvisioningOverview({
         >
           <div className="grid h-24 w-24 place-items-center rounded-full bg-[var(--card)] text-center">
             <div>
-              <div className="text-2xl font-semibold text-[var(--foreground)]">{score}%</div>
-              <div className="text-[11px] text-[var(--muted-foreground)]">{t("Ready")}</div>
+              <div className="text-2xl font-semibold text-[var(--foreground)]">
+                {score}%
+              </div>
+              <div className="text-[11px] text-[var(--muted-foreground)]">
+                {t("Ready")}
+              </div>
             </div>
           </div>
         </div>
@@ -464,13 +488,22 @@ function ProvisioningOverview({
             return (
               <div key={row.label}>
                 <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                  <span className="font-medium text-[var(--foreground)]">{row.label}</span>
-                  <span className="text-[var(--muted-foreground)]">{row.value}/{row.total}</span>
+                  <span className="font-medium text-[var(--foreground)]">
+                    {row.label}
+                  </span>
+                  <span className="text-[var(--muted-foreground)]">
+                    {row.value}/{row.total}
+                  </span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
-                  <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${percent}%` }} />
+                  <div
+                    className="h-full rounded-full bg-[var(--primary)]"
+                    style={{ width: `${percent}%` }}
+                  />
                 </div>
-                <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{row.detail}</p>
+                <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">
+                  {row.detail}
+                </p>
               </div>
             );
           })}
@@ -531,10 +564,17 @@ function AdminQuickActions() {
               <action.icon size={17} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-[var(--foreground)]">{action.label}</p>
-              <p className="truncate text-xs text-[var(--muted-foreground)]">{action.detail}</p>
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                {action.label}
+              </p>
+              <p className="truncate text-xs text-[var(--muted-foreground)]">
+                {action.detail}
+              </p>
             </div>
-            <ArrowRight size={14} className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+            <ArrowRight
+              size={14}
+              className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]"
+            />
           </Link>
         ))}
       </div>
@@ -544,11 +584,18 @@ function AdminQuickActions() {
 
 function AccountDistribution({ summary }: { summary: AdminDashboardSummary }) {
   const { t } = useTranslation();
-  const total = Math.max(summary.standard + summary.custom + summary.learners, 1);
+  const total = Math.max(
+    summary.standard + summary.custom + summary.learners,
+    1,
+  );
   const standardEnd = (summary.standard / total) * 100;
   const customEnd = standardEnd + (summary.custom / total) * 100;
   const rows = [
-    { label: t("Standard"), value: summary.standard, color: "bg-[var(--primary)]" },
+    {
+      label: t("Standard"),
+      value: summary.standard,
+      color: "bg-[var(--primary)]",
+    },
     { label: t("Custom"), value: summary.custom, color: "bg-teal-500" },
     { label: t("Learner"), value: summary.learners, color: "bg-blue-500" },
   ];
@@ -562,20 +609,31 @@ function AccountDistribution({ summary }: { summary: AdminDashboardSummary }) {
             background: `conic-gradient(var(--primary) 0 ${standardEnd}%, #14b8a6 ${standardEnd}% ${customEnd}%, #3b82f6 ${customEnd}% 100%)`,
           }}
           role="img"
-          aria-label={t("Distribution of Standard, Custom, and Learner accounts")}
+          aria-label={t(
+            "Distribution of Standard, Custom, and Learner accounts",
+          )}
         >
           <div className="grid h-28 w-28 place-items-center rounded-full bg-[var(--card)] text-center shadow-inner">
             <div>
-              <div className="text-2xl font-semibold">{total === 1 && summary.totalAccounts === 0 ? 0 : total}</div>
-              <div className="text-xs text-[var(--muted-foreground)]">{t("Users")}</div>
+              <div className="text-2xl font-semibold">
+                {total === 1 && summary.totalAccounts === 0 ? 0 : total}
+              </div>
+              <div className="text-xs text-[var(--muted-foreground)]">
+                {t("Users")}
+              </div>
             </div>
           </div>
         </div>
         <div className="space-y-3">
           {rows.map((row) => (
-            <div key={row.label} className="flex items-center gap-3 rounded-xl bg-[var(--background)]/60 px-3 py-2.5">
+            <div
+              key={row.label}
+              className="flex items-center gap-3 rounded-xl bg-[var(--background)]/60 px-3 py-2.5"
+            >
               <span className={`h-2.5 w-2.5 rounded-full ${row.color}`} />
-              <span className="flex-1 text-sm text-[var(--foreground)]">{row.label}</span>
+              <span className="flex-1 text-sm text-[var(--foreground)]">
+                {row.label}
+              </span>
               <span className="text-sm font-semibold">{row.value}</span>
               <span className="w-12 text-right text-xs text-[var(--muted-foreground)]">
                 {Math.round((row.value / total) * 100)}%
@@ -584,9 +642,12 @@ function AccountDistribution({ summary }: { summary: AdminDashboardSummary }) {
           ))}
           {summary.admins > 0 ? (
             <p className="px-3 text-xs text-[var(--muted-foreground)]">
-              {t("{{count}} administrator account is excluded from the preset chart.", {
-                count: summary.admins,
-              })}
+              {t(
+                "{{count}} administrator account is excluded from the preset chart.",
+                {
+                  count: summary.admins,
+                },
+              )}
             </p>
           ) : null}
         </div>
@@ -623,18 +684,29 @@ function NeedsAttention({ summary }: { summary: AdminDashboardSummary }) {
       <div className="divide-y divide-[var(--border)]/70 px-5">
         {items.map((item) => (
           <div key={item.title} className="flex items-center gap-3 py-4">
-            <div className={`rounded-xl p-2.5 ${item.count ? "bg-[var(--warning-surface)] text-[var(--warning)]" : "bg-[var(--success-surface)] text-[var(--success)]"}`}>
+            <div
+              className={`rounded-xl p-2.5 ${item.count ? "bg-[var(--warning-surface)] text-[var(--warning)]" : "bg-[var(--success-surface)] text-[var(--success)]"}`}
+            >
               {item.count ? <item.icon size={18} /> : <CircleCheck size={18} />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-medium text-[var(--foreground)]">{item.title}</p>
-                <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-semibold">{item.count}</span>
+                <p className="truncate text-sm font-medium text-[var(--foreground)]">
+                  {item.title}
+                </p>
+                <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-semibold">
+                  {item.count}
+                </span>
               </div>
-              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{item.description}</p>
+              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                {item.description}
+              </p>
             </div>
             {item.count ? (
-              <Link href="/admin/users" className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline">
+              <Link
+                href="/admin/users"
+                className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+              >
                 {t("View")} <ArrowRight size={13} />
               </Link>
             ) : null}
@@ -652,7 +724,10 @@ function AccountReadiness({ rows }: { rows: AccountReadinessRow[] }) {
       <CardHeader
         title={t("Account readiness")}
         action={
-          <Link href="/admin/users" className="text-xs font-medium text-[var(--primary)] hover:underline">
+          <Link
+            href="/admin/users"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
             {t("Manage")}
           </Link>
         }
@@ -670,28 +745,46 @@ function AccountReadiness({ rows }: { rows: AccountReadinessRow[] }) {
                 <th className="px-4 py-3 font-medium">{t("Preset")}</th>
                 <th className="px-4 py-3 font-medium">{t("Model")}</th>
                 <th className="px-4 py-3 font-medium">{t("Access")}</th>
-                <th className="px-5 py-3 text-right font-medium">{t("Readiness")}</th>
+                <th className="px-5 py-3 text-right font-medium">
+                  {t("Readiness")}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]/70">
               {rows.slice(0, 7).map((row) => (
-                <tr key={row.user.id || row.user.username} className="hover:bg-[var(--background)]/40">
-                  <td className="px-5 py-3 font-medium text-[var(--foreground)]">{row.user.username}</td>
+                <tr
+                  key={row.user.id || row.user.username}
+                  className="hover:bg-[var(--background)]/40"
+                >
+                  <td className="px-5 py-3 font-medium text-[var(--foreground)]">
+                    {row.user.username}
+                  </td>
                   <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                    {t(row.user.preset === "learner" ? "Learner" : row.user.preset === "custom" ? "Custom" : "Standard")}
+                    {t(
+                      row.user.preset === "learner"
+                        ? "Learner"
+                        : row.user.preset === "custom"
+                          ? "Custom"
+                          : "Standard",
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <StatusDot ready={row.modelReady} unknown={!row.checked} />
                   </td>
                   <td className="px-4 py-3">
-                    <StatusDot ready={row.contentReady} unknown={!row.checked} />
+                    <StatusDot
+                      ready={row.contentReady}
+                      unknown={!row.checked}
+                    />
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                      row.accessReady
-                        ? "bg-[var(--success-surface)] text-[var(--success)]"
-                        : "bg-[var(--warning-surface)] text-[var(--warning)]"
-                    }`}>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                        row.accessReady
+                          ? "bg-[var(--success-surface)] text-[var(--success)]"
+                          : "bg-[var(--warning-surface)] text-[var(--warning)]"
+                      }`}
+                    >
                       {row.accessReady ? t("Ready") : t("Needs setup")}
                     </span>
                   </td>
@@ -707,9 +800,16 @@ function AccountReadiness({ rows }: { rows: AccountReadinessRow[] }) {
 
 function StatusDot({ ready, unknown }: { ready: boolean; unknown: boolean }) {
   const { t } = useTranslation();
-  if (unknown) return <span className="text-xs text-[var(--muted-foreground)]">{t("Unknown")}</span>;
+  if (unknown)
+    return (
+      <span className="text-xs text-[var(--muted-foreground)]">
+        {t("Unknown")}
+      </span>
+    );
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs ${ready ? "text-[var(--success)]" : "text-[var(--warning)]"}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs ${ready ? "text-[var(--success)]" : "text-[var(--warning)]"}`}
+    >
       {ready ? <CircleCheck size={14} /> : <AlertTriangle size={14} />}
       {ready ? t("Ready") : t("Missing")}
     </span>
@@ -720,27 +820,54 @@ function AssignmentUsage({ counts }: { counts: AdminAssignmentCounts }) {
   const { t } = useTranslation();
   const items = [
     { label: t("Model assignments"), value: counts.models, icon: Bot },
-    { label: t("Knowledge assignments"), value: counts.knowledgeBases, icon: Database },
+    {
+      label: t("Knowledge assignments"),
+      value: counts.knowledgeBases,
+      icon: Database,
+    },
     { label: t("Skill assignments"), value: counts.skills, icon: Sparkles },
-    { label: t("Partner assignments"), value: counts.partners, icon: HeartHandshake },
-    { label: t("Tool assignments"), value: counts.tools + counts.mcpTools, icon: Wrench },
-    { label: t("Reading assignments"), value: counts.readingMaterials, icon: BookMarked },
+    {
+      label: t("Partner assignments"),
+      value: counts.partners,
+      icon: HeartHandshake,
+    },
+    {
+      label: t("Tool assignments"),
+      value: counts.tools + counts.mcpTools,
+      icon: Wrench,
+    },
+    {
+      label: t("Reading assignments"),
+      value: counts.readingMaterials,
+      icon: BookMarked,
+    },
   ];
   const total = items.reduce((sum, item) => sum + item.value, 0);
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader
         title={t("Assignments in use")}
-        action={<span className="text-xs font-semibold text-[var(--foreground)]">{total}</span>}
+        action={
+          <span className="text-xs font-semibold text-[var(--foreground)]">
+            {total}
+          </span>
+        }
       />
       <div className="grid grid-cols-2 gap-2 p-4">
         {items.map((item) => (
-          <div key={item.label} className="rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3">
+          <div
+            key={item.label}
+            className="rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <item.icon size={16} className="text-[var(--primary)]" />
-              <span className="text-xl font-semibold text-[var(--foreground)]">{item.value}</span>
+              <span className="text-xl font-semibold text-[var(--foreground)]">
+                {item.value}
+              </span>
             </div>
-            <p className="mt-2 truncate text-xs text-[var(--muted-foreground)]">{item.label}</p>
+            <p className="mt-2 truncate text-xs text-[var(--muted-foreground)]">
+              {item.label}
+            </p>
           </div>
         ))}
       </div>
@@ -751,16 +878,31 @@ function AssignmentUsage({ counts }: { counts: AdminAssignmentCounts }) {
   );
 }
 
-function RecentAccounts({ users, lang }: { users: UserRecord[]; lang: Language }) {
+function RecentAccounts({
+  users,
+  lang,
+}: {
+  users: UserRecord[];
+  lang: Language;
+}) {
   const { t } = useTranslation();
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader
         title={t("Recently joined accounts")}
-        action={<Link href="/admin/users" className="text-xs font-medium text-[var(--primary)] hover:underline">{t("View all")}</Link>}
+        action={
+          <Link
+            href="/admin/users"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
+            {t("View all")}
+          </Link>
+        }
       />
       {users.length === 0 ? (
-        <div className="px-5 py-12 text-center text-sm text-[var(--muted-foreground)]">{t("No accounts yet")}</div>
+        <div className="px-5 py-12 text-center text-sm text-[var(--muted-foreground)]">
+          {t("No accounts yet")}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -774,14 +916,31 @@ function RecentAccounts({ users, lang }: { users: UserRecord[]; lang: Language }
             </thead>
             <tbody className="divide-y divide-[var(--border)]/70">
               {users.map((user) => (
-                <tr key={user.id || user.username} className="hover:bg-[var(--background)]/40">
-                  <td className="px-5 py-3 font-medium text-[var(--foreground)]">{user.username}</td>
-                  <td className="px-5 py-3 text-[var(--muted-foreground)]">
-                    {user.role === "admin" ? t("Admin") : t(user.preset === "learner" ? "Learner" : user.preset === "custom" ? "Custom" : "Standard")}
+                <tr
+                  key={user.id || user.username}
+                  className="hover:bg-[var(--background)]/40"
+                >
+                  <td className="px-5 py-3 font-medium text-[var(--foreground)]">
+                    {user.username}
                   </td>
-                  <td className="px-5 py-3 text-[var(--muted-foreground)]">{formatDate(user.created_at, lang)}</td>
+                  <td className="px-5 py-3 text-[var(--muted-foreground)]">
+                    {user.role === "admin"
+                      ? t("Admin")
+                      : t(
+                          user.preset === "learner"
+                            ? "Learner"
+                            : user.preset === "custom"
+                              ? "Custom"
+                              : "Standard",
+                        )}
+                  </td>
+                  <td className="px-5 py-3 text-[var(--muted-foreground)]">
+                    {formatDate(user.created_at, lang)}
+                  </td>
                   <td className="px-5 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${user.disabled ? "bg-red-500/10 text-red-600 dark:text-red-400" : "bg-[var(--success-surface)] text-[var(--success)]"}`}>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${user.disabled ? "bg-red-500/10 text-red-600 dark:text-red-400" : "bg-[var(--success-surface)] text-[var(--success)]"}`}
+                    >
                       {user.disabled ? t("Disabled") : t("Active")}
                     </span>
                   </td>
@@ -799,30 +958,50 @@ function ResourceAccess({ counts }: { counts: AdminResourceCounts }) {
   const { t } = useTranslation();
   const resources = [
     { label: t("Models"), value: counts.models, icon: Bot },
-    { label: t("Knowledge bases"), value: counts.knowledgeBases, icon: Database },
+    {
+      label: t("Knowledge bases"),
+      value: counts.knowledgeBases,
+      icon: Database,
+    },
     { label: t("Books"), value: counts.books, icon: BookOpen },
     { label: t("Skills"), value: counts.skills, icon: Sparkles },
     { label: t("Partners"), value: counts.partners, icon: HeartHandshake },
     { label: t("Tools"), value: counts.tools, icon: Wrench },
     { label: t("MCP tools"), value: counts.mcpTools, icon: Boxes },
-    { label: t("Reading materials"), value: counts.readingMaterials, icon: BrainCircuit },
+    {
+      label: t("Reading materials"),
+      value: counts.readingMaterials,
+      icon: BrainCircuit,
+    },
   ];
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader title={t("Resource access")} />
       <div className="grid grid-cols-2 gap-2 p-4">
         {resources.map((resource) => (
-          <div key={resource.label} className="flex items-center gap-2.5 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3">
-            <div className="rounded-lg bg-[var(--primary)]/10 p-2 text-[var(--primary)]"><resource.icon size={16} /></div>
+          <div
+            key={resource.label}
+            className="flex items-center gap-2.5 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3"
+          >
+            <div className="rounded-lg bg-[var(--primary)]/10 p-2 text-[var(--primary)]">
+              <resource.icon size={16} />
+            </div>
             <div className="min-w-0">
-              <p className="truncate text-xs text-[var(--muted-foreground)]">{resource.label}</p>
-              <p className="text-lg font-semibold text-[var(--foreground)]">{resource.value.toLocaleString()}</p>
+              <p className="truncate text-xs text-[var(--muted-foreground)]">
+                {resource.label}
+              </p>
+              <p className="text-lg font-semibold text-[var(--foreground)]">
+                {resource.value.toLocaleString()}
+              </p>
             </div>
           </div>
         ))}
       </div>
       <div className="border-t border-[var(--border)]/70 px-5 py-3">
-        <Link href="/settings" className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline">
+        <Link
+          href="/settings"
+          className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+        >
           {t("Manage shared resources")} <ArrowRight size={13} />
         </Link>
       </div>
@@ -832,11 +1011,16 @@ function ResourceAccess({ counts }: { counts: AdminResourceCounts }) {
 
 function AdminDashboardSkeleton() {
   return (
-    <div className="h-full overflow-hidden bg-[var(--background)] p-6" aria-hidden>
+    <div
+      className="h-full overflow-hidden bg-[var(--background)] p-6"
+      aria-hidden
+    >
       <div className="mx-auto max-w-[1440px] animate-pulse">
         <div className="mb-6 h-16 w-full max-w-md rounded-xl bg-[var(--muted)]/60" />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-2xl bg-[var(--muted)]/55" />)}
+          {[0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-32 rounded-2xl bg-[var(--muted)]/55" />
+          ))}
         </div>
         <div className="mt-5 grid gap-5 xl:grid-cols-2">
           <div className="h-80 rounded-2xl bg-[var(--muted)]/45" />

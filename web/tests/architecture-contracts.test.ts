@@ -5,6 +5,17 @@ import { execFileSync } from "node:child_process";
 import test from "node:test";
 
 const root = process.cwd();
+// Path comparisons below are written with forward slashes, but path.relative()
+// and path.join() return backslash-separated paths on Windows, so the
+// allowlists never matched and every exempt file read as a violation.
+// Normalise to POSIX separators before comparing. Split on path.sep rather
+// than regex-replacing backslashes: a backslash is a legal character in a
+// POSIX filename, and replacing it there would corrupt the path. On macOS and
+// Linux path.sep is already "/", so this is the identity function and CI
+// (ubuntu) is unaffected.
+const toPosix = (p: string) => p.split(path.sep).join("/");
+const relPosix = (file: string) => toPosix(path.relative(root, file));
+
 const sourceRoots = [
   "app",
   "components",
@@ -33,14 +44,14 @@ const allSources = sourceRoots.flatMap(sourceFiles);
 
 test("browser storage methods stay behind the shared boundary", () => {
   const violations = allSources
-    .filter((file) => !file.endsWith("components/ThemeScript.tsx"))
-    .filter((file) => !file.includes("shared/storage/"))
+    .filter((file) => !toPosix(file).endsWith("components/ThemeScript.tsx"))
+    .filter((file) => !toPosix(file).includes("shared/storage/"))
     .filter((file) =>
       /(?:window\.)?(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)/.test(
         fs.readFileSync(file, "utf8"),
       ),
     )
-    .map((file) => path.relative(root, file));
+    .map(relPosix);
   assert.deepEqual(violations, []);
 });
 
@@ -51,7 +62,7 @@ test("raw fetch is limited to the shared API client and media preview", () => {
   ]);
   const violations = allSources
     .filter((file) => /\bfetch\(/.test(fs.readFileSync(file, "utf8")))
-    .map((file) => path.relative(root, file))
+    .map(relPosix)
     .filter((file) => !allow.has(file));
   assert.deepEqual(violations, []);
 });
@@ -61,7 +72,7 @@ test("source modules cannot import Next route pages", () => {
     .filter((file) =>
       /from\s+["'][^"']*\/page["']/.test(fs.readFileSync(file, "utf8")),
     )
-    .map((file) => path.relative(root, file));
+    .map(relPosix);
   assert.deepEqual(violations, []);
 });
 

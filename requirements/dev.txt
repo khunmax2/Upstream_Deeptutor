@@ -11,6 +11,13 @@
 
 pytest>=7.0.0
 pytest-asyncio>=0.23.0
+
+# Pinned to the version CI installs (.github/workflows/tests.yml) and the
+# pre-commit hook pins (.pre-commit-config.yaml). scripts/precheck.sh refuses to
+# start without a `ruff` in the venv, and a version drift between the three is
+# invisible until one formats a file the other rejects.
+ruff==0.16.0
+
 pre-commit>=3.0.0
 safety<3.0.0
 bandit>=1.8.0

@@ -79,6 +79,13 @@ def mu_isolated_root(tmp_path, monkeypatch) -> Path:
     monkeypatch.setattr(auth_service, "AUTH_USERNAME", "")
     monkeypatch.setattr(auth_service, "AUTH_PASSWORD_HASH", "")
 
+    # The primary-admin election is cached per marker path; the paths differ
+    # per test already, but clearing makes the isolation explicit rather than
+    # dependent on tmp_path never repeating.
+    from deeptutor.multi_user.primary_admin import reset_primary_admin_cache
+
+    reset_primary_admin_cache()
+
     admin_root.mkdir(parents=True, exist_ok=True)
     return tmp_path
 

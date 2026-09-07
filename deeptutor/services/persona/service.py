@@ -27,6 +27,7 @@ personas root on first service access for a workspace.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import re
 import shutil
@@ -35,6 +36,12 @@ from typing import Any
 import yaml
 
 from deeptutor.services.path_service import get_path_service
+from deeptutor.services.persona.localization import (
+    preset_source_file,
+    relocalize_seeded_presets,
+)
+
+logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -45,6 +52,8 @@ PERSONA_FILE = "PERSONA.md"
 # ``pyproject.toml`` package-data ``**/*.md``). Seeded into the admin workspace
 # on first run so fresh installs expose them as read-only presets (issue #659).
 PRESETS_DIR = Path(__file__).resolve().parent / "presets"
+
+# Fork: presets ship a PERSONA.<lang>.md beside the English original.
 
 # Product-seeded persona skills that predate the persona/skill split. Only
 # these well-known names are migrated automatically — arbitrary user skills
@@ -154,9 +163,17 @@ class PersonaService:
 
     # ── public read API ─────────────────────────────────────────────────
 
+    def _follow_interface_language(self) -> None:
+        """Fork: untouched seeded presets track the interface language."""
+        try:
+            relocalize_seeded_presets(PRESETS_DIR, self._root)
+        except Exception:  # localization must never break listing a persona
+            logger.debug("Persona relocalization skipped", exc_info=True)
+
     def list_personas(self) -> list[PersonaInfo]:
         if not self._root.exists():
             return []
+        self._follow_interface_language()
         out: list[PersonaInfo] = []
         for entry in sorted(self._root.iterdir()):
             if not entry.is_dir():
@@ -178,6 +195,7 @@ class PersonaService:
         return out
 
     def get_detail(self, name: str) -> PersonaDetail:
+        self._follow_interface_language()
         file = self._persona_file(name)
         if not file.exists():
             raise PersonaNotFoundError(name)
@@ -281,7 +299,7 @@ class PersonaService:
             return []
         seeded: list[str] = []
         for preset_dir in sorted(PRESETS_DIR.iterdir()):
-            source_file = preset_dir / PERSONA_FILE
+            source_file = preset_source_file(preset_dir)
             if not preset_dir.is_dir() or not source_file.exists():
                 continue
             try:

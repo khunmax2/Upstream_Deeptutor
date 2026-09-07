@@ -28,7 +28,7 @@ more branch here without touching a single consumer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import logging
 from pathlib import Path
 import re
@@ -71,6 +71,11 @@ class Extraction:
     outline: tuple[OutlineEntry, ...] = field(default_factory=tuple)
     render_mode: RenderMode = "text"
     unit_refs: tuple[UnitReference, ...] = field(default_factory=tuple)
+    # Set only when a recovery pass rebuilt the source file (today: the OCR
+    # fallback, which writes an invisible text layer into a scanned PDF). The
+    # store persists these bytes for the raw view instead of the upload, so the
+    # browser gets the selection surface the original never had.
+    raw_bytes: bytes | None = None
 
     @property
     def char_count(self) -> int:
@@ -99,11 +104,32 @@ def extract_material(path: str | Path) -> Extraction:
         extraction = _extract_sections(source)
 
     if not any(unit.strip() for unit in extraction.units):
-        raise ReadingError(
-            f"{source.name}: no readable text could be extracted. "
-            "A scanned document needs OCR before it can be read here."
-        )
+        if suffix != ".pdf":
+            raise ReadingError(
+                f"{source.name}: no readable text could be extracted. "
+                "A scanned document needs OCR before it can be read here."
+            )
+        extraction = _recover_pdf_with_ocr(source, extraction)
     return extraction
+
+
+def _recover_pdf_with_ocr(source: Path, extraction: Extraction) -> Extraction:
+    """Refill an image-only PDF's empty units from OCR, page for page.
+
+    Only the units, the extractor label and the raw bytes change: unit kind,
+    outline and render mode are already correct for a PDF, and keeping them is
+    what guarantees an OCR'd scan stays addressable by physical page number
+    exactly like every other PDF.
+    """
+    from deeptutor.reading.ocr import recover_with_ocr
+
+    recovered = recover_with_ocr(source, len(extraction.units))
+    return replace(
+        extraction,
+        units=recovered.units,
+        extractor=f"{extraction.extractor}+ocr:{recovered.engine}",
+        raw_bytes=recovered.searchable_pdf,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +234,23 @@ def _pdf_outline(doc: object, *, page_count: int) -> tuple[OutlineEntry, ...]:
 
 
 def _extract_slides(source: Path) -> Extraction:
-    text = _shared_extract(source)
+    try:
+        text = _shared_extract(source)
+    except ReadingError as exc:
+        # A deck exported from a design tool is one full-bleed picture per
+        # slide and carries no text run at all, so the shared extractor calls
+        # it empty. That is the deck's *pictures* being its text, not a broken
+        # file — recover it the same way a scanned PDF is recovered. Any other
+        # failure (corrupt package, unsupported) still surfaces as it was.
+        if not _is_empty_document(exc):
+            raise
+        recovered = _recover_slides_with_ocr(source)
+        return Extraction(
+            units=recovered.units,
+            unit="slide",
+            extractor=f"pptx+ocr:{recovered.engine}",
+        )
+
     parts = [part.strip() for part in _SLIDE_SEPARATOR.split(text)]
     units = tuple(part for part in parts if part)
     if not units:
@@ -216,6 +258,24 @@ def _extract_slides(source: Path) -> Extraction:
         # raw-OOXML fallback). Treat it as flat text rather than losing it.
         return _sections_from_text(text, extractor="pptx-text")
     return Extraction(units=units, unit="slide", extractor="pptx")
+
+
+def _is_empty_document(error: ReadingError) -> bool:
+    """Whether *error* is "this file holds no text", not "this file is broken".
+
+    ``_shared_extract`` re-raises with ``from exc``, so the extractor's own
+    exception type is still on the chain — worth reading rather than matching
+    the message text, which is user-facing copy and free to change.
+    """
+    from deeptutor.utils.document_extractor import EmptyDocumentError
+
+    return isinstance(error.__cause__, EmptyDocumentError)
+
+
+def _recover_slides_with_ocr(source: Path):
+    from deeptutor.reading.ocr import recover_slides_with_ocr
+
+    return recover_slides_with_ocr(source)
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +433,12 @@ def _shared_extract(source: Path) -> str:
             source, max_bytes=DocumentValidator.MAX_FILE_SIZE, max_chars=None
         )
     except DocumentExtractionError as exc:
-        raise ReadingError(f"{source.name}: {exc}") from exc
+        # Every extractor message already opens with the filename, so prefixing
+        # it again reads as "deck.pptx: deck.pptx: no extractable text".
+        message = str(exc)
+        if not message.startswith(source.name):
+            message = f"{source.name}: {message}"
+        raise ReadingError(message) from exc
     except OSError as exc:
         raise ReadingError(f"{source.name}: could not be read ({exc})") from exc
 
