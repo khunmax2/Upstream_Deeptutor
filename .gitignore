@@ -340,3 +340,6 @@ graphify-out/
 
 # The vendored OpenMAIC subtree builds in place; its caches are not ours to keep.
 integration/maic/.pnpm-store/
+
+# Writable pytest temp root — see the Windows note in CLAUDE.md
+.pytest-tmp/

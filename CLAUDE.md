@@ -72,6 +72,16 @@ pytest tests/path/to/test_x.py::test_name    # a single test
 # Note: --strict-markers is on; async tests need the `asyncio` marker (pytest-asyncio).
 # CI expects data/user/settings/main.yaml to exist (system.language, logging.level).
 
+# On Windows, a stale ACL on %TEMP%\pytest-of-<user> makes `tmp_path` unusable and
+# every test that touches it ERRORs at setup — 2,600+ of them, which buries the
+# real result and cannot be cleared by deleting the directory (that is denied
+# too). Point pytest somewhere writable instead; errors go to zero and the run
+# becomes readable:
+#   PYTEST_DEBUG_TEMPROOT=./.pytest-tmp pytest -q tests deeptutor/learning/tests
+# The remaining ~84 Windows failures are platform-bound (sandbox argv exec, the
+# macOS command launcher, some websocket timing) and are the local baseline, not
+# a regression — CI runs Linux and does not see them.
+
 # Python lint / format (must pass CI — ruff is the gate)
 ruff check .
 ruff format --check .           # ruff format (without --check) to autofix
