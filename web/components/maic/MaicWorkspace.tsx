@@ -87,11 +87,11 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
             className="mx-auto text-[var(--muted-foreground)]"
           />
           <h1 className="text-lg font-medium text-[var(--foreground)]">
-            {t("OpenMAIC is not connected")}
+            {t("The course studio is not connected")}
           </h1>
           <p className="text-sm leading-relaxed text-[var(--muted-foreground)]">
             {t(
-              "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.",
+              "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request.",
             )}
           </p>
           <div className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4 text-left text-xs">
@@ -129,14 +129,14 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
           the page one honest line saying whose app you are looking at. */}
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--background)] px-3">
         <span className="truncate text-xs text-[var(--muted-foreground)]">
-          {t("OpenMAIC course studio")}
+          {t("Course studio")}
         </span>
         <a
           href={tabSrc}
           target="_blank"
           rel="noopener noreferrer"
-          title={t("Open OpenMAIC in a new tab")}
-          aria-label={t("Open OpenMAIC in a new tab")}
+          title={t("Open the course studio in a new tab")}
+          aria-label={t("Open the course studio in a new tab")}
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)]/55 hover:text-[var(--foreground)]"
         >
           <ExternalLink size={15} strokeWidth={1.8} />
@@ -162,7 +162,7 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
         {languageReady ? (
           <iframe
             src={frameSrc}
-            title={t("OpenMAIC course studio")}
+            title={t("Course studio")}
             onLoad={() => setLoadedSrc(frameSrc)}
             allow="clipboard-write; fullscreen; microphone"
             className="h-full w-full border-0"

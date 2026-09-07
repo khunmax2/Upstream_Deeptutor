@@ -43,7 +43,13 @@
     "ttsPreview": "Vorschau",
     "ttsPreviewing": "Wird abgespielt...",
     "interactiveModeHint": "Aktiviere den interaktiven Modus, damit bevorzugt interaktive Inhalte erzeugt werden",
-    "interactiveModeLabel": "Interaktiver Modus"
+    "interactiveModeLabel": "Interaktiver Modus",
+    "toggleSidebar": "Seitenleiste umschalten",
+    "playbackSpeed": "Wiedergabegeschwindigkeit",
+    "previousScene": "Vorherige Szene",
+    "nextScene": "Nächste Szene",
+    "autoPlay": "Automatische Wiedergabe",
+    "toggleChat": "Chat umschalten"
   },
   "export": {
     "pptx": "PPTX exportieren",
@@ -230,7 +236,8 @@
     "exitFullscreen": "Vollbild beenden",
     "editCourse": "Kurs bearbeiten",
     "doneEditing": "Bearbeitung abschließen",
-    "proModeDisabledHint": "Diese Seite kann nicht bearbeitet werden — öffne eine Kursfolie, um sie im Pro-Modus zu bearbeiten."
+    "proModeDisabledHint": "Diese Seite kann nicht bearbeitet werden — öffne eine Kursfolie, um sie im Pro-Modus zu bearbeiten.",
+    "proMode": "Pro-Modus"
   },
   "edit": {
     "proMode": "Pro",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "Dein Browser unterstützt keine Spracherkennung",
+      "noSpeech": "Keine Sprache erkannt",
+      "micUnavailable": "Kein Zugriff auf das Mikrofon",
+      "micPermissionDenied": "Mikrofonzugriff verweigert",
+      "micAccess": "Kein Zugriff auf das Mikrofon. Prüfe die Berechtigungen.",
+      "network": "Netzwerkfehler",
+      "recognitionFailed": "Spracherkennung fehlgeschlagen. Bitte erneut versuchen.",
+      "recognitionError": "Spracherkennungsfehler: {{code}}",
+      "ttsUnsupported": "Dein Browser unterstützt keine Sprachausgabe"
     }
   }
 }

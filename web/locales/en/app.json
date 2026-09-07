@@ -4885,11 +4885,11 @@
   "{{count}} administrator account is excluded from the preset chart.": "{{count}} administrator account is excluded from the preset chart.",
   "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked.",
   "Course Studio": "Course Studio",
-  "Course Studio tooltip": "Build a whole course with OpenMAIC",
-  "OpenMAIC is not connected": "OpenMAIC is not connected",
-  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.": "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.",
+  "Course Studio tooltip": "Build a whole course",
   "Set the environment variable": "Set the environment variable",
   "or add this to data/user/settings/openmaic.json": "or add this to data/user/settings/openmaic.json",
-  "Open OpenMAIC in a new tab": "Open OpenMAIC in a new tab",
-  "OpenMAIC course studio": "OpenMAIC course studio"
+  "Course studio": "Course studio",
+  "Open the course studio in a new tab": "Open the course studio in a new tab",
+  "The course studio is not connected": "The course studio is not connected",
+  "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request.": "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request."
 }

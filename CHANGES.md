@@ -17,6 +17,63 @@ upstream.
 
 ---
 
+## A UAT of the course studio, and the Chinese defaults it found — 2026-09-07
+
+Clicking every control and walking a course from an empty library to a playing
+classroom, with the sweep done mechanically wherever it could be: every page
+route fetched and scanned, every visible button clicked with real pointer
+events and the resulting DOM scanned, all 1,699 `t()` calls checked against
+both locale tables.
+
+**The microphone toast was the thread to pull.** Pressing it and denying
+permission printed `无法访问麦克风，请检查权限设置` in every language — the symptom
+reported days ago. `lib/hooks/use-audio-recorder.ts` held nine hardcoded Chinese
+messages; all nine now go through `t()` in 13 languages.
+
+Pulling it found four more, and one of them was the root:
+
+- **`defaultLocale` was `zh-CN`**, and `lib/i18n/config.ts` hands that same value
+  to i18next as **both `lng` and `fallbackLng`**. So the first paint was Chinese,
+  and — the part that matters — *any key missing from a locale fell back to
+  Chinese rather than to English*. Now `en-US`, the language every locale file is
+  written against.
+- **Azure TTS was told to speak Chinese**: the SSML hardcoded `xml:lang='zh-CN'`
+  on both `<speak>` and `<voice>`. An Azure voice is named for its locale
+  (`th-TH-PremwadeeNeural`), so the tag now comes from the voice id.
+- `asr-settings.tsx` and `use-browser-asr.ts` both fell back to `zh-CN` for
+  browser speech recognition; `use-browser-tts.ts` did the same for synthesis and
+  carried its own Chinese error string.
+- `components/agent/agent-config-panel.tsx` — 11 Chinese strings, imported by
+  nothing — is deleted.
+
+**`stage.proMode` was called and defined nowhere.** The label beside the Pro
+switch rendered the literal string `stage.proMode`. Upstream's key gate compares
+locales against each other and never checks that a `t()` call resolves, so
+nothing caught it. Added in 13 languages, along with the six classroom transport
+controls whose `aria-label`s were hardcoded English beside translated
+neighbours.
+
+**The host's own frame was still branded.** De-branding stopped at
+`integration/maic` and never reached DeepTutor's wrapper: the panel header read
+"OpenMAIC course studio", the new-tab tooltip and the iframe's accessible name
+said the same, the sidebar tooltip offered to "Build a whole course with
+OpenMAIC", and the voice widget named it in Thai. All reworded in en/th/zh, and
+the route `/maic` is now `/course-studio` with a 308 redirect so old links land.
+
+**Verified end to end.** A Thai prompt produced a Thai outline, Thai slides, a
+Thai teacher and Thai narration with no language mixing, playback advanced, the
+export menu was fully Thai, and no server error was logged during the run. Every
+route scans 0 brand / 0 external links / 0 raw keys.
+
+**Left, and reported rather than fixed:** 43 Chinese strings in the slide
+editor's context menu and 45 call sites defaulting to a Chinese workbench
+translator — both behind feature flags that are off; a dozen more English
+`aria-label`s on surfaces a learner does not reach; and the gap that
+`server-providers.yml` carries no TTS provider, because `ServerProviderEntry`
+has no voice field and the configured server's only voice is not the built-in
+default. Speech therefore works on the browser that configured it and on no
+other. Details in `docs/reports/REPORT_uat_course_studio_2026-09-07.md`.
+
 ## The embedded classroom no longer carries OpenMAIC's brand — 2026-09-07
 
 The embed still announced itself as a second product. The browser tab said

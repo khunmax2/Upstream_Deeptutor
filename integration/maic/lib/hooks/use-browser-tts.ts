@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useI18n } from '@/lib/hooks/use-i18n';
 
 // Note: Window.SpeechSynthesis declaration is already in the global scope
 
@@ -15,19 +16,14 @@ export interface UseBrowserTTSOptions {
   rate?: number; // 0.1 to 10
   pitch?: number; // 0 to 2
   volume?: number; // 0 to 1
-  lang?: string; // e.g., 'zh-CN', 'en-US'
+  /** BCP-47 tag; defaults to the UI language. */
+  lang?: string;
 }
 
 export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
-  const {
-    onStart,
-    onEnd,
-    onError,
-    rate = 1.0,
-    pitch = 1.0,
-    volume = 1.0,
-    lang = 'zh-CN',
-  } = options;
+  const { onStart, onEnd, onError, rate = 1.0, pitch = 1.0, volume = 1.0, lang } = options;
+  const { t, locale } = useI18n();
+  const speechLang = lang || locale;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -62,7 +58,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
   const speak = useCallback(
     (text: string, voiceURI?: string) => {
       if (typeof window === 'undefined' || !window.speechSynthesis) {
-        onError?.('浏览器不支持 Web Speech API');
+        onError?.(t('audio.error.ttsUnsupported'));
         return;
       }
 
@@ -73,7 +69,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
       utterance.rate = rate;
       utterance.pitch = pitch;
       utterance.volume = volume;
-      utterance.lang = lang;
+      utterance.lang = speechLang;
 
       // Set voice if specified
       if (voiceURI) {
@@ -114,7 +110,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
       utteranceRef.current = utterance;
       window.speechSynthesis.speak(utterance);
     },
-    [rate, pitch, volume, lang, availableVoices, onStart, onEnd, onError],
+    [rate, pitch, volume, speechLang, availableVoices, onStart, onEnd, onError, t],
   );
 
   const pause = useCallback(() => {

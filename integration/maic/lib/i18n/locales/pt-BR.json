@@ -43,7 +43,13 @@
     "ttsPreview": "Pré-visualizar",
     "ttsPreviewing": "Reproduzindo...",
     "interactiveModeHint": "Ative o modo interativo para conteúdos mais práticos",
-    "interactiveModeLabel": "Modo Interativo"
+    "interactiveModeLabel": "Modo Interativo",
+    "toggleSidebar": "Mostrar ou ocultar a barra lateral",
+    "playbackSpeed": "Velocidade de reprodução",
+    "previousScene": "Cena anterior",
+    "nextScene": "Próxima cena",
+    "autoPlay": "Reprodução automática",
+    "toggleChat": "Mostrar ou ocultar o chat"
   },
   "export": {
     "pptx": "Exportar PPTX",
@@ -643,7 +649,8 @@
     "exitFullscreen": "Sair da tela cheia",
     "editCourse": "Editar curso",
     "doneEditing": "Concluir edição",
-    "proModeDisabledHint": "A edição não está disponível nesta página — abra um slide do curso para editar no modo Pro."
+    "proModeDisabledHint": "A edição não está disponível nesta página — abra um slide do curso para editar no modo Pro.",
+    "proMode": "Modo Pro"
   },
   "classroomComplete": {
     "title": "Curso concluído",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "Seu navegador não é compatível com reconhecimento de fala",
+      "noSpeech": "Nenhuma fala detectada",
+      "micUnavailable": "Não foi possível acessar o microfone",
+      "micPermissionDenied": "Permissão de microfone negada",
+      "micAccess": "Não foi possível acessar o microfone. Verifique as permissões.",
+      "network": "Erro de rede",
+      "recognitionFailed": "Falha no reconhecimento de fala. Tente novamente.",
+      "recognitionError": "Erro de reconhecimento de fala: {{code}}",
+      "ttsUnsupported": "Seu navegador não é compatível com síntese de fala"
     }
   }
 }

@@ -4885,11 +4885,11 @@
   "{{count}} administrator account is excluded from the preset chart.": "แผนภูมิพรีเซ็ตไม่นับบัญชีผู้ดูแลระบบ {{count}} บัญชี",
   "{{count}} assignment record could not be checked.": "ตรวจสอบข้อมูลการมอบหมาย {{count}} รายการไม่ได้",
   "Course Studio": "สตูดิโอสร้างคอร์ส",
-  "Course Studio tooltip": "สร้างคอร์สทั้งคอร์สด้วย OpenMAIC",
-  "OpenMAIC is not connected": "ยังไม่ได้เชื่อมต่อ OpenMAIC",
-  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.": "OpenMAIC ทำงานเป็นบริการแยกข้าง DeepTutor ตั้งค่าปลายทางให้หน้านี้ แล้วโหลดหน้าใหม่ — ระบบอ่านค่าใหม่ทุกครั้งที่เปิดหน้า",
+  "Course Studio tooltip": "สร้างคอร์สทั้งคอร์ส",
   "Set the environment variable": "ตั้งค่า environment variable",
   "or add this to data/user/settings/openmaic.json": "หรือเพิ่มค่านี้ใน data/user/settings/openmaic.json",
-  "Open OpenMAIC in a new tab": "เปิด OpenMAIC ในแท็บใหม่",
-  "OpenMAIC course studio": "สตูดิโอสร้างคอร์ส OpenMAIC"
+  "Course studio": "สตูดิโอสร้างคอร์ส",
+  "Open the course studio in a new tab": "เปิดสตูดิโอสร้างคอร์สในแท็บใหม่",
+  "The course studio is not connected": "ยังไม่ได้เชื่อมต่อสตูดิโอสร้างคอร์ส",
+  "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request.": "สตูดิโอสร้างคอร์สทำงานเป็นบริการแยกข้างแอปนี้ ตั้งค่าปลายทางให้หน้านี้ แล้วโหลดหน้าใหม่ — ระบบอ่านค่าใหม่ทุกครั้งที่เปิดหน้า"
 }

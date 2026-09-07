@@ -101,8 +101,8 @@ const UI_PAGES: { id: string; label: string; path: string }[] = [
   {
     id: "maic",
     label:
-      "หน้าสตูดิโอสร้างคอร์ส (course studio, OpenMAIC)",
-    path: "/maic",
+      "หน้าสตูดิโอสร้างคอร์ส (course studio)",
+    path: "/course-studio",
   },
   { id: "settings", label: "หน้าตั้งค่า (settings)", path: "/settings" },
   { id: "profile", label: "หน้าโปรไฟล์ผู้ใช้", path: "/profile" },

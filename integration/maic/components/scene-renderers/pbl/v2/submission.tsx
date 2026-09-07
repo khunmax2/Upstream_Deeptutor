@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { defaultLocale } from '@/lib/i18n';
 import {
   CheckCircle2,
   Download,
@@ -176,7 +177,7 @@ function newClientMessageId(): string {
 }
 
 function submissionReceiptText(submission: PBLSubmission, language?: string): string {
-  const lng = language || 'zh-CN';
+  const lng = language || defaultLocale;
   const label =
     submission.kind === 'file' && submission.filename
       ? i18n.t('pbl.v2.submission.receiptFile', { lng, filename: submission.filename })

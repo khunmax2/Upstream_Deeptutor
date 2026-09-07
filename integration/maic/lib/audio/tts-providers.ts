@@ -436,9 +436,7 @@ const DEFAULT_PCM_SAMPLE_RATE = 24_000;
 const DEFAULT_PCM_CHANNELS = 1;
 
 /** `(sampleRate, channels)` when the response is headerless PCM, else null. */
-function parsePcmContentType(
-  contentType: string,
-): { sampleRate: number; channels: number } | null {
+function parsePcmContentType(contentType: string): { sampleRate: number; channels: number } | null {
   const [mediaType, ...params] = (contentType || '').split(';');
   if (!RAW_PCM_MEDIA_TYPES.has(mediaType.trim().toLowerCase())) return null;
 
@@ -448,7 +446,13 @@ function parsePcmContentType(
     const eq = param.indexOf('=');
     if (eq === -1) continue;
     const key = param.slice(0, eq).trim().toLowerCase();
-    const parsed = Number.parseInt(param.slice(eq + 1).trim().replace(/^"|"$/g, ''), 10);
+    const parsed = Number.parseInt(
+      param
+        .slice(eq + 1)
+        .trim()
+        .replace(/^"|"$/g, ''),
+      10,
+    );
     if (!Number.isFinite(parsed) || parsed <= 0) continue;
     if (key === 'rate' || key === 'sample-rate' || key === 'samplerate') sampleRate = parsed;
     else if (key === 'channels' || key === 'channel') channels = parsed;
@@ -564,8 +568,7 @@ export function decodeAudioResponse(
     const mediaType = (contentType || '').split(';')[0].trim().toLowerCase();
     // WAV stores samples little-endian, so big-endian PCM has to be swapped
     // rather than merely wrapped — a header alone would describe it wrongly.
-    const samples =
-      detectByteOrder(bytes, mediaType) === 'big' ? swapBytes(bytes) : bytes;
+    const samples = detectByteOrder(bytes, mediaType) === 'big' ? swapBytes(bytes) : bytes;
     return {
       audio: pcm16ToWav(samples, pcm.sampleRate, pcm.channels),
       format: 'wav',
@@ -792,9 +795,13 @@ async function generateAzureTTS(
 
   // Build SSML
   const rate = config.speed ? `${((config.speed - 1) * 100).toFixed(0)}%` : '0%';
+  // Azure names a voice for its locale (`th-TH-PremwadeeNeural`), so the
+  // first two segments are the language to pronounce. Hardcoding zh-CN here
+  // asked Azure to read every language with Chinese phonetics.
+  const voiceLocale = /^[a-z]{2,3}-[A-Za-z]{2,4}/.exec(config.voice ?? '')?.[0] ?? 'en-US';
   const ssml = `
-    <speak version='1.0' xml:lang='zh-CN'>
-      <voice xml:lang='zh-CN' name='${config.voice}'>
+    <speak version='1.0' xml:lang='${voiceLocale}'>
+      <voice xml:lang='${voiceLocale}' name='${config.voice}'>
         <prosody rate='${rate}'>${escapeXml(text)}</prosody>
       </voice>
     </speak>

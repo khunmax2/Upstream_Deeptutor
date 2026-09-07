@@ -43,7 +43,13 @@
     "ttsPreview": "Écouter",
     "ttsPreviewing": "Lecture…",
     "interactiveModeHint": "Activez le mode interactif pour obtenir un contenu plus pratique",
-    "interactiveModeLabel": "Mode interactif"
+    "interactiveModeLabel": "Mode interactif",
+    "toggleSidebar": "Afficher ou masquer la barre latérale",
+    "playbackSpeed": "Vitesse de lecture",
+    "previousScene": "Scène précédente",
+    "nextScene": "Scène suivante",
+    "autoPlay": "Lecture automatique",
+    "toggleChat": "Afficher ou masquer le chat"
   },
   "export": {
     "pptx": "Exporter en PPTX",
@@ -230,7 +236,8 @@
     "exitFullscreen": "Quitter le plein écran",
     "editCourse": "Modifier le cours",
     "doneEditing": "Terminer les modifications",
-    "proModeDisabledHint": "L’édition n’est pas disponible sur cette page. Ouvrez une diapositive de cours pour la modifier en mode Pro."
+    "proModeDisabledHint": "L’édition n’est pas disponible sur cette page. Ouvrez une diapositive de cours pour la modifier en mode Pro.",
+    "proMode": "Mode Pro"
   },
   "edit": {
     "proMode": "Pro",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "Votre navigateur ne prend pas en charge la reconnaissance vocale",
+      "noSpeech": "Aucune parole détectée",
+      "micUnavailable": "Impossible d’accéder au microphone",
+      "micPermissionDenied": "Accès au microphone refusé",
+      "micAccess": "Impossible d’accéder au microphone. Vérifiez les autorisations.",
+      "network": "Erreur réseau",
+      "recognitionFailed": "Échec de la reconnaissance vocale. Veuillez réessayer.",
+      "recognitionError": "Erreur de reconnaissance vocale : {{code}}",
+      "ttsUnsupported": "Votre navigateur ne prend pas en charge la synthèse vocale"
     }
   }
 }

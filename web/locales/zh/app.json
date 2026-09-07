@@ -4885,11 +4885,11 @@
   "{{count}} administrator account is excluded from the preset chart.": "预设分布图中已排除 {{count}} 个管理员账户。",
   "{{count}} assignment record could not be checked.": "有 {{count}} 条分配记录无法检查。",
   "Course Studio": "课程工作室",
-  "Course Studio tooltip": "使用 OpenMAIC 生成整门课程",
-  "OpenMAIC is not connected": "尚未连接 OpenMAIC",
-  "OpenMAIC runs as its own service beside DeepTutor. Point this page at it, then reload — the setting is read on every request.": "OpenMAIC 作为独立服务运行在 DeepTutor 旁边。为本页配置其地址后刷新即可 — 该设置在每次请求时读取。",
+  "Course Studio tooltip": "生成整门课程",
   "Set the environment variable": "设置环境变量",
   "or add this to data/user/settings/openmaic.json": "或在 data/user/settings/openmaic.json 中添加",
-  "Open OpenMAIC in a new tab": "在新标签页中打开 OpenMAIC",
-  "OpenMAIC course studio": "OpenMAIC 课程工作室"
+  "Course studio": "课程工作室",
+  "Open the course studio in a new tab": "在新标签页中打开课程工作室",
+  "The course studio is not connected": "尚未连接课程工作室",
+  "The course studio runs as its own service beside this app. Point this page at it, then reload — the setting is read on every request.": "课程工作室作为独立服务运行在本应用旁边。为本页配置其地址后刷新即可 — 该设置在每次请求时读取。"
 }

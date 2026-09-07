@@ -97,8 +97,8 @@ export const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
-    // OpenMAIC course studio — an external application (THU-MAIC/OpenMAIC,
-    // MIT) framed at /maic, not code that runs in this bundle. It brings its
+    // The course studio — an external application (THU-MAIC/OpenMAIC, MIT)
+    // framed at /course-studio, not code that runs in this bundle. It brings its
     // own Tailwind v4, its own `/api/*` routes and its own database, none of
     // which can share this app's, so it runs as a sibling service and this
     // entry is the door to it.
@@ -107,7 +107,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     // OpenMAIC authenticates against its own providers. `surface` is left
     // undeclared, which keeps it hidden from restricted learning accounts —
     // the safe direction until someone decides it belongs to a surface.
-    href: "/maic",
+    href: "/course-studio",
     label: "Course Studio",
     icon: GraduationCap,
     tooltipKey: "Course Studio tooltip",

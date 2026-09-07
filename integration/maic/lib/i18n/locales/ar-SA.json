@@ -43,7 +43,13 @@
     "ttsTitle": "تحويل النص إلى كلام",
     "ttsHint": "اختر صوتًا للمعلم الذكي",
     "ttsPreview": "معاينة",
-    "ttsPreviewing": "جارٍ التشغيل..."
+    "ttsPreviewing": "جارٍ التشغيل...",
+    "toggleSidebar": "إظهار الشريط الجانبي أو إخفاؤه",
+    "playbackSpeed": "سرعة التشغيل",
+    "previousScene": "المشهد السابق",
+    "nextScene": "المشهد التالي",
+    "autoPlay": "تشغيل تلقائي",
+    "toggleChat": "إظهار المحادثة أو إخفاؤها"
   },
   "export": {
     "pptx": "تصدير PPTX",
@@ -230,7 +236,8 @@
     "exitFullscreen": "الخروج من ملء الشاشة",
     "editCourse": "تحرير الدورة",
     "doneEditing": "إنهاء التحرير",
-    "proModeDisabledHint": "التحرير غير متاح في هذه الصفحة — افتح شريحة من الدورة للتحرير باستخدام وضع Pro."
+    "proModeDisabledHint": "التحرير غير متاح في هذه الصفحة — افتح شريحة من الدورة للتحرير باستخدام وضع Pro.",
+    "proMode": "الوضع الاحترافي"
   },
   "edit": {
     "proMode": "احترافي",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "متصفحك لا يدعم التعرف على الكلام",
+      "noSpeech": "لم يتم اكتشاف أي كلام",
+      "micUnavailable": "تعذر الوصول إلى الميكروفون",
+      "micPermissionDenied": "تم رفض إذن الميكروفون",
+      "micAccess": "تعذر الوصول إلى الميكروفون. تحقق من إعدادات الأذونات.",
+      "network": "خطأ في الشبكة",
+      "recognitionFailed": "فشل التعرف على الكلام. يرجى المحاولة مرة أخرى.",
+      "recognitionError": "خطأ في التعرف على الكلام: {{code}}",
+      "ttsUnsupported": "متصفحك لا يدعم تركيب الكلام"
     }
   }
 }

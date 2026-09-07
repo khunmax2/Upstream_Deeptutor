@@ -43,7 +43,13 @@
     "ttsPreview": "ฟังตัวอย่าง",
     "ttsPreviewing": "กำลังเล่น...",
     "interactiveModeHint": "เปิดโหมดเน้นการโต้ตอบ เพื่อให้ได้เนื้อหาที่ลงมือทำมากขึ้น",
-    "interactiveModeLabel": "โหมดโต้ตอบ"
+    "interactiveModeLabel": "โหมดโต้ตอบ",
+    "toggleSidebar": "สลับแถบด้านข้าง",
+    "playbackSpeed": "ความเร็วการเล่น",
+    "previousScene": "ฉากก่อนหน้า",
+    "nextScene": "ฉากถัดไป",
+    "autoPlay": "เล่นอัตโนมัติ",
+    "toggleChat": "สลับหน้าต่างแชท"
   },
   "export": {
     "pptx": "ส่งออก PPTX",
@@ -230,7 +236,8 @@
     "exitFullscreen": "ออกจากเต็มจอ",
     "editCourse": "แก้ไขคอร์ส",
     "doneEditing": "แก้ไขเสร็จแล้ว",
-    "proModeDisabledHint": "หน้านี้แก้ไขไม่ได้ — เปิดสไลด์ของคอร์สเพื่อแก้ไขด้วยโหมด Pro"
+    "proModeDisabledHint": "หน้านี้แก้ไขไม่ได้ — เปิดสไลด์ของคอร์สเพื่อแก้ไขด้วยโหมด Pro",
+    "proMode": "โหมดโปร"
   },
   "edit": {
     "proMode": "Pro",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "เบราว์เซอร์ของคุณไม่รองรับการรู้จำเสียงพูด",
+      "noSpeech": "ไม่พบเสียงพูด",
+      "micUnavailable": "เข้าถึงไมโครโฟนไม่ได้",
+      "micPermissionDenied": "ไม่ได้รับอนุญาตให้ใช้ไมโครโฟน",
+      "micAccess": "เข้าถึงไมโครโฟนไม่ได้ กรุณาตรวจสอบการอนุญาต",
+      "network": "เครือข่ายขัดข้อง",
+      "recognitionFailed": "รู้จำเสียงพูดไม่สำเร็จ กรุณาลองใหม่",
+      "recognitionError": "รู้จำเสียงพูดผิดพลาด: {{code}}",
+      "ttsUnsupported": "เบราว์เซอร์ของคุณไม่รองรับการอ่านออกเสียง"
     }
   }
 }

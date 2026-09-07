@@ -43,7 +43,13 @@
     "ttsPreview": "Preview",
     "ttsPreviewing": "Playing...",
     "interactiveModeHint": "Enable interactive-first mode for more hands-on content",
-    "interactiveModeLabel": "Interactive Mode"
+    "interactiveModeLabel": "Interactive Mode",
+    "toggleSidebar": "Toggle sidebar",
+    "playbackSpeed": "Playback speed",
+    "previousScene": "Previous scene",
+    "nextScene": "Next scene",
+    "autoPlay": "Auto-play",
+    "toggleChat": "Toggle chat"
   },
   "export": {
     "pptx": "Export PPTX",
@@ -230,7 +236,8 @@
     "exitFullscreen": "Exit Fullscreen",
     "editCourse": "Edit course",
     "doneEditing": "Done editing",
-    "proModeDisabledHint": "Editing isn't available on this page — open a course slide to edit with Pro mode."
+    "proModeDisabledHint": "Editing isn't available on this page — open a course slide to edit with Pro mode.",
+    "proMode": "Pro mode"
   },
   "edit": {
     "proMode": "Pro",
@@ -2027,6 +2034,19 @@
       "error": {
         "materialExtraction": null
       }
+    }
+  },
+  "audio": {
+    "error": {
+      "browserUnsupported": "Your browser does not support speech recognition",
+      "noSpeech": "No speech detected",
+      "micUnavailable": "Cannot access the microphone",
+      "micPermissionDenied": "Microphone permission denied",
+      "micAccess": "Cannot access the microphone. Check your permission settings.",
+      "network": "Network error",
+      "recognitionFailed": "Speech recognition failed. Please try again.",
+      "recognitionError": "Speech recognition error: {{code}}",
+      "ttsUnsupported": "Your browser does not support speech synthesis"
     }
   }
 }
