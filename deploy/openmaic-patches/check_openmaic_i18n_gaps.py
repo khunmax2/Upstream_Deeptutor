@@ -113,9 +113,7 @@ def scan(root: Path) -> list[tuple[str, str, int, str]]:
         # something a reader sees. Both matter and they are not the same problem:
         # UI text in Chinese shows Chinese; a prompt in Chinese steers the model
         # toward answering in it. Counting them together hid both.
-        is_prompt = (
-            rel.startswith("app/api/") or "prompt" in rel.lower() or "/agents/" in rel
-        )
+        is_prompt = rel.startswith("app/api/") or "prompt" in rel.lower() or "/agents/" in rel
 
         for number, line in enumerate(text.splitlines(), 1):
             # Checked first and unconditionally: an English hardcoded string has
@@ -147,7 +145,12 @@ def scan(root: Path) -> list[tuple[str, str, int, str]]:
             number = text[: match.start()].count("\n") + 1
             codes = re.findall(r"['\"]([a-z]{2,3}(?:-[A-Za-z]{2,4})?)['\"]", block)
             findings.append(
-                (rel, "language-list", number, f"{len(codes)} codes, no 'th': {', '.join(codes[:10])}")
+                (
+                    rel,
+                    "language-list",
+                    number,
+                    f"{len(codes)} codes, no 'th': {', '.join(codes[:10])}",
+                )
             )
 
     return sorted(findings)
