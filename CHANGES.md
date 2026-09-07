@@ -17,6 +17,37 @@ upstream.
 
 ---
 
+## What a real deploy found that the runbook did not — 2026-09-08
+
+Three gaps, reported from the machine rather than guessed at here. All three
+come from one wrong assumption: that the host is empty and that whoever runs
+this owns everything on it.
+
+**`data/` is not yours to write.** The container writes it as its own user, so
+after DeepTutor has run once the directory belongs to that UID and `775` leaves
+the operator with `r-x`. §4's `cat > data/user/settings/openmaic.json` answers
+`Permission denied`. The runbook now writes through the container and fixes the
+ownership afterwards — `docker exec` runs as root, so a file created that way
+lands `root:root 0666` and looks nothing like its neighbours. §4b hits the same
+wall, one directory earlier.
+
+**The script could not be moved.** `build_server_providers.py` found the
+repository root with `Path(__file__).parents[2]` — "two directories up", which
+is true exactly where it already lives. Copied to `/tmp`, as an operator
+reasonably would, it raised `IndexError`. It now imports the mapping if the
+package is installed, and otherwise finds the root by looking for the module.
+
+**The running DeepTutor was older than the procedure.** The runbook was written
+for a clean machine; this one had been serving DeepTutor for a while from an
+earlier commit, so `openmaic_bridge.py` and the `/course-studio` route were
+simply absent from the image. §4b and §8 both depend on code that ships in it,
+and neither says so loudly when it is missing. "Before you start" now checks for
+both.
+
+That check needed a correction of its own before it was worth printing:
+`docker exec deeptutor test -f …` runs `test` as a binary rather than a shell
+builtin and returns 1 for a file that is plainly there. Both tests go through
+`sh -c`, and the runbook says why so nobody simplifies it back.
 ## The course studio had no model to call — 2026-09-08
 
 Found by deploying it. `BINDING_TO_PROVIDER['providers']` in

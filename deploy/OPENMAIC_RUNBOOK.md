@@ -28,6 +28,30 @@ route in is the gatekeeper.
 
 ## Before you start
 
+**If DeepTutor is already running on this machine, check what it is running
+first.** This procedure assumes the whole stack comes from one checkout, and a
+machine that has been serving DeepTutor for a while usually does not: its
+container was built from an older commit, and two steps below need code that
+commit does not contain.
+
+```bash
+docker exec deeptutor sh -c '
+  test -f /app/deeptutor/services/config/openmaic_bridge.py \
+    && echo "bridge present" || echo "STALE: rebuild before 4b"
+  test -d "/app/web/.next/server/app/(workspace)/course-studio" \
+    && echo "route present"  || echo "STALE: rebuild before 8"
+'
+```
+
+Both tests go through `sh -c` on purpose. `docker exec deeptutor test -f …`
+runs `test` as a binary rather than a shell builtin and returns 1 for a file
+that is plainly there, so the check reports a stale image on a current one.
+
+Missing either, `docker compose build deeptutor` before going further. §4b
+writes the provider file through code that ships in the image, and §8 opens a
+route that has to exist in the bundle — neither fails loudly when the image is
+behind.
+
 | | |
 |---|---|
 | `git`, `docker`, `docker compose` | required |
@@ -134,6 +158,26 @@ The backup line matters on any machine that has trialled this before: the file
 may already exist and point somewhere else, and `cat >` replaces it without a
 word.
 
+**`Permission denied` here is expected on a machine that has run DeepTutor
+before.** The container writes `data/` as its own user, so the directory ends up
+owned by that UID rather than yours; `775` leaves everyone else with `r-x`.
+Write through the container instead, and fix the ownership after — `docker exec`
+runs as root, so a file created this way lands `root:root 0666` and looks
+nothing like its neighbours:
+
+```bash
+docker exec deeptutor sh -c 'cat > /app/data/user/settings/openmaic.json <<EOF
+{ "embed_url": "https://203.185.144.41:10330" }
+EOF
+chown deeptutor:deeptutor /app/data/user/settings/openmaic.json
+chmod 644 /app/data/user/settings/openmaic.json'
+```
+
+`data/` is a bind mount from the repository, so writing inside the container
+writes the host file the compose overlay will mount. The same applies to §4b:
+`data/user/openmaic/` may not exist yet and you may not be able to create it
+from the host.
+
 `DEEPTUTOR_OPENMAIC_URL` overrides it if you prefer an environment variable. The
 page reads this per request — `force-dynamic` — so no rebuild or restart of
 DeepTutor is needed.
@@ -155,6 +199,12 @@ was something to write the file, which is what this does, from
 
 The compose overlay mounts it read-only. It contains credentials and lives under
 `data/`, which is gitignored.
+
+Run it from the repository, or from inside the DeepTutor container — it
+imports the mapping from `deeptutor.services.config.openmaic_bridge`, and finds
+the repository root by looking for that module rather than by counting
+directories. Copying the file somewhere else on its own used to fail with
+`IndexError`.
 
 **You only need this command for a first bring-up.** After that DeepTutor
 rewrites the file itself, on every save of provider settings, and OpenMAIC
