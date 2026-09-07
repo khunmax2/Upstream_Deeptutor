@@ -93,6 +93,39 @@ from the Next middleware matcher the way the knowledge-base upload routes are,
 so the middleware was the other suspect — but posting straight to the frontend
 port streamed 58 MB through it untouched, leaving nginx as the only ceiling.
 
+**OCR for scanned documents (`Dockerfile`, `deploy/docker-compose.localhost.yml`)**
+— `deeptutor/reading/ocr.py` arrived with the 2026-09-07 update and reaches
+Tesseract through PyMuPDF, which costs no extra Python dependency but needs
+three things present, not one:
+
+1. `tesseract-ocr` — the binary;
+2. `tesseract-ocr-eng` + `tesseract-ocr-tha` — ocr.py maps the interface
+   language to a traineddata name and *always* appends English, so a Thai
+   deployment asks for `tha+eng` and fails if either half is missing;
+3. `TESSDATA_PREFIX` — `pymupdf.get_tessdata()` reads it and otherwise raises
+   *"No tessdata specified and Tesseract is not installed"*, which is also the
+   message for nothing being installed at all. A missing variable therefore
+   reads as a missing package.
+
+The path (`/usr/share/tesseract-ocr/5/tessdata`) is version-numbered and was
+confirmed against this base image (debian trixie, tesseract 5.5.0) rather than
+assumed; re-check it whenever the base image's tesseract major version moves.
+
+`DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng` is pinned in the host override because
+this deployment's `main.yaml` still says `language: en` — without it a Thai scan
+would be read as English and come back as noise. Drop it if the interface
+language is switched to Thai, which derives the same spec.
+
+Checked with `deploy/ocr_check.py`, which builds a genuinely text-layer-free PDF
+(render to raster, rebuild from the raster) and pushes it through the real
+extractor. English round-trips exactly; `tha` and `tha+eng` load in Tesseract
+without error, though neither this image nor the host ships a Thai font, so Thai
+*glyph* accuracy is unproven here — only that the language data loads.
+
+**MinerU and Docling are not configured** (`engine = text_only`, no tokens, both
+with OCR off), so there was no lighter path: ocr.py's preferred heavyweight
+providers would have declined and fallen through to Tesseract anyway.
+
 **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
 HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
 `/login` with basePath preserved, APIs 401), and a full streaming turn over
