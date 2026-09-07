@@ -12,8 +12,6 @@ Run inside the container:
 
 from __future__ import annotations
 
-import sys
-
 
 def _image_only_pdf(text: str, fontfile: str | None) -> bytes:
     """A one-page PDF carrying a raster of `text` and no text layer."""
@@ -86,8 +84,8 @@ def main() -> int:
 
         doc = pymupdf.open("pdf", pdf)
         try:
-            ocr_pdf = doc[0].get_pixmap(dpi=300).pdfocr_tobytes(
-                language=language, tessdata=tessdata
+            ocr_pdf = (
+                doc[0].get_pixmap(dpi=300).pdfocr_tobytes(language=language, tessdata=tessdata)
             )
         except Exception as exc:
             print(f"  ✗ OCR raised: {exc}")
