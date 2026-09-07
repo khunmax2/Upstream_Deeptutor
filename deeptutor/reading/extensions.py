@@ -8,7 +8,7 @@ the reader or any other extension.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import json
 import logging
 import threading
@@ -119,7 +119,10 @@ class ReadingExtensionRegistry:
         self._execution_lock = threading.Lock()
         self._executors: dict[str, ThreadPoolExecutor] = {}
         self._active: set[str] = set()
-        self._timed_out: set[str] = set()
+        # extension id -> the worker that overran, or None when the caller did
+        # not name one. The circuit stays open while that worker is still
+        # running, which is the condition it actually protects.
+        self._timed_out: dict[str, Future | None] = {}
 
     def all(self) -> list[ReadingExtension]:
         return sorted(self._extensions.values(), key=lambda row: row.manifest.id)
@@ -130,19 +133,42 @@ class ReadingExtensionRegistry:
     def begin_action(self, extension_id: str) -> bool:
         """Reserve one extension worker unless it is busy or circuit-broken."""
         with self._execution_lock:
-            if extension_id in self._active or extension_id in self._timed_out:
+            if extension_id in self._active:
                 return False
+            if extension_id in self._timed_out and not self._worker_free(extension_id):
+                return False
+            self._timed_out.pop(extension_id, None)
             self._active.add(extension_id)
             return True
+
+    def _worker_free(self, extension_id: str) -> bool:
+        """Whether the overrunning worker has since released the single slot.
+
+        Called with the lock held. A handler that eventually returned — and an
+        async one, whose executor call only ever *built* the coroutine and so
+        finished immediately — leaves the worker free, and the circuit has
+        nothing left to protect. A sync handler still spinning does not, and
+        the circuit stays open for exactly as long as it holds the slot.
+        """
+        worker = self._timed_out.get(extension_id)
+        # No worker named: the caller could not tell us, so assume the worst
+        # and keep the old permanent behaviour rather than double-book the slot.
+        return worker is not None and worker.done()
 
     def finish_action(self, extension_id: str) -> None:
         with self._execution_lock:
             self._active.discard(extension_id)
 
-    def mark_timed_out(self, extension_id: str) -> None:
-        """Open the circuit: Python cannot safely kill a stuck sync handler."""
+    def mark_timed_out(self, extension_id: str, worker: Future | None = None) -> None:
+        """Open the circuit: Python cannot safely kill a stuck sync handler.
+
+        Pass the executor ``Future`` that overran. The circuit then closes on
+        its own once that worker releases the slot, instead of holding the
+        extension down for the life of the process — "temporarily unavailable"
+        used to mean "until someone restarts the backend".
+        """
         with self._execution_lock:
-            self._timed_out.add(extension_id)
+            self._timed_out[extension_id] = worker
 
     def executor_for(self, extension_id: str) -> ThreadPoolExecutor:
         """Return the extension's private single worker, never the global pool."""
