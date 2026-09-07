@@ -72,12 +72,31 @@ pytest tests/path/to/test_x.py::test_name    # a single test
 # Note: --strict-markers is on; async tests need the `asyncio` marker (pytest-asyncio).
 # CI expects data/user/settings/main.yaml to exist (system.language, logging.level).
 
+# On Windows, a stale ACL on %TEMP%\pytest-of-<user> makes `tmp_path` unusable and
+# every test that touches it ERRORs at setup — 2,600+ of them, which buries the
+# real result and cannot be cleared by deleting the directory (that is denied
+# too). Point pytest somewhere writable instead; errors go to zero and the run
+# becomes readable:
+#   PYTEST_DEBUG_TEMPROOT=./.pytest-tmp pytest -q tests deeptutor/learning/tests
+# The remaining ~84 Windows failures are platform-bound (sandbox argv exec, the
+# macOS command launcher, some websocket timing) and are the local baseline, not
+# a regression — CI runs Linux and does not see them.
+
 # Python lint / format (must pass CI — ruff is the gate)
 ruff check .
 ruff format --check .           # ruff format (without --check) to autofix
 
 # All pre-commit hooks (ruff, prettier, detect-secrets, bandit, mypy)
 pre-commit run --all-files
+
+# The embedded course studio (in integration/maic/) — pnpm, not npm
+# A Docker build does this itself; these are for working on it directly.
+cd integration/maic
+corepack enable && pnpm install --frozen-lockfile
+pnpm test                       # vitest
+node scripts/check-i18n-keys.mjs   # upstream's own locale gate (expects 13 files)
+# Note: after a containerised install, node_modules holds POSIX symlinks and no
+# .cmd shims, so host-side npx cannot use it — run the suite in a container too.
 
 # Frontend (in web/)
 cd web && npm ci --legacy-peer-deps
@@ -130,6 +149,27 @@ under **"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`.
 
 > Note: `main` currently carries fork customizations (Thai i18n was merged in), so an
 > upstream sync is a real **merge-with-conflicts**, not a fast-forward.
+
+### `integration/maic` is out of scope for this sync
+
+That directory is **OpenMAIC** (THU-MAIC/OpenMAIC, MIT), vendored as a squashed
+git subtree. It has nothing to do with HKUDS and must not be touched by a
+DeepTutor upstream sync — do not merge into it, do not resolve conflicts in it,
+and exclude it from any diff or impact analysis of an HKUDS release:
+
+```bash
+git diff <upstream> -- . ':(exclude)integration/maic'
+```
+
+It has its own update path, which is the only command that should ever write
+there:
+
+```bash
+git subtree pull --prefix=integration/maic     https://github.com/THU-MAIC/OpenMAIC main --squash
+```
+
+Everything else about it — why it is vendored rather than patched, what our
+changes to it are, how the embed is deployed — is in `deploy/OPENMAIC_*.md`.
 
 ## 3. Keep customizations mergeable
 

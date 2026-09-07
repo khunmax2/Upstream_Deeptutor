@@ -44,6 +44,10 @@ SECTION_TARGET_CHARS = 2800
 # Never emit a section longer than this even if no paragraph break was found —
 # a minified file or a single 200k-character line must still be addressable.
 SECTION_HARD_CHARS = 4200
+# Non-whitespace characters a line must carry to label an OCR'd unit. Sits well
+# above the fragments OCR pulls out of decoration (measured: 1-6 characters) and
+# below a real slide heading (23-45), so it separates them without tuning.
+OCR_LABEL_MIN_CHARS = 12
 
 _SLIDE_SEPARATOR = re.compile(r"^--- Slide \d+ ---$", re.MULTILINE)
 # Title candidates: a markdown heading, or the first non-trivial line.
@@ -80,6 +84,11 @@ class Extraction:
     @property
     def char_count(self) -> int:
         return sum(len(u) for u in self.units)
+
+    @property
+    def from_ocr(self) -> bool:
+        """Whether these units were read by OCR rather than out of the file."""
+        return "+ocr:" in self.extractor
 
 
 def extract_material(path: str | Path) -> Extraction:
@@ -443,27 +452,54 @@ def _shared_extract(source: Path) -> str:
         raise ReadingError(f"{source.name}: could not be read ({exc})") from exc
 
 
-def synthesise_outline(units: tuple[str, ...] | list[str]) -> tuple[OutlineEntry, ...]:
+def synthesise_outline(
+    units: tuple[str, ...] | list[str], *, from_ocr: bool = False
+) -> tuple[OutlineEntry, ...]:
     """Build a fallback outline: one row per unit, labelled by its first line.
 
     Used for every material whose format carries no structure of its own. The
     label matters more than it looks: without it ``material_outline`` would
     return a bare count and the model would have to read units blindly to find
     anything.
+
+    ``from_ocr`` raises the bar for what counts as a line, because OCR reads
+    decoration as characters: a slide's real heading sits behind a scatter of
+    one- and two-character fragments picked out of icons and rules, and taking
+    the literal first line labelled a whole deck "onl", "z|", "oll", "{ae".
     """
+    minimum = OCR_LABEL_MIN_CHARS if from_ocr else 2
     entries: list[OutlineEntry] = []
     for index, unit in enumerate(units, start=1):
         entries.append(
-            OutlineEntry(locator=index, title=first_line_label(unit), level=1, synthesised=True)
+            OutlineEntry(
+                locator=index,
+                title=first_line_label(unit, min_chars=minimum),
+                level=1,
+                synthesised=True,
+            )
         )
     return tuple(entries)
 
 
-def first_line_label(unit: str, *, limit: int = 90) -> str:
-    """A short human label for a unit: its heading, else its first real line."""
+def first_line_label(unit: str, *, limit: int = 90, min_chars: int = 2) -> str:
+    """A short human label for a unit: its heading, else its first real line.
+
+    ``min_chars`` counts non-whitespace characters, so a line of scattered
+    marks does not qualify on its spaces. A unit with nothing that long falls
+    back to the loose rule rather than going unlabelled — a poor label still
+    beats a blank row in the navigator.
+    """
+    if min_chars > 2:
+        label = _first_line_at_least(unit, min_chars, limit)
+        if label:
+            return label
+    return _first_line_at_least(unit, 2, limit)
+
+
+def _first_line_at_least(unit: str, min_chars: int, limit: int) -> str:
     for raw_line in unit.splitlines():
         line = raw_line.strip()
-        if len(line) < 2:
+        if len("".join(line.split())) < min_chars:
             continue
         heading = _MD_HEADING.match(line)
         if heading:
@@ -475,6 +511,7 @@ def first_line_label(unit: str, *, limit: int = 90) -> str:
 
 
 __all__ = [
+    "OCR_LABEL_MIN_CHARS",
     "RAW_VIEW_EXTENSIONS",
     "SECTION_HARD_CHARS",
     "SECTION_TARGET_CHARS",

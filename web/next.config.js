@@ -127,6 +127,13 @@ const nextConfig = {
     NEXT_PUBLIC_AUTH_ENABLED,
   },
 
+  // The course studio moved from /maic when the embedded product stopped
+  // carrying its upstream name. Anything already pointing at the old path —
+  // a bookmark, a link in a chat — still lands.
+  async redirects() {
+    return [{ source: "/maic", destination: "/course-studio", permanent: true }];
+  },
+
   // Standalone output: self-contained server.js + minimal node_modules
   // This eliminates the need to copy the full node_modules into Docker production images
   output: "standalone",

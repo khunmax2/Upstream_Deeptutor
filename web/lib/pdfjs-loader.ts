@@ -14,6 +14,8 @@
 
 import type * as PdfjsModule from "pdfjs-dist";
 
+import { installReadableStreamAsyncIterator } from "./readable-stream-async-iterator";
+
 export type Pdfjs = typeof PdfjsModule;
 export type PdfDocument = Awaited<ReturnType<Pdfjs["getDocument"]>["promise"]>;
 export type PdfPageProxy = Awaited<ReturnType<PdfDocument["getPage"]>>;
@@ -23,6 +25,11 @@ let pending: Promise<Pdfjs> | null = null;
 export function loadPdfjs(): Promise<Pdfjs> {
   if (pending) return pending;
   pending = (async () => {
+    // Before the library loads, not after: pdf.js reads page text by async
+    // iterating a ReadableStream, which WebKit does not implement, and the
+    // failure is silent — the canvas still paints, so the page looks fine with
+    // nothing selectable on it.
+    installReadableStreamAsyncIterator();
     const pdfjs = await import("pdfjs-dist");
     if (!pdfjs.GlobalWorkerOptions.workerSrc) {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(

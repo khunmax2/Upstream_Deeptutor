@@ -17,6 +17,1266 @@ upstream.
 
 ---
 
+## The docs still described the layout we replaced — 2026-09-08
+
+Before deploying, a read of what an agent or an operator would actually find.
+
+**`AGENTS.md` did not know a second application was here.** `CLAUDE.md` sends
+every agent to it first for architecture, and it has never mentioned
+`integration/maic` — so the map said "this repo is DeepTutor" and was wrong
+about a third of the tree. It now has a section of its own: where OpenMAIC comes
+from, that `git subtree pull` is the only command that writes there, that its
+Dockerfile installs its own dependencies with pnpm, and that its providers
+arrive from DeepTutor rather than being configured separately.
+
+`CLAUDE.md` gained the commands beside the `web/` ones, including the trap that
+a containerised `node_modules` holds POSIX symlinks and no `.cmd` shims, so
+host-side `npx` cannot use it.
+
+**The runbook still described the patch queue.** It told you to reverse
+`deploy/openmaic-patches/0*.patch` against a sibling checkout and run
+`check_openmaic_tree.py`. The patches became commits when OpenMAIC was vendored,
+and the checker went with them — so every command in that block was guarded or
+absent, and following it did nothing at all, silently. Replaced with what is
+true now: the source is in the repository, and `export_upstream_patches.py`
+answers "what is ours".
+
+Also corrected: the topology diagram still framed `/maic`, the prerequisites
+still claimed the build clones OpenMAIC, the build-context note still pointed at
+`../OpenMAIC`, and `OPENMAIC_EMBED.md`'s local-dev command still `cd`-ed to a
+sibling checkout that no longer exists.
+
+**Checked rather than assumed.** Every verification command in the runbook was
+run against the live stack: the gate returns 401, a forged cookie is refused,
+`__gatekeeper/health` reports `gated:true`, the provider check prints the three
+configured sections, and the gatekeeper does print the URL it verifies against
+on startup, as claimed. One apparent defect was not one — `--profile
+openmaic-persistence` looked undeclared because `docker compose config` omits
+services whose profile is inactive.
+
+## Saying when a capability is ready but switched off — 2026-09-07
+
+Configuring an image provider and switching image generation on are two
+different controls in two different places: the settings page owns the first,
+a popover beside the compose box owns the second. Nothing connected them. A
+credit key, a working provider, a bridge that carried it through — and courses
+still came out with no pictures, because `imageGenerationEnabled` defaults to
+false and the prompt never asks the model for an image while it is.
+
+That default is right; images cost money per call. The silence was not. Three
+places now say so:
+
+- **The popover's tab markers.** An enabled tab already carried a violet dot. A
+  tab whose provider is configured but switched off looked identical to one with
+  no provider at all, so it now carries a hollow dot — available, not on.
+- **The image tab itself**, when off with a usable provider: *a provider is
+  configured and ready; turn this on to use it.*
+- **The settings page**, where the provider was configured in the first place,
+  names the state and where the switch actually is — the two are far enough
+  apart that finding the second from the first was guesswork.
+
+Four keys, 13 languages, two files.
+
+**Found in passing.** The popover's own tab labels — `Image`, `Video`, `TTS`,
+`ASR` — were hardcoded English in every language, in the component being edited.
+Now `media.tab*`, translated with the rest.
+
+## A rotated key now reaches the course studio on its own — 2026-09-07
+
+The provider bridge was a script under `deploy/` plus a container restart. Both
+halves of that are things a user cannot do, and the person whose API key expires
+is a user with a settings page, not an operator with a shell. Their key runs
+out, they paste a new one into DeepTutor, and the embedded studio keeps using
+the dead one until somebody with SSH notices. The system is alive and broken at
+the same time.
+
+**The file is now written by the app.** The mapping moved out of
+`build_server_providers.py` into `deeptutor/services/config/openmaic_bridge.py`,
+which ships inside the image — `deploy/` does not — and `ModelCatalogService.save()`
+calls it. That method is the one place every settings path funnels through, so
+the settings page, the connection tester and the partner flows are all covered
+by hooking it once. It is best-effort by construction: a provider that maps to
+nothing, or a read-only data directory, is logged and skipped rather than
+costing the user the settings they just saved. `DEEPTUTOR_OPENMAIC_BRIDGE=0`
+turns it off for a deployment with no studio.
+
+**And OpenMAIC re-reads it.** `getConfig()` cached the parsed YAML for the life
+of the process, which is the wrong shape for a read-only mount that something
+else rewrites. It is now keyed on the file's mtime and size. A `statSync` per
+call is nothing beside the LLM round trip that follows, and a stale key costs
+far more.
+
+The script survives as a thin CLI over the same module — one implementation, two
+entry points — for a first bring-up before the app has saved anything, and for
+reading the mapping decisions with `--dry-run`.
+
+Verified end to end with no restart: change the model in DeepTutor, call `save()`,
+and `/api/server-providers` inside the studio returns the new model — while
+`docker inspect` reports `restarts: 0` and the log shows three separate
+"Loaded (server-providers.yml)" lines in one process, one per change.
+
+**Also carried in this round.** The bridge's `image` and `video` binding tables
+were empty, so a configured image provider was skipped with "binding has no
+OpenMAIC id" — image generation could not be bridged at all. Both are filled in
+now, including `openrouter`, which turned out to answer the same
+`/images/generations` contract OpenMAIC's `openai-image` adapter calls and to
+return `data[0].b64_json` exactly as it expects. Confirmed against the real
+endpoint at 1024x576, the 16:9 size slides ask for; only very wide sizes are
+refused and OpenMAIC never requests one. Worth noting because DeepTutor's own
+image path uses `/chat/completions` with `modalities: ["image","text"]`, which
+narrows its model choice considerably — the studio is not bound by that.
+
+## Server TTS can name its own voices, and the editor speaks Thai — 2026-09-07
+
+Two things the UAT reported rather than fixed, both closed.
+
+**The deployment had no server TTS at all, and that was our own doing.**
+`server-providers.yml` reported `1 LLM, 0 TTS, 1 ASR` — speech worked on the one
+browser that had configured it by hand, and on no other, because TTS settings
+live in a per-browser store. The bridge had been made to emit nothing for TTS
+because `ServerProviderEntry` carried apiKey, baseUrl, models and proxy and **no
+voice**: a self-hosted engine whose only voice is `dr_wit`, mapped onto the
+built-in `openai-tts`, was called with that provider's default and refused —
+
+    provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+
+Emitting nothing was better than emitting that, but it left the product
+incomplete: a new user got a course with no narration.
+
+`voices:` closes it, mirroring `models:` exactly — declared in the YAML (or
+`${PREFIX}_VOICES`), carried through the same merge, authoritative over the
+client's choice via a new `resolveTTSVoice`, and surfaced to the picker so the
+UI names the voice the request will actually use rather than offering `alloy`
+for an engine that has never heard of it. The merge itself needed the change
+too: it copied four named fields, so an unlisted one was silently dropped.
+
+Verified from a browser with its storage cleared — the closest thing to a user
+who has never touched settings: `1 TTS` loaded, `/api/server-providers` returns
+`{"openai-tts":{"voices":["dr_wit"]}}`, and course generation made **nine** TTS
+calls, every one `voice=dr_wit`, with zero errors.
+
+**The slide editor's context menus were Chinese**, all 43 of them — cut, copy,
+paste, the align and layer submenus, the grid and ruler toggles, the line
+presets. Empirically unreachable today (`NEXT_PUBLIC_MAIC_EDITOR_ENABLED` is off
+and there is no edit affordance anywhere in the classroom), but one environment
+variable from being the entire right-click menu. 37 keys under `editor.menu.*`,
+translated into 13 languages and wired through `t()`.
+
+Two of them hid in ternary else-branches (`组合`, `直线`) where a sweep for quoted
+literals in a menu table does not look — the same shape as the `Play`/`Pause`
+labels earlier today. That is twice in one day; a literal-only grep is not a
+sufficient check for hardcoded copy.
+
+Chinese literals in user-facing code: 68 → 25, and what remains is correct —
+Azure's own voice names, the Chinese sample sentence for the Chinese voice,
+strings matched *against* scraped pages, and comments.
+
+## A UAT of the course studio, and the Chinese defaults it found — 2026-09-07
+
+Clicking every control and walking a course from an empty library to a playing
+classroom, with the sweep done mechanically wherever it could be: every page
+route fetched and scanned, every visible button clicked with real pointer
+events and the resulting DOM scanned, all 1,699 `t()` calls checked against
+both locale tables.
+
+**The microphone toast was the thread to pull.** Pressing it and denying
+permission printed `无法访问麦克风，请检查权限设置` in every language — the symptom
+reported days ago. `lib/hooks/use-audio-recorder.ts` held nine hardcoded Chinese
+messages; all nine now go through `t()` in 13 languages.
+
+Pulling it found four more, and one of them was the root:
+
+- **`defaultLocale` was `zh-CN`**, and `lib/i18n/config.ts` hands that same value
+  to i18next as **both `lng` and `fallbackLng`**. So the first paint was Chinese,
+  and — the part that matters — *any key missing from a locale fell back to
+  Chinese rather than to English*. Now `en-US`, the language every locale file is
+  written against.
+- **Azure TTS was told to speak Chinese**: the SSML hardcoded `xml:lang='zh-CN'`
+  on both `<speak>` and `<voice>`. An Azure voice is named for its locale
+  (`th-TH-PremwadeeNeural`), so the tag now comes from the voice id.
+- `asr-settings.tsx` and `use-browser-asr.ts` both fell back to `zh-CN` for
+  browser speech recognition; `use-browser-tts.ts` did the same for synthesis and
+  carried its own Chinese error string.
+- `components/agent/agent-config-panel.tsx` — 11 Chinese strings, imported by
+  nothing — is deleted.
+
+**`stage.proMode` was called and defined nowhere.** The label beside the Pro
+switch rendered the literal string `stage.proMode`. Upstream's key gate compares
+locales against each other and never checks that a `t()` call resolves, so
+nothing caught it. Added in 13 languages, along with the six classroom transport
+controls whose `aria-label`s were hardcoded English beside translated
+neighbours.
+
+**The host's own frame was still branded.** De-branding stopped at
+`integration/maic` and never reached DeepTutor's wrapper: the panel header read
+"OpenMAIC course studio", the new-tab tooltip and the iframe's accessible name
+said the same, the sidebar tooltip offered to "Build a whole course with
+OpenMAIC", and the voice widget named it in Thai. All reworded in en/th/zh, and
+the route `/maic` is now `/course-studio` with a 308 redirect so old links land.
+
+**Verified end to end.** A Thai prompt produced a Thai outline, Thai slides, a
+Thai teacher and Thai narration with no language mixing, playback advanced, the
+export menu was fully Thai, and no server error was logged during the run. Every
+route scans 0 brand / 0 external links / 0 raw keys.
+
+**Left, and reported rather than fixed:** 43 Chinese strings in the slide
+editor's context menu and 45 call sites defaulting to a Chinese workbench
+translator — both behind feature flags that are off; a dozen more English
+`aria-label`s on surfaces a learner does not reach; and the gap that
+`server-providers.yml` carries no TTS provider, because `ServerProviderEntry`
+has no voice field and the configured server's only voice is not the built-in
+default. Speech therefore works on the browser that configured it and on no
+other. Details in `docs/reports/REPORT_uat_course_studio_2026-09-07.md`.
+
+## The embedded classroom no longer carries OpenMAIC's brand — 2026-09-07
+
+The embed still announced itself as a second product. The browser tab said
+`OpenMAIC`, the home hero showed OpenMAIC's wordmark over a tagline that spells
+the name out — *Generative Learning in **M**ulti-**A**gent **I**nteractive
+**C**lassroom* — the footer read "OpenMAIC Open Source Project", and the
+classroom sidebar, the PBL workspace header and the access-code gate each showed
+the mark again. Reading the app told you it was two systems glued together
+before anything about it did.
+
+`lib/brand/brand-config.ts` already existed as the one place a brand is
+declared, and three surfaces already read it. The rest hardcoded the logo path
+and the string `OpenMAIC` beside it, so the config was a single source of truth
+that four screens ignored. Those four now read it too, the config defaults to the
+host product (`DeepWitya`, its own `banner.png` and `logo.png` resized in), and
+every field is overridable through `NEXT_PUBLIC_BRAND_*` — inlined at build time,
+so a change there needs a rebuild rather than a restart.
+
+`public/logo-horizontal.png` and `public/openmaic-mark.png` are deleted, and the
+favicon and apple-icon regenerated from the host mark.
+
+**The brand also left the app.** Three places carried it outward, where removing
+the logo would not have reached:
+
+- `lib/web-search/searxng.ts` sent `User-Agent: Mozilla/5.0 (compatible;
+  OpenMAIC/1.0; +https://github.com/THU-MAIC/OpenMAIC)` to every SearXNG
+  instance queried.
+- `lib/web-search/minimax.ts` sent `MM-API-Source: OpenMAIC` to MiniMax.
+- `lib/video-export-app/cover-config.ts` printed `open.maic.chat` on the cover of
+  every exported video, as the default when the operator set no destination.
+  There is no default now: a cover carries a CTA only when
+  `NEXT_PUBLIC_VIDEO_EXPORT_CTA_DESTINATION` is set.
+
+And every course a user exports was named `<name>.maic.zip`.
+`CLASSROOM_ZIP_EXTENSION` is now `.classroom.zip`. Import is unaffected — the
+picker accepts `.zip` and never compared against that constant — so files
+exported before today still open.
+
+**Outbound links.** `components/ai-elements/open-in-chat.tsx` shipped six links
+out to ChatGPT, Claude, T3, Scira, v0 and Cursor; `sources.tsx` shipped a
+seventh. Nothing imported either file. Both are deleted rather than hidden.
+Settings' Baidu sub-source rows linked to three `cloud.baidu.com` /
+`ai.baidu.com` doc pages; those anchors and the `docsUrl` field behind them are
+gone. What remains clickable in the shipped chrome is internal navigation.
+
+**Translations.** The brand was in the strings too, in all thirteen languages:
+the tagline, "This skill ships with OpenMAIC", "OpenMAIC official skill" in the
+workbench overlay, "MAIC Agent" on the timeline hint, and `.maic.zip` in an error
+message. 80 translated strings changed. `home.slogan` and `settings.viewDocs`
+lost their last readers and are removed from every locale — hence 1798 keys where
+the pin recorded 1800, which is why the pin moved.
+
+**Two wire identifiers**, visible only with devtools open but shipped all the
+same: the DOM attribute `data-maic-element-id` stamped on every rendered slide
+element, and the HTTP response header `X-OpenMAIC-Element-Reference-Accepted`.
+Renamed to `data-element-id` and `X-Element-Reference-Accepted` across 14 files.
+
+**Deliberately left.** The `@openmaic/*` workspace package names, the
+`OPENMAIC_*` / `NEXT_PUBLIC_MAIC_*` environment variables, the internal provider
+id `maic-connector`, and source comments. None is visible to a reader of the app;
+renaming the env vars would break every existing deployment, and renaming the
+packages would make every future `git subtree pull` a merge conflict for no gain.
+
+Verified against the running container: the home page returns `title: DeepWitya`,
+zero case-insensitive matches for `maic` anywhere in its HTML, zero external
+links, `/brand-wordmark.png` 200 and `/logo-horizontal.png` 404; `/workspace` the
+same. `tsc --noEmit` clean, eslint clean, upstream's `check-i18n-keys.mjs` green
+at 13 locale files, and `check_openmaic_contract.py` green after the pin bump.
+
+`tests/video-export/cover-config.test.ts` also gained the `th-TH` row it had been
+missing since Thai joined the `Locale` union — that fixture is keyed by `Locale`,
+so `tsc` had been red on it before any of this.
+
+MIT attribution is unaffected: `integration/maic/LICENSE` is untouched, and MIT
+requires the notice in the distribution, not in the UI.
+
+## The provider bridge sent Gemini down the wrong protocol — 2026-09-07
+
+Every LLM call from the embedded OpenMAIC failed with `AI_APICallError: Not
+Found`, and course generation with it. The bridge had copied DeepTutor's base URL
+— `https://generativelanguage.googleapis.com/v1beta/openai/` — into OpenMAIC's
+`google` provider, which is `type: 'google'` and appends *native* Gemini paths to
+whatever base it is given. The result was
+`.../v1beta/openai/models/…:generateContent`, which does not exist.
+
+A vendor's own id and its OpenAI-compatible shim are two protocols wearing one
+name, and the mapping table only knew the name. The URL is the part that says
+which is meant, so the bridge now reads it: a base ending in `/openai` is the
+compatible endpoint and is configured as OpenMAIC's generic `openai` provider
+instead, keeping the URL that already worked.
+
+Verified from inside the container against the real endpoint: `HTTP 200` and a
+reply from `models/gemini-3.1-flash-lite`, where the same key and URL under the
+`google` id returned `Not Found`.
+
+**A second mapping the bridge should not have made.** It also carried DeepTutor's
+custom speech endpoint into OpenMAIC's built-in `openai-tts`, and course
+generation then failed outright — "สร้างเสียงพูดไม่สำเร็จ" — with
+
+    provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+
+`ServerProviderEntry` carries apiKey, baseUrl, models and proxy, and **no voice**.
+So a server whose only voice is `dr_wit` was called with `alloy`, the built-in
+default, and refused. The mechanism cannot express a custom voice, and emitting
+the entry anyway produced a provider that looked configured, was auto-selected
+ahead of the one that worked, and failed on its first call — worse than not
+being there.
+
+It is now skipped with the reason stated, and the note names the voices it found
+so the message says what to do rather than only what went wrong. OpenMAIC's own
+custom-provider UI does carry a voice table; that is where such an endpoint
+belongs, and the reader already had it configured there.
+
+**Also diagnosed, not a defect of ours:** the classroom made no speech request at
+all, because `ttsEnabled` is off and OpenMAIC's auto-enable is guarded by
+`autoConfigApplied`, a flag it sets once and never revisits
+(`lib/store/settings.ts:1761`). A browser that opened the app before the bridge
+existed spent that one chance when there were no server providers to find, so
+the switch stays off until somebody turns it on by hand. Worth knowing before
+concluding the bridge failed: it is a first-run flag meeting a
+configured-afterwards deployment.
+
+Files: `deploy/openmaic-patches/build_server_providers.py`.
+
+---
+
+## Speech recognition no longer assumes Chinese — 2026-09-07
+
+`asrLanguage` defaulted to `'zh'` and is sent with every request, so Whisper was
+told the audio was Chinese and obliged. Thai speech came back as fluent Chinese —
+`字幕志愿者 李宗盛` in the settings test, `《無憂》《鳥》` typed into the home page by
+voice input. It reads like a broken model and is the API doing what it was asked.
+
+Patch `0009` had added `th` to the *list* of choices and stopped there. The
+default was the other half, and without it nothing changed for anyone who had not
+gone looking for the setting.
+
+**The fallback was Chinese too, and that was the subtler half.** When a provider
+does not offer the chosen language the store reset to `supportedLanguages[0]` —
+and for `browser-native`, the default recogniser, that is `zh-CN`, because its
+49-entry list happens to begin with the Chinese variants. Picking Thai and
+switching recogniser moved you back to Chinese by way of an array index.
+`fallbackASRLanguage` now prefers `auto`, then the same language spelled the
+provider's way (`th` to `th-TH`, which browser-native does list), and only then
+the first on offer. A test sweeps the real provider table asserting that no
+provider lands a Thai reader on Chinese while something better was available.
+
+**What was checked and found fine**, since the question was whether anything else
+defaults to Chinese: the settings store holds no other Chinese default
+(`ttsProviderId` and `asrProviderId` are `browser-native`, `ttsVoice` is
+`default`); `defaultLocale` is `zh-CN` but never surfaces, because our
+`th-TH.json` carries all 1,797 keys with gaps filled from English; and the eight
+Chinese strings in `en-US.json` that our Thai file inherits are language
+*endonyms* — the same convention that makes `settings.lang_th` read "ไทย".
+Upstream does leave 32 untranslated Chinese strings in each of ar-SA, de-DE,
+es-MX, fr-FR, ko-KR, pt-BR, ru-RU and vi-VN; ours is not among them.
+
+Files: `integration/maic/lib/audio/constants.ts`,
+`integration/maic/lib/store/settings.ts`,
+`integration/maic/tests/audio/asr-language-fallback.test.ts` (new).
+
+---
+
+## OpenMAIC is vendored at `integration/maic` — 2026-09-07
+
+The patch queue is gone. OpenMAIC is now a **squashed git subtree** at
+`integration/maic`, its nine patches are commits there, and a clone of this
+repository is everything an image build needs — no sibling checkout, no fetch
+script, no pinned commit to resolve.
+
+**Why the shape changed.** Patches were right while every change was one upstream
+might accept, and all nine were. They stopped being right when the work turned to
+changes upstream never will: removing OpenMAIC's branding, laying the classroom
+out for an iframe, reading configuration from DeepTutor. A patch nobody upstream
+will take is one you carry for ever, and a growing stack of those against a moving
+target costs more than merging. The trigger was not a patch count — an earlier
+note here proposed fifteen to twenty, which was the wrong measure — it was the
+first change that could not go upstream, and branding work in a parallel checkout
+had already crossed it.
+
+**What the subtree gives up, and how it is given back.** The patch files were
+self-evidently ours: a directory where each file was one change.
+`export_upstream_patches.py` regenerates that on demand from the commits, with
+paths rewritten relative to the OpenMAIC root so they apply to a plain THU-MAIC
+checkout with `git am`. Verified rather than asserted: all ten exported patches
+apply in sequence to a pristine `d4ef5faa` worktree and reproduce the subtree
+exactly, modulo the line endings git normalises.
+
+**Committed rather than generated:** the Thai locale, the reconciled lockfile and
+the video-export font assets. Each used to be produced by a step between a clone
+and a build, and each is now simply present — which is what this layout is for.
+The Docker build never ran the font generator, so an image built without those
+assets exported video with no Thai glyphs and nothing to say why.
+
+Removed as obsolete: the nine `.patch` files, `openmaic-fetch.sh` (nothing to
+assemble), and `check_openmaic_tree.py` (no mirror left to guard).
+`check_openmaic_contract.py` now reads the commit `git subtree` recorded in its
+squash message instead of a second checkout's HEAD, which turns its version check
+into a better question: has somebody pulled a newer OpenMAIC without re-verifying?
+
+`CLAUDE.md` §2 keeps the directory out of HKUDS syncs — it comes from THU-MAIC,
+and `git subtree pull` is the only command that should write there.
+`OPENMAIC_SYNC.md` is rewritten around that, and the runbook's longest step is now
+"There is no step 2".
+
+Verified end to end: `docker compose build openmaic` from the subtree alone
+succeeds with `--frozen-lockfile`, the image carries `th-TH.json` at 152,341
+bytes, and the running stack still refuses an unauthenticated request.
+
+Files: `integration/maic/**` (new, 2,827 files), `deploy/OPENMAIC_SYNC.md`,
+`deploy/OPENMAIC_RUNBOOK.md`, `deploy/docker-compose.openmaic.yml`, `CLAUDE.md`,
+`deploy/openmaic-patches/{export_upstream_patches.py,check_openmaic_contract.py}`,
+`.gitignore`.
+
+---
+
+## One place to configure providers, and no patch needed — 2026-09-07
+
+**New: `deploy/openmaic-patches/build_server_providers.py`**, mounted read-only by
+the compose overlay and documented as runbook step 4b.
+
+Two applications side by side, each with its own provider settings, is the seam a
+customer notices before any other: nobody expects to type the same API key twice.
+It turned out to need no source change at all. OpenMAIC already reads a
+server-side `server-providers.yml` covering `providers` (LLM), `tts`, `asr`,
+`pdf`, `image`, `video` and `web-search`, and its own `docker-compose.yml` carries
+the mount line commented out. What was missing was something to write the file.
+
+This reads DeepTutor's `data/user/settings/model_catalog.json` and writes it —
+the *active* profile per service, not merely the first one. Three things it has
+to get right:
+
+- **Container addresses.** A base URL of `http://localhost:11434` works in
+  DeepTutor's settings page and points at the container itself once OpenMAIC
+  reads it. Loopback hosts are rewritten to `host.docker.internal`, and the
+  rewrite is reported rather than done quietly.
+- **Names differ per capability.** The same vendor is `openai` for LLM,
+  `openai-tts` for speech and `openai-whisper` for recognition. A first version
+  used one mapping table and emitted `openai` in all three; OpenMAIC's loader
+  ignores ids it does not know, so the TTS and ASR entries would have vanished in
+  silence and the file would have looked entirely correct. Caught by checking the
+  ids against `provider-config.ts`'s own env maps — the script's own comment had
+  warned about exactly this failure and the first version still walked into it.
+- **The output holds secrets.** Written under `data/` (gitignored), and nothing
+  prints a key: `--dry-run` masks every credential.
+
+Verified by asking OpenMAIC rather than by reading the file back: with it
+mounted, `/api/server-providers` reports `providers.google` with the Gemini
+model, `tts.openai-tts`, `asr.openai-whisper` and `webSearch.tavily`.
+
+Files: `deploy/openmaic-patches/build_server_providers.py` (new),
+`deploy/docker-compose.openmaic.yml`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
+## The PCM patch assumed a byte order — 2026-09-07
+
+`0007` wrapped raw PCM in a WAV header and left the samples as they arrived.
+That is right only if they are little-endian, and **RFC 2586 defines `audio/L16`
+as big-endian**. A spec-compliant server would have been described wrongly by the
+header we wrote, and played as noise.
+
+Found by reading a parallel experiment in another checkout, which had hit the same
+provider and handled the spec correctly. Not taken on trust — measured against the
+bytes the server actually sends, by reading them both ways and comparing how far
+consecutive samples move, since speech is continuous and a wrong byte order turns
+every step into a jump:
+
+    little-endian   average step   1,238     <- smooth, speech
+    big-endian      average step  16,874     <- noise
+
+So that server sends **little**-endian under an `audio/L16` label: `0007` was
+right about this server by luck, and wrong about the specification.
+
+Neither default is safe, so the byte order is now measured rather than assumed —
+the same comparison, in the decoder. `audio/pcm` and `audio/x-pcm` are
+little-endian by definition and skip it; silence and clips shorter than 64 frames
+fall back to what the spec says; `TTS_L16_BYTE_ORDER` forces the choice for a
+known gateway. Five more unit tests cover both orders and both fallbacks, and the
+real server's response is still read as little-endian and still opens in Python's
+`wave` module.
+
+**A second thing this turned up.** Running `pnpm install` inside a container —
+which `openmaic-fetch.sh` does so a deploy host needs no Node toolchain — leaves
+`node_modules` full of POSIX symlinks and no `.cmd` shims, so host-side `npx` and
+`node` cannot use it afterwards. Not a defect, but a consequence worth knowing:
+after a containerised install, run the test suite in a container too. That is how
+these ten tests were run.
+
+Files: `deploy/openmaic-patches/0007-pcm-audio-responses.patch`.
+
+---
+
+## Thai can be chosen for speech recognition — 2026-09-07
+
+**New: `deploy/openmaic-patches/0009-thai-asr-language.patch`.**
+`CUSTOM_ASR_DEFAULT_LANGUAGES` — the menu a custom OpenAI-compatible speech
+provider offers — carried twelve languages and no `th`, so Thai could not be
+selected. The default is `zh` (`lib/store/settings.ts:482`) and it is sent with
+the request (`lib/audio/asr-providers.ts:235`), so Whisper was told the audio was
+Chinese and obliged: Thai speech came back as `我愛你`. That reads like a broken
+model and is the API doing exactly what it was asked.
+
+Nothing else was missing — `settings.lang_th` is already "ไทย" in all thirteen
+locale files. The label had been waiting for an option to attach to, and an
+option is an array entry, which no locale file can add. Found by the gap checker
+added in the previous entry, at the line it named.
+
+`funasr`'s own `supportedLanguages` is left alone on purpose: SenseVoice really
+cannot transcribe Thai, and adding it there would move the failure from a missing
+menu item to a wrong answer. It is recorded in the checker's `KNOWN` set as
+correct-as-written rather than as a gap.
+
+Files: `deploy/openmaic-patches/0009-thai-asr-language.patch` (new),
+`deploy/openmaic-patches/check_openmaic_i18n_gaps.py`.
+
+---
+
+## A check for the Thai gaps a translation cannot close — 2026-09-07
+
+**New: `deploy/openmaic-patches/check_openmaic_i18n_gaps.py`**, wired into
+`OPENMAIC_SYNC.md` as step 5b so it runs on every upstream update.
+
+Three Thai gaps have been found so far — a hardcoded English toast, a hardcoded
+Chinese dev chip, and an ASR language list offering `zh`, `en`, `ja`, `hi` and
+ten others but not `th` — and **every one was found by using the app**, never by
+a check. Coverage read 93.8%, `build_th_locale.py` passed, and OpenMAIC's own
+`check-i18n-keys.mjs` passed, because none of them looks at the place those come
+from. Leaving that to whoever happens to click the right thing is how the next
+one gets missed.
+
+It reports four kinds: UI text passed to `toast.*` as a literal; Chinese string
+literals in components; Chinese literals on server routes and agent files, which
+are model prompts rather than screen text and are a different problem; and arrays
+of language codes carrying `zh` and `en` but no `th` — the label already exists
+(`settings.lang_th` is "ไทย" in every locale), so what is missing is an option,
+and an option is data that no translation file can add.
+
+Validated the only way that means anything: it finds all three known cases at
+their exact lines, `app/page.tsx:293` and `:992` and
+`lib/hooks/use-home-discovery.tsx:139` and `lib/audio/constants.ts:51`.
+
+Getting there took four passes of removing noise, and the noise is worth
+recording because each round would have been reported as a finding:
+`lib/i18n/workbench.ts` is a locale table written in TypeScript, so its 245
+Chinese strings are correct code; Azure's voice names (`晓晓 (女)`) are proper
+nouns; Chinese comments are not shipped to anyone. A first version reported 568
+findings and would have been switched off by the second person to run it.
+
+One self-inflicted bug on the way, fixed: filtering comments early made the
+English-toast check conditional on a line containing Chinese, which silently
+dropped all eight of them.
+
+Files: `deploy/openmaic-patches/check_openmaic_i18n_gaps.py` (new),
+`deploy/OPENMAIC_SYNC.md`.
+
+---
+
+## The container could not write to its own data directory — 2026-09-07
+
+**New: `deploy/openmaic-patches/0008-data-volume-ownership.patch`.** OpenMAIC's
+own `docker-compose.yml` mounts a named volume at `/app/data`, and the app writes
+classrooms, classroom jobs, uploaded materials and usage records under it. The
+Dockerfile never creates that path, so Docker created the mount point while
+seeding the volume — and a fresh named volume covering a path absent from the
+image comes up root-owned, while the process runs as `nextjs` (uid 1001):
+
+    drwxr-xr-x 2 root root /app/data
+    uid=1001(nextjs) gid=65533(nogroup)
+
+Every write failed, once every few seconds in a running container:
+
+    [WARN] [UsageStorage] Failed to record usage (ignored):
+      Error: EACCES: permission denied, mkdir '/app/data/usage'
+
+Usage records are swallowed with a warning, which is how this stays invisible;
+the classroom and material paths sit on the same directory.
+
+Creating the directory as the runtime user before `USER nextjs` fixes new
+deployments, since Docker seeds a volume with the ownership of the image path it
+covers. The volume already created here was repaired in place with a one-off
+`chown -R 1001:1001` from a privileged container rather than deleted, so nothing
+saved was lost; verified afterwards — the directory reads `nextjs:nodejs`, a
+write test succeeds, and `EACCES` is gone from the log.
+
+An upstream bug rather than one of ours: it is their compose file, their
+Dockerfile and their storage paths, and any deployment of theirs using that
+volume has it.
+
+Files: `deploy/openmaic-patches/0008-data-volume-ownership.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
+## Speech that arrives as raw PCM now plays — 2026-09-06
+
+**New: `deploy/openmaic-patches/0007-pcm-audio-responses.patch`.** A custom TTS
+provider configured against an OpenAI-compatible server failed every test with
+
+    TTS test failed: Failed to load because no supported source was found.
+
+which is the browser's own message and names nothing. The server was answering
+`content-type: audio/L16;rate=24000;channels=1` — bare PCM16 samples, no
+container; the first bytes carry neither a RIFF nor an ID3 magic.
+`getAudioResponseFormat` does not know those media types and falls through to
+its `mp3` default, so `new Audio(URL.createObjectURL(blob))` was handed PCM
+labelled as MP3 and could not decode it.
+
+Worth stating because it looked like an integration problem and was not: the
+same server plays fine through DeepTutor, which requests a format *and* then
+repairs the answer — `_parse_pcm_content_type` and `_pcm16_to_wav` in
+`deeptutor/api/routers/voice.py` wrap the samples server-side whatever the
+provider actually sent. OpenMAIC had the request half and not the repair.
+
+`decodeAudioResponse` adds it: parse `audio/l16` / `audio/pcm` / `audio/x-pcm`,
+take `rate` and `channels` from the media-type parameters (24 kHz mono when
+absent, matching DeepTutor), and prepend the 44-byte RIFF/WAVE header. Anything
+already in a container passes through untouched. Placed at the single point all
+three provider paths converge on, so preview, regeneration and classroom playback
+are fixed together.
+
+Verified twice over: five unit tests on the header fields, the media-type
+parameters and the pass-through cases, plus a real 16,384-byte response from that
+server converted and then opened by an **independent** decoder — Python's `wave`
+module reports 1 channel, 16-bit, 24 kHz, 8,192 frames, 0.341 s.
+
+> **Correction.** This entry said OpenMAIC's own `tests/audio/` suite "stays green
+> at 228". That was one lucky run. `tests/audio/narrator-pin-fallback.test.ts`
+> fails two or three of its six, and does so in upstream's own code: with our
+> changes and without them, in the subtree and in the sibling checkout, and with
+> `tts-providers.ts` restored to pristine. A single passing run was reported as a
+> property of the suite.
+
+An upstream candidate like the rest: it mentions nothing of DeepTutor, and any
+embedder pointing OpenMAIC at such a server hits it.
+
+Files: `deploy/openmaic-patches/0007-pcm-audio-responses.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
+## The compose file defaulted to the production auth endpoint — 2026-09-06
+
+`DEEPTUTOR_AUTH_URL` fell back to `https://203.185.144.41/deepwitya2/api/auth/status`
+when unset. Any `docker compose up` from this repository — a laptop, a CI runner,
+somebody else's checkout — therefore began sending whatever `dt_token` arrived to
+the live server, with nobody having decided that. Noticed after doing it here:
+restarting the gatekeeper without the environment silently repointed it at
+production.
+
+Assessed rather than assumed, and it is **not** a production compromise:
+`/api/auth/status` answers `200` to an unauthenticated request, so it is a public
+read and the gate gains no access anyone else lacks; it only reads; TLS
+verification is on and passed against the IP-SAN certificate; and the only header
+sent is the `dt_token` that came from that server in the first place. The
+exposure runs the other way — a valid production session would open the *local*
+OpenMAIC — and the gatekeeper binds `127.0.0.1` only.
+
+The defect is the defaulting, not the traffic. A request's destination should be
+a decision. `DEEPTUTOR_AUTH_URL` now defaults to **empty** rather than to the
+production URL, and the gatekeeper already fails closed on unset with
+`gatekeeper_misconfigured` — so an unconfigured stack serves nothing and calls
+nothing.
+
+> **Correction.** This first used compose's `:?` required-variable form, and this
+> entry said "compose refuses to start without it". That was too blunt and the
+> claim was wrong about the consequence: compose interpolates the whole file for
+> *every* command, so `docker compose build` and `down` failed too, neither of
+> which has anything to do with an auth endpoint. Caught by the next build.
+> The reason not to use `:?` is now recorded in the compose file itself.
+
+`LOGIN_URL` loses its production default for the same reason.
+
+Verified afterwards by repointing the running stack at a local DeepTutor: the
+gate reports `verifying against http://host.docker.internal:3782/...`, holds zero
+references to the production host, and answers `auth_disabled_upstream` — which
+is correct for a local instance with auth off, and is the one code path the
+runbook walkthrough never reached.
+
+Files: `deploy/docker-compose.openmaic.yml`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
+## The runbook was walked by someone else, and it did not hold — 2026-09-06
+
+`deploy/OPENMAIC_RUNBOOK.md` was handed to a fresh session with no access to
+`CHANGES.md`, `docs/reports/` or the commit history, and instructions to follow
+it literally and record every point where it had to guess. It guessed six times
+and never reached the end. Five defects, all real, all in code or docs written
+here — and all in the parts that had been *described* rather than *walked*.
+
+**Step 2 aborted on any machine that had run OpenMAIC before.** A `node_modules`
+built by a pnpm on the host records a store path that does not exist inside the
+`node:22-alpine` container; pnpm wants to replace the directory, asks for
+confirmation, finds no TTY, and stops with
+`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`. The script passed `HOME` and
+`COREPACK_ENABLE_DOWNLOAD_PROMPT` into the container but not `CI=true`. Every
+earlier run of this script here was against a *fresh clone*, which is the one
+state where the bug cannot appear — and the runbook's own "Trying it locally
+first" section is an instruction for producing the state that triggers it.
+
+**`ALLOW_ANONYMOUS` was never passed through compose.** The gatekeeper's
+`environment:` block listed five variables and not that one, so the escape hatch
+the documentation recommends *twice* reached the process from nowhere. Now
+`GATEKEEPER_ALLOW_ANONYMOUS`, empty by default; verified end to end, `"gated":
+false` and `200` without a cookie, then verified gated again.
+
+**`host.docker.internal` did not resolve**, because the compose file mapped no
+`host-gateway`. From inside the gatekeeper that is indistinguishable from
+DeepTutor being down. Added; it now resolves.
+
+**The 503 advice was wrong in the way the document itself warns against.** It
+said `503` means `auth_disabled_upstream`. `auth_unavailable` — the gate could
+not reach DeepTutor at all — is also `503`, and on a machine whose `auth.json`
+says `"enabled": false` a reader is *expecting* the first and will accept the
+second as confirmation. The runbook teaches "a dead gatekeeper and a permissive
+one are indistinguishable from `curl` alone" and then had the reader distinguish
+two states by status code. Now a table of every `code`, and the instruction to
+read the body.
+
+**The CSP verification command produced no output on Git Bash.** `curl -sI |
+grep -i -e A -e B` gives curl exit 23 and grep abort 134 — silence, which reads
+exactly like a missing header, which is the failure the check exists to detect.
+The multiple-`-e` form is what breaks; `grep -iE` is fine. Rewritten to write
+headers to a file and `|| cat` them on no match.
+
+Also fixed from the same report: the "Expected output" block did not show the
+yellow untracked-files warning a reader actually sees, so the first thing they
+compare against lacks it; step 4's `cat >` replaced an existing
+`openmaic.json` without a word; `--host-pnpm` is now flagged as the trap it is on
+Windows, where it hung at rollup and cut 1,934 lines from `pnpm-lock.yaml` — the
+same damage this file already records under a different heading; and "Trying it
+locally first" now carries copy-pasteable commands rather than a comparison
+table, since the local path has more traps than the deployed one.
+
+Files: `deploy/openmaic-fetch.sh`, `deploy/docker-compose.openmaic.yml`,
+`deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
+## The fetch guard refused on things it had no business refusing — 2026-09-06
+
+`openmaic-fetch.sh` treated every local change in the OpenMAIC checkout alike and
+refused on all of them. On a real working machine that meant refusing over editor
+backups, a local `docker-compose.override.yml` and an agent's `CLAUDE.md` — none
+of which the script could build over, because untracked files can only be added.
+
+That is the failure mode where a guard stops being read. Anything that blocks on
+ordinary debris becomes something to work around, and then it is not protecting
+anything.
+
+Split by risk instead:
+
+- **modified** tracked files outside the patch set — refuse. These are edits to
+  upstream source, and a build absorbs them silently.
+- **untracked** files — name them and continue. Named rather than ignored,
+  because an untracked *source* file can still change a Next build: a stray
+  `app/**/page.tsx` becomes a route.
+- `--strict` refuses on both, for the case the original behaviour was actually
+  right for: preparing a patch or an upstream PR, where anything foreign rides
+  along.
+
+Verified against a real clone in all four states: untracked only (warns,
+continues), `--strict` on the same (refuses), a foreign modified file (refuses
+without `--strict`), and restored (continues).
+
+Files: `deploy/openmaic-fetch.sh`, `deploy/OPENMAIC_RUNBOOK.md`.
+
+---
+
+## A runbook for the Docker bring-up — 2026-09-06
+
+**New: `deploy/OPENMAIC_RUNBOOK.md`.** The sequence that was actually run, from a
+machine with no containers, no images and no `../OpenMAIC`, plus the ten problems
+it hit on the way. Written so that following it reproduces the same result rather
+than a similar one — every step carries the check that tells you it worked, and
+the failure it looks like when it did not.
+
+The problems are recorded because most of them are invisible from the outside: a
+blank iframe has a dozen possible causes that look identical, a dead gatekeeper
+and a permissive one are indistinguishable from `curl`, and an edit that never
+reached its file reads exactly like a fix that did not work.
+
+Its own verification commands were run before committing it, and two were
+rewritten as a result: the image name is derived from the compose project rather
+than hardcoded (it follows the directory name, so a differently named clone
+produces a differently named image), and the `python3`/`python` split on Windows
+is called out where those one-liners are used.
+
+Files: `deploy/OPENMAIC_RUNBOOK.md` (new).
+
+---
+
+## Where OpenMAIC's source comes from at deploy time — 2026-09-06
+
+`deploy/docker-compose.openmaic.yml` builds from `context: ../OpenMAIC`, a
+sibling checkout. On a deploy host that directory does not exist, and there is
+no second repository to clone it from — OpenMAIC is kept as a pristine mirror of
+upstream precisely so that `git pull` there stays a fast-forward, which means
+none of our work can live in it.
+
+So the source had no stated origin. `docker compose build` on a fresh host fails
+on a missing context, or — worse — succeeds against an unpatched tree and ships
+an image with no Thai and no embed support.
+
+**New: `deploy/openmaic-fetch.sh`.** Clones upstream at the commit in
+`openmaic-pin.json`, applies every patch in order, generates the Thai locale,
+and reconciles the lockfile. The host needs **git and docker only**: the
+`pnpm install` step runs in a throwaway `node:22-alpine` container, because a
+deploy host should not have to carry a Node toolchain to fix a lockfile.
+
+Deliberately not a fork of OpenMAIC. Committing our changes into that checkout
+would turn every future release into a merge with conflicts — the position this
+fork is already in with HKUDS — and would throw away the property that all six
+patches are upstream candidates that can simply be deleted if accepted.
+
+Re-running is safe. The dirty-tree check asks whether anything is dirty *that is
+not ours*, deriving "ours" from the patches themselves so it cannot drift out of
+step with the patch set; already-applied patches are recognised and skipped, and
+anything else makes it refuse rather than build over someone's work.
+
+Three things the first runs found, none of which reading could have:
+
+- `command -v python3` succeeds on Windows for a Microsoft Store stub that then
+  refuses to execute. The check now asks the interpreter to run, not to exist.
+- Git Bash rewrote the container-side `-w /w` into `W:/`, and docker refused it.
+- The pin is doing real work: upstream `main` had already moved past it, so a
+  plain clone would have built a different commit than the one verified.
+
+Also updated: the compose file names the script at the point where the missing
+directory would otherwise be discovered, and `OPENMAIC_SYNC.md` separates
+*getting* a checkout from *updating* one.
+
+Files: `deploy/openmaic-fetch.sh` (new), `deploy/docker-compose.openmaic.yml`,
+`deploy/OPENMAIC_SYNC.md`.
+
+---
+
+## The container build depended on files that were in no repository — 2026-09-06
+
+`deploy/docker-compose.openmaic.yml` builds OpenMAIC from `context: ../OpenMAIC`,
+a sibling checkout. Two files there had been edited by hand to make the image
+build at all — `.dockerignore` needed `**/node_modules` and `**/dist` globs
+(Docker matches patterns only at the context root, and pnpm on Windows writes
+nested `node_modules` as absolute `D:/...` symlinks that are dead in the image
+and shadow the ones the deps stage built), and the `Dockerfile` needed an
+ARG/ENV pair for `NEXT_PUBLIC_PRO_WORKBENCH_ENABLED`, which Next can only inline
+at build time.
+
+Neither was committed anywhere. They existed in exactly one working tree.
+
+Two consequences worth stating plainly:
+
+- **The "image builds" result recorded on 2026-09-06 was not reproducible.** It
+  was measured on a tree containing these edits, and reported as though the
+  repository were sufficient.
+- **`check_openmaic_tree.py` was actively steering toward losing them.** It
+  bucketed both as *foreign — revert or stash*, which for the one change the
+  build needs is the wrong instruction.
+
+**New: `deploy/openmaic-patches/0006-docker-build-fixes.patch`** — verified to
+apply to a pristine `d4ef5faa` checkout. Both changes are upstream candidates:
+neither mentions DeepTutor, and the `.dockerignore` one is a plain bug for
+anyone building this on Windows.
+
+The guard gains a `docker-build` profile so it recognises them as ours.
+
+Files: `deploy/openmaic-patches/0006-docker-build-fixes.patch` (new),
+`deploy/openmaic-patches/check_openmaic_tree.py`.
+
+---
+
+## 0004 and 0005 were inert: the host never sent what they read — 2026-09-06
+
+Both patches let a host choose OpenMAIC's language, theme and chrome through
+query parameters (`?lang=`, `?theme=`, `?embed=1`). Nothing in DeepTutor ever
+sent them. `MaicWorkspace` framed the bare URL, and `normalizeEmbedUrl` rebuilds
+its result as `origin + pathname`, so a query string added by an operator was
+discarded too. The receiving half existed; the sending half was never written,
+and the whole "reads as one product" result did nothing in the actual product.
+
+Found by running the two apps on genuinely different origins for the first time
+— DeepTutor on `127.0.0.1:3200`, OpenMAIC on `localhost:3100` — rather than
+loading OpenMAIC's dev server with hand-typed parameters, which is what the
+patches' own "verified" notes describe.
+
+**New in `web/components/maic/MaicWorkspace.tsx`:**
+
+- the frame's src carries `embed=1`, `lang`, and `theme` from `useAppShell()`,
+  so the panel opens in the language and theme the reader is already using
+- DeepTutor's four themes map onto OpenMAIC's two by what they *render as*:
+  `glass` sets the `dark` class, `snow` is the pure-white default. Collapsing
+  four onto two also means `dark` -> `glass` changes nothing here, so the frame
+  is not reloaded for a switch it cannot represent
+- the open-in-new-tab link carries `lang` and `theme` but **not** `embed=1`: a
+  tab of its own should have back the controls this app was standing in for
+- nothing is framed until `languageReady`, and the spinner tracks *which* src
+  finished loading rather than a bare boolean. Rendering first and correcting
+  after would load OpenMAIC twice, the first time in the wrong language
+
+OpenMAIC reads all three once on mount, so changing either value reloads the
+frame. That cost is accepted — a language change is deliberate and infrequent —
+but it is a cost: a course generation running at that moment is lost.
+
+**Verified across two real origins**, with `contentDocument` blocked by the
+browser as proof the origins are genuinely separate:
+
+| | |
+|---|---|
+| `?lang=th` | OpenMAIC renders Thai inside the frame |
+| `?theme=dark` / `snow` -> `light` | frame follows the host both ways |
+| `?embed=1` | framed shows only the settings gear; the same build opened directly shows the full language/theme/settings pill |
+
+`ALLOWED_FRAME_ANCESTORS` is required for any of this to be visible at all —
+without it OpenMAIC sends `frame-ancestors 'self'` plus `X-Frame-Options:
+SAMEORIGIN` and the frame is blocked. `deploy/docker-compose.openmaic.yml`
+already sets it; this run confirmed what the failure looks like when it is
+missing.
+
+The two known upstream i18n gaps were confirmed visually in a Thai session: the
+hardcoded English persistence toast, and the hardcoded Chinese dev chip.
+
+Files: `web/components/maic/MaicWorkspace.tsx`.
+
+---
+
+## The nginx block would not have loaded on the target host — 2026-09-06
+
+`deploy/nginx-openmaic.locations.conf` used `http2 on;`, the standalone directive
+introduced in nginx 1.25. The target host runs 1.24, where it is an unknown
+directive and `nginx -t` rejects the entire configuration — so the one step that
+needs someone's `sudo` would have failed at the moment they ran it.
+
+Found by syntax-checking the file offline against `nginx:1.24-alpine` with the
+certificate paths pointed at a throwaway self-signed pair. It had never been run
+through nginx at all before; it was written to be correct rather than checked.
+
+**Fixed** — `listen 10330 ssl http2;`. Now passes `nginx -t` on 1.24 and on 1.27,
+the latter with a deprecation warning noted inline for whenever the host moves
+past 1.25.
+
+Files: `deploy/nginx-openmaic.locations.conf`.
+
+---
+
+## The gatekeeper read the wrong field, found by testing against a real DeepTutor — 2026-09-06
+
+`deploy/openmaic-gatekeeper/gatekeeper.mjs` decided access from
+`/api/auth/status`'s `authenticated` field alone. That endpoint also returns
+`enabled`, and when DeepTutor's own auth is switched off it answers
+`authenticated: true` to every caller regardless of cookie:
+
+```
+$ curl -H 'Cookie: dt_token=totally-made-up-garbage' .../api/auth/status
+{"enabled":false,"authenticated":true,"user_id":"local-admin",...}
+```
+
+`data/user/settings/auth.json` ships with `"enabled": false`. Against such an
+instance the gate meant "present any cookie named `dt_token`" — a forged one
+returned `200` and reached OpenMAIC. Measured against a live backend, not
+reasoned about. It also misdiagnosed the honest case: with auth off DeepTutor
+never sets the cookie, so real readers were told to sign in at a login page that
+does not exist.
+
+**Fixed** — the gate reads `enabled` first and refuses with a fifth outcome,
+`auth_disabled_upstream` (503), rather than serving OpenMAIC openly on the
+strength of a setting nobody made about OpenMAIC. `ALLOW_ANONYMOUS=1` remains the
+way to ask for that deliberately. The websocket upgrade path inherits the same
+verdict. `deploy/docker-compose.openmaic.yml` was already correct — it never set
+`ALLOW_ANONYMOUS`, so the gate is on by default.
+
+**Why twelve green checks missed it.** `gatekeeper.test.mjs` stubbed the endpoint
+as `{authenticated: <depends on the token>}` — the shape the code assumed. Stub
+and code agreed about a case neither had ever seen. The suite now serves payloads
+copied verbatim from a live instance and covers the disabled-auth state
+explicitly; 12 checks became 21. `deploy/openmaic-gatekeeper/README.md` records
+both the hole and the reason the original test could not have found it.
+
+Files: `deploy/openmaic-gatekeeper/gatekeeper.mjs`,
+`deploy/openmaic-gatekeeper/gatekeeper.test.mjs`,
+`deploy/openmaic-gatekeeper/README.md`.
+
+---
+
+## The OpenMAIC stack, built and run rather than described — 2026-09-06
+
+"Anything never built is not deployable." The compose overlay had been written,
+validated and committed without once being built, so this built it and ran it.
+
+`docker compose build openmaic` succeeds with all four patches applied — which
+also puts `0004` and `0005` through a production `next build` for the first
+time, the only place their client-side `window.location` reads would show up as
+a hydration problem. It didn't.
+
+The gate then verified in containers, not in a harness — no cookie answers 401
+`not_signed_in`, a bad cookie 401 `session_invalid`, a valid one 200 carrying
+OpenMAIC's own HTML, and OpenMAIC itself is unreachable from the host.
+
+Three things the build found that no amount of reading would have:
+
+- **`0002` cannot be applied alone.** The Dockerfile runs
+  `pnpm install --frozen-lockfile`, and that patch adds a dependency while
+  deliberately excluding the lockfile. `pnpm install` has to run between
+  applying it and building. Recorded in `deploy/OPENMAIC_SYNC.md`.
+- **The gatekeeper's volume path was wrong.** `./openmaic-gatekeeper` resolves
+  against the project directory, not the file's own `deploy/` — exactly the rule
+  written in a comment on `build.context` four lines above it. The container
+  restart-looped on `MODULE_NOT_FOUND`.
+- **The port publish removal had silently not been applied** — see the
+  correction in the entry below.
+
+---
+
+## An auth gate in front of the embedded OpenMAIC — 2026-09-06
+
+Framing OpenMAIC never protected it. Its requests go to its own origin and never
+pass through `web/proxy.ts`, so anyone who learned the address reached the app
+directly — measured earlier in this work: a plain GET with no cookie answered
+200. The usual answer, nginx `auth_request`, does not exist on the target host,
+which has no forward-auth anywhere in its config.
+
+**New: `deploy/openmaic-gatekeeper/`** — a dependency-free Node process that
+verifies the DeepTutor session before anything reaches OpenMAIC.
+
+What makes it cheap is a property of DeepTutor's own cookie. `dt_token` is
+host-only with `path=/` and `SameSite=None; Secure`, and cookies ignore the port,
+so a request to OpenMAIC on any port of the same host already carries it. That
+is a leak — an app that should not hold that token gets one on every request —
+and the gatekeeper turns it into the mechanism while closing it: it reads the
+cookie to decide, then strips it before forwarding.
+
+Three outcomes rather than two, because "the checker is down" must not be
+reported as "you are not signed in": 401 `not_signed_in` / 401 `session_invalid`
+/ **503 `auth_unavailable`**, plus 500 when its own configuration is missing —
+refusing rather than passing everything through.
+
+`gatekeeper.test.mjs` covers all of it against stubs, including the two that
+matter: `dt_token` is absent upstream while unrelated cookies survive, and an
+unreachable auth service yields 503 rather than 401. Stubs on purpose — pointed
+at a live DeepTutor the test could only confirm the happy path, and a gate never
+observed refusing anything is not a gate. 12 checks, all passing.
+
+Also new: `deploy/nginx-openmaic.locations.conf` (TLS on :10330, and
+`frame-ancestors` naming DeepTutor, with no `X-Frame-Options` beside it since
+that header cannot express a different port), and a `gatekeeper` service in the
+compose overlay.
+
+> **Correction.** This entry first claimed OpenMAIC published no host port. It
+> still did: the edit that removed it was lost when the script making it hit a
+> failed assertion before writing, and the check that was supposed to catch that
+> used an `awk` range that ended early and reported a false negative. Both were
+> fixed while building the stack for real, and re-verified by asking
+> `docker compose config` for that service's ports directly rather than by
+> pattern-matching its output.
+
+Not solved, and stated plainly in the README: `dt_token` stays readable by
+anything else on that host. Cookies are scoped by host and path and ignore the
+port, so this keeps the token from OpenMAIC but not from a third application
+deployed beside it. A real domain and a separate subdomain is the structural
+fix; the host currently has an IP-SAN certificate and no domain at all.
+
+---
+
+## Embed mode for OpenMAIC — `?embed=1` — 2026-09-06
+
+`0005-embed-mode.patch` completes the pair started by `0004`. Once a host
+decides the language and theme, the app's own language menu and theme switch
+become a second set of controls for settings it no longer owns — and the one a
+reader reaches for first is the one that loses on the next load.
+
+Scoped on purpose. Settings stays, because it is the only route to provider
+configuration and a host cannot offer that on the app's behalf; attribution
+stays untouched. This hides two controls, not the product's identity.
+
+The language gate went inside `LanguageSwitcher` rather than at its call sites:
+the pill is rendered from the home page, the classroom header and the Pro rail,
+and one edit covers all three. Theme has no equivalent single component — the
+Pro rail uses `ThemeToggle` while the home page and classroom header each build
+an inline menu — so all three were gated separately. That asymmetry cost a round
+of rework: the first attempt patched only the classroom header and had no effect
+on the home screen, which is the first thing anyone sees.
+
+Verified with `?lang=th&theme=dark&embed=1`: the control pill goes from three
+buttons to one, while the Thai locale and dark class both remain applied.
+
+The patch queue now stands at five, and every one is generic — none mentions
+DeepTutor, so all five sit in the upstream-candidate group rather than as
+integration adapters.
+
+---
+
+## Embedding seams for OpenMAIC, kept generic enough to upstream — 2026-09-06
+
+Two patches that let a host embed OpenMAIC properly, neither of which mentions
+DeepTutor:
+
+- `0003-basepath.patch` — serve the app under a reverse-proxy subpath. Next
+  generates every `/_next/` URL from `basePath`, so without it a framed app 404s
+  on its own chunks.
+- `0004-host-supplied-locale-and-theme.patch` — `?lang=` and `?theme=`. Both
+  settings are read once on mount from bare `localStorage` keys, which an
+  embedder can only write by sharing an origin — and that shares every other key
+  with it too. These parameters give a cross-origin host the same reach without
+  collapsing the security boundary.
+
+That is the point of the pair: the integration that made same-origin look
+necessary is achievable across origins, so the origin split stays a security
+decision rather than a cost.
+
+Measured before writing them down. Same-origin was built end to end (DeepTutor
+:3000, OpenMAIC :3100 under a subpath, a Node proxy for one origin) and it does
+work — the parent wrote `locale` and `theme`, the frame came up Thai and dark,
+and `iframe.contentDocument` was reachable. What it also does is put OpenMAIC's
+`fetch('/api/...')` calls — **68** of them, not the 53 first counted, since 15
+are template literals — onto whoever else owns `/api` there. The first symptom
+was not an error: OpenMAIC rendered a login box that was never configured,
+because its access-code check failed and the guard defaults to locked.
+
+`0004` is verified with localStorage cleared first, so the query is demonstrably
+what applied it: `/?lang=th&theme=dark` comes up Thai with the dark class set,
+and persists both so in-app navigation keeps them.
+
+---
+
+## Thai script support, and a checked procedure for following OpenMAIC — 2026-09-06
+
+**Thai font** — `deploy/openmaic-patches/0002-thai-script-support.patch`. Nothing
+in OpenMAIC's font stack covered Thai: Inter carries latin, greek, cyrillic and
+vietnamese, and the two video-export font registries carry CJK and
+cyrillic + arabic. The UI merely looked inconsistent (Thai fell to the OS font,
+as Chinese and Korean still do); the export was broken outright, rendering Thai
+narration as tofu in the MP4. Both fixed the way the project already does it —
+per-subset `unicode-range` faces, verified on a running server: two of six
+declared faces load, and `document.fonts.check(..., 'ก')` is true while 'A' is
+false.
+
+**Tooling that keeps the checkout a mirror**
+
+- `deploy/openmaic-patches/check_openmaic_contract.py` — asserts the five
+  runtime assumptions the embed rests on (reachable, no `X-Frame-Options`,
+  `frame-ancestors` allows us, access gate off) plus offline drift against the
+  pin. Verified in both directions: green against an allowed origin, and red with
+  exit 1 against a disallowed one — the exact condition that produced a blank
+  iframe during testing and took a while to name.
+- `deploy/openmaic-patches/openmaic-pin.json` — the commit everything was
+  verified against, so taking a new OpenMAIC release is a decision rather than a
+  surprise.
+- `deploy/OPENMAIC_SYNC.md` — the procedure, in seven steps. Short by design:
+  there is nothing to merge, only a checkout to keep clean.
+
+---
+
+## Thai locale for OpenMAIC, and the tooling that keeps our copy pristine — 2026-09-06
+
+OpenMAIC ships 12 locales and none of them is Thai, so a learner who picks Thai
+in this app lands in English the moment they open Course Studio. This adds the
+Thai locale — and, more importantly, adds it in a way that does not turn our
+OpenMAIC checkout into a second fork.
+
+**New files (all in this repository; the OpenMAIC checkout stays untouched)**
+
+- `deploy/openmaic-patches/th-TH.partial.json` — the translation itself, 1,689
+  of 1,800 keys. The remaining 111 are deliberate: 108 `settings.lang_*`
+  endonyms (`lang_ja` is 日本語 in the English file too) and 3 `workbench.tool.*`
+  keys that are `null` upstream.
+- `deploy/openmaic-patches/build_th_locale.py` — merges the partial over
+  `en-US.json` so the generated file is always complete. OpenMAIC falls back to
+  **zh-CN**, not English, for missing keys, so a partial file would have shown
+  Thai mixed with Chinese; this is what made an incremental translation possible
+  at all. Also enforces interpolation parity and fails on keys that no longer
+  exist upstream.
+- `deploy/openmaic-patches/0001-register-th-TH-locale.patch` — three lines
+  across two files, generated from a real `git diff`. The locale file is a new
+  file and needs no patch, which is why the footprint stays this small.
+- `deploy/openmaic-patches/check_openmaic_tree.py` — sorts every change in the
+  checkout into allowed / ours / foreign, so a Dockerfile experiment or a
+  leftover `.bak` cannot ride along into an upstream PR unnoticed.
+
+**Verified against a running OpenMAIC at `d4ef5faa`, applied then reverted:**
+their own `scripts/check-i18n-keys.mjs` reports 13 locale files with exact key
+alignment; the home screen and settings dialog render in Thai; no Chinese leaks
+through the fallback.
+
+**Two upstream i18n gaps found, not fixable from a locale file:** the
+persistence-failure toast is hardcoded English (`app/page.tsx:291`) and the dev
+feature chip is hardcoded Chinese (`app/page.tsx:988`).
+
+**Still open:** no font in OpenMAIC covers Thai script, so Thai currently renders
+in whatever the OS supplies. See `docs/planning/PLAN_openmaic_thai_i18n.md`.
+
+---
+
+## OpenMAIC course studio embedded at `/maic` — 2026-09-05
+
+First cut ("L1") of bringing [THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)
+(MIT) into this app. OpenMAIC runs as a **sibling service** and is framed at
+`/maic`; it is deliberately *not* merged into `web/`. Two blockers make a merge
+impossible rather than merely expensive: it ships Tailwind v4 against this app's
+v3 (one Next app, one PostCSS pipeline), and its 69 Next API routes all live
+under `/api/*`, which `web/lib/proxy-policy.ts` forwards wholesale to FastAPI.
+
+**New files**
+
+- `web/lib/openmaic-embed.ts` — resolves the embed target from
+  `DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/openmaic.json`, and validates
+  it (only `http(s)` URLs and same-origin paths; `javascript:`, `data:` and
+  protocol-relative `//host` are rejected as unconfigured).
+- `web/app/(workspace)/maic/page.tsx` — `force-dynamic` server component, so the
+  setting is read per request rather than frozen into the Docker image at build.
+- `web/components/maic/MaicWorkspace.tsx` — the frame, its loading state, an
+  open-in-new-tab escape hatch, and a setup panel when nothing is configured.
+- `web/tests/openmaic-embed.test.ts` — 8 node tests, including the three hostile
+  URL shapes.
+- `deploy/docker-compose.openmaic.yml` — the sibling service (+ optional
+  Postgres under the `openmaic-persistence` profile, which OpenMAIC's Pro agent
+  workbench requires).
+- `deploy/OPENMAIC_EMBED.md` — the two deployment shapes, and the limitations
+  this first cut knowingly ships with.
+- `docs/planning/PLAN_openmaic_thai_i18n.md` — measured plan for giving OpenMAIC
+  a Thai locale *upstream* rather than in our copy, so it survives every sync.
+  Sized from OpenMAIC's own source: 1,800 keys / 6,429 words in the main locale
+  plus 247 in the Pro workbench, 106 keys carrying interpolation, and two things
+  Vietnamese did not need — no font in the project covers Thai script, and the
+  video-export font registry knows only cyrillic and arabic.
+
+**Changed upstream files** (kept to three, each a single insertion)
+
+- `web/components/sidebar/nav-entries.ts` — "Course Studio" nav entry.
+- `web/components/voice/VoiceCallWidget.tsx` — `/maic` added to `UI_PAGES`;
+  `tests/voice-manifest-parity.test.ts` fails the build for any top-level page
+  missing from that manifest.
+- `web/locales/{en,th,zh}/app.json` — 8 keys each, keeping i18n parity at 4,893.
+
+**Config note.** The embed URL lives in a fork-owned
+`data/user/settings/openmaic.json`, **not** in upstream's `integrations.json`.
+`_normalize_integrations` in `deeptutor/services/config/runtime_settings.py`
+rebuilds that payload from a hardcoded dict literal on every load and save, so an
+added key is silently deleted the next time the backend touches the file — found
+by testing, after a configured URL disappeared between writing it and loading the
+page.
+
+**Known limitations** (documented in `deploy/OPENMAIC_EMBED.md`, not defects to
+fix silently): the framed app inherits no authentication from this one; OpenMAIC
+has no Thai locale; nothing but the shell is shared (no common session, data,
+theme or model config); and on a same-origin deployment the two apps share
+`localStorage`, where OpenMAIC keeps provider API keys.
+
+---
+
 ## Local production deploy — nginx subpath `/deepwitya2` over HTTPS — 2026-09-04
 
 Second deployment of this fork on the ai4thai host, built from upstream
@@ -136,6 +1396,182 @@ HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 
 These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
+
+- **2026-09-07 — "Explain vocabulary" failed on every short selection, and the
+  file picker offered two formats the server refuses.** Both found by a UAT
+  walkthrough of Immersive Reading rather than a bug report.
+
+  **Vocabulary.** Selecting a word or a phrase and asking for vocabulary help
+  answered 503 — reproducibly, three runs out of three on `"Adaptive Learning"`,
+  while a 300-character selection succeeded. The extension contradicted itself:
+  `_prompt` hands the model the selection **and** its surrounding context, and
+  `_vocabulary` then required *every* returned term to appear in the selection
+  alone. The model reliably took a term or two from the context it had just been
+  given, and the check is `any(not …)` — so one out-of-selection term discarded
+  the grounded ones with it and failed the whole action.
+
+  Two changes, because either alone leaves it broken. Terms outside the
+  selection are now **dropped rather than fatal**, and the action fails only
+  when nothing is left — grounding is unchanged, every surviving term is still
+  one the reader selected. And the prompt now states the case that made this
+  unavoidable: **a selection short enough to be a term is itself the term.** A
+  two-word phrase has nothing to explain *inside* it, so the model answered with
+  nearby words every time; filtering alone still left zero. With both, three
+  consecutive runs on `"Adaptive Learning"` return `["Adaptive Learning"]`, a
+  single word returns itself, and a long selection returns three terms from
+  inside it.
+
+  **The picker.** `AddMaterialsDialog`'s `accept` advertised `.ppt` and `.doc`,
+  which `SUPPORTED_DOC_EXTENSIONS` does not include: uploading either answered
+  *"has unsupported extension"*. The picker let a file through that was always
+  going to be refused afterwards. Removed from the list — supporting legacy
+  binary Office is a separate feature (it needs LibreOffice), not a fix.
+
+  `tests/reading/test_vocabulary.py` 10 → 14 tests: a context term no longer
+  discards the grounded ones, an answer made only of context terms is still
+  refused, surviving terms keep the model's order, and the prompt keeps its
+  short-selection rule.
+
+- **2026-09-07 — No PDF text was selectable in Safari, silently, in every
+  document.** Reported as *"ถ้าเปิดกับ safari นั้น ไม่สามารถคลุมดำที่ตัวข้อความได้"*.
+  Driven and reproduced in Safari 26.6.2 (`AppleWebKit/605.1.15`) over Apple
+  Events: nine pages rendered, nine text layers present, and
+  `spans: [0,0,0,0,0,0,0,0,0]` — against `[19,126,…]` for the same document in
+  Chrome. **Two independent WebKit divergences**, stacked.
+
+  **1. `getTextContent()` threw.** pdf.js reads page text with
+  `for await (const chunk of this.streamTextContent(…))`, and WebKit has never
+  shipped `ReadableStream.prototype[Symbol.asyncIterator]` — confirmed
+  `undefined` in this Safari. The result is a bare
+  `TypeError: undefined is not a function (near '...t of e...')` thrown inside
+  the library. Fixed with a spec-shaped shim
+  (`web/lib/readable-stream-async-iterator.ts`) installed by the pdf.js loader
+  *before* the library loads: `values()`/`Symbol.asyncIterator` over
+  `getReader()`, cancelling on `return()` unless `preventCancel`, releasing the
+  lock on every exit path — including the final chunk, because pdf.js drains a
+  text stream and never calls `return()`. Feature-detected, so Chrome and
+  Firefox keep their native implementation.
+
+  **2. Every span was `font-size: 0`.** With text extraction fixed the spans
+  appeared but still could not be selected. pdf.js measures the smallest font
+  the browser will render — a `font-size: 1px; line-height: 1` div, measured
+  with `getBoundingClientRect().height` — and publishes it as
+  `--min-font-size`. Chrome measures **1**; Safari measures **0**. That makes
+  `--text-scale-factor: calc(scale * 0)`, so every span renders at
+  `font-size: 0` with `transform: scale(1 / 0)` — a fully populated, correctly
+  positioned text layer of zero-sized boxes, which cannot be selected. Repaired
+  after `layer.render()`, and only when the measurement is not positive, so
+  pdf.js's intent survives wherever the probe is right.
+
+  **Why it was invisible.** `PdfPage` renders canvas and text layer through
+  `Promise.allSettled` and reports failure only if *both* reject — deliberately,
+  since either half alone still leaves a usable page. But a text layer that
+  never built takes selection, highlighting, annotations and every
+  selection-gated reading action with it, while the page looks completely
+  normal. One-sided failures are now logged with the side and the page number;
+  the both-sides rule for showing an error is unchanged.
+
+  Verified in Safari after the fix: `--min-font-size` 0 → 1, span font-size
+  0px → 57.6px, span box NaN → 249×56, text selects, and all four
+  selection-gated buttons (three translations + vocabulary) go from `disabled`
+  to enabled. `web/tests/` gains 5 tests (1097 → 1102).
+
+- **2026-09-07 — "This reading action is temporarily unavailable" was
+  permanent, and nothing was logged.** Reported as *"ทำไมปุ่มด้านบนกดไม่ได้"* —
+  the Immersive Reading action bar answered a red banner and nothing else.
+  Reproduced against a live dev server, and the timing settled it: the 503 came
+  back in **12–46 ms**, while calling the same extension directly in Python
+  translated fine. Nothing had been attempted; the request was refused before
+  it started.
+
+  **`begin_action()` was returning False because the circuit was open, and the
+  circuit had no way to close.** `mark_timed_out()` added the extension to a
+  `set` that was never removed from, so one overrun — ever — disabled that
+  extension for the life of the process. Only a backend restart cleared it;
+  "temporarily" meant "until someone restarts the backend".
+
+  Worse, the breaker punished the wrong handlers. Its own docstring gives the
+  reason it exists — *"Python cannot safely kill a stuck sync handler"* — and
+  that is true, but four of the five built-ins (`translation`, `quiz`,
+  `vocabulary`, `guided_learning`) are **async**. Their executor call only ever
+  *builds* the coroutine and returns; the work happens on the event loop, where
+  `asyncio.timeout` cancels it cleanly and the worker was never held at all.
+  The extensions that actually time out — the ones calling an LLM — were
+  exactly the ones that never needed protecting.
+
+  The circuit now closes when the worker it protects releases the slot. That
+  needs the *executor's* future rather than the one `run_in_executor` returns:
+  the asyncio future reports `done()` the moment it is cancelled, while the
+  thread behind it may still be running — precisely the state the circuit
+  exists to detect. `executor.submit()` + `asyncio.wrap_future()` keeps both.
+  A sync handler still spinning holds the circuit open for exactly as long as
+  it holds the worker, which is the invariant that was meant all along.
+
+  **The router had no logger.** A blanket `except Exception` flattened every
+  failure into the same opaque 503 with no extension id, no action and no
+  traceback, so the only record of what broke did not exist — which is why this
+  diagnosis needed a live reproduction instead of a log line. It logs now:
+  `exception()` for a failure, `warning()` for an overrun, `info()` for a
+  refusal. The response body stays deliberately opaque.
+
+  `ACTION_TIMEOUT_S` 30 → 60 at the maintainer's call. `translation` asks for up
+  to 5,000 tokens, which a slower provider does not deliver in 30 seconds — the
+  most likely source of the original overrun.
+
+  `tests/reading/test_extension_router.py` 8 → 12 tests, covering: the circuit
+  closing once the stuck worker returns, an async handler being usable on the
+  very next request after an overrun, a timeout with no named worker keeping the
+  old permanent behaviour, and the failure log carrying extension, action and
+  traceback.
+
+- **2026-09-07 — OCR asked Tesseract for the wrong language, so Thai came back
+  as Latin.** The first live run of the two entries below, on the deployed
+  instance, transcribed a Thai deck into nonsense — *"SudouuwuusiU"*,
+  *"AD WAAIWAaVAUUAY"* — while the English on the same slides came out clean.
+  That split is the signature of OCR running English-only.
+
+  **The defect was mine, in `_ocr_language`.** It resolved the reader's
+  language from `main.yaml`'s `system.language`, which is a *different setting*
+  from the interface language the person actually picked: the deployment runs a
+  Thai UI (`interface.json` → `language: "th"`) on an install whose
+  `system.language` is still `en`, because #11's Thai default applies to fresh
+  installs and this one predates it. `deeptutor/services/settings/
+  interface_settings.py` has had `get_ui_language()` / `get_response_language()`
+  all along; the fix is to call them. The reply language counts too — someone
+  reading Thai documents through an English interface still has Thai on the
+  page.
+
+  This is worse than a plain failure, and worth naming as its own class:
+  English-only OCR of Thai returns *plausible-looking output* rather than an
+  error, so nothing anywhere reports a problem. Local testing missed it for a
+  precise reason — every run had passed `DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng`
+  explicitly, so the default path this deployment actually uses was never
+  exercised.
+
+  **Missing language data now names its own package.** Tesseract fails a whole
+  page when one requested language is absent, and its error names a path rather
+  than an apt package. The requested languages are checked against the
+  `.traineddata` present before OCR starts, so the message says
+  `apt install tesseract-ocr-tha`.
+
+  **The table of contents was garbage on the same upload**, and it was the same
+  root cause compounded: OCR reads decoration as characters, so a slide's real
+  heading sits behind a scatter of one- and two-character fragments, and the
+  synthesised outline took the literal first line — labelling a twelve-slide
+  deck `onl`, `z|`, `oll`, `ope`, `{ae`. On OCR'd units only, a label line must
+  now carry 12 non-whitespace characters, which sits above the fragments
+  (measured 1–6 on the reported deck) and below a real heading (23–45); a unit
+  with nothing that long still falls back to the old rule rather than going
+  unlabelled. Formats that were not OCR'd are untouched, so a legitimately short
+  heading still labels its section.
+
+  Verified on the reported deck (`Vectorless_RAG_Evolution.pptx`, 12 slides,
+  14.5 MB) with no environment override: 5,869 characters, 12.7 s, and headings
+  that read — *"ข้อจำกัดหลักของ Traditional RAG"*, *"Phase 2 Deep Dive:
+  การสืบค้นด้วยตรรกะเชิงวิเคราะห์"*, *"สรุปกระบวนทัศน์: ทำไม Vectorless RAG
+  คืออนาคตระดับ Enterprise?"*. Outline labels go from 1 of 12 usable to 11 of 12;
+  the remaining one is a title slide drawn as art. `tests/reading/test_ocr.py`
+  32 → 43.
 
 - **2026-09-06 — A picture-only slide deck is readable too, and an extractor
   error no longer says the filename twice.** Follow-up to the scanned-PDF entry

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import threading
+import time
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -191,3 +192,95 @@ def test_timed_out_sync_extension_opens_circuit_without_queueing(material, monke
         assert calls == 1
     finally:
         release.set()
+
+
+def test_the_circuit_closes_once_the_stuck_worker_releases_the_slot(material, monkeypatch):
+    """ "Temporarily unavailable" used to mean "until someone restarts the backend"."""
+    release = threading.Event()
+    calls = 0
+
+    def run(*_args):
+        nonlocal calls
+        calls += 1
+        release.wait(timeout=5)
+        return ReadingExtensionResult(type="card")
+
+    monkeypatch.setattr(reading_extensions, "ACTION_TIMEOUT_S", 0.05)
+    client = _client(monkeypatch, _extension(run))
+    url = f"/api/reading/materials/{material.material_id}/extensions/sample/actions/open"
+
+    assert client.post(url, json={"locator": 1}).status_code == 503
+    # Still held: the handler owns the extension's single worker.
+    assert client.post(url, json={"locator": 1}).status_code == 503
+    assert calls == 1
+
+    release.set()
+    _wait_until(lambda: client.post(url, json={"locator": 1}).status_code != 503)
+
+    monkeypatch.setattr(reading_extensions, "ACTION_TIMEOUT_S", 5)
+    assert client.post(url, json={"locator": 1}).status_code == 200
+    assert calls > 1
+
+
+def test_an_async_handler_that_overran_is_usable_on_the_next_request(material, monkeypatch):
+    """The built-ins are async, and asyncio cancels them cleanly.
+
+    Their executor call only ever *builds* the coroutine, so the worker was
+    free the whole time and the circuit has nothing to protect.
+    """
+    attempts = 0
+
+    async def run(*_args):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            await asyncio.sleep(5)
+        return ReadingExtensionResult(type="card")
+
+    monkeypatch.setattr(reading_extensions, "ACTION_TIMEOUT_S", 0.05)
+    client = _client(monkeypatch, _extension(run))
+    url = f"/api/reading/materials/{material.material_id}/extensions/sample/actions/open"
+
+    assert client.post(url, json={"locator": 1}).status_code == 503
+
+    monkeypatch.setattr(reading_extensions, "ACTION_TIMEOUT_S", 5)
+    assert client.post(url, json={"locator": 1}).status_code == 200
+    assert attempts == 2
+
+
+def test_a_timeout_with_no_named_worker_stays_open(material, monkeypatch):
+    """Without a worker to watch, assume the slot is still held."""
+    registry = ReadingExtensionRegistry([_extension(lambda *_: None)])
+
+    registry.mark_timed_out("sample")
+
+    assert registry.begin_action("sample") is False
+
+
+def test_a_failing_action_is_logged_with_its_extension_and_action(material, monkeypatch, caplog):
+    """The 503 body is deliberately opaque; the server log must not be."""
+
+    def run(*_args):
+        raise RuntimeError("provider exploded")
+
+    client = _client(monkeypatch, _extension(run))
+
+    with caplog.at_level("ERROR"):
+        response = client.post(
+            f"/api/reading/materials/{material.material_id}/extensions/sample/actions/open",
+            json={"locator": 1},
+        )
+
+    assert response.status_code == 503
+    assert "sample/open" in caplog.text
+    assert "provider exploded" in caplog.text
+    assert "RuntimeError" in caplog.text  # the traceback, not just the message
+
+
+def _wait_until(predicate, *, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.05)
+    raise AssertionError("condition never became true")
