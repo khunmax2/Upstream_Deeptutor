@@ -114,6 +114,37 @@ deeptutor serve --port 8001       # API server only
 deeptutor start                   # backend + frontend together
 ```
 
+## `integration/maic` — a second application
+
+This repository contains two applications. Everything above describes DeepTutor;
+`integration/maic` is **OpenMAIC** ([THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC), MIT),
+a Next.js course studio vendored as a **squashed git subtree** and embedded in
+DeepTutor at `/course-studio`.
+
+It shares nothing with the Python architecture above: its own Next app, its own
+Tailwind, its own `/api/*` routes, its own IndexedDB. Reading `deeptutor/` will
+tell you nothing about it, and changing `deeptutor/` will not affect it.
+
+**Three things worth knowing before you touch it.**
+
+*It comes from a different upstream.* THU-MAIC, not HKUDS. A DeepTutor upstream
+sync must leave it alone, and `git subtree pull` is the only command that should
+ever write there — see `CLAUDE.md` §2 and `deploy/OPENMAIC_SYNC.md`.
+
+*It builds itself.* `integration/maic/Dockerfile` runs `corepack` and
+`pnpm install --frozen-lockfile`, so a Docker build needs no separate install
+step. Working on it outside Docker needs `pnpm` (not npm — the lockfile is
+pnpm's, and the repo is a pnpm workspace).
+
+*Its providers come from DeepTutor.* `ModelCatalogService.save()` writes
+`data/user/openmaic/server-providers.yml` from DeepTutor's own provider
+settings, and OpenMAIC re-reads that file when it changes. Nobody configures an
+API key twice, and a rotated key needs no restart. The mapping is
+`deeptutor/services/config/openmaic_bridge.py`.
+
+Deployment, the auth gate in front of it, and what our changes to it are:
+`deploy/OPENMAIC_*.md`.
+
 ## Key Files
 
 | Path                                       | Purpose                              |

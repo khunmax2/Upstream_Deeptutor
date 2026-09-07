@@ -17,6 +17,43 @@ upstream.
 
 ---
 
+## The docs still described the layout we replaced — 2026-09-08
+
+Before deploying, a read of what an agent or an operator would actually find.
+
+**`AGENTS.md` did not know a second application was here.** `CLAUDE.md` sends
+every agent to it first for architecture, and it has never mentioned
+`integration/maic` — so the map said "this repo is DeepTutor" and was wrong
+about a third of the tree. It now has a section of its own: where OpenMAIC comes
+from, that `git subtree pull` is the only command that writes there, that its
+Dockerfile installs its own dependencies with pnpm, and that its providers
+arrive from DeepTutor rather than being configured separately.
+
+`CLAUDE.md` gained the commands beside the `web/` ones, including the trap that
+a containerised `node_modules` holds POSIX symlinks and no `.cmd` shims, so
+host-side `npx` cannot use it.
+
+**The runbook still described the patch queue.** It told you to reverse
+`deploy/openmaic-patches/0*.patch` against a sibling checkout and run
+`check_openmaic_tree.py`. The patches became commits when OpenMAIC was vendored,
+and the checker went with them — so every command in that block was guarded or
+absent, and following it did nothing at all, silently. Replaced with what is
+true now: the source is in the repository, and `export_upstream_patches.py`
+answers "what is ours".
+
+Also corrected: the topology diagram still framed `/maic`, the prerequisites
+still claimed the build clones OpenMAIC, the build-context note still pointed at
+`../OpenMAIC`, and `OPENMAIC_EMBED.md`'s local-dev command still `cd`-ed to a
+sibling checkout that no longer exists.
+
+**Checked rather than assumed.** Every verification command in the runbook was
+run against the live stack: the gate returns 401, a forged cookie is refused,
+`__gatekeeper/health` reports `gated:true`, the provider check prints the three
+configured sections, and the gatekeeper does print the URL it verifies against
+on startup, as claimed. One apparent defect was not one — `--profile
+openmaic-persistence` looked undeclared because `docker compose config` omits
+services whose profile is inactive.
+
 ## Saying when a capability is ready but switched off — 2026-09-07
 
 Configuring an image provider and switching image generation on are two
