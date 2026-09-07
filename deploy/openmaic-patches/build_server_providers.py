@@ -21,9 +21,35 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from deeptutor.services.config.openmaic_bridge import build, to_yaml  # noqa: E402
+def _load_bridge():
+    """Import the mapping, from an install or from a checkout.
+
+    Inside the container `deeptutor` is already importable and this returns
+    immediately. From a checkout it is not, so the repo root is found by
+    looking for the module rather than by counting directories — a fixed
+    `parents[2]` made the script unrunnable from anywhere but its own folder,
+    which is exactly where an operator copying it to /tmp will not be.
+    """
+    try:
+        from deeptutor.services.config.openmaic_bridge import build, to_yaml
+    except ModuleNotFoundError:
+        here = Path(__file__).resolve()
+        target = Path("deeptutor/services/config/openmaic_bridge.py")
+        root = next((p for p in here.parents if (p / target).is_file()), None)
+        if root is None:
+            raise SystemExit(
+                "[server-providers] cannot find deeptutor/services/config/"
+                "openmaic_bridge.py — run this from a checkout of the repository, "
+                "or from inside the DeepTutor container where the package is "
+                "installed."
+            ) from None
+        sys.path.insert(0, str(root))
+        from deeptutor.services.config.openmaic_bridge import build, to_yaml
+    return build, to_yaml
+
+
+build, to_yaml = _load_bridge()
 
 
 def main() -> int:
