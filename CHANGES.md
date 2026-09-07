@@ -84,6 +84,13 @@ them is 404, which is exactly the failure the wrapper exists to prevent. Eight
 unit tests cover the rewrite rules, including idempotency and the cases it must
 leave alone.
 
+Found on the way: `tests/lib/brand/brand-config.test.ts` had been red since the
+de-branding change in `d766fdb2`. It still asserted the upstream identity —
+`OpenMAIC`, `/openmaic-mark.png`, `#722ed1` — while the file it guards had been
+rewritten around ours, and nobody noticed because this repository's CI does not
+run the studio's tests at all (`integration/maic/**` is outside the workflow's
+`paths:` filter). It now asserts what this build ships, plus the new prefixing.
+
 One thing the plan expected to need and did not: the gatekeeper. It is fully
 path-transparent (`path: req.url`), and its one literal comparison,
 `/__gatekeeper/health`, is only ever reached directly on `127.0.0.1:10331`,
