@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import re
 from typing import Any
 
@@ -21,8 +22,14 @@ from deeptutor.reading.extensions import (
     get_reading_extension_registry,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
-ACTION_TIMEOUT_S = 30
+# Long enough for the widest action to finish: translation asks for up to 5,000
+# tokens, which a slower provider does not deliver in 30 seconds. Overrunning
+# is not free — it holds the extension's single worker — so this is a ceiling,
+# not a target.
+ACTION_TIMEOUT_S = 60
 
 
 class ActionPayload(BaseModel):
@@ -97,22 +104,21 @@ async def run_extension_action(
             detail="This reading unit is too large for the extension protocol.",
         ) from exc
     if not registry.begin_action(extension_id):
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "This reading action is temporarily unavailable.",
-                "recoverable": True,
-            },
+        logger.info(
+            "Reading extension %s/%s refused: worker busy or circuit open",
+            extension_id,
+            action,
         )
+        raise _unavailable()
+    # submit() rather than run_in_executor(): we need the *executor's* future,
+    # whose done() tells the truth about the worker. The asyncio future that
+    # run_in_executor returns reports done() the moment it is cancelled, while
+    # the thread behind it may still be running — which is exactly the state
+    # the circuit exists to detect.
+    call = registry.executor_for(extension_id).submit(extension.run_action, action, context)
     try:
         async with asyncio.timeout(ACTION_TIMEOUT_S):
-            loop = asyncio.get_running_loop()
-            value = await loop.run_in_executor(
-                registry.executor_for(extension_id),
-                extension.run_action,
-                action,
-                context,
-            )
+            value = await asyncio.wrap_future(call)
             if inspect.isawaitable(value):
                 value = await value
         result = (
@@ -124,24 +130,28 @@ async def run_extension_action(
             raise ValueError(f"Extension returned undeclared result type {result.type!r}.")
         return result.model_dump()
     except TimeoutError as exc:
-        registry.mark_timed_out(extension_id)
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "This reading action is temporarily unavailable.",
-                "recoverable": True,
-            },
-        ) from exc
+        registry.mark_timed_out(extension_id, call)
+        logger.warning(
+            "Reading extension %s/%s exceeded %ss", extension_id, action, ACTION_TIMEOUT_S
+        )
+        raise _unavailable() from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "This reading action is temporarily unavailable.",
-                "recoverable": True,
-            },
-        ) from exc
+        # The response is deliberately opaque; the server log must not be. This
+        # was the only record of what actually broke, and it did not exist.
+        logger.exception("Reading extension %s/%s failed: %s", extension_id, action, exc)
+        raise _unavailable() from exc
     finally:
         registry.finish_action(extension_id)
+
+
+def _unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "message": "This reading action is temporarily unavailable.",
+            "recoverable": True,
+        },
+    )
 
 
 __all__ = ["router"]

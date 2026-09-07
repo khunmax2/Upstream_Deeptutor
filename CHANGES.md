@@ -91,6 +91,54 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-07 — "This reading action is temporarily unavailable" was
+  permanent, and nothing was logged.** Reported as *"ทำไมปุ่มด้านบนกดไม่ได้"* —
+  the Immersive Reading action bar answered a red banner and nothing else.
+  Reproduced against a live dev server, and the timing settled it: the 503 came
+  back in **12–46 ms**, while calling the same extension directly in Python
+  translated fine. Nothing had been attempted; the request was refused before
+  it started.
+
+  **`begin_action()` was returning False because the circuit was open, and the
+  circuit had no way to close.** `mark_timed_out()` added the extension to a
+  `set` that was never removed from, so one overrun — ever — disabled that
+  extension for the life of the process. Only a backend restart cleared it;
+  "temporarily" meant "until someone restarts the backend".
+
+  Worse, the breaker punished the wrong handlers. Its own docstring gives the
+  reason it exists — *"Python cannot safely kill a stuck sync handler"* — and
+  that is true, but four of the five built-ins (`translation`, `quiz`,
+  `vocabulary`, `guided_learning`) are **async**. Their executor call only ever
+  *builds* the coroutine and returns; the work happens on the event loop, where
+  `asyncio.timeout` cancels it cleanly and the worker was never held at all.
+  The extensions that actually time out — the ones calling an LLM — were
+  exactly the ones that never needed protecting.
+
+  The circuit now closes when the worker it protects releases the slot. That
+  needs the *executor's* future rather than the one `run_in_executor` returns:
+  the asyncio future reports `done()` the moment it is cancelled, while the
+  thread behind it may still be running — precisely the state the circuit
+  exists to detect. `executor.submit()` + `asyncio.wrap_future()` keeps both.
+  A sync handler still spinning holds the circuit open for exactly as long as
+  it holds the worker, which is the invariant that was meant all along.
+
+  **The router had no logger.** A blanket `except Exception` flattened every
+  failure into the same opaque 503 with no extension id, no action and no
+  traceback, so the only record of what broke did not exist — which is why this
+  diagnosis needed a live reproduction instead of a log line. It logs now:
+  `exception()` for a failure, `warning()` for an overrun, `info()` for a
+  refusal. The response body stays deliberately opaque.
+
+  `ACTION_TIMEOUT_S` 30 → 60 at the maintainer's call. `translation` asks for up
+  to 5,000 tokens, which a slower provider does not deliver in 30 seconds — the
+  most likely source of the original overrun.
+
+  `tests/reading/test_extension_router.py` 8 → 12 tests, covering: the circuit
+  closing once the stuck worker returns, an async handler being usable on the
+  very next request after an overrun, a timeout with no named worker keeping the
+  old permanent behaviour, and the failure log carrying extension, action and
+  traceback.
+
 - **2026-09-07 — OCR asked Tesseract for the wrong language, so Thai came back
   as Latin.** The first live run of the two entries below, on the deployed
   instance, transcribed a Thai deck into nonsense — *"SudouuwuusiU"*,
