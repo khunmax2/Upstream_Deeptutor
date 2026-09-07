@@ -73,6 +73,13 @@ BINDING_TO_PROVIDER: dict[str, dict[str, str]] = {
         "ollama": "ollama",
         "lemonade": "lemonade",
         "atlascloud": "atlascloud",
+        # OpenRouter has an id of its own in OpenMAIC — `LLM_ENV_MAP.OPENROUTER`
+        # in integration/maic/lib/server/provider-config.ts — so it maps to
+        # itself rather than being flattened into `openai` like the relays
+        # below. Missing here, a DeepTutor deployment whose LLM is OpenRouter
+        # handed the course studio an empty `providers:` section and the studio
+        # silently had no model to call.
+        "openrouter": "openrouter",
         # OpenAI-compatible relays have no id of their own; they are `openai`
         # with a different base URL, which is exactly how OpenMAIC models them.
         "groq": "openai",
