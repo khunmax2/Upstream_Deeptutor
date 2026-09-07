@@ -189,8 +189,16 @@ upstream เพิ่ม `deeptutor-redis` (`redis:7.4-alpine`, volume `./data/r
   **บน deploy สดปี v1.6.4 พบว่า container สร้าง `data/user` เป็น 700 และ
   `data/user/settings` เป็น 700 ด้วย → host เข้าไม่ถึงแม้แต่จะ `ls`**
 
-  **⚠️ ต้องทำซ้ำก่อน `up -d` / `--build` ทุกครั้ง** — file mode (644/666) รอด แต่
-  **directory mode ถูกรีเซ็ตกลับเป็น 700 ทุกครั้งที่คอนเทนเนอร์ start/restart**
+  **⚠️ ต้องทำซ้ำก่อน `up -d` / `--build` ทุกครั้ง** — มีสองกลไกที่รีเซ็ตคนละแบบ:
+
+  1. **directory mode กลับเป็น 700 ทุกครั้งที่คอนเทนเนอร์ start/restart**
+  2. **`system.json` กลับเป็น 600 เมื่อมีคนกด save setting ในหน้าเว็บ** — แอปเขียน
+     ไฟล์แบบ atomic (temp + rename) ไฟล์ใหม่จึงได้ mode ตาม umask ไม่ใช่ของเดิม
+     ที่เรา chmod ไว้ เจอจริงตอน update 2026-09-07: ไฟล์ถูกแก้ตอน 09-05 06:11
+     แล้ว build ถัดมาก็ตายทันที ต่างจาก `docker.env` ที่ 666 รอด เพราะ wrapper
+     เป็นคนเขียน ไม่ใช่แอป
+
+  (ข้อ 1 คือ)
   (โค้ด multi-user เรียก `os.chmod(path, stat.S_IRWXU)` ดู `deeptutor/multi_user/paths.py`)
   อาการ: `python3 scripts/docker_compose.py ... --build` ตายคาที่
   `PermissionError: '/…/data/user/settings'` **ก่อน build จะเริ่มด้วยซ้ำ**
