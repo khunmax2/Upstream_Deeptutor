@@ -39,8 +39,11 @@ import {
   sourceKindKey,
 } from "./shared";
 
+// Legacy binary .doc/.ppt are deliberately absent: the server rejects them
+// ("unsupported extension"), and advertising them here only let the picker
+// hand over a file that was always going to fail after the upload.
 const ACCEPT =
-  ".pdf,.epub,.ppt,.pptx,.doc,.docx,.txt,.md,.html,.htm,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.m4v,.webm,.mkv";
+  ".pdf,.epub,.pptx,.docx,.txt,.md,.html,.htm,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.m4v,.webm,.mkv";
 
 type PendingItem = {
   key: string;

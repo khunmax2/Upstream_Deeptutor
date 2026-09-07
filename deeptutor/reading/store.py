@@ -273,7 +273,12 @@ class ReadingStore:
                 raw_dir = stage_dir / RAW_DIR
                 raw_dir.mkdir(parents=True, exist_ok=True)
                 raw_path = raw_dir / _safe_filename(display_name, fallback=path.name)
-                raw_path.write_bytes(data)
+                # A recovery pass may hand back a rebuilt file (the OCR
+                # fallback returns the scan with a text layer welded in). The
+                # material id still hashes the *upload*, so re-uploading the
+                # same scan stays idempotent; only what the reader renders
+                # changes.
+                raw_path.write_bytes(extraction.raw_bytes or data)
 
             # A PDF page's first text line is not a table of contents. It is
             # often a figure caption, running header, or reference entry, so
@@ -283,7 +288,7 @@ class ReadingStore:
             outline = (
                 extraction.outline
                 if extraction.outline or extraction.render_mode == "pdf"
-                else synthesise_outline(extraction.units)
+                else synthesise_outline(extraction.units, from_ocr=extraction.from_ocr)
             )
             _atomic_write(
                 stage_dir / OUTLINE_NAME,

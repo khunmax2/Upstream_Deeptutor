@@ -28,7 +28,7 @@ more branch here without touching a single consumer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import logging
 from pathlib import Path
 import re
@@ -44,6 +44,10 @@ SECTION_TARGET_CHARS = 2800
 # Never emit a section longer than this even if no paragraph break was found —
 # a minified file or a single 200k-character line must still be addressable.
 SECTION_HARD_CHARS = 4200
+# Non-whitespace characters a line must carry to label an OCR'd unit. Sits well
+# above the fragments OCR pulls out of decoration (measured: 1-6 characters) and
+# below a real slide heading (23-45), so it separates them without tuning.
+OCR_LABEL_MIN_CHARS = 12
 
 _SLIDE_SEPARATOR = re.compile(r"^--- Slide \d+ ---$", re.MULTILINE)
 # Title candidates: a markdown heading, or the first non-trivial line.
@@ -71,10 +75,20 @@ class Extraction:
     outline: tuple[OutlineEntry, ...] = field(default_factory=tuple)
     render_mode: RenderMode = "text"
     unit_refs: tuple[UnitReference, ...] = field(default_factory=tuple)
+    # Set only when a recovery pass rebuilt the source file (today: the OCR
+    # fallback, which writes an invisible text layer into a scanned PDF). The
+    # store persists these bytes for the raw view instead of the upload, so the
+    # browser gets the selection surface the original never had.
+    raw_bytes: bytes | None = None
 
     @property
     def char_count(self) -> int:
         return sum(len(u) for u in self.units)
+
+    @property
+    def from_ocr(self) -> bool:
+        """Whether these units were read by OCR rather than out of the file."""
+        return "+ocr:" in self.extractor
 
 
 def extract_material(path: str | Path) -> Extraction:
@@ -99,11 +113,32 @@ def extract_material(path: str | Path) -> Extraction:
         extraction = _extract_sections(source)
 
     if not any(unit.strip() for unit in extraction.units):
-        raise ReadingError(
-            f"{source.name}: no readable text could be extracted. "
-            "A scanned document needs OCR before it can be read here."
-        )
+        if suffix != ".pdf":
+            raise ReadingError(
+                f"{source.name}: no readable text could be extracted. "
+                "A scanned document needs OCR before it can be read here."
+            )
+        extraction = _recover_pdf_with_ocr(source, extraction)
     return extraction
+
+
+def _recover_pdf_with_ocr(source: Path, extraction: Extraction) -> Extraction:
+    """Refill an image-only PDF's empty units from OCR, page for page.
+
+    Only the units, the extractor label and the raw bytes change: unit kind,
+    outline and render mode are already correct for a PDF, and keeping them is
+    what guarantees an OCR'd scan stays addressable by physical page number
+    exactly like every other PDF.
+    """
+    from deeptutor.reading.ocr import recover_with_ocr
+
+    recovered = recover_with_ocr(source, len(extraction.units))
+    return replace(
+        extraction,
+        units=recovered.units,
+        extractor=f"{extraction.extractor}+ocr:{recovered.engine}",
+        raw_bytes=recovered.searchable_pdf,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +243,23 @@ def _pdf_outline(doc: object, *, page_count: int) -> tuple[OutlineEntry, ...]:
 
 
 def _extract_slides(source: Path) -> Extraction:
-    text = _shared_extract(source)
+    try:
+        text = _shared_extract(source)
+    except ReadingError as exc:
+        # A deck exported from a design tool is one full-bleed picture per
+        # slide and carries no text run at all, so the shared extractor calls
+        # it empty. That is the deck's *pictures* being its text, not a broken
+        # file — recover it the same way a scanned PDF is recovered. Any other
+        # failure (corrupt package, unsupported) still surfaces as it was.
+        if not _is_empty_document(exc):
+            raise
+        recovered = _recover_slides_with_ocr(source)
+        return Extraction(
+            units=recovered.units,
+            unit="slide",
+            extractor=f"pptx+ocr:{recovered.engine}",
+        )
+
     parts = [part.strip() for part in _SLIDE_SEPARATOR.split(text)]
     units = tuple(part for part in parts if part)
     if not units:
@@ -216,6 +267,24 @@ def _extract_slides(source: Path) -> Extraction:
         # raw-OOXML fallback). Treat it as flat text rather than losing it.
         return _sections_from_text(text, extractor="pptx-text")
     return Extraction(units=units, unit="slide", extractor="pptx")
+
+
+def _is_empty_document(error: ReadingError) -> bool:
+    """Whether *error* is "this file holds no text", not "this file is broken".
+
+    ``_shared_extract`` re-raises with ``from exc``, so the extractor's own
+    exception type is still on the chain — worth reading rather than matching
+    the message text, which is user-facing copy and free to change.
+    """
+    from deeptutor.utils.document_extractor import EmptyDocumentError
+
+    return isinstance(error.__cause__, EmptyDocumentError)
+
+
+def _recover_slides_with_ocr(source: Path):
+    from deeptutor.reading.ocr import recover_slides_with_ocr
+
+    return recover_slides_with_ocr(source)
 
 
 # ---------------------------------------------------------------------------
@@ -373,32 +442,64 @@ def _shared_extract(source: Path) -> str:
             source, max_bytes=DocumentValidator.MAX_FILE_SIZE, max_chars=None
         )
     except DocumentExtractionError as exc:
-        raise ReadingError(f"{source.name}: {exc}") from exc
+        # Every extractor message already opens with the filename, so prefixing
+        # it again reads as "deck.pptx: deck.pptx: no extractable text".
+        message = str(exc)
+        if not message.startswith(source.name):
+            message = f"{source.name}: {message}"
+        raise ReadingError(message) from exc
     except OSError as exc:
         raise ReadingError(f"{source.name}: could not be read ({exc})") from exc
 
 
-def synthesise_outline(units: tuple[str, ...] | list[str]) -> tuple[OutlineEntry, ...]:
+def synthesise_outline(
+    units: tuple[str, ...] | list[str], *, from_ocr: bool = False
+) -> tuple[OutlineEntry, ...]:
     """Build a fallback outline: one row per unit, labelled by its first line.
 
     Used for every material whose format carries no structure of its own. The
     label matters more than it looks: without it ``material_outline`` would
     return a bare count and the model would have to read units blindly to find
     anything.
+
+    ``from_ocr`` raises the bar for what counts as a line, because OCR reads
+    decoration as characters: a slide's real heading sits behind a scatter of
+    one- and two-character fragments picked out of icons and rules, and taking
+    the literal first line labelled a whole deck "onl", "z|", "oll", "{ae".
     """
+    minimum = OCR_LABEL_MIN_CHARS if from_ocr else 2
     entries: list[OutlineEntry] = []
     for index, unit in enumerate(units, start=1):
         entries.append(
-            OutlineEntry(locator=index, title=first_line_label(unit), level=1, synthesised=True)
+            OutlineEntry(
+                locator=index,
+                title=first_line_label(unit, min_chars=minimum),
+                level=1,
+                synthesised=True,
+            )
         )
     return tuple(entries)
 
 
-def first_line_label(unit: str, *, limit: int = 90) -> str:
-    """A short human label for a unit: its heading, else its first real line."""
+def first_line_label(unit: str, *, limit: int = 90, min_chars: int = 2) -> str:
+    """A short human label for a unit: its heading, else its first real line.
+
+    ``min_chars`` counts non-whitespace characters, so a line of scattered
+    marks does not qualify on its spaces. A unit with nothing that long falls
+    back to the loose rule rather than going unlabelled — a poor label still
+    beats a blank row in the navigator.
+    """
+    if min_chars > 2:
+        label = _first_line_at_least(unit, min_chars, limit)
+        if label:
+            return label
+    return _first_line_at_least(unit, 2, limit)
+
+
+def _first_line_at_least(unit: str, min_chars: int, limit: int) -> str:
     for raw_line in unit.splitlines():
         line = raw_line.strip()
-        if len(line) < 2:
+        if len("".join(line.split())) < min_chars:
             continue
         heading = _MD_HEADING.match(line)
         if heading:
@@ -410,6 +511,7 @@ def first_line_label(unit: str, *, limit: int = 90) -> str:
 
 
 __all__ = [
+    "OCR_LABEL_MIN_CHARS",
     "RAW_VIEW_EXTENSIONS",
     "SECTION_HARD_CHARS",
     "SECTION_TARGET_CHARS",

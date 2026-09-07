@@ -1314,6 +1314,283 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-07 — "Explain vocabulary" failed on every short selection, and the
+  file picker offered two formats the server refuses.** Both found by a UAT
+  walkthrough of Immersive Reading rather than a bug report.
+
+  **Vocabulary.** Selecting a word or a phrase and asking for vocabulary help
+  answered 503 — reproducibly, three runs out of three on `"Adaptive Learning"`,
+  while a 300-character selection succeeded. The extension contradicted itself:
+  `_prompt` hands the model the selection **and** its surrounding context, and
+  `_vocabulary` then required *every* returned term to appear in the selection
+  alone. The model reliably took a term or two from the context it had just been
+  given, and the check is `any(not …)` — so one out-of-selection term discarded
+  the grounded ones with it and failed the whole action.
+
+  Two changes, because either alone leaves it broken. Terms outside the
+  selection are now **dropped rather than fatal**, and the action fails only
+  when nothing is left — grounding is unchanged, every surviving term is still
+  one the reader selected. And the prompt now states the case that made this
+  unavoidable: **a selection short enough to be a term is itself the term.** A
+  two-word phrase has nothing to explain *inside* it, so the model answered with
+  nearby words every time; filtering alone still left zero. With both, three
+  consecutive runs on `"Adaptive Learning"` return `["Adaptive Learning"]`, a
+  single word returns itself, and a long selection returns three terms from
+  inside it.
+
+  **The picker.** `AddMaterialsDialog`'s `accept` advertised `.ppt` and `.doc`,
+  which `SUPPORTED_DOC_EXTENSIONS` does not include: uploading either answered
+  *"has unsupported extension"*. The picker let a file through that was always
+  going to be refused afterwards. Removed from the list — supporting legacy
+  binary Office is a separate feature (it needs LibreOffice), not a fix.
+
+  `tests/reading/test_vocabulary.py` 10 → 14 tests: a context term no longer
+  discards the grounded ones, an answer made only of context terms is still
+  refused, surviving terms keep the model's order, and the prompt keeps its
+  short-selection rule.
+
+- **2026-09-07 — No PDF text was selectable in Safari, silently, in every
+  document.** Reported as *"ถ้าเปิดกับ safari นั้น ไม่สามารถคลุมดำที่ตัวข้อความได้"*.
+  Driven and reproduced in Safari 26.6.2 (`AppleWebKit/605.1.15`) over Apple
+  Events: nine pages rendered, nine text layers present, and
+  `spans: [0,0,0,0,0,0,0,0,0]` — against `[19,126,…]` for the same document in
+  Chrome. **Two independent WebKit divergences**, stacked.
+
+  **1. `getTextContent()` threw.** pdf.js reads page text with
+  `for await (const chunk of this.streamTextContent(…))`, and WebKit has never
+  shipped `ReadableStream.prototype[Symbol.asyncIterator]` — confirmed
+  `undefined` in this Safari. The result is a bare
+  `TypeError: undefined is not a function (near '...t of e...')` thrown inside
+  the library. Fixed with a spec-shaped shim
+  (`web/lib/readable-stream-async-iterator.ts`) installed by the pdf.js loader
+  *before* the library loads: `values()`/`Symbol.asyncIterator` over
+  `getReader()`, cancelling on `return()` unless `preventCancel`, releasing the
+  lock on every exit path — including the final chunk, because pdf.js drains a
+  text stream and never calls `return()`. Feature-detected, so Chrome and
+  Firefox keep their native implementation.
+
+  **2. Every span was `font-size: 0`.** With text extraction fixed the spans
+  appeared but still could not be selected. pdf.js measures the smallest font
+  the browser will render — a `font-size: 1px; line-height: 1` div, measured
+  with `getBoundingClientRect().height` — and publishes it as
+  `--min-font-size`. Chrome measures **1**; Safari measures **0**. That makes
+  `--text-scale-factor: calc(scale * 0)`, so every span renders at
+  `font-size: 0` with `transform: scale(1 / 0)` — a fully populated, correctly
+  positioned text layer of zero-sized boxes, which cannot be selected. Repaired
+  after `layer.render()`, and only when the measurement is not positive, so
+  pdf.js's intent survives wherever the probe is right.
+
+  **Why it was invisible.** `PdfPage` renders canvas and text layer through
+  `Promise.allSettled` and reports failure only if *both* reject — deliberately,
+  since either half alone still leaves a usable page. But a text layer that
+  never built takes selection, highlighting, annotations and every
+  selection-gated reading action with it, while the page looks completely
+  normal. One-sided failures are now logged with the side and the page number;
+  the both-sides rule for showing an error is unchanged.
+
+  Verified in Safari after the fix: `--min-font-size` 0 → 1, span font-size
+  0px → 57.6px, span box NaN → 249×56, text selects, and all four
+  selection-gated buttons (three translations + vocabulary) go from `disabled`
+  to enabled. `web/tests/` gains 5 tests (1097 → 1102).
+
+- **2026-09-07 — "This reading action is temporarily unavailable" was
+  permanent, and nothing was logged.** Reported as *"ทำไมปุ่มด้านบนกดไม่ได้"* —
+  the Immersive Reading action bar answered a red banner and nothing else.
+  Reproduced against a live dev server, and the timing settled it: the 503 came
+  back in **12–46 ms**, while calling the same extension directly in Python
+  translated fine. Nothing had been attempted; the request was refused before
+  it started.
+
+  **`begin_action()` was returning False because the circuit was open, and the
+  circuit had no way to close.** `mark_timed_out()` added the extension to a
+  `set` that was never removed from, so one overrun — ever — disabled that
+  extension for the life of the process. Only a backend restart cleared it;
+  "temporarily" meant "until someone restarts the backend".
+
+  Worse, the breaker punished the wrong handlers. Its own docstring gives the
+  reason it exists — *"Python cannot safely kill a stuck sync handler"* — and
+  that is true, but four of the five built-ins (`translation`, `quiz`,
+  `vocabulary`, `guided_learning`) are **async**. Their executor call only ever
+  *builds* the coroutine and returns; the work happens on the event loop, where
+  `asyncio.timeout` cancels it cleanly and the worker was never held at all.
+  The extensions that actually time out — the ones calling an LLM — were
+  exactly the ones that never needed protecting.
+
+  The circuit now closes when the worker it protects releases the slot. That
+  needs the *executor's* future rather than the one `run_in_executor` returns:
+  the asyncio future reports `done()` the moment it is cancelled, while the
+  thread behind it may still be running — precisely the state the circuit
+  exists to detect. `executor.submit()` + `asyncio.wrap_future()` keeps both.
+  A sync handler still spinning holds the circuit open for exactly as long as
+  it holds the worker, which is the invariant that was meant all along.
+
+  **The router had no logger.** A blanket `except Exception` flattened every
+  failure into the same opaque 503 with no extension id, no action and no
+  traceback, so the only record of what broke did not exist — which is why this
+  diagnosis needed a live reproduction instead of a log line. It logs now:
+  `exception()` for a failure, `warning()` for an overrun, `info()` for a
+  refusal. The response body stays deliberately opaque.
+
+  `ACTION_TIMEOUT_S` 30 → 60 at the maintainer's call. `translation` asks for up
+  to 5,000 tokens, which a slower provider does not deliver in 30 seconds — the
+  most likely source of the original overrun.
+
+  `tests/reading/test_extension_router.py` 8 → 12 tests, covering: the circuit
+  closing once the stuck worker returns, an async handler being usable on the
+  very next request after an overrun, a timeout with no named worker keeping the
+  old permanent behaviour, and the failure log carrying extension, action and
+  traceback.
+
+- **2026-09-07 — OCR asked Tesseract for the wrong language, so Thai came back
+  as Latin.** The first live run of the two entries below, on the deployed
+  instance, transcribed a Thai deck into nonsense — *"SudouuwuusiU"*,
+  *"AD WAAIWAaVAUUAY"* — while the English on the same slides came out clean.
+  That split is the signature of OCR running English-only.
+
+  **The defect was mine, in `_ocr_language`.** It resolved the reader's
+  language from `main.yaml`'s `system.language`, which is a *different setting*
+  from the interface language the person actually picked: the deployment runs a
+  Thai UI (`interface.json` → `language: "th"`) on an install whose
+  `system.language` is still `en`, because #11's Thai default applies to fresh
+  installs and this one predates it. `deeptutor/services/settings/
+  interface_settings.py` has had `get_ui_language()` / `get_response_language()`
+  all along; the fix is to call them. The reply language counts too — someone
+  reading Thai documents through an English interface still has Thai on the
+  page.
+
+  This is worse than a plain failure, and worth naming as its own class:
+  English-only OCR of Thai returns *plausible-looking output* rather than an
+  error, so nothing anywhere reports a problem. Local testing missed it for a
+  precise reason — every run had passed `DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng`
+  explicitly, so the default path this deployment actually uses was never
+  exercised.
+
+  **Missing language data now names its own package.** Tesseract fails a whole
+  page when one requested language is absent, and its error names a path rather
+  than an apt package. The requested languages are checked against the
+  `.traineddata` present before OCR starts, so the message says
+  `apt install tesseract-ocr-tha`.
+
+  **The table of contents was garbage on the same upload**, and it was the same
+  root cause compounded: OCR reads decoration as characters, so a slide's real
+  heading sits behind a scatter of one- and two-character fragments, and the
+  synthesised outline took the literal first line — labelling a twelve-slide
+  deck `onl`, `z|`, `oll`, `ope`, `{ae`. On OCR'd units only, a label line must
+  now carry 12 non-whitespace characters, which sits above the fragments
+  (measured 1–6 on the reported deck) and below a real heading (23–45); a unit
+  with nothing that long still falls back to the old rule rather than going
+  unlabelled. Formats that were not OCR'd are untouched, so a legitimately short
+  heading still labels its section.
+
+  Verified on the reported deck (`Vectorless_RAG_Evolution.pptx`, 12 slides,
+  14.5 MB) with no environment override: 5,869 characters, 12.7 s, and headings
+  that read — *"ข้อจำกัดหลักของ Traditional RAG"*, *"Phase 2 Deep Dive:
+  การสืบค้นด้วยตรรกะเชิงวิเคราะห์"*, *"สรุปกระบวนทัศน์: ทำไม Vectorless RAG
+  คืออนาคตระดับ Enterprise?"*. Outline labels go from 1 of 12 usable to 11 of 12;
+  the remaining one is a title slide drawn as art. `tests/reading/test_ocr.py`
+  32 → 43.
+
+- **2026-09-06 — A picture-only slide deck is readable too, and an extractor
+  error no longer says the filename twice.** Follow-up to the scanned-PDF entry
+  below, from a second report against the same screen: an 11.6 MB PPTX was
+  refused with *"PageIndex_Vectorless_RAG_Architecture.pptx:
+  PageIndex_Vectorless_RAG_Architecture.pptx: no extractable text"*. Two
+  separate defects in one message.
+
+  **The deck.** Ten slides, ten PNGs, and every `slideN.xml` a 921-byte shell
+  holding a single full-bleed `<p:pic>` — a deck exported from a design tool,
+  where the slides *are* pictures. The same shape as the scanned PDF, in a
+  different format, and it took the same dead end: `_extract_slides` calls the
+  shared extractor, which finds no text run and raises before
+  `extract_material`'s empty-unit check (and therefore its OCR recovery) is ever
+  reached.
+
+  Recovery now reads the pictures straight out of the OOXML package and OCRs
+  them, one unit per slide. No rendering, so no LibreOffice on the host — for a
+  deck whose every slide is already an image, rendering would only redraw what
+  is sitting in `ppt/media/`. Two details carry the correctness:
+
+  * **Slide order comes from `sldIdLst`, not the `slideN.xml` file names.**
+    Those numbers are creation order; a deck whose slides were reordered would
+    otherwise attribute each slide's text to the wrong locator — the same
+    misalignment the PDF path refuses to risk. File order is the fallback, and
+    it sorts numerically so slide10 follows slide9.
+  * **Only "this file holds no text" routes to OCR.** `_shared_extract`
+    re-raises `from exc`, so the extractor's own exception type is still on the
+    chain: an `EmptyDocumentError` recovers, while a corrupt package still
+    reports being corrupt. Read from the chain rather than matched against the
+    message, which is user-facing copy and free to change.
+
+  Pictures are upscaled to a 2400 px target width before OCR: `get_pixmap`
+  renders an image at its *declared* size at 72 dpi, which for a slide picture
+  is well under its own pixel count, and small text OCRs better upscaled.
+
+  **The doubled filename** was a separate, pre-existing wart, visible in the
+  screenshot and found while writing the tests for the PDF work. Every
+  `DocumentExtractionError` message already opens with the filename, and
+  `_shared_extract` prefixed it again. It now prefixes only when the message
+  does not already start with the name.
+
+  Verified on the reported deck: 10 slides, `tha+eng`, 9.7 s, 4,654 characters —
+  *"สถาปัตยกรรม RAG ไร้เวกเตอร์"*, *"ความคล้ายคลึง(Similarity) ≠
+  ความเกี่ยวข้อง(Relevance)"*, *"การจัดทำดัชนีด้วยโครงสร้างต้นไม้"* all recovered.
+  `tests/reading/test_ocr.py` grows from 21 tests to 32.
+
+- **2026-09-06 — A scanned PDF is readable in Immersive Reading instead of
+  refused at upload.** `extract_material` read a PDF through PyMuPDF and
+  nothing else, so an image-only scan — every page a picture, no text layer —
+  came back as a document of empty pages and was rejected outright:
+  *"no readable text could be extracted. A scanned document needs OCR before it
+  can be read here."* The message was accurate and the dead end was total:
+  there was no OCR anywhere on the reading path, even though the repo already
+  ships OCR-capable parse engines (`deeptutor/services/parsing/engines/`,
+  MinerU and Docling) — they were wired only into the RAG pipelines, never into
+  `deeptutor/reading/`. Reported against a five-page Thai
+  *หนังสือส่งมอบงาน* (a signed, scanned handover letter).
+
+  A PDF that yields no text now goes through a recovery pass before it is
+  refused (new file `deeptutor/reading/ocr.py`; three lines of hook in
+  `extract.py`, one in `store.py`). Two things had to hold:
+
+  1. **The page grid is the locator space.** A PDF is the one format the reader
+     renders faithfully, so `locator == physical page number` and every
+     annotation is stored normalised against that page's box. A recovery
+     returning flat markdown would put unit 7 on page 3 and land every
+     highlight in the wrong place. Every provider therefore emits *exactly*
+     `page_count` units in page order, or declines — MinerU/Docling blocks are
+     grouped by their `page_idx`, and blocks outside the range are dropped
+     rather than clamped (the same rule `_pdf_outline` already applies to stale
+     bookmarks).
+  2. **Selection happens in the browser.** `PdfPage.tsx` builds its selection
+     surface from pdf.js `getTextContent()`, so text known only server-side
+     would leave select → highlight → ask dead on precisely these documents.
+     The Tesseract provider therefore rebuilds the PDF with an invisible OCR
+     text layer welded in, and `store.ingest` writes those bytes for the raw
+     view. The material id still hashes the *upload*, so re-uploading the same
+     scan stays idempotent.
+
+  Providers, in order: the operator's configured parse engine when it is one
+  that actually OCRs (MinerU, Docling), then PyMuPDF's built-in Tesseract
+  binding — which costs no new Python dependency, because PyMuPDF is already
+  core. A heavy engine that is misconfigured or missing its models *declines*
+  rather than raising, so it can never cost the user the Tesseract path that
+  would have worked. When nothing can run, the original two sentences are kept
+  verbatim and the operator-facing fix is appended (`brew install tesseract` /
+  `apt install tesseract-ocr-tha`, or pick an engine in Settings → Document
+  Parsing).
+
+  Configuration is environment-only on purpose: this path runs *only* for a
+  document that would otherwise be rejected, so there is no default to protect.
+  `DEEPTUTOR_READING_OCR` (off switch), `..._LANGUAGE` (defaults to the
+  interface language + English, so a Thai install asks for `tha+eng`),
+  `..._DPI` (300), `..._MAX_SECONDS` (300 — the upload is synchronous, so the
+  budget bounds what the caller waits for).
+
+  Verified end to end on the reported file: 5 pages, `tha+eng`, 6.5 s, 3,573
+  characters recovered, 86 selectable words on page 1 of the stored PDF.
+  21 tests in `tests/reading/test_ocr.py`; the one that needs a real OCR engine
+  skips itself where Tesseract is absent.
+
 - **2026-09-05 — The web contract tests compare `/`-separated paths against a
   file walker that returns `\` on Windows, so five of them can never pass
   there.** `web/tests/architecture-contracts.test.ts`,
@@ -1406,6 +1683,69 @@ back to HKUDS; once merged upstream the divergence is removed.
   `from ... import get_reading_extension_registry` and so holds a binding of its
   own that a patch on the defining module never reaches
   (`tests/multi_user/test_learner_surface_contract.py`).
+
+- **2026-09-07 — `AGENTS.md` now points at `CLAUDE.md`.** `CLAUDE.md` tells
+  agents to read `AGENTS.md` first, but `AGENTS.md` carried no reference back —
+  an agent that starts from the architecture file (Codex reads it by default)
+  never learned the fork rules at all, including the Apache-2.0 §4(b)
+  modification logging in §1 and the branch-and-PR rule adopted in §5 the day
+  before. A short blockquote under the H1 closes the loop (`AGENTS.md`).
+
+  Found while clearing three June 2026 stashes: one of them held this same
+  pointer, written and then lost when the branch it sat on disappeared. Its
+  other changes — gitignoring `CLAUDE.md` and a local-only `CHANGELOG.md` —
+  are the approach §1 now warns against, so only the pointer was recovered.
+
+- **2026-09-07 — A fresh clone now comes up in Thai, and the last four partner
+  strings are translated.** `data/` is gitignored, so a clone carries no
+  `interface.json` and the defaults in `deeptutor/services/setup/init.py` are
+  the only thing a first run sees. They said `en`, which is why cloning this
+  repo onto a second machine showed an English partner wizard while the
+  original machine — carrying its own saved settings — was Thai. Both
+  `DEFAULT_INTERFACE_SETTINGS["language"]` and
+  `DEFAULT_MAIN_SETTINGS["system"]["language"]` are now `th`, pinned by
+  `tests/services/test_fork_default_language.py` because an upstream sync will
+  offer `en` back every time.
+
+  The default also decides which language the soul and persona templates seed
+  in, so a first run gets the Thai ones end to end.
+
+  Separately, an audit of all 316 `t()` literals across the 35 partner modules
+  found the wizard already fully translated except for four keys, now filled
+  in: `Soul` → จิตวิญญาณ (the step label in the wizard header), `Groups` → กลุ่ม,
+  `Members` → สมาชิก, `Archive` → เก็บเข้าคลัง (`web/locales/th/app.json`).
+- **2026-09-06 — The eight bundled prompt templates now speak Thai.** The
+  "Soul library" and "Clone a persona" pickers in the partner wizard showed
+  English to Thai users no matter the interface language, because their content
+  is a *prompt*, not a label: three `PERSONA.md` presets and five
+  `DEFAULT_SOUL_TEMPLATES` entries, seeded to disk once and never revisited.
+  `locales/th/app.json` cannot reach either.
+
+  Thai variants live beside the originals — `presets/<name>/PERSONA.th.md` and a
+  new `soul_templates_th.py` — so upstream's own files stay almost untouched.
+  Two new fork modules, `services/persona/localization.py` and
+  `services/partners/soul_localization.py`, pick the variant and keep it in
+  sync; the four upstream call sites change by a line each.
+
+  Switching the interface language switches the templates *both ways*, and only
+  while a template is still byte-identical to something we ship in one of the
+  known languages. Edit one and it is yours, in whatever language you left it —
+  the same "provably untouched" rule as upstream's `_refresh_stale_default_souls`,
+  which this deliberately mirrors. A language with no complete translation falls
+  back to English rather than shipping a half-translated prompt. Both hooks sit
+  on the read path (`list_souls`, `list_personas`, `get_detail`), so no settings
+  endpoint and no write path changes.
+
+  Per the fork's translation rule, genuinely technical terms stay English —
+  "Socratic", "primary source", "trade-off", "edge case", "API" — and the tests
+  pin that so it cannot quietly regress. 18 new tests across
+  `tests/services/persona/test_persona_localization.py` and
+  `tests/services/partners/test_soul_localization.py`.
+
+  One consequence worth recording: `list_souls` now reads
+  `data/user/settings/interface.json`, so an assertion about a seeded soul used
+  to pass on an English machine and fail on a Thai one. The partners suite pins
+  the language in its `conftest.py` rather than encoding whoever ran it last.
 
 - **2026-09-05 — Working rule reversed: no more commits on `main`.** Every
   change now starts on a branch and merges through a PR once CI is green;

@@ -218,3 +218,78 @@ def test_vocabulary_crosses_the_api_boundary_with_verified_text(monkeypatch, tmp
     assert prompt["selection"] == "verified phrase"
     assert "Stored passage with a verified phrase." in prompt["surrounding_context"]
     assert "forged phrase" not in prompt["surrounding_context"]
+
+
+def _terms(*pairs: tuple[str, str]) -> str:
+    return json.dumps(
+        {
+            "terms": [
+                {
+                    "term": term,
+                    "meaning": f"The passage explains {label} in its own words.",
+                    "usage": f"The passage uses {label} to carry its point.",
+                }
+                for term, label in pairs
+            ]
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_term_from_the_context_does_not_discard_the_grounded_ones(monkeypatch):
+    """The prompt hands the model the surrounding context, so it reaches into it.
+
+    Rejecting the whole answer over that used to 503 the action — on a short
+    selection, every single time.
+    """
+
+    async def complete(**_kwargs):
+        return _terms(("verified", "the selected phrase"), ("context", "a nearby word"))
+
+    monkeypatch.setattr("deeptutor.reading.vocabulary.complete", complete)
+
+    result = await VocabularyExtension().run_action("explain", _context())
+
+    assert [row["term"] for row in result.payload["terms"]] == ["verified"]
+
+
+@pytest.mark.asyncio
+async def test_an_answer_made_only_of_context_terms_is_still_refused(monkeypatch):
+    """Filtering is not a licence to explain words the reader did not select."""
+
+    async def complete(**_kwargs):
+        return _terms(("Before", "a word before"), ("after", "a word after"))
+
+    monkeypatch.setattr("deeptutor.reading.vocabulary.complete", complete)
+
+    with pytest.raises(ValueError, match="must come from the selection"):
+        await VocabularyExtension().run_action("explain", _context())
+
+
+@pytest.mark.asyncio
+async def test_the_surviving_terms_keep_the_model_s_order(monkeypatch):
+    async def complete(**_kwargs):
+        return _terms(
+            ("context", "a nearby word"),
+            ("phrase", "the second half"),
+            ("verified", "the first half"),
+        )
+
+    monkeypatch.setattr("deeptutor.reading.vocabulary.complete", complete)
+
+    result = await VocabularyExtension().run_action("explain", _context("verified phrase"))
+
+    assert [row["term"] for row in result.payload["terms"]] == ["phrase", "verified"]
+
+
+def test_the_prompt_tells_the_model_a_short_selection_is_itself_the_term():
+    """A two-word selection has nothing to explain *inside* it.
+
+    Without this instruction the model answered with nearby words every time,
+    all of which were then filtered out, leaving nothing and failing the action.
+    """
+    from deeptutor.reading.vocabulary import _SYSTEM_EN, _SYSTEM_ZH
+
+    assert "the selection" in _SYSTEM_EN
+    assert "single word or a short phrase" in _SYSTEM_EN
+    assert "词条" in _SYSTEM_ZH
