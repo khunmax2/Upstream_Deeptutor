@@ -230,28 +230,94 @@ def test_the_language_override_wins(monkeypatch) -> None:
     assert ocr._ocr_language() == "tha"
 
 
+def _ui_languages(monkeypatch, *, ui: str, response: str) -> None:
+    """Pin what the reader's own settings say, independent of the host."""
+    monkeypatch.delenv("DEEPTUTOR_READING_OCR_LANGUAGE", raising=False)
+    monkeypatch.setattr(
+        "deeptutor.services.settings.interface_settings.get_ui_language",
+        lambda *_a, **_k: ui,
+    )
+    monkeypatch.setattr(
+        "deeptutor.services.settings.interface_settings.get_response_language",
+        lambda *_a, **_k: response,
+    )
+
+
 def test_the_interface_language_picks_the_traineddata(monkeypatch) -> None:
     from deeptutor.reading import ocr
 
-    monkeypatch.delenv("DEEPTUTOR_READING_OCR_LANGUAGE", raising=False)
-    monkeypatch.setattr(
-        "deeptutor.services.config.loader.load_config_with_main",
-        lambda _name: {"system": {"language": "th"}},
-    )
+    _ui_languages(monkeypatch, ui="th", response="th")
 
     assert ocr._ocr_language() == "tha+eng"
 
 
-def test_english_does_not_get_a_redundant_second_pass(monkeypatch) -> None:
+def test_the_language_comes_from_interface_settings_not_system_language(monkeypatch) -> None:
+    """The reported deployment ran a Thai UI on system.language == "en".
+
+    Reading the wrong setting asked Tesseract for English and handed back Thai
+    transcribed into Latin, which is worse than failing: it looks like output.
+    """
     from deeptutor.reading import ocr
 
-    monkeypatch.delenv("DEEPTUTOR_READING_OCR_LANGUAGE", raising=False)
+    _ui_languages(monkeypatch, ui="th", response="th")
     monkeypatch.setattr(
         "deeptutor.services.config.loader.load_config_with_main",
         lambda _name: {"system": {"language": "en"}},
     )
 
+    assert ocr._ocr_language() == "tha+eng"
+
+
+def test_the_reply_language_counts_when_the_interface_is_english(monkeypatch) -> None:
+    """An English UI does not mean English documents."""
+    from deeptutor.reading import ocr
+
+    _ui_languages(monkeypatch, ui="en", response="th")
+
+    assert ocr._ocr_language() == "eng+tha"
+
+
+def test_english_does_not_get_a_redundant_second_pass(monkeypatch) -> None:
+    from deeptutor.reading import ocr
+
+    _ui_languages(monkeypatch, ui="en", response="en")
+
     assert ocr._ocr_language() == "eng"
+
+
+def test_english_is_always_available_even_for_an_unmapped_language(monkeypatch) -> None:
+    from deeptutor.reading import ocr
+
+    _ui_languages(monkeypatch, ui="xx", response="xx")
+
+    assert ocr._ocr_language() == "eng"
+
+
+def test_a_missing_language_pack_is_named(tmp_path: Path) -> None:
+    from deeptutor.reading import ocr
+
+    (tmp_path / "eng.traineddata").write_bytes(b"x")
+
+    missing = ocr._missing_languages("tha+eng", str(tmp_path))
+
+    assert missing == ["tha"]
+    assert "tesseract-ocr-tha" in ocr._language_guidance("tha+eng", missing)
+
+
+def test_nothing_is_reported_missing_when_the_pack_is_there(tmp_path: Path) -> None:
+    from deeptutor.reading import ocr
+
+    for name in ("tha", "eng"):
+        (tmp_path / f"{name}.traineddata").write_bytes(b"x")
+
+    assert ocr._missing_languages("tha+eng", str(tmp_path)) == []
+
+
+def test_an_unreadable_tessdata_dir_blocks_nothing(tmp_path: Path) -> None:
+    """A path we cannot list is not evidence a language is absent."""
+    from deeptutor.reading import ocr
+
+    assert ocr._missing_languages("tha+eng", str(tmp_path / "nope")) == []
 
 
 def test_a_nonsense_dpi_falls_back_to_the_default(monkeypatch) -> None:
@@ -598,3 +664,50 @@ def test_a_real_picture_deck_round_trips_into_slide_text(tmp_path: Path, monkeyp
     assert len(extraction.units) == 2
     assert "ALPHA" in extraction.units[0].upper()
     assert "BRAVO" in extraction.units[1].upper()
+
+
+# ---------------------------------------------------------------------------
+# outline labels for OCR'd units
+# ---------------------------------------------------------------------------
+
+
+def test_an_ocr_label_skips_the_fragments_ocr_reads_out_of_decoration() -> None:
+    """Measured on the reported deck: noise runs 1-6 chars, headings 23-45."""
+    from deeptutor.reading.extract import first_line_label
+
+    unit = "\u0e51\noll\n2.\n= _\ne\nPhase 2 Deep Dive: \u0e01\u0e32\u0e23\u0e2a\u0e37\u0e1a\u0e04\u0e49\u0e19"
+
+    # "oll" is verbatim one of the labels the reported deck showed in its
+    # table of contents.
+    assert first_line_label(unit) == "oll"
+    assert first_line_label(unit, min_chars=12).startswith("Phase 2 Deep Dive")
+
+
+def test_a_line_of_scattered_marks_does_not_qualify_on_its_spaces() -> None:
+    from deeptutor.reading.extract import first_line_label
+
+    unit = "| | | | | | | | |\nDual Processing Pipeline:"
+
+    assert first_line_label(unit, min_chars=12) == "Dual Processing Pipeline:"
+
+
+def test_a_unit_with_nothing_long_still_gets_a_label() -> None:
+    """A poor label beats a blank row in the navigator."""
+    from deeptutor.reading.extract import first_line_label
+
+    assert first_line_label("2.\noll", min_chars=12) == "2."
+
+
+def test_a_short_heading_survives_when_the_text_was_not_ocred() -> None:
+    from deeptutor.reading.extract import synthesise_outline
+
+    outline = synthesise_outline(("\u0e1a\u0e17\u0e17\u0e35\u0e48 1\nbody text here",))
+
+    assert outline[0].title == "\u0e1a\u0e17\u0e17\u0e35\u0e48 1"
+
+
+def test_the_outline_knows_when_its_units_came_from_ocr(tmp_path: Path, monkeypatch) -> None:
+    from deeptutor.reading.extract import Extraction
+
+    assert Extraction(units=(), unit="slide", extractor="pptx").from_ocr is False
+    assert Extraction(units=(), unit="slide", extractor="pptx+ocr:tesseract").from_ocr is True
