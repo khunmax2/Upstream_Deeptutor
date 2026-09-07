@@ -70,6 +70,9 @@ one file to six, but four of them are new files that cannot conflict.
 Outside the subtree: `deploy/nginx-openmaic-subpath.locations.conf` (a
 `location` block for the existing 443 server, not a new `server`),
 `deploy/docker-compose.openmaic.yml`, and §3b of `deploy/OPENMAIC_RUNBOOK.md`.
+`deploy/OPENMAIC_EMBED.md` now marks its own `Referer`-routing measurement as
+superseded, because leaving it there is leaving a recommendation that is unsafe
+on the host this actually runs on.
 
 Verified against a real build, not reasoned about. `NEXT_PUBLIC_BASE_PATH` is
 compiled into the **client** bundle — the shipped chunk holds
