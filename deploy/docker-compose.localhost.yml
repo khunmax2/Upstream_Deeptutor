@@ -36,6 +36,13 @@ services:
       # trips the default 60s embedding timeout when indexing real documents.
       # Give generous headroom (read by resolve_embedding_runtime_config).
       DEEPTUTOR_EMBEDDING_TIMEOUT: "600"
+      # OCR language for scanned documents. Left alone, ocr.py derives this from
+      # the interface language and appends English — and this deployment's
+      # main.yaml still says `language: en`, so a Thai scan would be read as
+      # English and come back as noise. Pinning it keeps Thai scans working
+      # regardless of what the UI is set to. Drop this line if the interface
+      # language is ever switched to Thai, which produces the same "tha+eng".
+      DEEPTUTOR_READING_OCR_LANGUAGE: "tha+eng"
 
   redis:
     container_name: deeptutor2-redis
