@@ -91,6 +91,41 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-07 — "Explain vocabulary" failed on every short selection, and the
+  file picker offered two formats the server refuses.** Both found by a UAT
+  walkthrough of Immersive Reading rather than a bug report.
+
+  **Vocabulary.** Selecting a word or a phrase and asking for vocabulary help
+  answered 503 — reproducibly, three runs out of three on `"Adaptive Learning"`,
+  while a 300-character selection succeeded. The extension contradicted itself:
+  `_prompt` hands the model the selection **and** its surrounding context, and
+  `_vocabulary` then required *every* returned term to appear in the selection
+  alone. The model reliably took a term or two from the context it had just been
+  given, and the check is `any(not …)` — so one out-of-selection term discarded
+  the grounded ones with it and failed the whole action.
+
+  Two changes, because either alone leaves it broken. Terms outside the
+  selection are now **dropped rather than fatal**, and the action fails only
+  when nothing is left — grounding is unchanged, every surviving term is still
+  one the reader selected. And the prompt now states the case that made this
+  unavoidable: **a selection short enough to be a term is itself the term.** A
+  two-word phrase has nothing to explain *inside* it, so the model answered with
+  nearby words every time; filtering alone still left zero. With both, three
+  consecutive runs on `"Adaptive Learning"` return `["Adaptive Learning"]`, a
+  single word returns itself, and a long selection returns three terms from
+  inside it.
+
+  **The picker.** `AddMaterialsDialog`'s `accept` advertised `.ppt` and `.doc`,
+  which `SUPPORTED_DOC_EXTENSIONS` does not include: uploading either answered
+  *"has unsupported extension"*. The picker let a file through that was always
+  going to be refused afterwards. Removed from the list — supporting legacy
+  binary Office is a separate feature (it needs LibreOffice), not a fix.
+
+  `tests/reading/test_vocabulary.py` 10 → 14 tests: a context term no longer
+  discards the grounded ones, an answer made only of context terms is still
+  refused, surviving terms keep the model's order, and the prompt keeps its
+  short-selection rule.
+
 - **2026-09-07 — No PDF text was selectable in Safari, silently, in every
   document.** Reported as *"ถ้าเปิดกับ safari นั้น ไม่สามารถคลุมดำที่ตัวข้อความได้"*.
   Driven and reproduced in Safari 26.6.2 (`AppleWebKit/605.1.15`) over Apple
