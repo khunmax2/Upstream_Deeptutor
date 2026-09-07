@@ -252,6 +252,10 @@ def _pages_from_tesseract(source: Path, page_count: int) -> OcrResult:
     except Exception as exc:
         raise _unavailable(source, _NO_ENGINE_GUIDANCE) from exc
 
+    missing = _missing_languages(language, tessdata)
+    if missing:
+        raise _unavailable(source, _language_guidance(language, missing))
+
     deadline = time.monotonic() + _ocr_budget_seconds()
     logger.info(
         "OCR fallback for %s: %s page(s), language=%s, dpi=%s",
@@ -346,6 +350,10 @@ def _slides_from_tesseract(source: Path, slides: list[list[bytes]]) -> OcrResult
         tessdata = pymupdf.get_tessdata()
     except Exception as exc:
         raise _unavailable(source, _NO_ENGINE_GUIDANCE) from exc
+
+    missing = _missing_languages(language, tessdata)
+    if missing:
+        raise _unavailable(source, _language_guidance(language, missing))
 
     deadline = time.monotonic() + _ocr_budget_seconds()
     logger.info("OCR fallback for %s: %s slide(s), language=%s", source.name, len(slides), language)
@@ -492,23 +500,70 @@ def _ocr_enabled() -> bool:
 
 
 def _ocr_language() -> str:
-    """The Tesseract language spec: explicit override, else UI language + eng."""
+    """The Tesseract language spec: explicit override, else the reader's own
+    languages + English.
+
+    Read from ``interface.json`` — the language the person is actually using —
+    and *not* from ``main.yaml``'s ``system.language``. They are different
+    settings and they disagree in practice: the deployment this was reported
+    from runs a Thai interface on an install whose ``system.language`` is still
+    ``en``, so OCR asked Tesseract for English and handed back Thai transcribed
+    into Latin ("SudouuwuusiU"). Both the interface language and the reply
+    language count, because someone reading Thai documents through an English
+    interface still has Thai on the page.
+    """
     override = os.getenv("DEEPTUTOR_READING_OCR_LANGUAGE", "").strip()
     if override:
         return override
 
-    code = "en"
+    codes: list[str] = []
     try:
-        from deeptutor.services.config import parse_language
-        from deeptutor.services.config.loader import load_config_with_main
+        from deeptutor.services.settings.interface_settings import (
+            get_response_language,
+            get_ui_language,
+        )
 
-        config = load_config_with_main("main.yaml")
-        code = parse_language((config.get("system") or {}).get("language"))
+        for preference in (get_ui_language(), get_response_language()):
+            name = _TESSERACT_LANGUAGES.get(preference)
+            if name and name not in codes:
+                codes.append(name)
     except Exception:
         logger.debug("Falling back to English OCR: interface language unreadable", exc_info=True)
 
-    primary = _TESSERACT_LANGUAGES.get(code, "eng")
-    return primary if primary == "eng" else f"{primary}+eng"
+    # English last but always present: scans and slides mix in English headings,
+    # numbers and stamps far more often than not.
+    if "eng" not in codes:
+        codes.append("eng")
+    return "+".join(codes)
+
+
+def _missing_languages(language: str, tessdata: str) -> list[str]:
+    """Requested languages with no ``.traineddata`` in *tessdata*.
+
+    Tesseract fails the whole page when one language is absent, and its own
+    error names a path rather than a package. Checking first turns that into
+    "install tesseract-ocr-tha".
+    """
+    try:
+        installed = {
+            name[: -len(".traineddata")]
+            for name in os.listdir(tessdata)
+            if name.endswith(".traineddata")
+        }
+    except OSError:
+        return []
+    return [name for name in language.split("+") if name and name not in installed]
+
+
+def _language_guidance(language: str, missing: list[str]) -> str:
+    """What to install, named precisely, when a language pack is absent."""
+    packs = " ".join(f"tesseract-ocr-{name[:3]}" for name in missing)
+    return (
+        f"OCR needs the '{'+'.join(missing)}' language data, which is not "
+        f"installed. Add it (Debian/Ubuntu: `apt install {packs}`, macOS: "
+        "`brew install tesseract-lang`), or set "
+        "DEEPTUTOR_READING_OCR_LANGUAGE to a language you do have."
+    )
 
 
 def _ocr_dpi() -> int:

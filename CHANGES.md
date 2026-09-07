@@ -91,6 +91,55 @@ These fix bugs that exist in upstream (not fork-specific). Each is kept as a
 small, isolated diff so it can be cherry-picked onto a clean branch and proposed
 back to HKUDS; once merged upstream the divergence is removed.
 
+- **2026-09-07 — OCR asked Tesseract for the wrong language, so Thai came back
+  as Latin.** The first live run of the two entries below, on the deployed
+  instance, transcribed a Thai deck into nonsense — *"SudouuwuusiU"*,
+  *"AD WAAIWAaVAUUAY"* — while the English on the same slides came out clean.
+  That split is the signature of OCR running English-only.
+
+  **The defect was mine, in `_ocr_language`.** It resolved the reader's
+  language from `main.yaml`'s `system.language`, which is a *different setting*
+  from the interface language the person actually picked: the deployment runs a
+  Thai UI (`interface.json` → `language: "th"`) on an install whose
+  `system.language` is still `en`, because #11's Thai default applies to fresh
+  installs and this one predates it. `deeptutor/services/settings/
+  interface_settings.py` has had `get_ui_language()` / `get_response_language()`
+  all along; the fix is to call them. The reply language counts too — someone
+  reading Thai documents through an English interface still has Thai on the
+  page.
+
+  This is worse than a plain failure, and worth naming as its own class:
+  English-only OCR of Thai returns *plausible-looking output* rather than an
+  error, so nothing anywhere reports a problem. Local testing missed it for a
+  precise reason — every run had passed `DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng`
+  explicitly, so the default path this deployment actually uses was never
+  exercised.
+
+  **Missing language data now names its own package.** Tesseract fails a whole
+  page when one requested language is absent, and its error names a path rather
+  than an apt package. The requested languages are checked against the
+  `.traineddata` present before OCR starts, so the message says
+  `apt install tesseract-ocr-tha`.
+
+  **The table of contents was garbage on the same upload**, and it was the same
+  root cause compounded: OCR reads decoration as characters, so a slide's real
+  heading sits behind a scatter of one- and two-character fragments, and the
+  synthesised outline took the literal first line — labelling a twelve-slide
+  deck `onl`, `z|`, `oll`, `ope`, `{ae`. On OCR'd units only, a label line must
+  now carry 12 non-whitespace characters, which sits above the fragments
+  (measured 1–6 on the reported deck) and below a real heading (23–45); a unit
+  with nothing that long still falls back to the old rule rather than going
+  unlabelled. Formats that were not OCR'd are untouched, so a legitimately short
+  heading still labels its section.
+
+  Verified on the reported deck (`Vectorless_RAG_Evolution.pptx`, 12 slides,
+  14.5 MB) with no environment override: 5,869 characters, 12.7 s, and headings
+  that read — *"ข้อจำกัดหลักของ Traditional RAG"*, *"Phase 2 Deep Dive:
+  การสืบค้นด้วยตรรกะเชิงวิเคราะห์"*, *"สรุปกระบวนทัศน์: ทำไม Vectorless RAG
+  คืออนาคตระดับ Enterprise?"*. Outline labels go from 1 of 12 usable to 11 of 12;
+  the remaining one is a title slide drawn as art. `tests/reading/test_ocr.py`
+  32 → 43.
+
 - **2026-09-06 — A picture-only slide deck is readable too, and an extractor
   error no longer says the filename twice.** Follow-up to the scanned-PDF entry
   below, from a second report against the same screen: an 11.6 MB PPTX was

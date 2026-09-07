@@ -288,7 +288,7 @@ class ReadingStore:
             outline = (
                 extraction.outline
                 if extraction.outline or extraction.render_mode == "pdf"
-                else synthesise_outline(extraction.units)
+                else synthesise_outline(extraction.units, from_ocr=extraction.from_ocr)
             )
             _atomic_write(
                 stage_dir / OUTLINE_NAME,
