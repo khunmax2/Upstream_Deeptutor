@@ -69,9 +69,7 @@ def main(origin: str, topic: str, username: str) -> int:
 
     print(f"→ requirement: {topic!r}")
     t0 = time.time()
-    status, payload = _req(
-        f"{origin}/api/generate-classroom", token, data={"requirement": topic}
-    )
+    status, payload = _req(f"{origin}/api/generate-classroom", token, data={"requirement": topic})
     if status != 202:
         print(f"✗ submit returned {status}: {json.dumps(payload)[:300]}")
         return 1
