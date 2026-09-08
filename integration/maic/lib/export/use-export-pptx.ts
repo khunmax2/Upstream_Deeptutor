@@ -43,7 +43,7 @@ import { lookupMediaTask, resolveVideoMediaForElement } from '@/lib/media/media-
 const log = createLogger('ExportPPTX');
 
 const DEFAULT_FONT_SIZE = 16;
-const DEFAULT_FONT_FAMILY = 'Microsoft YaHei';
+const DEFAULT_FONT_FAMILY = 'Tahoma';
 
 // ── Color formatting ──
 

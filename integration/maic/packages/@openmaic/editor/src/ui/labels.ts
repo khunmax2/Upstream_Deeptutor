@@ -507,6 +507,13 @@ const BUILT_IN_LINE_LABELS: Record<BuiltInEditorLocale, LineToolbarLabels> = {
 
 export const DEFAULT_TEXT_TOOLBAR_FONTS: readonly TextToolbarFont[] = Object.freeze([
   { label: 'Default', value: '' },
+  // Thai-capable faces first: this deployment teaches in Thai and English, and
+  // the previous default (Microsoft YaHei) carries no Thai glyphs at all, so
+  // every Thai slide fell back to whatever the renderer chose. Kept in the list
+  // below rather than removed — it is still the right pick for a Chinese deck.
+  { label: 'Tahoma', value: 'Tahoma' },
+  { label: 'Sarabun', value: 'Sarabun' },
+  { label: 'Noto Sans Thai', value: 'Noto Sans Thai' },
   { label: 'Microsoft YaHei', value: 'Microsoft YaHei' },
   { label: '思源黑体', value: 'Noto Sans SC' },
   { label: '思源宋体', value: 'Noto Serif SC' },

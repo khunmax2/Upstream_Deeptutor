@@ -211,7 +211,7 @@ export interface PPTTextElement extends PPTBaseElement {
   type: 'text';
   /** @default "" */
   content: string;
-  /** @default "Microsoft YaHei" */
+  /** @default "Tahoma" */
   defaultFontName: string;
   /** @default "#333333" */
   defaultColor: string;
@@ -380,7 +380,7 @@ export type ShapeTextAlign = 'top' | 'middle' | 'bottom';
 export interface ShapeText {
   /** @default "" */
   content: string;
-  /** @default "Microsoft YaHei" */
+  /** @default "Tahoma" */
   defaultFontName: string;
   /** @default "#333333" */
   defaultColor: string;

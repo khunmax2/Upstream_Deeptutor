@@ -17,6 +17,49 @@ upstream.
 
 ---
 
+## Chinese in a Thai course, from the prompts and the font default — 2026-09-08
+
+A UAT of the course studio produced a Thai lesson with `启动` on its start
+button and a fullwidth `：` in a status label, with the body text otherwise
+correct Thai. Switching the model from `gemini-3.1-flash-lite` to
+`gpt-4o-mini` changed nothing, which was the clue: the model was never the
+cause.
+
+**The worked examples were Chinese.** `lib/prompts/templates/` showed the model
+two complete outline objects with Chinese titles, descriptions and keyPoints, a
+course-title style list of `"抛体运动实战", "Hands-on Recursion", "太阳系探索"`,
+a Chinese `challenge` in the few-shot block, and — most directly —
+`The learner-facing product name is "任务引擎"`. A model told to teach in Thai
+still copies the shape it was shown, so the prose came out Thai and the UI
+labels came out Chinese.
+
+Translated the examples; kept every Chinese string that is an example of what a
+learner might **say**. The language-inference rules, the frustration signals in
+the director prompt and the `"用中文讲"` style requests are inputs, each already
+paired with an English equivalent, and deleting them would make the product
+worse for Chinese users without touching this bug.
+`tests/prompts/no-cjk-in-worked-examples.test.ts` draws the same line: CJK is
+allowed in prose, banned inside ``` fences.
+
+**The default font had no Thai glyphs.** Separately — and this is code, not
+prompts — `Microsoft YaHei` was the default `fontName` in 19 places across the
+DSL, renderer, editor, whiteboard, slide defaults and the PPTX exporter. It
+covers no Thai at all, so every Thai slide rendered through a fallback nobody
+chose.
+
+Now `Tahoma`, which is what pptxgenjs's own bundled Office theme maps
+`script="Thai"` to. It has to be a single family name rather than a stack: the
+same value reaches CSS `fontFamily`, which would accept one, and PPTX
+`fontFace`, which would not. `Noto Sans Thai` was the tempting choice — the fork
+already ships it — but only for video export, so in the app it would have fallen
+back silently. YaHei stays in the font picker alongside new Thai entries; what
+changed is which one is the default.
+
+Measured on a fresh generation after both changes: Chinese characters 0,
+fullwidth punctuation 0, `YaHei` 0 (was 29), `Tahoma` 13, and the interactive
+widget's buttons read `เริ่มจำลอง` / `รีเซ็ต`.
+
+
 ## Course generation had no model to resolve — 2026-09-08
 
 Found by a scenario UAT against the deployed studio: every

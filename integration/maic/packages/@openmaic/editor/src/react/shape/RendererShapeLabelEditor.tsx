@@ -25,7 +25,7 @@ function shapeText(element: PPTShapeElement): ShapeText {
     element.text ?? {
       content: '',
       align: 'middle',
-      defaultFontName: 'Microsoft YaHei',
+      defaultFontName: 'Tahoma',
       defaultColor: '#333333',
     }
   );

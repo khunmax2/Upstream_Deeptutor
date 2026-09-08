@@ -102,7 +102,7 @@ export function BaseShapeElement({ elementInfo, renderLabel }: BaseShapeElementP
   const text: ShapeText = elementInfo.text || {
     content: '',
     align: 'middle',
-    defaultFontName: 'Microsoft YaHei',
+    defaultFontName: 'Tahoma',
     defaultColor: '#333333',
   };
 

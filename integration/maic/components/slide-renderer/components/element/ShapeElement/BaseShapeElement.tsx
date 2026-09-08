@@ -24,7 +24,7 @@ export function BaseShapeElement({ elementInfo }: BaseShapeElementProps) {
   const text: ShapeText = elementInfo.text || {
     content: '',
     align: 'middle',
-    defaultFontName: 'Microsoft YaHei',
+    defaultFontName: 'Tahoma',
     defaultColor: '#333333',
   };
 

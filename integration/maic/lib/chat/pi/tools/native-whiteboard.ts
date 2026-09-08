@@ -763,7 +763,7 @@ export function buildNativeWhiteboardTools(opts: NativeWhiteboardToolOptions): A
           height: params.height ?? 100,
           rotate: 0,
           content: paragraphHtml(params.content, params.fontSize ?? 18),
-          defaultFontName: 'Microsoft YaHei',
+          defaultFontName: 'Tahoma',
           defaultColor: params.color ?? '#333333',
         }),
       }),

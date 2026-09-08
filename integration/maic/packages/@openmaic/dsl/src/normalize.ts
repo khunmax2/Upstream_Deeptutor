@@ -78,7 +78,7 @@ import type {
  */
 export const ELEMENT_DEFAULTS = {
   text: {
-    defaultFontName: 'Microsoft YaHei',
+    defaultFontName: 'Tahoma',
     defaultColor: '#333333',
     content: '',
   },
@@ -91,7 +91,7 @@ export const ELEMENT_DEFAULTS = {
   },
   shapeText: {
     content: '',
-    defaultFontName: 'Microsoft YaHei',
+    defaultFontName: 'Tahoma',
     defaultColor: '#333333',
     align: 'middle',
   },
