@@ -17,6 +17,37 @@ upstream.
 
 ---
 
+## Course generation had no model to resolve — 2026-09-08
+
+Found by a scenario UAT against the deployed studio: every
+`POST /api/generate-classroom` failed in five seconds with
+
+```
+No model could be resolved. Configure DEFAULT_MODEL (and/or a MODEL_ROUTES
+entry for this stage), or send a model via x-model.
+```
+
+`server-providers.yml` was correct — the bridge had written `openrouter` with
+its model list. But that file says which providers *exist*; it does not choose
+one, `resolveModel` reads `DEFAULT_MODEL` and deliberately has no vendor
+fallback, and the compose overlay had no way to pass it in.
+
+The browser's own saved model does not cover this. The one-click generator runs
+as a background job and calls `resolveModel({ stage: 'generate-classroom' })`
+with no model string, so nothing a client sends can reach it — the interactive
+path (`/api/generate/scene-content`, which does send `x-model`) and this one
+resolve their model from different places entirely.
+
+`DEFAULT_MODEL` and `MODEL_ROUTES` are now passed through the overlay as
+`OPENMAIC_DEFAULT_MODEL` / `OPENMAIC_MODEL_ROUTES`.
+
+Measured after the fix, on `openrouter:google/gemini-3.1-flash-lite`: a 5-scene
+Thai course in 51 s, and a 10-scene one — 45,828 characters, code samples,
+diagrams and quizzes — in 96 s, with no scene truncated. The doubt that prompted
+the UAT was whether a lite model would run out of output budget mid-HTML; on
+this workload it does not.
+
+
 ## The studio's images 404'd under the subpath — 2026-09-08
 
 Found by looking at the deployed page: avatars rendered as broken-image icons
