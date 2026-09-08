@@ -11,6 +11,7 @@ import { useSceneData } from '@/lib/contexts/scene-context';
 import type { SlideContent } from '@/lib/types/stage';
 import { mediaRetryTarget, retryMediaTask } from '@/lib/media/media-orchestrator';
 import { useResolvedVideoMedia } from './useResolvedVideoMedia';
+import { asset } from '@/lib/base-path';
 
 export interface VideoElementProps {
   elementInfo: PPTVideoElement;
@@ -92,7 +93,7 @@ export function VideoElement({ elementInfo, selectElement }: VideoElementProps) 
             <img
               className="w-full h-full"
               style={{ objectFit: 'contain' }}
-              src={resolvedPoster}
+              src={asset(resolvedPoster)}
               alt=""
               draggable={false}
               onDragStart={(e) => e.preventDefault()}

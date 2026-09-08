@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import type { ProviderId, ProviderConfig } from '@/lib/ai/providers';
 import { MONO_LOGO_PROVIDERS } from '@/lib/ai/providers';
+import { asset } from '@/lib/base-path';
 
 interface ProviderWithServerInfo extends ProviderConfig {
   isServerConfigured?: boolean;
@@ -52,7 +53,7 @@ export function ProviderList({
           >
             {provider.icon ? (
               <img
-                src={provider.icon}
+                src={asset(provider.icon)}
                 alt={getProviderDisplayName(provider)}
                 className={cn(
                   'w-5 h-5 rounded',

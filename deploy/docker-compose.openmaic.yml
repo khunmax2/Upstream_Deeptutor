@@ -89,6 +89,23 @@ services:
       # container can ask it to fetch internal addresses. Set it only where the
       # gate in front is what keeps strangers out.
       - ALLOW_LOCAL_NETWORKS=${OPENMAIC_ALLOW_LOCAL_NETWORKS:-}
+      # Which model the SERVER-side generators use, as `provider:model`
+      # (e.g. openrouter:google/gemini-3.1-flash-lite).
+      #
+      # `server-providers.yml` says which providers exist and which models each
+      # one may use; it does not choose one, and OpenMAIC has no default —
+      # `resolveModel` fails loud rather than guessing a vendor. The browser's
+      # own saved model does not help either: the one-click generator runs as a
+      # background job and calls `resolveModel({ stage: 'generate-classroom' })`
+      # with no model string at all, so nothing the client sends reaches it.
+      #
+      # Unset, every course generation dies at once with "No model could be
+      # resolved" — a whole-feature outage from a variable nobody was told to
+      # set, which is why it is written down here rather than left to the
+      # deployer to discover.
+      - DEFAULT_MODEL=${OPENMAIC_DEFAULT_MODEL:-}
+      # Optional per-stage overrides, JSON: {"scene-content":"provider:model"}.
+      - MODEL_ROUTES=${OPENMAIC_MODEL_ROUTES:-}
       # Leave ACCESS_CODE unset: OpenMAIC's access cookie is SameSite=Lax and
       # does not survive a cross-origin frame, so enabling it here locks the
       # embed out rather than securing it.

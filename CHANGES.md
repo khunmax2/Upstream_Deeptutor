@@ -17,6 +17,75 @@ upstream.
 
 ---
 
+## Course generation had no model to resolve — 2026-09-08
+
+Found by a scenario UAT against the deployed studio: every
+`POST /api/generate-classroom` failed in five seconds with
+
+```
+No model could be resolved. Configure DEFAULT_MODEL (and/or a MODEL_ROUTES
+entry for this stage), or send a model via x-model.
+```
+
+`server-providers.yml` was correct — the bridge had written `openrouter` with
+its model list. But that file says which providers *exist*; it does not choose
+one, `resolveModel` reads `DEFAULT_MODEL` and deliberately has no vendor
+fallback, and the compose overlay had no way to pass it in.
+
+The browser's own saved model does not cover this. The one-click generator runs
+as a background job and calls `resolveModel({ stage: 'generate-classroom' })`
+with no model string, so nothing a client sends can reach it — the interactive
+path (`/api/generate/scene-content`, which does send `x-model`) and this one
+resolve their model from different places entirely.
+
+`DEFAULT_MODEL` and `MODEL_ROUTES` are now passed through the overlay as
+`OPENMAIC_DEFAULT_MODEL` / `OPENMAIC_MODEL_ROUTES`.
+
+Measured after the fix, on `openrouter:google/gemini-3.1-flash-lite`: a 5-scene
+Thai course in 51 s, and a 10-scene one — 45,828 characters, code samples,
+diagrams and quizzes — in 96 s, with no scene truncated. The doubt that prompted
+the UAT was whether a lite model would run out of output budget mid-HTML; on
+this workload it does not.
+
+
+## The studio's images 404'd under the subpath — 2026-09-08
+
+Found by looking at the deployed page: avatars rendered as broken-image icons
+while the brand wordmark was fine.
+
+`integration/maic/lib/base-path.ts` already had `asset()`, and its docstring
+names this exact case — *"Prefix a root-absolute /public asset path
+(`/avatars/x.png`, `/logos/y.svg`)"*. It was called from one place,
+`lib/brand/brand-config.ts`, for the one image that happened to be on screen
+while the subpath work was being tested. Every other `<img>` still addressed
+`/public` from the domain root, which under `/course-studio-app` is not this
+app at all.
+
+**Wrapped at the render site, not at the constant.** The obvious fix — prefixing
+`AVATAR_OPTIONS` and `AGENT_DEFAULT_AVATARS` where they are declared — is wrong
+twice over: they are `as const`, so `asset()` would widen the literal types
+other code depends on, and `user-profile`'s avatar is *persisted*, so a
+prefixed value would be written into saved state and break the day the prefix
+changes. `asset()` at the `<img>` keeps the stored value canonical.
+
+52 sites across 31 files, including ones whose `src` is a `data:` URI or an
+absolute URL. Those are wrapped too: `asset()` returns anything that is not a
+root-absolute path untouched, and wrapping every site uniformly is what stops
+this from recurring one image at a time.
+
+Two things the sweep had to survive, both of which broke a first attempt:
+
+- `<img>` is usually written across several lines here, so a line-oriented grep
+  finds 15 of the 52. The first build fixed `user.png` and left `teacher.png`
+  and `assist.png` broken — the same partial-fix shape as the original bug.
+- `src={agents.find((a) => a.role === 'assistant')!.avatar}` closes an inner
+  brace before the JSX expression ends, so matching to the first `}` corrupts
+  the file. The rewrite counts braces instead.
+
+Verified against the deployed page: every image URL it emits now carries the
+prefix, and all four return 200.
+
+
 ## The course studio, served under a path instead of a port — 2026-09-08
 
 The embed was designed around giving OpenMAIC a port of its own, which is the
