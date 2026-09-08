@@ -29,6 +29,7 @@ import {
   type TokenPlanModality,
 } from '@/lib/config/token-plan-presets';
 import { applyTokenPlan, removeTokenPlan } from '@/lib/config/apply-token-plan';
+import { asset } from '@/lib/base-path';
 
 const CATEGORY_LABEL_KEYS: Record<PresetCategory, string> = {
   token_plan: 'settings.presetCategory.tokenPlan',
@@ -177,7 +178,7 @@ export function TokenPlanSettings() {
                       )}
                     >
                       {preset.icon ? (
-                        <img src={preset.icon} alt="" className="size-5 shrink-0 rounded" />
+                        <img src={asset(preset.icon)} alt="" className="size-5 shrink-0 rounded" />
                       ) : (
                         <span className="size-5 shrink-0 rounded bg-muted" />
                       )}

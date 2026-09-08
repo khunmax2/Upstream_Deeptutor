@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { asset } from '@/lib/base-path';
 
 interface AvatarDisplayProps {
   readonly src: string;
@@ -13,7 +14,7 @@ export function AvatarDisplay({ src, alt, className }: AvatarDisplayProps) {
 
   if (isUrl) {
     return (
-      <img src={src} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
+      <img src={asset(src)} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
     );
   }
 
