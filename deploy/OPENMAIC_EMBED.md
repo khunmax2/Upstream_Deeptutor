@@ -146,15 +146,25 @@ referrer policy can strip, and it means the routing rule for `/api` is no longer
 a path prefix but a heuristic — the kind of thing that works until the day it
 does not, and fails in a way that looks like an application bug.
 
+> **Superseded, 2026-09-08.** Do not do this. The measurement above was taken on
+> a machine we owned entirely. The actual deployment host serves five other
+> applications from the same `:443` — `/sansarnnews`, `/research-helper`,
+> `/dol`, `/deepwitya`, `/opdc-assistant` — so `/api` at its root is not ours to
+> route, and a rule there would sit in front of all of them and decide by
+> header. The app prefixes its own URLs instead:
+> `integration/maic/components/base-path-bridge.tsx` patches `fetch` and
+> `EventSource` once, covering all 74 call sites, and is inert when
+> `NEXT_PUBLIC_BASE_PATH` is unset. See §3b of `OPENMAIC_RUNBOOK.md`.
+
 **So the choice is a real one**
 
 | | cross-origin (today) | same-origin |
 |---|---|---|
 | language / theme sync | ✗ | ✓ |
 | hide their chrome, look like one module | ✗ | ✓ |
-| `/api/*` | clean | collides; needs Referer routing |
+| `/api/*` | clean | collides; the app prefixes its own (base-path-bridge) |
 | `localStorage` isolation | ✓ | ✗ — shared, and OpenMAIC keeps provider API keys there |
-| patches to OpenMAIC | none | `0003-basepath.patch` |
+| patches to OpenMAIC | none | basePath, the bridge, and three asset choke points |
 | reverse proxy | simple prefix | prefix + a heuristic |
 
 Cross-origin is what ships today and it is honest about being two systems.

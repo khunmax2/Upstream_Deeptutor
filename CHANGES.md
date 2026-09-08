@@ -17,6 +17,85 @@ upstream.
 
 ---
 
+## The course studio, served under a path instead of a port — 2026-09-08
+
+The embed was designed around giving OpenMAIC a port of its own, which is the
+cleaner shape: a different port is a different origin, so the two apps keep
+their `localStorage` apart for free. The deployment host will not open one —
+policy, not configuration — so the studio was simply unreachable.
+
+The remaining route is a path on the 443 that is already open. Next has a
+`basePath` for exactly this and we patched one in yesterday, but `basePath` only
+prefixes `<Link>`, the router and `/_next/` assets. It does not touch a URL the
+app writes itself, and this app writes **74 `fetch('/api/...')` calls across 44
+files** plus three `EventSource` streams. Under a prefix, every one of them
+leaves for the root of the host.
+
+Normally a reverse proxy absorbs that. Not here: the host already serves
+`/sansarnnews`, `/research-helper`, `/dol`, `/deepwitya`, `/opdc-assistant` and
+`/deepwitya2`, so `/api` at its root belongs to other people's applications. A
+routing rule there would sit in front of all of them. The earlier note in
+`deploy/OPENMAIC_EMBED.md` suggesting a `Referer` heuristic was measured on a
+machine we owned entirely; on a shared host it is not an option at all.
+
+So the app prefixes its own URLs. Rewriting 44 files would have been 44 files to
+re-apply on every `git subtree pull`; rewriting the two globals they all funnel
+through is one. `components/base-path-bridge.tsx` patches `window.fetch` and
+`window.EventSource` while its module is evaluated — ahead of every caller,
+which reaches them from an effect — and the whole thing is inert when
+`NEXT_PUBLIC_BASE_PATH` is unset, so the port shape and upstream are untouched.
+
+`EventSource` matters as much as `fetch` and is easy to miss: the workbench
+streams over SSE, and wrapping only `fetch` would have left the stream silently
+dead.
+
+Static files under `/public` are the other half. Rather than the 43 files that
+reference one, three choke points cover them: `AvatarImage` (every agent,
+roundtable and editor avatar), `DEFAULT_BRAND` (our own logo and mark), and one
+pass over `PROVIDERS` beside the `applyModelMetadata` call that already
+post-processes it.
+
+**The symptom this prevents is not a network error.** It is the studio showing
+an access-code login box nobody configured: `/api/access-code/status` fails, and
+the guard treats an error as locked — the right default, and a confusing one to
+debug.
+
+New in `integration/maic/`: `lib/base-path.ts` (mirrors `web/lib/basePath.ts`,
+down to the function names), `components/base-path-bridge.tsx`,
+`tests/lib/base-path.test.ts`. Edited: `app/layout.tsx` (one import, mounted
+first), `components/ui/avatar.tsx`, `lib/brand/brand-config.ts`,
+`lib/ai/providers.ts`, `Dockerfile`. That takes the subtree patch surface from
+one file to six, but four of them are new files that cannot conflict.
+
+Outside the subtree: `deploy/nginx-openmaic-subpath.locations.conf` (a
+`location` block for the existing 443 server, not a new `server`),
+`deploy/docker-compose.openmaic.yml`, and §3b of `deploy/OPENMAIC_RUNBOOK.md`.
+`deploy/OPENMAIC_EMBED.md` now marks its own `Referer`-routing measurement as
+superseded, because leaving it there is leaving a recommendation that is unsafe
+on the host this actually runs on.
+
+Verified against a real build, not reasoned about. `NEXT_PUBLIC_BASE_PATH` is
+compiled into the **client** bundle — the shipped chunk holds
+`let t="/course-studio-app"` — which is the thing that would have made the
+wrapper a silent no-op had it not been. Under the prefix, the page, `/api`,
+`/brand-wordmark.png`, `/avatars/*` and `/logos/*` all answer 200 and the served
+page is byte-identical to the prerendered home page; at the root every one of
+them is 404, which is exactly the failure the wrapper exists to prevent. Eight
+unit tests cover the rewrite rules, including idempotency and the cases it must
+leave alone.
+
+Found on the way: `tests/lib/brand/brand-config.test.ts` had been red since the
+de-branding change in `d766fdb2`. It still asserted the upstream identity —
+`OpenMAIC`, `/openmaic-mark.png`, `#722ed1` — while the file it guards had been
+rewritten around ours, and nobody noticed because this repository's CI does not
+run the studio's tests at all (`integration/maic/**` is outside the workflow's
+`paths:` filter). It now asserts what this build ships, plus the new prefixing.
+
+One thing the plan expected to need and did not: the gatekeeper. It is fully
+path-transparent (`path: req.url`), and its one literal comparison,
+`/__gatekeeper/health`, is only ever reached directly on `127.0.0.1:10331`,
+never through nginx.
+
 ## What a real deploy found that the runbook did not — 2026-09-08
 
 Three gaps, reported from the machine rather than guessed at here. All three

@@ -48,6 +48,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # ---- Stage 3: Builder ----
 FROM base AS builder
 
+# The subpath this app is served under, when a reverse proxy routes a prefix
+# to it rather than giving it a host of its own. Structural: Next generates
+# every /_next/ asset URL from it, so it has to be known at build time and
+# cannot be switched per request. Unset means "owns the domain root", which is
+# every deployment that does not need this.
+ARG NEXT_PUBLIC_BASE_PATH
 ARG ALLOWED_FRAME_ANCESTORS
 ARG NEXT_PUBLIC_PERSISTENCE
 ARG NEXT_PUBLIC_PERSISTENCE_TOKEN
@@ -60,6 +66,7 @@ ARG NEXT_PUBLIC_SHOW_VOCATIONAL_TEST_UI
 ARG NEXT_PUBLIC_ENABLE_VIDEO_EXPORT
 ARG NEXT_PUBLIC_VIDEO_EXPORT_CTA_DESTINATION
 ARG NEXT_PUBLIC_ENABLE_PPTX_IMPORT
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 ENV ALLOWED_FRAME_ANCESTORS=$ALLOWED_FRAME_ANCESTORS
 ENV NEXT_PUBLIC_PERSISTENCE=$NEXT_PUBLIC_PERSISTENCE
 ENV NEXT_PUBLIC_PERSISTENCE_TOKEN=$NEXT_PUBLIC_PERSISTENCE_TOKEN

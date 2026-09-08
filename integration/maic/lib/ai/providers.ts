@@ -48,6 +48,7 @@ import type {
 } from '@/lib/types/provider';
 import { applyModelMetadata, getCatalogThinkingCapability } from './model-metadata';
 import { findModelById } from './model-aliases';
+import { asset } from '@/lib/base-path';
 import {
   getDefaultThinkingConfig,
   getThinkingMode,
@@ -1551,6 +1552,17 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
 };
 
 applyModelMetadata(PROVIDERS);
+
+// Provider logos are files under /public addressed root-absolutely, and Next
+// does not prefix those when the app is served under a subpath — only its own
+// /_next/ assets and router links. Doing it here, once, covers every consumer
+// (the generation toolbar, the media popover, each settings panel) instead of
+// a dozen render sites that are easy to miss one of. `asset` is idempotent and
+// a no-op when the app owns its domain root, which is every deployment that
+// does not set NEXT_PUBLIC_BASE_PATH.
+for (const provider of Object.values(PROVIDERS)) {
+  if (provider.icon) provider.icon = asset(provider.icon);
+}
 
 /**
  * Get provider config (from built-in or unified config in localStorage)
