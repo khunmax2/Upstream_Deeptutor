@@ -17,6 +17,59 @@ upstream.
 
 ---
 
+## A Thai course showed Chinese labels — the prompt half only — 2026-09-09
+
+A Thai lesson came out with a start button reading 启动 and a fullwidth colon in
+a status label, body text otherwise correct. Swapping the model did not help,
+because the model was not the cause: the prompt templates showed it Chinese
+*output* — two complete worked outlines with Chinese titles and keyPoints, a
+Chinese few-shot challenge, and a task-engine prompt announcing that the
+learner-facing product name is 任务引擎. A model told to teach in Thai copies the
+shape it is shown.
+
+Translated those. Kept every Chinese string that is an example of what a learner
+might **say** — the language-inference rules, the director's frustration
+signals, the "用中文讲" style requests. Those are inputs, already paired with
+English, and removing them would make the product worse for Chinese users. The
+new test draws that line: CJK allowed in prose, banned inside fenced example
+blocks. It checks every template, not only the four edited here — 17 assertions.
+
+**What this deliberately leaves out, and why.** The change it came from also
+swapped the default font from Microsoft YaHei to Tahoma in 19 places across the
+DSL, renderer, editor, whiteboard, slide defaults and the PPTX exporter. That
+half broke slide layout on the deployment and is not included.
+
+The mechanism is worth writing down, because "just change the default font"
+looks harmless. Every slide element is an absolutely positioned box —
+`PPTBaseElement` carries `left`, `top`, `width`, `height` — on a fixed
+1000×562 canvas, and the model writes those numbers to fit the text it wrote,
+under whatever font the slide was rendered with. `scene-builder.ts` stamps that
+font into the theme of every generated slide. Change it and the boxes stay
+where they are while the text inside them changes width and height: overflow,
+different wrapping, overlap — on every slide at once. Fixing the font means
+also telling whatever sizes the boxes which font it is sizing for; on its own
+it only moves the problem.
+
+The sweep was also partial: 17 files still carried `Microsoft YaHei`, including
+`components/workbench/chat/workbench-chat.css` and the editor's font picker, so
+the result was a mixed state rather than a changed default.
+
+**Honest about what this does not fix.** It reduces Chinese in the templates
+from 267 characters to 141, not to zero. Everything left is prose, none of it
+inside a fenced block, and all of it is learner-input examples — so the new test
+passes by design. But the prose/fence distinction is one a capable model
+respects and a lite model may not, and this deployment runs
+`gemini-3.1-flash-lite`. `templates/agent-system/system.md` (103 characters) and
+`templates/director/system.md` (18) are untouched and remain the largest
+sources.
+
+**Rolling it back does not need a rebuild.** `lib/prompts/loader.ts` reads each
+template with `fs.readFileSync` on every call and caches nothing, and the `.md`
+files ship into the image as files (16 of them under `/app/lib/prompts/`). So
+`docker cp` the previous file over it and the next generation uses it — no
+restart, no image build. `git revert` on this commit is the source-side
+equivalent; it touches nothing else, so it reverts clean.
+
 ## Course generation had no model to resolve — 2026-09-08
 
 Found by a scenario UAT against the deployed studio: every
