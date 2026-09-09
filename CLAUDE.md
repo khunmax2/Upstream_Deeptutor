@@ -72,6 +72,16 @@ pytest tests/path/to/test_x.py::test_name    # a single test
 # Note: --strict-markers is on; async tests need the `asyncio` marker (pytest-asyncio).
 # CI expects data/user/settings/main.yaml to exist (system.language, logging.level).
 
+# On Windows, a stale ACL on %TEMP%\pytest-of-<user> makes `tmp_path` unusable and
+# every test that touches it ERRORs at setup — 2,600+ of them, which buries the
+# real result and cannot be cleared by deleting the directory (that is denied
+# too). Point pytest somewhere writable instead; errors go to zero and the run
+# becomes readable:
+#   PYTEST_DEBUG_TEMPROOT=./.pytest-tmp pytest -q tests deeptutor/learning/tests
+# The remaining ~84 Windows failures are platform-bound (sandbox argv exec, the
+# macOS command launcher, some websocket timing) and are the local baseline, not
+# a regression — CI runs Linux and does not see them.
+
 # Python lint / format (must pass CI — ruff is the gate)
 ruff check .
 ruff format --check .           # ruff format (without --check) to autofix
@@ -94,6 +104,39 @@ workflow carries no `continue-on-error` anywhere, and `test-summary` requires al
 five jobs. 3.14 is the widest-covered version, not the weakest: import-check runs
 it on ubuntu, macOS *and* windows-latest, while 3.11–3.13 each run on ubuntu
 alone.
+
+## What a fresh clone will not guess
+
+Four things about this repository's current shape that the code does not
+explain.
+
+**`main`'s history was rewritten on 2026-09-09.** The OpenMAIC integration was
+taken off it so the integration can be designed again from a clean import.
+Nothing was discarded: `main` as it stood is whole on
+**`archive/main-2026-09-09`**, and the rebuild notes — 22 subtree patches, 7
+deploy patches, and the commit message behind each — are on `main` under
+`docs/maic-fork-export/`. Read that folder before starting the integration
+again; it records traps that cost real time.
+
+Three branches hold work the archive does not, so do not delete them:
+`fix/openmaic-prompt-cjk-only`, `fix/openmaic-prompt-cjk-examples`,
+`page-agent-clean-eval`.
+
+**An existing clone must reset, not pull.** `git fetch origin && git reset --hard
+origin/main`. A plain `git pull` fails, and a force-push from a stale clone would
+undo the rewrite.
+
+**A fresh install comes up in Thai.** `DEFAULT_INTERFACE_SETTINGS["language"]` is
+`th` (`deeptutor/services/setup/init.py`), pinned by
+`tests/services/test_fork_default_language.py` because an upstream sync offers
+`en` back every time. `data/` is gitignored, so those defaults are the only thing
+a first run sees. The same value decides which language the soul and persona
+templates seed in.
+
+**An existing venv can be behind `pyproject.toml`.** v1.6.6 moved
+`lightrag-hku` from `1.5.7rc2` to `1.5.7`, and the RAG tests assert the version
+exactly — five of them fail until the venv matches. `uv pip install
+"lightrag-hku==1.5.7"` (this venv has no `pip`; it was made with `uv`).
 
 ## Fork policy for AI agents
 

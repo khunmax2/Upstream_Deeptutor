@@ -6,6 +6,23 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — `CLAUDE.md` describes the repository as it is now.** The
+  history rewrite and the v1.6.6 sync left two gaps a fresh clone would have hit.
+
+  A "What a fresh clone will not guess" section records the four: `main`'s
+  history was rewritten and the OpenMAIC work lives on
+  `archive/main-2026-09-09` with its rebuild notes on `main`; an existing clone
+  must `reset --hard`, not `pull`; a fresh install comes up in Thai because
+  `data/` is gitignored and the defaults are all a first run sees; and an
+  existing venv can sit behind `pyproject.toml` — v1.6.6's `lightrag-hku`
+  `1.5.7rc2` → `1.5.7` fails five RAG tests until it matches, and this venv has
+  no `pip` because `uv` made it.
+
+  The Windows `PYTEST_DEBUG_TEMPROOT` workaround was also restored. It was
+  written after a real Windows session where a stale `%TEMP%` ACL made 2,600+
+  tests error at setup, and it was lost with the OpenMAIC removal despite having
+  nothing to do with it — recovered from the archive (`CLAUDE.md`).
+
 - **2026-09-09 — The OpenMAIC integration is off `main`, to be designed again
   from a clean import.** `integration/maic` (2,832 files) and the 97 commits
   that built around it are removed from `main`. Nothing is discarded: `main` as
