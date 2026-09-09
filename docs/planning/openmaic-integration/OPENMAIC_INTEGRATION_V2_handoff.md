@@ -344,6 +344,58 @@ that removed the provider bridge, in a different direction.
 The accepted consequence: **changing the interface language while the studio is
 open does not reach it until a reload.** Confirmed acceptable.
 
+### 3.14 Where the seven tools go, and what triggers a rebase
+
+`deploy/openmaic-patches/` was written when OpenMAIC was a subtree. Under a fork
+some of it is in the wrong repository and some of it has no job left.
+
+| tool | goes | why |
+|---|---|---|
+| `th-TH.partial.json` | **the fork** | the generated `th-TH.json` lives there; a source sitting in another repository makes the build reach across one |
+| `build_th_locale.py` | the fork | it writes a file in the fork |
+| `check_openmaic_i18n_gaps.py` | the fork | it reads OpenMAIC's source |
+| `check_openmaic_contract.py` | **stays here** | it asserts what *DeepWitya* depends on — URL, `frame-ancestors`, port, pin, and now the DDL |
+| `openmaic-pin.json` | **stays here**, naming our fork's commit **and the image digest** | it is this repository's statement of which studio it expects |
+| `export_upstream_patches.py` | **retired** | it converted our commits into patches a maintainer could apply; a real fork opens a pull request instead |
+| `build_server_providers.py` | **deleted** | it is the provider bridge, cut from scope |
+
+Both deletions were confirmed after being told what they hold.
+`build_server_providers.py` is the one worth naming: it carried the knowledge
+that a provider URL valid in DeepTutor's settings may be `localhost`, which
+inside another container means *that* container, so loopback must be rewritten to
+`host.docker.internal`; and that the two products name the same things
+differently (`gemini`/`google`, `stt`/`asr`, `search`/`web-search`). If shared
+provider configuration is ever wanted again, recover it from
+`archive/main-2026-09-09` rather than rediscovering it.
+
+**A rebase happens for a reason, never on a schedule.** A security fix, or a
+feature worth having. Every rebase carries the DDL-drift risk of §3.9, so a
+calendar would be a way of taking that risk for nothing.
+`check_openmaic_contract.py` **reports** the distance — commit, locale-key drift
+(roughly 50–90 keys a week upstream), DDL — and must not force the move.
+
+The procedure, in order:
+
+1. `pg_dump`
+2. rebase our commits onto the new upstream — commits upstream has since merged
+   drop out by themselves, which is the mechanism by which this fork shrinks
+3. `check_openmaic_contract.py`; write the `ALTER TABLE` by hand if the DDL moved
+4. CI on both sides, including the two-account isolation proof
+5. build, then update `openmaic-pin.json` and the compose digest here
+
+This is a **rebase**, where the DeepTutor side is a *merge*: `main` here carries
+fork work woven through its history, while the fork will carry a small set of
+commits sitting on top, and keeping those a readable set is worth more than
+preserving their original parents.
+
+**Write this as a plain checklist in phase 1; promote it to a skill only after
+the first real rebase.** The `upstream-sync` skill earns its keep through
+`references/decisions.md`, accumulated from syncs that actually happened — a
+skill written before the first rebase would be a guess with a table of contents.
+It should end up easier than `upstream-sync`, because nearly every check here is
+machine-answerable (DDL pin, key count, contract, isolation test) where the Thai
+localisation work needs judgement on almost every hunk.
+
 ---
 
 ## 4. The phased plan
@@ -385,19 +437,15 @@ Draft upstream PRs for the generic work. Attapon sends them.
 
 ---
 
-## 5. Still open — the questions this session did not reach
+## 5. What is not decided
 
-The design interview stopped here. Questions 1, 2, 4 of the original six were answered after this file was first
-written and now live in §3.8–§3.11. These three remain genuinely undecided:
+All six questions this file originally listed have been answered, in §3.8–§3.14.
+Nothing in the design is knowingly left open.
 
-1. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
-   decides. `deploy/openmaic-patches/openmaic-pin.json` (pinned at `d4ef5faa`,
-   2026-09-01) and `check_openmaic_contract.py` exist for exactly this and need
-   re-pointing at the fork.
-3. **The seven tools in `deploy/openmaic-patches/`.** `export_upstream_patches.py`
-   and `check_openmaic_contract.py` both need an `integration/maic` checkout and
-   will fail until one exists. Under a fork they should point at the fork
-   instead — nobody has decided their new home.
+What remains unknown is a measurement, not a decision: **nobody has yet tried
+threading `authenticatedOwnerId` through OpenMAIC's call sites**, so the size of
+§3.3 step 2 is an estimate. That is phase 1's first real task and the first place
+this plan can turn out to be wrong.
 
 ---
 
