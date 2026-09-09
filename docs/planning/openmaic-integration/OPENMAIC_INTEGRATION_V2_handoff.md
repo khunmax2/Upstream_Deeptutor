@@ -317,6 +317,33 @@ returns `user_id="local-admin"` when authentication is off, which the gatekeeper
 already reads. A single-user install therefore has one well-defined owner, and
 OpenMAIC's anonymous-cookie owner is never reached.
 
+### 3.12 Naming: "Course Studio" at `/studio`
+
+Confirmed. The first attempt named everything after the vendor — `/maic`,
+`MaicWorkspace` — which contradicts the de-branding requirement in the most
+visible place there is:
+
+| | first attempt | second |
+|---|---|---|
+| route | `/maic` — **the brand leaks into the address bar** | `/studio` |
+| menu entry | `MaicWorkspace` | `Course Studio` / `สตูดิโอสร้างคอร์ส` / `课程工作室` |
+| env var | `DEEPTUTOR_OPENMAIC_URL` | unchanged — an operator sees it, a user does not, and it says plainly what is behind the door |
+
+### 3.13 Seamlessness: URL parameters at open, and nothing more
+
+Accepted at the middle level. DeepWitya passes `?lang=`, `?theme=` and
+`?embed=1` when it opens the studio — the first attempt's patches 4 and 5, 7
+files, +206/−116 — so the theme and language match and host-owned chrome is
+hidden.
+
+Rejected: two-way state binding over `postMessage`. It buys live theme and
+language switching, at the cost of an API between two systems that must be kept
+in version step forever and that breaks quietly on a rebase — the same objection
+that removed the provider bridge, in a different direction.
+
+The accepted consequence: **changing the interface language while the studio is
+open does not reach it until a reload.** Confirmed acceptable.
+
 ---
 
 ## 4. The phased plan
@@ -363,10 +390,7 @@ Draft upstream PRs for the generic work. Attapon sends them.
 The design interview stopped here. Questions 1, 2, 4 of the original six were answered after this file was first
 written and now live in §3.8–§3.11. These three remain genuinely undecided:
 
-1. **How seamless must the embed feel?** The first attempt had `?lang=`,
-   `?theme=` and `?embed=1` to hide host-owned chrome. Whether that is enough for
-   *"ให้ผู้ใช้คิดว่าเป็น 1 ฟีเจอร์ของ deeptutor"* was never asked.
-2. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
+1. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
    decides. `deploy/openmaic-patches/openmaic-pin.json` (pinned at `d4ef5faa`,
    2026-09-01) and `check_openmaic_contract.py` exist for exactly this and need
    re-pointing at the fork.
