@@ -1,0 +1,285 @@
+From 28749e08d3c72d21451bb98eb145ab7b592466c7 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 17:08:07 +0700
+Subject: [PATCH] fix(maic): translate the last two player labels, built from a
+ ternary
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`aria-label={engineState === 'playing' ? 'Pause' : 'Play'}` and the Mute/Unmute
+pair beside it were assembled rather than written as literals, so the sweep for
+`aria-label="..."` walked past them and the re-test after the first fix still
+showed two English tooltips in a Thai classroom. toolbar.play / pause / mute /
+unmute added in 13 languages.
+
+Verified on the running container: zero English aria-labels left, zero Chinese,
+zero brand. Note for anyone re-testing — Next serves content-hashed chunks and
+the browser will happily keep the previous document, so a rebuild needs a
+cache-busting reload before the new locale chunk is fetched. Two rounds of
+"the fix did nothing" here were that and nothing else.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ integration/maic/components/canvas/canvas-toolbar.tsx | 4 ++--
+ integration/maic/lib/i18n/locales/ar-SA.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/de-DE.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/en-US.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/es-MX.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/fr-FR.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/ja-JP.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/ko-KR.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/pt-BR.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/ru-RU.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/th-TH.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/vi-VN.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/zh-CN.json          | 6 +++++-
+ integration/maic/lib/i18n/locales/zh-TW.json          | 6 +++++-
+ 14 files changed, 67 insertions(+), 15 deletions(-)
+
+diff --git a/integration/maic/components/canvas/canvas-toolbar.tsx b/integration/maic/components/canvas/canvas-toolbar.tsx
+index ca96d7f53..bd7d88d2d 100644
+--- a/integration/maic/components/canvas/canvas-toolbar.tsx
++++ b/integration/maic/components/canvas/canvas-toolbar.tsx
+@@ -214,7 +214,7 @@ export function CanvasToolbar({
+                       ? 'text-red-500 dark:text-red-400'
+                       : 'text-gray-500 dark:text-gray-400',
+                 )}
+-                aria-label={ttsMuted ? 'Unmute' : 'Mute'}
++                aria-label={ttsMuted ? t('toolbar.unmute') : t('toolbar.mute')}
+               >
+                 <VolumeIcon muted={!!ttsMuted} volume={ttsVolume} disabled={!ttsEnabled} />
+               </button>
+@@ -353,7 +353,7 @@ export function CanvasToolbar({
+                   ? 'text-violet-600 dark:text-violet-400'
+                   : 'text-gray-500 dark:text-gray-400',
+               )}
+-              aria-label={engineState === 'playing' ? 'Pause' : 'Play'}
++              aria-label={engineState === 'playing' ? t('toolbar.pause') : t('toolbar.play')}
+             >
+               {engineState === 'playing' ? (
+                 <Pause className="w-3.5 h-3.5" />
+diff --git a/integration/maic/lib/i18n/locales/ar-SA.json b/integration/maic/lib/i18n/locales/ar-SA.json
+index 640839c79..3666ca789 100644
+--- a/integration/maic/lib/i18n/locales/ar-SA.json
++++ b/integration/maic/lib/i18n/locales/ar-SA.json
+@@ -49,7 +49,11 @@
+     "previousScene": "المشهد السابق",
+     "nextScene": "المشهد التالي",
+     "autoPlay": "تشغيل تلقائي",
+-    "toggleChat": "إظهار المحادثة أو إخفاؤها"
++    "toggleChat": "إظهار المحادثة أو إخفاؤها",
++    "play": "تشغيل",
++    "pause": "إيقاف مؤقت",
++    "mute": "كتم الصوت",
++    "unmute": "إلغاء كتم الصوت"
+   },
+   "export": {
+     "pptx": "تصدير PPTX",
+diff --git a/integration/maic/lib/i18n/locales/de-DE.json b/integration/maic/lib/i18n/locales/de-DE.json
+index 03c0e499b..97a5f4560 100644
+--- a/integration/maic/lib/i18n/locales/de-DE.json
++++ b/integration/maic/lib/i18n/locales/de-DE.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Vorherige Szene",
+     "nextScene": "Nächste Szene",
+     "autoPlay": "Automatische Wiedergabe",
+-    "toggleChat": "Chat umschalten"
++    "toggleChat": "Chat umschalten",
++    "play": "Abspielen",
++    "pause": "Pause",
++    "mute": "Stummschalten",
++    "unmute": "Stummschaltung aufheben"
+   },
+   "export": {
+     "pptx": "PPTX exportieren",
+diff --git a/integration/maic/lib/i18n/locales/en-US.json b/integration/maic/lib/i18n/locales/en-US.json
+index 743c60bd5..a12a515db 100644
+--- a/integration/maic/lib/i18n/locales/en-US.json
++++ b/integration/maic/lib/i18n/locales/en-US.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Previous scene",
+     "nextScene": "Next scene",
+     "autoPlay": "Auto-play",
+-    "toggleChat": "Toggle chat"
++    "toggleChat": "Toggle chat",
++    "play": "Play",
++    "pause": "Pause",
++    "mute": "Mute",
++    "unmute": "Unmute"
+   },
+   "export": {
+     "pptx": "Export PPTX",
+diff --git a/integration/maic/lib/i18n/locales/es-MX.json b/integration/maic/lib/i18n/locales/es-MX.json
+index 44b90853d..04bf1cc3a 100644
+--- a/integration/maic/lib/i18n/locales/es-MX.json
++++ b/integration/maic/lib/i18n/locales/es-MX.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Escena anterior",
+     "nextScene": "Escena siguiente",
+     "autoPlay": "Reproducción automática",
+-    "toggleChat": "Mostrar u ocultar el chat"
++    "toggleChat": "Mostrar u ocultar el chat",
++    "play": "Reproducir",
++    "pause": "Pausar",
++    "mute": "Silenciar",
++    "unmute": "Activar el sonido"
+   },
+   "export": {
+     "pptx": "Exportar PPTX",
+diff --git a/integration/maic/lib/i18n/locales/fr-FR.json b/integration/maic/lib/i18n/locales/fr-FR.json
+index cbe1efb0b..54a07c642 100644
+--- a/integration/maic/lib/i18n/locales/fr-FR.json
++++ b/integration/maic/lib/i18n/locales/fr-FR.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Scène précédente",
+     "nextScene": "Scène suivante",
+     "autoPlay": "Lecture automatique",
+-    "toggleChat": "Afficher ou masquer le chat"
++    "toggleChat": "Afficher ou masquer le chat",
++    "play": "Lire",
++    "pause": "Pause",
++    "mute": "Couper le son",
++    "unmute": "Rétablir le son"
+   },
+   "export": {
+     "pptx": "Exporter en PPTX",
+diff --git a/integration/maic/lib/i18n/locales/ja-JP.json b/integration/maic/lib/i18n/locales/ja-JP.json
+index 281d5033d..4c1173e09 100644
+--- a/integration/maic/lib/i18n/locales/ja-JP.json
++++ b/integration/maic/lib/i18n/locales/ja-JP.json
+@@ -49,7 +49,11 @@
+     "previousScene": "前のシーン",
+     "nextScene": "次のシーン",
+     "autoPlay": "自動再生",
+-    "toggleChat": "チャットの表示切替"
++    "toggleChat": "チャットの表示切替",
++    "play": "再生",
++    "pause": "一時停止",
++    "mute": "ミュート",
++    "unmute": "ミュート解除"
+   },
+   "export": {
+     "pptx": "PPTXエクスポート",
+diff --git a/integration/maic/lib/i18n/locales/ko-KR.json b/integration/maic/lib/i18n/locales/ko-KR.json
+index fdd7dd6cc..2dbd6fba0 100644
+--- a/integration/maic/lib/i18n/locales/ko-KR.json
++++ b/integration/maic/lib/i18n/locales/ko-KR.json
+@@ -49,7 +49,11 @@
+     "previousScene": "이전 장면",
+     "nextScene": "다음 장면",
+     "autoPlay": "자동 재생",
+-    "toggleChat": "채팅 전환"
++    "toggleChat": "채팅 전환",
++    "play": "재생",
++    "pause": "일시정지",
++    "mute": "음소거",
++    "unmute": "음소거 해제"
+   },
+   "export": {
+     "pptx": "PPTX 내보내기",
+diff --git a/integration/maic/lib/i18n/locales/pt-BR.json b/integration/maic/lib/i18n/locales/pt-BR.json
+index 5b49b2869..dff1fccd8 100644
+--- a/integration/maic/lib/i18n/locales/pt-BR.json
++++ b/integration/maic/lib/i18n/locales/pt-BR.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Cena anterior",
+     "nextScene": "Próxima cena",
+     "autoPlay": "Reprodução automática",
+-    "toggleChat": "Mostrar ou ocultar o chat"
++    "toggleChat": "Mostrar ou ocultar o chat",
++    "play": "Reproduzir",
++    "pause": "Pausar",
++    "mute": "Silenciar",
++    "unmute": "Ativar o som"
+   },
+   "export": {
+     "pptx": "Exportar PPTX",
+diff --git a/integration/maic/lib/i18n/locales/ru-RU.json b/integration/maic/lib/i18n/locales/ru-RU.json
+index 283e9df3a..fa89fd0c6 100644
+--- a/integration/maic/lib/i18n/locales/ru-RU.json
++++ b/integration/maic/lib/i18n/locales/ru-RU.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Предыдущая сцена",
+     "nextScene": "Следующая сцена",
+     "autoPlay": "Автовоспроизведение",
+-    "toggleChat": "Показать или скрыть чат"
++    "toggleChat": "Показать или скрыть чат",
++    "play": "Воспроизвести",
++    "pause": "Пауза",
++    "mute": "Выключить звук",
++    "unmute": "Включить звук"
+   },
+   "export": {
+     "pptx": "Экспорт PPTX",
+diff --git a/integration/maic/lib/i18n/locales/th-TH.json b/integration/maic/lib/i18n/locales/th-TH.json
+index 081852d99..d572793aa 100644
+--- a/integration/maic/lib/i18n/locales/th-TH.json
++++ b/integration/maic/lib/i18n/locales/th-TH.json
+@@ -49,7 +49,11 @@
+     "previousScene": "ฉากก่อนหน้า",
+     "nextScene": "ฉากถัดไป",
+     "autoPlay": "เล่นอัตโนมัติ",
+-    "toggleChat": "สลับหน้าต่างแชท"
++    "toggleChat": "สลับหน้าต่างแชท",
++    "play": "เล่น",
++    "pause": "หยุดชั่วคราว",
++    "mute": "ปิดเสียง",
++    "unmute": "เปิดเสียง"
+   },
+   "export": {
+     "pptx": "ส่งออก PPTX",
+diff --git a/integration/maic/lib/i18n/locales/vi-VN.json b/integration/maic/lib/i18n/locales/vi-VN.json
+index a1f004f3f..74150798e 100644
+--- a/integration/maic/lib/i18n/locales/vi-VN.json
++++ b/integration/maic/lib/i18n/locales/vi-VN.json
+@@ -49,7 +49,11 @@
+     "previousScene": "Cảnh trước",
+     "nextScene": "Cảnh sau",
+     "autoPlay": "Tự động phát",
+-    "toggleChat": "Bật/tắt trò chuyện"
++    "toggleChat": "Bật/tắt trò chuyện",
++    "play": "Phát",
++    "pause": "Tạm dừng",
++    "mute": "Tắt tiếng",
++    "unmute": "Bật tiếng"
+   },
+   "export": {
+     "pptx": "Xuất PPTX",
+diff --git a/integration/maic/lib/i18n/locales/zh-CN.json b/integration/maic/lib/i18n/locales/zh-CN.json
+index 8d5f13793..72b9f7432 100644
+--- a/integration/maic/lib/i18n/locales/zh-CN.json
++++ b/integration/maic/lib/i18n/locales/zh-CN.json
+@@ -49,7 +49,11 @@
+     "previousScene": "上一幕",
+     "nextScene": "下一幕",
+     "autoPlay": "自动播放",
+-    "toggleChat": "切换聊天"
++    "toggleChat": "切换聊天",
++    "play": "播放",
++    "pause": "暂停",
++    "mute": "静音",
++    "unmute": "取消静音"
+   },
+   "export": {
+     "pptx": "导出 PPTX",
+diff --git a/integration/maic/lib/i18n/locales/zh-TW.json b/integration/maic/lib/i18n/locales/zh-TW.json
+index dfd7f9f6b..d2bfd1d16 100644
+--- a/integration/maic/lib/i18n/locales/zh-TW.json
++++ b/integration/maic/lib/i18n/locales/zh-TW.json
+@@ -49,7 +49,11 @@
+     "previousScene": "上一幕",
+     "nextScene": "下一幕",
+     "autoPlay": "自動播放",
+-    "toggleChat": "切換聊天"
++    "toggleChat": "切換聊天",
++    "play": "播放",
++    "pause": "暫停",
++    "mute": "靜音",
++    "unmute": "取消靜音"
+   },
+   "export": {
+     "pptx": "匯出 PPTX",
+-- 
+2.51.0.windows.2
+

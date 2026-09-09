@@ -1,0 +1,861 @@
+From b19dd7ba836106e033ee0302676125bf1aaed317 Mon Sep 17 00:00:00 2001
+From: Pond500 <pond500@gmail.com>
+Date: Tue, 8 Sep 2026 08:47:01 +0700
+Subject: [PATCH] fix(maic): prefix every image with the base path, not just
+ the one on screen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avatars rendered as broken-image icons under /course-studio-app while the brand
+wordmark was fine. lib/base-path.ts already had asset(), and its docstring names
+this exact case, but it was called from one place — brand-config.ts, for the one
+image visible while the subpath work was tested. Every other <img> still
+addressed /public from the domain root, which under a subpath is a different
+application entirely.
+
+Wrapped at the render site rather than at the constants. Prefixing
+AVATAR_OPTIONS and AGENT_DEFAULT_AVATARS where they are declared is wrong twice:
+they are `as const`, so asset() would widen literal types other code depends on,
+and user-profile's avatar is persisted, so a prefixed value would be written
+into saved state and break whenever the prefix changes.
+
+52 sites across 31 files, including ones whose src is a data: URI or an absolute
+URL. asset() returns anything that is not a root-absolute path untouched, so
+those are no-ops — and wrapping uniformly is what stops this recurring one image
+at a time, which is how it got here.
+
+Two traps, both of which broke a first attempt at the sweep: <img> is usually
+written across several lines, so a line-oriented search finds 15 of the 52 and
+leaves a partial fix shaped exactly like the original bug; and
+src={agents.find((a) => a.role === 'assistant')!.avatar} closes an inner brace
+before the JSX expression ends, so matching to the first } corrupts the file.
+The rewrite counts braces.
+
+Verified against the deployed page: every image URL it emits now carries the
+prefix, and all four return 200.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ integration/maic/app/page.tsx                   |  7 ++++---
+ integration/maic/components/agent/agent-bar.tsx | 11 ++++++-----
+ .../components/agent/agent-reveal-modal.tsx     |  3 ++-
+ .../maic/components/ai-elements/image.tsx       |  3 ++-
+ .../maic/components/ai-elements/message.tsx     |  3 ++-
+ .../components/ai-elements/model-selector.tsx   |  3 ++-
+ .../components/ai-elements/prompt-input.tsx     |  5 +++--
+ .../maic/components/chat/proactive-card.tsx     |  3 ++-
+ .../edit/AgentsView/AgentRosterPanel.tsx        |  3 ++-
+ .../components/edit/AgentsView/AvatarPicker.tsx |  3 ++-
+ .../edit/SlideNavRail/SlideNavRail.tsx          |  3 ++-
+ .../generation/generation-toolbar.tsx           |  7 ++++---
+ .../components/generation/media-popover.tsx     |  5 +++--
+ .../maic/components/roundtable/index.tsx        |  9 +++++----
+ .../scene-renderers/pbl/v2/submission.tsx       |  5 +++--
+ integration/maic/components/settings/index.tsx  | 17 +++++++++--------
+ .../maic/components/settings/provider-list.tsx  |  3 ++-
+ .../components/settings/token-plan-settings.tsx |  3 ++-
+ .../element/ImageElement/BaseImageElement.tsx   |  3 ++-
+ .../element/ImageElement/ImageClipHandler.tsx   |  5 +++--
+ .../components/element/ImageElement/index.tsx   |  3 ++-
+ .../components/element/VideoElement/index.tsx   |  3 ++-
+ .../maic/components/stage/scene-sidebar.tsx     |  3 ++-
+ .../maic/components/ui/avatar-display.tsx       |  3 ++-
+ integration/maic/components/user-profile.tsx    |  5 +++--
+ .../workbench/workspace/WorkspaceHome.tsx       |  7 ++++---
+ .../workbench/workspace/WorkspaceRail.tsx       |  3 ++-
+ 27 files changed, 79 insertions(+), 52 deletions(-)
+
+diff --git a/integration/maic/app/page.tsx b/integration/maic/app/page.tsx
+index 76d0fdbfc..89d532fcc 100644
+--- a/integration/maic/app/page.tsx
++++ b/integration/maic/app/page.tsx
+@@ -97,6 +97,7 @@ import {
+   readLastWorkspaceSessionId,
+   workspaceResumeHref,
+ } from '@/lib/workbench/workspace-session-memory';
++import { asset } from '@/lib/base-path';
+ 
+ const log = createLogger('Home');
+ 
+@@ -1453,7 +1454,7 @@ function GreetingBar() {
+         >
+           <div className="shrink-0 relative">
+             <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-border/30 group-hover:ring-violet-400/60 dark:group-hover:ring-violet-400/40 transition-all duration-300">
+-              <img src={avatar} alt="" className="size-full object-cover" />
++              <img src={asset(avatar)} alt="" className="size-full object-cover" />
+             </div>
+             <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-white dark:bg-slate-800 border border-border/40 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
+               <Pencil className="size-[7px] text-muted-foreground/70" />
+@@ -1506,7 +1507,7 @@ function GreetingBar() {
+                   }}
+                 >
+                   <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-violet-300/70 dark:ring-violet-500/40 transition-all duration-300">
+-                    <img src={avatar} alt="" className="size-full object-cover" />
++                    <img src={asset(avatar)} alt="" className="size-full object-cover" />
+                   </div>
+                   <motion.div
+                     initial={{ scale: 0 }}
+@@ -1599,7 +1600,7 @@ function GreetingBar() {
+                                 : 'hover:ring-1 hover:ring-muted-foreground/30',
+                             )}
+                           >
+-                            <img src={url} alt="" className="size-full" />
++                            <img src={asset(url)} alt="" className="size-full" />
+                           </button>
+                         ))}
+                         <label
+diff --git a/integration/maic/components/agent/agent-bar.tsx b/integration/maic/components/agent/agent-bar.tsx
+index 4b079e674..0440e6f61 100644
+--- a/integration/maic/components/agent/agent-bar.tsx
++++ b/integration/maic/components/agent/agent-bar.tsx
+@@ -27,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
+ import type { AgentConfig } from '@/lib/orchestration/registry/types';
+ import type { TTSProviderId } from '@/lib/audio/types';
+ import type { ProviderWithVoices } from '@/lib/audio/voice-resolver';
++import { asset } from '@/lib/base-path';
+ 
+ function matchesVoiceQuery(value: string | undefined, query: string): boolean {
+   return !!value?.toLowerCase().includes(query);
+@@ -722,7 +723,7 @@ export function AgentBar() {
+       {teacherAgent && (
+         <div className="size-8 rounded-full overflow-hidden ring-2 ring-blue-400/40 dark:ring-blue-500/30 shrink-0">
+           <img
+-            src={teacherAgent.avatar}
++            src={asset(teacherAgent.avatar)}
+             alt={getAgentName(teacherAgent)}
+             className="size-full object-cover"
+           />
+@@ -735,7 +736,7 @@ export function AgentBar() {
+             {agents.find((a) => a.role === 'assistant') && (
+               <div className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background">
+                 <img
+-                  src={agents.find((a) => a.role === 'assistant')!.avatar}
++                  src={asset(agents.find((a) => a.role === 'assistant')!.avatar)}
+                   alt=""
+                   className="size-full object-cover"
+                 />
+@@ -754,7 +755,7 @@ export function AgentBar() {
+                   className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background"
+                 >
+                   <img
+-                    src={agent.avatar}
++                    src={asset(agent.avatar)}
+                     alt={getAgentName(agent)}
+                     className="size-full object-cover"
+                   />
+@@ -801,7 +802,7 @@ export function AgentBar() {
+           className="size-7 rounded-full overflow-hidden shrink-0 ring-1 ring-border/40"
+           style={{ boxShadow: isSelected ? `0 0 0 2px ${agent.color}30` : undefined }}
+         >
+-          <img src={agent.avatar} alt={getAgentName(agent)} className="size-full object-cover" />
++          <img src={asset(agent.avatar)} alt={getAgentName(agent)} className="size-full object-cover" />
+         </div>
+         <span className="text-[13px] font-medium truncate min-w-0 flex-1">
+           {getAgentName(agent)}
+@@ -866,7 +867,7 @@ export function AgentBar() {
+                     style={{ boxShadow: `0 0 0 2px ${teacherAgent.color}30` }}
+                   >
+                     <img
+-                      src={teacherAgent.avatar}
++                      src={asset(teacherAgent.avatar)}
+                       alt={getAgentName(teacherAgent)}
+                       className="size-full object-cover"
+                     />
+diff --git a/integration/maic/components/agent/agent-reveal-modal.tsx b/integration/maic/components/agent/agent-reveal-modal.tsx
+index d0d811115..f7efaa1d4 100644
+--- a/integration/maic/components/agent/agent-reveal-modal.tsx
++++ b/integration/maic/components/agent/agent-reveal-modal.tsx
+@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
+ import { Sparkles, X } from 'lucide-react';
+ import { cn } from '@/lib/utils';
+ import { useI18n } from '@/lib/hooks/use-i18n';
++import { asset } from '@/lib/base-path';
+ 
+ interface AgentRevealModalProps {
+   agents: Array<{
+@@ -232,7 +233,7 @@ export function AgentRevealModal({ agents, open, onClose, onAllRevealed }: Agent
+                             >
+                               {isUrl(agent.avatar) ? (
+                                 <img
+-                                  src={agent.avatar}
++                                  src={asset(agent.avatar)}
+                                   alt={agent.name}
+                                   className="size-full rounded-full object-cover"
+                                 />
+diff --git a/integration/maic/components/ai-elements/image.tsx b/integration/maic/components/ai-elements/image.tsx
+index 5518a5070..7f1225709 100644
+--- a/integration/maic/components/ai-elements/image.tsx
++++ b/integration/maic/components/ai-elements/image.tsx
+@@ -1,5 +1,6 @@
+ import { cn } from '@/lib/utils';
+ import type { Experimental_GeneratedImage } from 'ai';
++import { asset } from '@/lib/base-path';
+ 
+ export type ImageProps = Experimental_GeneratedImage & {
+   className?: string;
+@@ -11,6 +12,6 @@ export const Image = ({ base64, mediaType, ...props }: ImageProps) => (
+     {...props}
+     alt={props.alt}
+     className={cn('h-auto max-w-full overflow-hidden rounded-md', props.className)}
+-    src={`data:${mediaType};base64,${base64}`}
++    src={asset(`data:${mediaType};base64,${base64}`)}
+   />
+ );
+diff --git a/integration/maic/components/ai-elements/message.tsx b/integration/maic/components/ai-elements/message.tsx
+index 10fdcd4d0..ba469b925 100644
+--- a/integration/maic/components/ai-elements/message.tsx
++++ b/integration/maic/components/ai-elements/message.tsx
+@@ -9,6 +9,7 @@ import { ChevronLeftIcon, ChevronRightIcon, PaperclipIcon, XIcon } from 'lucide-
+ import type { ComponentProps, HTMLAttributes, ReactElement } from 'react';
+ import { createContext, memo, useContext, useEffect, useMemo, useState } from 'react';
+ import { Streamdown } from 'streamdown';
++import { asset } from '@/lib/base-path';
+ 
+ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
+   from: UIMessage['role'];
+@@ -299,7 +300,7 @@ export function MessageAttachment({ data, className, onRemove, ...props }: Messa
+             alt={filename || 'attachment'}
+             className="size-full object-cover"
+             height={100}
+-            src={data.url}
++            src={asset(data.url)}
+             width={100}
+           />
+           {onRemove && (
+diff --git a/integration/maic/components/ai-elements/model-selector.tsx b/integration/maic/components/ai-elements/model-selector.tsx
+index e2a7e498d..9fccedcd6 100644
+--- a/integration/maic/components/ai-elements/model-selector.tsx
++++ b/integration/maic/components/ai-elements/model-selector.tsx
+@@ -12,6 +12,7 @@ import {
+ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+ import { cn } from '@/lib/utils';
+ import type { ComponentProps, ReactNode } from 'react';
++import { asset } from '@/lib/base-path';
+ 
+ export type ModelSelectorProps = ComponentProps<typeof Dialog>;
+ 
+@@ -146,7 +147,7 @@ export const ModelSelectorLogo = ({ provider, className, ...props }: ModelSelect
+     alt={`${provider} logo`}
+     className={cn('size-3 dark:invert', className)}
+     height={12}
+-    src={`https://models.dev/logos/${provider}.svg`}
++    src={asset(`https://models.dev/logos/${provider}.svg`)}
+     width={12}
+   />
+ );
+diff --git a/integration/maic/components/ai-elements/prompt-input.tsx b/integration/maic/components/ai-elements/prompt-input.tsx
+index e2da5631a..227cb0247 100644
+--- a/integration/maic/components/ai-elements/prompt-input.tsx
++++ b/integration/maic/components/ai-elements/prompt-input.tsx
+@@ -68,6 +68,7 @@ import {
+   useRef,
+   useState,
+ } from 'react';
++import { asset } from '@/lib/base-path';
+ 
+ // ============================================================================
+ // Provider Context & Types
+@@ -299,7 +300,7 @@ export function PromptInputAttachment({ data, className, ...props }: PromptInput
+                   alt={filename || 'attachment'}
+                   className="size-5 object-cover"
+                   height={20}
+-                  src={data.url}
++                  src={asset(data.url)}
+                   width={20}
+                 />
+               ) : (
+@@ -334,7 +335,7 @@ export function PromptInputAttachment({ data, className, ...props }: PromptInput
+                 alt={filename || 'attachment preview'}
+                 className="max-h-full max-w-full object-contain"
+                 height={384}
+-                src={data.url}
++                src={asset(data.url)}
+                 width={448}
+               />
+             </div>
+diff --git a/integration/maic/components/chat/proactive-card.tsx b/integration/maic/components/chat/proactive-card.tsx
+index 27e7056e1..6b4101064 100644
+--- a/integration/maic/components/chat/proactive-card.tsx
++++ b/integration/maic/components/chat/proactive-card.tsx
+@@ -7,6 +7,7 @@ import { Play, Pause, X } from 'lucide-react';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { DISCUSSION_AUTO_SKIP_MS } from '@/lib/choreography';
+ import type { DiscussionAction } from '@/lib/types/action';
++import { asset } from '@/lib/base-path';
+ 
+ interface ProactiveCardProps {
+   action: DiscussionAction;
+@@ -175,7 +176,7 @@ export const ProactiveCard = ({
+             {agentAvatar && (
+               <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-gray-100 dark:border-gray-700">
+                 <img
+-                  src={agentAvatar}
++                  src={asset(agentAvatar)}
+                   alt={agentName || ''}
+                   className="w-full h-full object-cover"
+                 />
+diff --git a/integration/maic/components/edit/AgentsView/AgentRosterPanel.tsx b/integration/maic/components/edit/AgentsView/AgentRosterPanel.tsx
+index 887853b62..0e7860bc4 100644
+--- a/integration/maic/components/edit/AgentsView/AgentRosterPanel.tsx
++++ b/integration/maic/components/edit/AgentsView/AgentRosterPanel.tsx
+@@ -34,6 +34,7 @@ import { useStageStore } from '@/lib/store/stage';
+ import type { GeneratedAgentConfig } from '@/lib/types/stage';
+ import { useAgentRoster } from './useAgentRoster';
+ import { AvatarPicker } from './AvatarPicker';
++import { asset } from '@/lib/base-path';
+ 
+ const PERSONA_MAX = 2000;
+ 
+@@ -68,7 +69,7 @@ function AvatarWithOverlay({ agent, size, ringColor, onPickerOpen }: AvatarWithO
+     >
+       {/* Avatars are static public paths; the roster needs no image optimizer. */}
+       <img
+-        src={agent.avatar}
++        src={asset(agent.avatar)}
+         alt={agent.name}
+         draggable={false}
+         className="rounded-full object-cover"
+diff --git a/integration/maic/components/edit/AgentsView/AvatarPicker.tsx b/integration/maic/components/edit/AgentsView/AvatarPicker.tsx
+index 4c25fe9c9..78aa37084 100644
+--- a/integration/maic/components/edit/AgentsView/AvatarPicker.tsx
++++ b/integration/maic/components/edit/AgentsView/AvatarPicker.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { cn } from '@/lib/utils/cn';
+ import { AGENT_DEFAULT_AVATARS } from '@/lib/constants/agent-defaults';
++import { asset } from '@/lib/base-path';
+ 
+ interface AvatarPickerProps {
+   readonly value: string;
+@@ -28,7 +29,7 @@ export function AvatarPicker({ value, onChange }: AvatarPickerProps) {
+           )}
+         >
+           {/* Static public path — no image optimizer needed. */}
+-          <img src={src} alt="" className="size-full object-cover" draggable={false} />
++          <img src={asset(src)} alt="" className="size-full object-cover" draggable={false} />
+         </button>
+       ))}
+     </div>
+diff --git a/integration/maic/components/edit/SlideNavRail/SlideNavRail.tsx b/integration/maic/components/edit/SlideNavRail/SlideNavRail.tsx
+index 4d20cd0cf..ba2880d4a 100644
+--- a/integration/maic/components/edit/SlideNavRail/SlideNavRail.tsx
++++ b/integration/maic/components/edit/SlideNavRail/SlideNavRail.tsx
+@@ -23,6 +23,7 @@ import { useInWorkbenchPanel } from '@/lib/workbench/panel-context';
+ import type { Scene } from '@/lib/types/stage';
+ import { ThumbItem } from './ThumbItem';
+ import { InsertionZone } from './InsertionZone';
++import { asset } from '@/lib/base-path';
+ 
+ // Collapsed, the rail is a slim edge handle — just wide enough to hold the
+ // expand chevron — rather than a narrow column of page numbers. The point of
+@@ -408,7 +409,7 @@ export function SlideNavRail() {
+             >
+               {/* Desktop client: the Electron title bar already shows the brand icon + name, so the edit rail doesn't repeat it;
+                   returning home is handled by the edit bar's CommandBar back arrow. */}
+-              <img src={brand.logoSrc} alt={brand.productName} className="h-6 w-auto" />
++              <img src={asset(brand.logoSrc)} alt={brand.productName} className="h-6 w-auto" />
+             </button>
+           )}
+         </div>
+diff --git a/integration/maic/components/generation/generation-toolbar.tsx b/integration/maic/components/generation/generation-toolbar.tsx
+index 2298d3563..268543d41 100644
+--- a/integration/maic/components/generation/generation-toolbar.tsx
++++ b/integration/maic/components/generation/generation-toolbar.tsx
+@@ -48,6 +48,7 @@ import {
+ import { dedupeCourseMaterialFiles } from '@/lib/document/course-materials';
+ import type { SelectedCourseMaterial } from '@/lib/types/generation';
+ import { findModelById, modelIdsMatch } from '@/lib/ai/model-aliases';
++import { asset } from '@/lib/base-path';
+ 
+ // ─── Constants ───────────────────────────────────────────────
+ const MAX_COURSE_MATERIAL_SIZE_MB = 50;
+@@ -314,7 +315,7 @@ export function GenerationToolbar({
+                           className={cn('flex items-center gap-1.5', !available && 'opacity-50')}
+                         >
+                           {provider.icon && (
+-                            <img src={provider.icon} alt={provider.name} className="w-3.5 h-3.5" />
++                            <img src={asset(provider.icon)} alt={provider.name} className="w-3.5 h-3.5" />
+                           )}
+                           {provider.name}
+                           {cfg?.isServerConfigured && (
+@@ -875,7 +876,7 @@ function ModelSettingsPopover({
+             >
+               {currentProviderIcon ? (
+                 <img
+-                  src={currentProviderIcon}
++                  src={asset(currentProviderIcon)}
+                   alt={currentProviderName}
+                   className="size-4 shrink-0 rounded-sm"
+                 />
+@@ -929,7 +930,7 @@ function ModelSettingsPopover({
+                     >
+                       {provider.icon ? (
+                         <img
+-                          src={provider.icon}
++                          src={asset(provider.icon)}
+                           alt={provider.name}
+                           className="size-4 shrink-0 rounded-sm"
+                         />
+diff --git a/integration/maic/components/generation/media-popover.tsx b/integration/maic/components/generation/media-popover.tsx
+index 18e40950e..e4c2300d1 100644
+--- a/integration/maic/components/generation/media-popover.tsx
++++ b/integration/maic/components/generation/media-popover.tsx
+@@ -34,6 +34,7 @@ import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
+ import type { ASRProviderId } from '@/lib/audio/types';
+ import { isCustomASRProvider } from '@/lib/audio/types';
+ import type { SettingsSection } from '@/lib/types/settings';
++import { asset } from '@/lib/base-path';
+ 
+ interface MediaPopoverProps {
+   onSettingsOpen: (section: SettingsSection) => void;
+@@ -480,7 +481,7 @@ function GroupedSelect({
+       <SelectTrigger className="h-8 w-full rounded-lg border-border/40 bg-background/80 hover:bg-muted/40 shadow-none text-xs focus:ring-1 focus:ring-ring/30 px-2.5">
+         <span className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+           {selectedGroup?.groupIcon && (
+-            <img src={selectedGroup.groupIcon} alt="" className="size-4 rounded-sm shrink-0" />
++            <img src={asset(selectedGroup.groupIcon)} alt="" className="size-4 rounded-sm shrink-0" />
+           )}
+           <span className="font-medium truncate">{selectedGroup?.groupName}</span>
+           <span className="text-muted-foreground/40">/</span>
+@@ -497,7 +498,7 @@ function GroupedSelect({
+               <SelectLabel className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider">
+                 {group.groupIcon && (
+                   <img
+-                    src={group.groupIcon}
++                    src={asset(group.groupIcon)}
+                     alt=""
+                     className={cn('size-3.5 rounded-sm', !group.available && 'opacity-40')}
+                   />
+diff --git a/integration/maic/components/roundtable/index.tsx b/integration/maic/components/roundtable/index.tsx
+index 99ea2f745..5f092bbd1 100644
+--- a/integration/maic/components/roundtable/index.tsx
++++ b/integration/maic/components/roundtable/index.tsx
+@@ -34,6 +34,7 @@ import { DEFAULT_TEACHER_AVATAR, DEFAULT_USER_AVATAR } from '@/components/roundt
+ import type { DiscussionAction } from '@/lib/types/action';
+ import type { EngineMode, PlaybackView } from '@/lib/playback';
+ import type { Participant } from '@/lib/types/roundtable';
++import { asset } from '@/lib/base-path';
+ 
+ export interface DiscussionRequest {
+   topic: string;
+@@ -1196,7 +1197,7 @@ export function Roundtable({
+ 
+                       <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 overflow-hidden relative z-10 shadow-sm border border-gray-50 dark:border-gray-700">
+                         <img
+-                          src={teacherAvatar}
++                          src={asset(teacherAvatar)}
+                           alt={teacherName}
+                           className="w-full h-full object-cover"
+                         />
+@@ -1233,7 +1234,7 @@ export function Roundtable({
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
+                             <img
+-                              src={teacherAvatar}
++                              src={asset(teacherAvatar)}
+                               alt={teacherName}
+                               className="w-full h-full object-cover"
+                             />
+@@ -1960,7 +1961,7 @@ export function Roundtable({
+                             />
+                             <div className="absolute inset-0.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                               <img
+-                                src={student.avatar}
++                                src={asset(student.avatar)}
+                                 alt={student.name}
+                                 className="w-full h-full"
+                               />
+@@ -1985,7 +1986,7 @@ export function Roundtable({
+                           <div className="flex items-center gap-2">
+                             <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
+                               <img
+-                                src={student.avatar}
++                                src={asset(student.avatar)}
+                                 alt={student.name}
+                                 className="w-full h-full"
+                               />
+diff --git a/integration/maic/components/scene-renderers/pbl/v2/submission.tsx b/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
+index 5122dc0b2..161f73be2 100644
+--- a/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
++++ b/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
+@@ -86,6 +86,7 @@ import {
+   isToleratedReactionStreamError,
+   type StreamStatus,
+ } from './use-instructor-stream';
++import { asset } from '@/lib/base-path';
+ 
+ interface Props {
+   readonly project: PBLProjectV2;
+@@ -870,7 +871,7 @@ function SubmissionViewer({
+           {submission.mimeType?.startsWith('image/') && submission.fileUrl ? (
+             <div className="space-y-3">
+               <img
+-                src={submission.fileUrl}
++                src={asset(submission.fileUrl)}
+                 alt={submission.filename || 'submission'}
+                 className="mx-auto max-h-[60vh] rounded-lg border border-cyan-100/[0.14] object-contain"
+               />
+@@ -1259,7 +1260,7 @@ function SubmissionModal({
+           {hasImage && (
+             <div className="flex items-center gap-2.5 rounded-xl border border-cyan-100/[0.14] bg-slate-700/[0.24] p-2">
+               <img
+-                src={fileUrl}
++                src={asset(fileUrl)}
+                 alt={filename}
+                 className="h-14 w-14 shrink-0 rounded-md border border-cyan-100/[0.14] object-cover"
+               />
+diff --git a/integration/maic/components/settings/index.tsx b/integration/maic/components/settings/index.tsx
+index ab052e6b0..c435fc235 100644
+--- a/integration/maic/components/settings/index.tsx
++++ b/integration/maic/components/settings/index.tsx
+@@ -66,6 +66,7 @@ import { AddAudioProviderDialog, type NewAudioProviderData } from './add-audio-p
+ import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
+ import { resolveASRProviderName, resolveTTSProviderName } from '@/lib/audio/provider-display';
+ import type { SettingsSection, EditingModel } from '@/lib/types/settings';
++import { asset } from '@/lib/base-path';
+ 
+ // ─── Provider List Column (reusable) ───
+ function ProviderListColumn<T extends string>({
+@@ -101,7 +102,7 @@ function ProviderListColumn<T extends string>({
+           >
+             {provider.icon ? (
+               <img
+-                src={provider.icon}
++                src={asset(provider.icon)}
+                 alt={provider.name}
+                 className={cn(
+                   'w-5 h-5 rounded',
+@@ -568,7 +569,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+             <>
+               {selectedProvider.icon ? (
+                 <img
+-                  src={selectedProvider.icon}
++                  src={asset(selectedProvider.icon)}
+                   alt={selectedProvider.name}
+                   className={cn(
+                     'w-8 h-8 rounded',
+@@ -603,7 +604,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {pdfProvider.icon ? (
+               <img
+-                src={pdfProvider.icon}
++                src={asset(pdfProvider.icon)}
+                 alt={pdfProvider.name}
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+@@ -624,7 +625,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {wsProvider.icon ? (
+               <img
+-                src={wsProvider.icon}
++                src={asset(wsProvider.icon)}
+                 alt={wsProvider.name}
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+@@ -647,7 +648,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {imgIcon ? (
+               <img
+-                src={imgIcon}
++                src={asset(imgIcon)}
+                 alt={imgProvider?.name}
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+@@ -670,7 +671,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {vidIcon ? (
+               <img
+-                src={vidIcon}
++                src={asset(vidIcon)}
+                 alt={vidProvider?.name}
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+@@ -692,7 +693,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {ttsIcon ? (
+               <img
+-                src={ttsIcon}
++                src={asset(ttsIcon)}
+                 alt=""
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+@@ -712,7 +713,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
+           <>
+             {asrIcon ? (
+               <img
+-                src={asrIcon}
++                src={asset(asrIcon)}
+                 alt=""
+                 className="w-8 h-8 rounded"
+                 onError={(e) => {
+diff --git a/integration/maic/components/settings/provider-list.tsx b/integration/maic/components/settings/provider-list.tsx
+index 5350e29ae..39ea7cbea 100644
+--- a/integration/maic/components/settings/provider-list.tsx
++++ b/integration/maic/components/settings/provider-list.tsx
+@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import type { ProviderId, ProviderConfig } from '@/lib/ai/providers';
+ import { MONO_LOGO_PROVIDERS } from '@/lib/ai/providers';
++import { asset } from '@/lib/base-path';
+ 
+ interface ProviderWithServerInfo extends ProviderConfig {
+   isServerConfigured?: boolean;
+@@ -52,7 +53,7 @@ export function ProviderList({
+           >
+             {provider.icon ? (
+               <img
+-                src={provider.icon}
++                src={asset(provider.icon)}
+                 alt={getProviderDisplayName(provider)}
+                 className={cn(
+                   'w-5 h-5 rounded',
+diff --git a/integration/maic/components/settings/token-plan-settings.tsx b/integration/maic/components/settings/token-plan-settings.tsx
+index 12c976ca4..c0629895f 100644
+--- a/integration/maic/components/settings/token-plan-settings.tsx
++++ b/integration/maic/components/settings/token-plan-settings.tsx
+@@ -29,6 +29,7 @@ import {
+   type TokenPlanModality,
+ } from '@/lib/config/token-plan-presets';
+ import { applyTokenPlan, removeTokenPlan } from '@/lib/config/apply-token-plan';
++import { asset } from '@/lib/base-path';
+ 
+ const CATEGORY_LABEL_KEYS: Record<PresetCategory, string> = {
+   token_plan: 'settings.presetCategory.tokenPlan',
+@@ -177,7 +178,7 @@ export function TokenPlanSettings() {
+                       )}
+                     >
+                       {preset.icon ? (
+-                        <img src={preset.icon} alt="" className="size-5 shrink-0 rounded" />
++                        <img src={asset(preset.icon)} alt="" className="size-5 shrink-0 rounded" />
+                       ) : (
+                         <span className="size-5 shrink-0 rounded bg-muted" />
+                       )}
+diff --git a/integration/maic/components/slide-renderer/components/element/ImageElement/BaseImageElement.tsx b/integration/maic/components/slide-renderer/components/element/ImageElement/BaseImageElement.tsx
+index b7b0cd21d..6a3b013f0 100644
+--- a/integration/maic/components/slide-renderer/components/element/ImageElement/BaseImageElement.tsx
++++ b/integration/maic/components/slide-renderer/components/element/ImageElement/BaseImageElement.tsx
+@@ -13,6 +13,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { useSceneData } from '@/lib/contexts/scene-context';
+ import type { SlideContent } from '@/lib/types/stage';
+ import { mediaResolutionCanRetry } from '@/lib/media/resolve-media-ref';
++import { asset } from '@/lib/base-path';
+ 
+ export interface BaseImageElementProps {
+   elementInfo: PPTImageElement;
+@@ -117,7 +118,7 @@ export function BaseImageElement({ elementInfo }: BaseImageElementProps) {
+             ) : resolvedSrc ? (
+               <>
+                 <img
+-                  src={resolvedSrc}
++                  src={asset(resolvedSrc)}
+                   draggable={false}
+                   style={{
+                     position: 'absolute',
+diff --git a/integration/maic/components/slide-renderer/components/element/ImageElement/ImageClipHandler.tsx b/integration/maic/components/slide-renderer/components/element/ImageElement/ImageClipHandler.tsx
+index e7cee12cf..7ce4682c8 100644
+--- a/integration/maic/components/slide-renderer/components/element/ImageElement/ImageClipHandler.tsx
++++ b/integration/maic/components/slide-renderer/components/element/ImageElement/ImageClipHandler.tsx
+@@ -6,6 +6,7 @@ import { KEYS } from '@/configs/hotkey';
+ import { OperateResizeHandlers } from '@/lib/types/edit';
+ import type { ImageClipedEmitData } from '@/lib/types/edit';
+ import type { ImageClipDataRange, ImageElementClip } from '@openmaic/dsl';
++import { asset } from '@/lib/base-path';
+ 
+ export interface ImageClipHandlerProps {
+   src: string;
+@@ -510,7 +511,7 @@ export function ImageClipHandler({
+     >
+       <img
+         className="bottom-img absolute top-0 left-0 w-full h-full opacity-50"
+-        src={src}
++        src={asset(src)}
+         draggable={false}
+         alt=""
+         style={bottomImgPositionStyle}
+@@ -525,7 +526,7 @@ export function ImageClipHandler({
+       >
+         <img
+           className="top-img absolute w-full h-full"
+-          src={src}
++          src={asset(src)}
+           draggable={false}
+           alt=""
+           style={topImgPositionStyle}
+diff --git a/integration/maic/components/slide-renderer/components/element/ImageElement/index.tsx b/integration/maic/components/slide-renderer/components/element/ImageElement/index.tsx
+index f53c12f50..59f665eac 100644
+--- a/integration/maic/components/slide-renderer/components/element/ImageElement/index.tsx
++++ b/integration/maic/components/slide-renderer/components/element/ImageElement/index.tsx
+@@ -18,6 +18,7 @@ import { useSceneData } from '@/lib/contexts/scene-context';
+ import type { SlideContent } from '@/lib/types/stage';
+ import { mediaRetryTarget, retryMediaTask } from '@/lib/media/media-orchestrator';
+ import { mediaResolutionCanRetry } from '@/lib/media/resolve-media-ref';
++import { asset } from '@/lib/base-path';
+ 
+ export interface ImageElementProps {
+   elementInfo: PPTImageElement;
+@@ -181,7 +182,7 @@ export function ImageElement({ elementInfo, selectElement }: ImageElementProps)
+                 </div>
+               ) : resolvedSrc ? (
+                 <img
+-                  src={resolvedSrc}
++                  src={asset(resolvedSrc)}
+                   draggable={false}
+                   style={{
+                     position: 'absolute',
+diff --git a/integration/maic/components/slide-renderer/components/element/VideoElement/index.tsx b/integration/maic/components/slide-renderer/components/element/VideoElement/index.tsx
+index a3007a1f9..5ce9870a0 100644
+--- a/integration/maic/components/slide-renderer/components/element/VideoElement/index.tsx
++++ b/integration/maic/components/slide-renderer/components/element/VideoElement/index.tsx
+@@ -11,6 +11,7 @@ import { useSceneData } from '@/lib/contexts/scene-context';
+ import type { SlideContent } from '@/lib/types/stage';
+ import { mediaRetryTarget, retryMediaTask } from '@/lib/media/media-orchestrator';
+ import { useResolvedVideoMedia } from './useResolvedVideoMedia';
++import { asset } from '@/lib/base-path';
+ 
+ export interface VideoElementProps {
+   elementInfo: PPTVideoElement;
+@@ -92,7 +93,7 @@ export function VideoElement({ elementInfo, selectElement }: VideoElementProps)
+             <img
+               className="w-full h-full"
+               style={{ objectFit: 'contain' }}
+-              src={resolvedPoster}
++              src={asset(resolvedPoster)}
+               alt=""
+               draggable={false}
+               onDragStart={(e) => e.preventDefault()}
+diff --git a/integration/maic/components/stage/scene-sidebar.tsx b/integration/maic/components/stage/scene-sidebar.tsx
+index f1cee6fa4..38db28230 100644
+--- a/integration/maic/components/stage/scene-sidebar.tsx
++++ b/integration/maic/components/stage/scene-sidebar.tsx
+@@ -22,6 +22,7 @@ import { useBrand } from '@/lib/brand/brand-context';
+ import { useNearViewport } from '@/lib/hooks/use-near-viewport';
+ import type { SceneType, SlideContent, InteractiveContent } from '@/lib/types/stage';
+ import { PENDING_SCENE_ID } from '@/lib/store/stage';
++import { asset } from '@/lib/base-path';
+ 
+ interface SceneSidebarProps {
+   readonly collapsed: boolean;
+@@ -133,7 +134,7 @@ export function SceneSidebar({
+             className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 -mx-1.5 py-1 -my-1 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 active:scale-[0.97] transition-all duration-150"
+             title={t('generation.backToHome')}
+           >
+-            <img src={brand.logoSrc} alt={brand.productName} className="h-6" />
++            <img src={asset(brand.logoSrc)} alt={brand.productName} className="h-6" />
+           </button>
+           <button
+             onClick={() => onCollapseChange(true)}
+diff --git a/integration/maic/components/ui/avatar-display.tsx b/integration/maic/components/ui/avatar-display.tsx
+index 7decd2feb..243e43a9e 100644
+--- a/integration/maic/components/ui/avatar-display.tsx
++++ b/integration/maic/components/ui/avatar-display.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import { cn } from '@/lib/utils';
++import { asset } from '@/lib/base-path';
+ 
+ interface AvatarDisplayProps {
+   readonly src: string;
+@@ -13,7 +14,7 @@ export function AvatarDisplay({ src, alt, className }: AvatarDisplayProps) {
+ 
+   if (isUrl) {
+     return (
+-      <img src={src} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
++      <img src={asset(src)} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
+     );
+   }
+ 
+diff --git a/integration/maic/components/user-profile.tsx b/integration/maic/components/user-profile.tsx
+index 2038f2890..375f8670a 100644
+--- a/integration/maic/components/user-profile.tsx
++++ b/integration/maic/components/user-profile.tsx
+@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
+ import { useI18n } from '@/lib/hooks/use-i18n';
+ import { toast } from 'sonner';
+ import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
++import { asset } from '@/lib/base-path';
+ 
+ /** Check whether avatar is a custom upload (data-URL) */
+ function isCustomAvatar(avatar: string) {
+@@ -120,7 +121,7 @@ export function UserProfileCard() {
+           className="shrink-0 group/avatar relative cursor-pointer"
+         >
+           <div className="size-11 rounded-full bg-gray-50 dark:bg-gray-800 overflow-hidden ring-2 ring-violet-300/50 dark:ring-violet-600/40 group-hover/avatar:ring-violet-400 dark:group-hover/avatar:ring-violet-500 transition-all">
+-            <img src={avatar} alt="" className="size-full object-cover" />
++            <img src={asset(avatar)} alt="" className="size-full object-cover" />
+           </div>
+           <div className="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-white dark:bg-slate-800 border border-muted/60 flex items-center justify-center">
+             <ChevronDown
+@@ -193,7 +194,7 @@ export function UserProfileCard() {
+                       : 'hover:ring-1 hover:ring-muted-foreground/30',
+                   )}
+                 >
+-                  <img src={url} alt="" className="size-full" />
++                  <img src={asset(url)} alt="" className="size-full" />
+                 </button>
+               ))}
+ 
+diff --git a/integration/maic/components/workbench/workspace/WorkspaceHome.tsx b/integration/maic/components/workbench/workspace/WorkspaceHome.tsx
+index cb6e28912..6e71d9edc 100644
+--- a/integration/maic/components/workbench/workspace/WorkspaceHome.tsx
++++ b/integration/maic/components/workbench/workspace/WorkspaceHome.tsx
+@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils/cn';
+ import { ProBadge } from '@/components/workbench/ProBadge';
+ import { ProLaunchPanel } from '@/components/workbench/ProLaunchPanel';
+ import type { CourseMentionSource } from '@/lib/workbench/course-mention';
++import { asset } from '@/lib/base-path';
+ 
+ export function WorkspaceHome({
+   composerReset,
+@@ -82,7 +83,7 @@ export function WorkspaceHome({
+           plain button, not a second ProBadge: two elements answering to
+           `pro-mode-exit` would be one testid too many. */}
+       <div className="flex h-12 shrink-0 items-center justify-between px-4 md:hidden">
+-        <img src={brand.logoSrc} alt={brand.productName} className="h-5 w-auto" />
++        <img src={asset(brand.logoSrc)} alt={brand.productName} className="h-5 w-auto" />
+         <button
+           type="button"
+           data-testid="pro-workspace-exit-compact"
+@@ -128,7 +129,7 @@ export function WorkspaceHome({
+                 // A brand whose mark carries no wordmark gets the product name
+                 // beside it, exactly as the classic hero does.
+                 <div className="flex items-center gap-3">
+-                  <img src={brand.markSrc} alt={brand.productName} className="size-11 md:size-14" />
++                  <img src={asset(brand.markSrc)} alt={brand.productName} className="size-11 md:size-14" />
+                   <span
+                     className="text-xl font-semibold tracking-tight md:text-2xl"
+                     style={{ color: brand.themeColor }}
+@@ -138,7 +139,7 @@ export function WorkspaceHome({
+                 </div>
+               ) : (
+                 <img
+-                  src={brand.logoSrc}
++                  src={asset(brand.logoSrc)}
+                   alt={brand.productName}
+                   data-testid="pro-workspace-hero-logo"
+                   className="ws-hero-logo"
+diff --git a/integration/maic/components/workbench/workspace/WorkspaceRail.tsx b/integration/maic/components/workbench/workspace/WorkspaceRail.tsx
+index 72251bb1c..d8ba0b95d 100644
+--- a/integration/maic/components/workbench/workspace/WorkspaceRail.tsx
++++ b/integration/maic/components/workbench/workspace/WorkspaceRail.tsx
+@@ -166,6 +166,7 @@ import {
+   workspaceFoldersAvailable,
+   WorkspaceFolderNameError,
+ } from './workspace-folder-seam';
++import { asset } from '@/lib/base-path';
+ 
+ type Discovery = ReturnType<typeof useHomeDiscovery>;
+ type StageListItem = Discovery['classrooms'][number];
+@@ -846,7 +847,7 @@ export function WorkspaceRail({
+             never one control wearing both meanings. */}
+         <HomeLink testId="pro-nav-home" onGoHome={onGoHome} className="-ml-1.5 px-1.5 py-1">
+           <img
+-            src={brand.logoSrc}
++            src={asset(brand.logoSrc)}
+             alt=""
+             aria-hidden="true"
+             className="h-[21px] w-auto max-w-[110px] shrink-0"
+-- 
+2.51.0.windows.2
+

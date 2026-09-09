@@ -6,6 +6,35 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — The OpenMAIC integration is off `main`, to be designed again
+  from a clean import.** `integration/maic` (2,832 files) and the 97 commits
+  that built around it are removed from `main`. Nothing is discarded: `main` as
+  it stood is kept whole on **`archive/main-2026-09-09`** (`5c6ed4295`), and the
+  work is documented for a rebuild in `docs/maic-fork-export/` — 22 subtree
+  patches plus 7 deploy patches, each with the commit message that explains it
+  (`why.md`, `why-deploy.md`).
+
+  Two things were carried onto the new `main` rather than left in the archive.
+  `deploy/openmaic-patches/` (7 files) holds instruments a rebuild will *run*,
+  not notes it will read — chiefly `th-TH.partial.json`, the **source** of the
+  Thai translation (1,862 of 1,862 keys) from which `th-TH.json` is generated;
+  without it an incremental translation would have to be re-done against the
+  generated file, which `build_th_locale.py` exists to prevent. And
+  `docs/maic-fork-export/` itself, so the record is on the branch people work
+  on instead of a side branch someone has to remember.
+
+  Why now: the integration was never covered by CI — no workflow matches
+  `integration/**` or `deploy/**`, though OpenMAIC ships its own `vitest` and
+  `check-i18n-keys` — so its state was never knowable. Removing it makes that a
+  decision to redo properly rather than a doubt to carry. The pending upstream
+  sync is unaffected either way: the conflict surface against v1.6.6 measures
+  81 files with the integration and 81 without it, because those conflicts come
+  from the Thai i18n and learning-account work, not from the subtree.
+
+  `docs/maic-fork-export/README.md` is corrected here too — its "What is still
+  not here" section described five files as live code in the repository, which
+  stopped being true with this change, and now points at the archive instead.
+
 - **Fork:** https://github.com/khunmax2/Upstream_Deeptutor
 - **Upstream:** https://github.com/HKUDS/DeepTutor
 - **Upstream baseline:** v1.4.6 (commit `7ac3a3ba`)

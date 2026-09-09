@@ -1,0 +1,77 @@
+From 273cbb4fd070f5275fa455fa54ea83cf5fae6630 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 15:43:24 +0700
+Subject: [PATCH] fix(maic): close the spaces the brand substitution left in
+ ja/th/zh
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Swapping a Latin product name for a native-script phrase left the space that
+had separated the Latin run from the text around it. Thai, Japanese and
+Chinese do not space words, so 'ให้ เอเจนต์', 'エージェント に' and '智能体 生成'
+each read as a break the source does not have.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ integration/maic/lib/i18n/locales/ja-JP.json | 2 +-
+ integration/maic/lib/i18n/locales/th-TH.json | 2 +-
+ integration/maic/lib/i18n/locales/zh-CN.json | 2 +-
+ integration/maic/lib/i18n/locales/zh-TW.json | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/integration/maic/lib/i18n/locales/ja-JP.json b/integration/maic/lib/i18n/locales/ja-JP.json
+index 72d23d94d..a8ed92ece 100644
+--- a/integration/maic/lib/i18n/locales/ja-JP.json
++++ b/integration/maic/lib/i18n/locales/ja-JP.json
+@@ -530,7 +530,7 @@
+       "panRight": "右にスクロール",
+       "collapseAxis": "軸に折りたたむ",
+       "expandTrack": "トラックを展開",
+-      "emptyHint": "上のアクションを軸にドラッグして開始するか、AI エージェント にナレーションを生成させましょう。",
++      "emptyHint": "上のアクションを軸にドラッグして開始するか、AI エージェントにナレーションを生成させましょう。",
+       "speechPlaceholder": "このナレーションを入力…",
+       "reorder": "ドラッグして並べ替え",
+       "moveLeft": "左へ移動",
+diff --git a/integration/maic/lib/i18n/locales/th-TH.json b/integration/maic/lib/i18n/locales/th-TH.json
+index da02bf2c0..62b4c3551 100644
+--- a/integration/maic/lib/i18n/locales/th-TH.json
++++ b/integration/maic/lib/i18n/locales/th-TH.json
+@@ -530,7 +530,7 @@
+       "panRight": "เลื่อนไปทางขวา",
+       "collapseAxis": "ย่อเหลือแกนเวลา",
+       "expandTrack": "ขยายแทร็ก",
+-      "emptyHint": "ลากการกระทำมาวางบนแกนเวลาเพื่อเริ่ม หรือให้ เอเจนต์ AI สร้างคำบรรยายให้",
++      "emptyHint": "ลากการกระทำมาวางบนแกนเวลาเพื่อเริ่ม หรือให้เอเจนต์ AI สร้างคำบรรยายให้",
+       "speechPlaceholder": "ใส่คำบรรยายบรรทัดนี้…",
+       "reorder": "ลากเพื่อจัดลำดับ",
+       "moveLeft": "เลื่อนไปทางซ้าย",
+diff --git a/integration/maic/lib/i18n/locales/zh-CN.json b/integration/maic/lib/i18n/locales/zh-CN.json
+index 4ef282d89..e4d446a87 100644
+--- a/integration/maic/lib/i18n/locales/zh-CN.json
++++ b/integration/maic/lib/i18n/locales/zh-CN.json
+@@ -530,7 +530,7 @@
+       "panRight": "右移视口",
+       "collapseAxis": "收起为轴线",
+       "expandTrack": "展开轨道",
+-      "emptyHint": "把上方的动作拖到轴上开始编排，或让 AI 智能体 生成讲解。",
++      "emptyHint": "把上方的动作拖到轴上开始编排，或让 AI 智能体生成讲解。",
+       "speechPlaceholder": "输入这一句讲解…",
+       "reorder": "拖动重排",
+       "moveLeft": "左移",
+diff --git a/integration/maic/lib/i18n/locales/zh-TW.json b/integration/maic/lib/i18n/locales/zh-TW.json
+index 566244e33..eb6c16233 100644
+--- a/integration/maic/lib/i18n/locales/zh-TW.json
++++ b/integration/maic/lib/i18n/locales/zh-TW.json
+@@ -458,7 +458,7 @@
+       "panRight": "向右平移",
+       "collapseAxis": "收合至時間軸",
+       "expandTrack": "展開音軌",
+-      "emptyHint": "將動作拖曳至時間軸以開始，或讓 AI 智能體 生成旁白。",
++      "emptyHint": "將動作拖曳至時間軸以開始，或讓 AI 智能體生成旁白。",
+       "speechPlaceholder": "輸入此旁白內容…",
+       "reorder": "拖曳以重新排序",
+       "moveLeft": "左移",
+-- 
+2.51.0.windows.2
+

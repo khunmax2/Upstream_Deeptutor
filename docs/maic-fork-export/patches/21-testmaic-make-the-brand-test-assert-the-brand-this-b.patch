@@ -1,0 +1,82 @@
+From 9c61f5577416554634b72714a5b9d569c0916269 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Tue, 8 Sep 2026 03:31:57 +0700
+Subject: [PATCH] test(maic): make the brand test assert the brand this build
+ actually ships
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It has been red since d766fdb2 rewrote brand-config.ts around our identity: the
+test still expected OpenMAIC, /openmaic-mark.png and #722ed1. Nobody noticed
+because this repository's CI does not run the studio's tests — integration/maic
+is outside the workflow's paths: filter — so the only gate is running them by
+hand, which is how this surfaced.
+
+Also covers the new behaviour: both /public assets pick up the prefix when the
+app is served under a subpath, which is the case where a missed logo is the
+most visible thing on the page.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+---
+ .../maic/tests/lib/brand/brand-config.test.ts | 41 +++++++++++++++----
+ 1 file changed, 34 insertions(+), 7 deletions(-)
+
+diff --git a/integration/maic/tests/lib/brand/brand-config.test.ts b/integration/maic/tests/lib/brand/brand-config.test.ts
+index db3cbb535..5a05e2f69 100644
+--- a/integration/maic/tests/lib/brand/brand-config.test.ts
++++ b/integration/maic/tests/lib/brand/brand-config.test.ts
+@@ -1,16 +1,43 @@
+-import { describe, expect, it } from 'vitest';
++import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { DEFAULT_BRAND } from '@/lib/brand/brand-config';
+ 
++/**
++ * This file asserted the upstream identity — `OpenMAIC`, `/openmaic-mark.png`,
++ * `#722ed1` — and kept asserting it after the fork replaced those defaults, so
++ * it has been red since the de-branding change rather than guarding anything.
++ * It now asserts what this build actually ships.
++ */
++
++const originalEnv = process.env.NEXT_PUBLIC_BASE_PATH;
++
++afterEach(() => {
++  if (originalEnv === undefined) delete process.env.NEXT_PUBLIC_BASE_PATH;
++  else process.env.NEXT_PUBLIC_BASE_PATH = originalEnv;
++});
++
+ describe('DEFAULT_BRAND (single-brand build)', () => {
+-  it('uses the original product identity for full chrome', () => {
+-    expect(DEFAULT_BRAND.productName).toBe('OpenMAIC');
+-    expect(DEFAULT_BRAND.shortName).toBe('OpenMAIC');
+-    expect(DEFAULT_BRAND.markSrc).toBe('/openmaic-mark.png');
+-    expect(DEFAULT_BRAND.themeColor).toBe('#722ed1');
++  it('is the host product, not the upstream one', () => {
++    expect(DEFAULT_BRAND.productName).toBe('DeepWitya');
++    expect(DEFAULT_BRAND.shortName).toBe('DeepWitya');
++    expect(DEFAULT_BRAND.markSrc).toBe('/brand-mark.png');
++    expect(DEFAULT_BRAND.themeColor).toBe('#b0501e');
++    expect(DEFAULT_BRAND.tagline).toBe('Agent-Native Learning');
+   });
+ 
+   it('marks its horizontal logo as already containing the wordmark', () => {
+     expect(DEFAULT_BRAND.logoHasWordmark).toBe(true);
+-    expect(DEFAULT_BRAND.logoSrc).toBe('/logo-horizontal.png');
++    expect(DEFAULT_BRAND.logoSrc).toBe('/brand-wordmark.png');
++  });
++
++  it('prefixes both assets when the app is served under a subpath', async () => {
++    // Root-absolute /public paths are the one thing Next's basePath does not
++    // prefix, and the logo is the most visible casualty when it is missed.
++    vi.resetModules();
++    process.env.NEXT_PUBLIC_BASE_PATH = '/course-studio-app';
++    const { DEFAULT_BRAND: prefixed } = await import('@/lib/brand/brand-config');
++
++    expect(prefixed.logoSrc).toBe('/course-studio-app/brand-wordmark.png');
++    expect(prefixed.markSrc).toBe('/course-studio-app/brand-mark.png');
++    expect(prefixed.productName).toBe('DeepWitya'); // not a path; untouched
+   });
+ });
+-- 
+2.51.0.windows.2
+

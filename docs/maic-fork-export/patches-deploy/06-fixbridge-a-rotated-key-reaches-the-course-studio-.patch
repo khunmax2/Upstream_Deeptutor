@@ -1,0 +1,899 @@
+From 2b95d2f0b2b3c9c920a62db35c5a17ea23e8c22b Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 20:11:11 +0700
+Subject: [PATCH] fix(bridge): a rotated key reaches the course studio without
+ a shell
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The provider bridge was a script under deploy/ plus a container restart. Both
+are things a user cannot do, and the person whose key expires is a user with a
+settings page, not an operator with SSH. Their key runs out, they paste a new
+one into DeepTutor, and the embedded studio keeps using the dead one — alive and
+broken at the same time.
+
+The mapping moves out of build_server_providers.py into
+deeptutor/services/config/openmaic_bridge.py, which ships inside the image
+(deploy/ does not), and ModelCatalogService.save() calls it. save() is the one
+place every settings path funnels through, so the settings page, the connection
+tester and the partner flows are covered by hooking it once. Best-effort by
+construction: an unmappable provider or a read-only data directory is logged and
+skipped rather than costing the user the settings they just saved.
+DEEPTUTOR_OPENMAIC_BRIDGE=0 disables it.
+
+OpenMAIC's getConfig() cached the parsed YAML for the life of the process, which
+is the wrong shape for a read-only mount another process rewrites. It is now
+keyed on mtime + size; a statSync per call is nothing beside the LLM round trip
+that follows.
+
+The script stays as a thin CLI over the same module — one implementation, two
+entry points — for a first bring-up and for --dry-run.
+
+Also: the bridge's image and video binding tables were empty, so a configured
+image provider was skipped entirely. Filled in, including openrouter, which
+answers the same /images/generations contract openai-image calls and returns
+data[0].b64_json as that adapter expects — verified against the real endpoint at
+1024x576, the 16:9 size slides ask for.
+
+Verified with no restart: change the model, save, and /api/server-providers in
+the studio returns it, while docker inspect reports restarts: 0 and the log
+shows three "Loaded (server-providers.yml)" lines in one process.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ CHANGES.md                                    |  45 +++
+ deeptutor/services/config/model_catalog.py    |  39 ++
+ deeptutor/services/config/openmaic_bridge.py  | 347 ++++++++++++++++++
+ deploy/OPENMAIC_RUNBOOK.md                    |  16 +-
+ .../build_server_providers.py                 | 289 +--------------
+ .../check_openmaic_contract.py                |   1 -
+ .../export_upstream_patches.py                |   1 -
+ 7 files changed, 458 insertions(+), 280 deletions(-)
+ create mode 100644 deeptutor/services/config/openmaic_bridge.py
+
+diff --git a/CHANGES.md b/CHANGES.md
+index c09e3a307..7916f7334 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -17,6 +17,51 @@ upstream.
+ 
+ ---
+ 
++## A rotated key now reaches the course studio on its own — 2026-09-07
++
++The provider bridge was a script under `deploy/` plus a container restart. Both
++halves of that are things a user cannot do, and the person whose API key expires
++is a user with a settings page, not an operator with a shell. Their key runs
++out, they paste a new one into DeepTutor, and the embedded studio keeps using
++the dead one until somebody with SSH notices. The system is alive and broken at
++the same time.
++
++**The file is now written by the app.** The mapping moved out of
++`build_server_providers.py` into `deeptutor/services/config/openmaic_bridge.py`,
++which ships inside the image — `deploy/` does not — and `ModelCatalogService.save()`
++calls it. That method is the one place every settings path funnels through, so
++the settings page, the connection tester and the partner flows are all covered
++by hooking it once. It is best-effort by construction: a provider that maps to
++nothing, or a read-only data directory, is logged and skipped rather than
++costing the user the settings they just saved. `DEEPTUTOR_OPENMAIC_BRIDGE=0`
++turns it off for a deployment with no studio.
++
++**And OpenMAIC re-reads it.** `getConfig()` cached the parsed YAML for the life
++of the process, which is the wrong shape for a read-only mount that something
++else rewrites. It is now keyed on the file's mtime and size. A `statSync` per
++call is nothing beside the LLM round trip that follows, and a stale key costs
++far more.
++
++The script survives as a thin CLI over the same module — one implementation, two
++entry points — for a first bring-up before the app has saved anything, and for
++reading the mapping decisions with `--dry-run`.
++
++Verified end to end with no restart: change the model in DeepTutor, call `save()`,
++and `/api/server-providers` inside the studio returns the new model — while
++`docker inspect` reports `restarts: 0` and the log shows three separate
++"Loaded (server-providers.yml)" lines in one process, one per change.
++
++**Also carried in this round.** The bridge's `image` and `video` binding tables
++were empty, so a configured image provider was skipped with "binding has no
++OpenMAIC id" — image generation could not be bridged at all. Both are filled in
++now, including `openrouter`, which turned out to answer the same
++`/images/generations` contract OpenMAIC's `openai-image` adapter calls and to
++return `data[0].b64_json` exactly as it expects. Confirmed against the real
++endpoint at 1024x576, the 16:9 size slides ask for; only very wide sizes are
++refused and OpenMAIC never requests one. Worth noting because DeepTutor's own
++image path uses `/chat/completions` with `modalities: ["image","text"]`, which
++narrows its model choice considerably — the studio is not bound by that.
++
+ ## Server TTS can name its own voices, and the editor speaks Thai — 2026-09-07
+ 
+ Two things the UAT reported rather than fixed, both closed.
+diff --git a/deeptutor/services/config/model_catalog.py b/deeptutor/services/config/model_catalog.py
+index 449af49ca..bebc7126f 100644
+--- a/deeptutor/services/config/model_catalog.py
++++ b/deeptutor/services/config/model_catalog.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ from collections.abc import Callable
+ from copy import deepcopy
+ import json
++import logging
+ import os
+ from pathlib import Path
+ import tempfile
+@@ -244,6 +245,9 @@ def _default_catalog() -> dict[str, Any]:
+     }
+ 
+ 
++logger = logging.getLogger(__name__)
++
++
+ class ModelCatalogService:
+     _instances: dict[str, "ModelCatalogService"] = {}
+ 
+@@ -306,8 +310,43 @@ class ModelCatalogService:
+                 os.replace(temp_path, self.path)
+             finally:
+                 temp_path.unlink(missing_ok=True)
++            self._refresh_openmaic_providers(normalized)
+             return normalized
+ 
++    def _refresh_openmaic_providers(self, catalog: dict[str, Any]) -> None:
++        """Mirror the provider settings into OpenMAIC's `server-providers.yml`.
++
++        The embedded course studio is a separate service with its own provider
++        configuration, and asking a user to type the same key twice is the seam
++        they notice first. This closes it from the side that owns the settings:
++        the file is rewritten on every save, and OpenMAIC re-reads it when the
++        mtime changes, so a rotated key takes effect without a restart or a
++        shell on the host.
++
++        Deliberately silent about failure beyond a log line. A provider that
++        does not map to OpenMAIC, or a read-only data directory, must never
++        cost the user the settings they just saved.
++        """
++        if os.environ.get("DEEPTUTOR_OPENMAIC_BRIDGE", "").strip().lower() in {
++            "0",
++            "false",
++            "off",
++            "no",
++        }:
++            return
++        try:
++            from deeptutor.services.config.openmaic_bridge import refresh_server_providers
++
++            out = self.path.parent.parent / "openmaic" / "server-providers.yml"
++            alias = os.environ.get("DEEPTUTOR_OPENMAIC_HOST_ALIAS", "host.docker.internal")
++            wrote, notes = refresh_server_providers(catalog, out, alias)
++            for note in notes:
++                logger.debug("openmaic bridge: %s", note)
++            if wrote:
++                logger.info("openmaic bridge: refreshed %s", out)
++        except Exception as exc:  # noqa: BLE001 - never break a settings save
++            logger.warning("openmaic bridge: skipped (%s)", exc)
++
+     def update(self, mutator: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
+         with self._lock:
+             catalog = self.load()
+diff --git a/deeptutor/services/config/openmaic_bridge.py b/deeptutor/services/config/openmaic_bridge.py
+new file mode 100644
+index 000000000..f98d3a165
+--- /dev/null
++++ b/deeptutor/services/config/openmaic_bridge.py
+@@ -0,0 +1,347 @@
++#!/usr/bin/env python3
++"""Write OpenMAIC's `server-providers.yml` from DeepTutor's own provider settings.
++
++Two applications side by side, each with its own provider configuration, is the
++seam a customer notices first: nobody expects to type the same API key twice.
++Closing it needed no patch. OpenMAIC already reads a server-side
++`server-providers.yml` covering `providers` (LLM), `tts`, `asr`, `pdf`, `image`,
++`video` and `web-search` — its own `docker-compose.yml` even carries the mount
++line, commented out. What was missing was something to write the file.
++
++    DeepTutor  data/user/settings/model_catalog.json
++                        │  this script
++                        ▼
++    OpenMAIC   /app/server-providers.yml   (read-only mount)
++
++Three things this has to get right, and each was learned the hard way:
++
++**Container addresses.** A URL that works in DeepTutor's settings page may be
++`http://localhost:11434`, and inside OpenMAIC's container `localhost` is that
++container. Every rewritten URL is checked and loopback is replaced with
++`host.docker.internal`, which the compose file maps. Getting this wrong produces
++"connection refused" from a service that is plainly running.
++
++**Names differ.** DeepTutor calls it `gemini`, `stt` and `search`; OpenMAIC calls
++the same things `google`, `asr` and `web-search`. An unmapped name is skipped and
++reported rather than guessed at, because a provider id OpenMAIC does not know is
++silently ignored by its loader — a wrong guess would look exactly like success.
++
++**The output holds secrets.** It is written under `data/`, which is gitignored,
++and nothing here prints a key: `--dry-run` shows the file with every credential
++masked, which is what makes it safe to paste into a bug report.
++
++    python build_server_providers.py --dry-run     # show it, keys masked
++    python build_server_providers.py               # write it
++"""
++
++from __future__ import annotations
++
++import json
++import os
++from pathlib import Path
++
++# DeepTutor's `binding` → the provider id OpenMAIC knows, **per section**.
++#
++# Not one table, because the same vendor is named differently in each capability:
++# OpenAI is `openai` for LLM, `openai-tts` for speech and `openai-whisper` for
++# recognition. A first version used a single table and emitted `openai` in all
++# three; OpenMAIC's loader ignores ids it does not recognise, so the TTS and ASR
++# entries would have been dropped in silence and the file would have looked
++# entirely correct. Verified against provider-config.ts's own env maps.
++#
++# Anything absent here is reported and skipped rather than guessed at.
++BINDING_TO_PROVIDER: dict[str, dict[str, str]] = {
++    "providers": {
++        "openai": "openai",
++        "azure": "azure",
++        "azure_openai": "azure",
++        "anthropic": "anthropic",
++        "claude": "anthropic",
++        "gemini": "google",
++        "google": "google",
++        "deepseek": "deepseek",
++        "qwen": "qwen",
++        "dashscope": "qwen",
++        "kimi": "kimi",
++        "moonshot": "kimi",
++        "minimax": "minimax",
++        "glm": "glm",
++        "zhipu": "glm",
++        "siliconflow": "siliconflow",
++        "doubao": "doubao",
++        "volcengine": "doubao",
++        "ollama": "ollama",
++        "lemonade": "lemonade",
++        "atlascloud": "atlascloud",
++        # OpenAI-compatible relays have no id of their own; they are `openai`
++        # with a different base URL, which is exactly how OpenMAIC models them.
++        "groq": "openai",
++        "custom": "openai",
++    },
++    "tts": {
++        "openai": "openai-tts",
++        "custom": "openai-tts",
++        "groq": "openai-tts",
++        "azure": "azure-tts",
++        "glm": "glm-tts",
++        "qwen": "qwen-tts",
++        "doubao": "doubao-tts",
++        "elevenlabs": "elevenlabs-tts",
++        "minimax": "minimax-tts",
++        "lemonade": "lemonade-tts",
++        "voxcpm": "voxcpm-tts",
++    },
++    "asr": {
++        "openai": "openai-whisper",
++        "custom": "openai-whisper",
++        "groq": "openai-whisper",
++        "whisper": "openai-whisper",
++        "azure": "azure-asr",
++        "qwen": "qwen-asr",
++        "funasr": "funasr-asr",
++        "lemonade": "lemonade-asr",
++    },
++    "web-search": {
++        "tavily": "tavily",
++        "bocha": "bocha",
++        "brave": "brave",
++        "baidu": "baidu",
++        "searxng": "searxng",
++        "minimax": "minimax",
++        "doubao": "doubao",
++        "claude": "claude",
++        "anthropic": "claude",
++    },
++    "pdf": {
++        "mineru": "mineru",
++        "mineru-cloud": "mineru-cloud",
++        "unpdf": "unpdf",
++    },
++    # OpenMAIC's image and video sections exist; no DeepTutor binding has been
++    # seen for them yet, so they stay empty rather than being guessed at.
++    "image": {
++        # Google's image models are `nano-banana` here, and they speak the
++        # NATIVE API (`/v1beta/models/{model}:generateContent`) — not the
++        # OpenAI-compatible path the LLM profile uses. A base URL ending in
++        # `/openai` would 404 every call, so the profile must point at the
++        # bare host.
++        "gemini": "nano-banana",
++        "google": "nano-banana",
++        "nano-banana": "nano-banana",
++        "openai": "openai-image",
++        # OpenRouter answers the same /images/generations contract and returns
++        # data[0].b64_json, which is exactly what the openai-image adapter
++        # reads. Verified against the real endpoint at 1024x576 (the 16:9 slide
++        # size); only very wide sizes like 1792x1024 are refused, and OpenMAIC
++        # caps its width at 1024 so it never asks for one.
++        "openrouter": "openai-image",
++        "qwen": "qwen-image",
++        "dashscope": "qwen-image",
++        "minimax": "minimax-image",
++        "grok": "grok-image",
++        "xai": "grok-image",
++        "comfyui": "comfyui-image",
++    },
++    "video": {
++        "minimax": "minimax-video",
++        "grok": "grok-video",
++        "xai": "grok-video",
++    },
++}
++
++# DeepTutor service → OpenMAIC YAML section. `embedding` and `task` have no
++# counterpart: OpenMAIC does its own retrieval and has no second model slot.
++SERVICE_TO_SECTION = {
++    "llm": "providers",
++    "tts": "tts",
++    "stt": "asr",
++    "search": "web-search",
++    "imagegen": "image",
++    "videogen": "video",
++}
++
++LOOPBACK = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
++
++
++def container_reachable(url: str, replacement: str) -> tuple[str, bool]:
++    """Point a host-loopback URL at the host as the container sees it."""
++    if not url:
++        return url, False
++    for host in LOOPBACK:
++        for prefix in (f"//{host}:", f"//{host}/"):
++            if prefix in url:
++                return url.replace(host, replacement, 1), True
++        if url.endswith(f"//{host}"):
++            return url.replace(host, replacement, 1), True
++    return url, False
++
++
++def active_profile(service: dict) -> dict | None:
++    """The profile the operator actually selected, not merely the first one."""
++    profiles = service.get("profiles") or []
++    if not profiles:
++        return None
++    wanted = service.get("active_profile_id")
++    for profile in profiles:
++        if profile.get("id") == wanted:
++            return profile
++    return profiles[0]
++
++
++def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
++    sections: dict[str, dict] = {}
++    notes: list[str] = []
++
++    for service_name, service in (catalog.get("services") or {}).items():
++        section = SERVICE_TO_SECTION.get(service_name)
++        if section is None:
++            if (service.get("profiles") or []) and service_name not in ("embedding", "task"):
++                notes.append(f"skipped service '{service_name}' — OpenMAIC has no section for it")
++            continue
++
++        profile = active_profile(service)
++        if not profile:
++            continue
++
++        binding = (profile.get("binding") or profile.get("provider") or "").strip().lower()
++        raw_base = (profile.get("base_url") or "").strip()
++
++        # A vendor's own id and its OpenAI-compatible shim are different
++        # protocols wearing the same name. DeepTutor talks to Gemini through
++        # `.../v1beta/openai/`; OpenMAIC's `google` provider is `type: 'google'`
++        # and appends native Gemini paths to whatever base it is given, so it
++        # built `.../v1beta/openai/models/...` and every call returned
++        # `AI_APICallError: Not Found`.
++        #
++        # The URL says which protocol is meant, so read it rather than the name:
++        # a base ending in `/openai` is the compatible shim, and OpenMAIC models
++        # exactly that as its generic `openai` provider.
++        compat = raw_base.rstrip("/").endswith("/openai")
++        if compat and section == "providers":
++            provider_id = "openai"
++            notes.append(
++                f"{service_name}: base URL is an OpenAI-compatible endpoint, so it is "
++                f"configured as 'openai' rather than '{binding}' — the native provider "
++                f"would append its own paths and 404."
++            )
++        else:
++            provider_id = BINDING_TO_PROVIDER.get(section, {}).get(binding)
++        if not provider_id:
++            notes.append(
++                f"skipped {service_name}: binding '{binding}' has no OpenMAIC id in section "
++                f"'{section}'. Add it to BINDING_TO_PROVIDER[{section!r}] if OpenMAIC "
++                f"supports that provider there."
++            )
++            continue
++
++        api_key = (profile.get("api_key") or "").strip()
++        base_url, rewritten = container_reachable(raw_base, host_alias)
++        if rewritten:
++            notes.append(f"{service_name}: rewrote a loopback base_url to {host_alias}")
++
++        if not api_key and not base_url:
++            notes.append(f"skipped {service_name}: neither an API key nor a base URL is set")
++            continue
++
++        entry: dict[str, object] = {}
++        if api_key:
++            entry["apiKey"] = api_key
++        if base_url:
++            entry["baseUrl"] = base_url
++        models = [m.get("model") or m.get("name") for m in (profile.get("models") or [])]
++        models = [m for m in models if m]
++        if models:
++            entry["models"] = models
++
++        # Speech is the one section where the model does not settle the request.
++        # A self-hosted engine ships its own voices, and the built-in default the
++        # client would otherwise send — `alloy` for `openai-tts` — is a name it
++        # has never heard of:
++        #
++        #   provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
++        #
++        # `voices:` is authoritative server-side and is surfaced to the picker,
++        # so the reader is offered the voice the request will actually use.
++        if section == "tts":
++            voices = [m.get("voice") for m in (profile.get("models") or []) if m.get("voice")]
++            voices = list(dict.fromkeys(v for v in voices if v))
++            if voices:
++                entry["voices"] = voices
++            else:
++                notes.append(
++                    f"{service_name}: no voice named in DeepTutor's profile, so the "
++                    "provider's own default will be used. If this endpoint has its own "
++                    "voice list, name one on the model in DeepTutor's settings."
++                )
++
++        sections.setdefault(section, {})[provider_id] = entry
++
++    return sections, notes
++
++
++def to_yaml(sections: dict, mask: bool) -> str:
++    """Emit YAML by hand — one dependency fewer, and the shape is this simple."""
++
++    def scalar(value: str) -> str:
++        return json.dumps(value)  # quotes and escapes exactly like YAML wants
++
++    lines = [
++        "# Generated by deploy/openmaic-patches/build_server_providers.py",
++        "# from DeepTutor's data/user/settings/model_catalog.json.",
++        "#",
++        "# Do not edit by hand: the next run overwrites it. Change the provider in",
++        "# DeepTutor's settings and run the script again.",
++        "#",
++        "# Contains credentials. It lives under data/, which is gitignored.",
++        "",
++    ]
++    for section in ("providers", "tts", "asr", "pdf", "image", "video", "web-search"):
++        entries = sections.get(section)
++        if not entries:
++            continue
++        lines.append(f"{section}:")
++        for provider_id, entry in sorted(entries.items()):
++            lines.append(f"  {provider_id}:")
++            for key, value in entry.items():
++                if isinstance(value, list):
++                    lines.append(f"    {key}:")
++                    lines.extend(f"      - {scalar(v)}" for v in value)
++                elif key == "apiKey" and mask:
++                    lines.append(f"    {key}: {scalar('***' + str(value)[-4:] if value else '')}")
++                else:
++                    lines.append(f"    {key}: {scalar(str(value))}")
++        lines.append("")
++    return "\n".join(lines)
++
++
++# ---------------------------------------------------------------------------
++# The entry point the app uses
++# ---------------------------------------------------------------------------
++
++
++def refresh_server_providers(
++    catalog: dict,
++    out_path: Path,
++    host_alias: str = "host.docker.internal",
++) -> tuple[bool, list[str]]:
++    """Write OpenMAIC's provider file from a DeepTutor catalog.
++
++    Returns `(wrote, notes)`. Writing is atomic — OpenMAIC re-reads the file
++    whenever its mtime changes, so a half-written file would be read as
++    "no providers configured" for as long as the write took.
++
++    Never raises: this runs on the settings-save path, and a provider that
++    cannot be mapped must not cost the user their settings.
++    """
++    try:
++        sections, notes = build(catalog, host_alias)
++        if not sections:
++            return False, notes or ["no provider in DeepTutor maps to OpenMAIC"]
++        out_path.parent.mkdir(parents=True, exist_ok=True)
++        tmp = out_path.with_name(f".{out_path.name}.tmp")
++        tmp.write_text(to_yaml(sections, mask=False), encoding="utf-8", newline="\n")
++        os.replace(tmp, out_path)
++        counts = ", ".join(f"{n} {len(e)}" for n, e in sorted(sections.items()))
++        return True, [*notes, counts]
++    except Exception as exc:  # noqa: BLE001 - a broken bridge must not break saving
++        return False, [f"failed: {exc}"]
+diff --git a/deploy/OPENMAIC_RUNBOOK.md b/deploy/OPENMAIC_RUNBOOK.md
+index 074893ce8..28608de7b 100644
+--- a/deploy/OPENMAIC_RUNBOOK.md
++++ b/deploy/OPENMAIC_RUNBOOK.md
+@@ -153,8 +153,20 @@ was something to write the file, which is what this does, from
+ `data/user/settings/model_catalog.json`.
+ 
+ The compose overlay mounts it read-only. It contains credentials and lives under
+-`data/`, which is gitignored. Re-run it after changing a provider in DeepTutor
+-and restart `openmaic` — the file is read once at startup.
++`data/`, which is gitignored.
++
++**You only need this command for a first bring-up.** After that DeepTutor
++rewrites the file itself, on every save of provider settings, and OpenMAIC
++re-reads it when its mtime changes — so a rotated key takes effect with no
++script and no restart. That matters more than convenience: the person whose key
++expires is a user with a settings page, not an operator with a shell, and the
++old arrangement left them with a dead course studio and no way to fix it.
++
++Set `DEEPTUTOR_OPENMAIC_BRIDGE=0` to turn the automatic refresh off (a
++deployment with no course studio), or `DEEPTUTOR_OPENMAIC_HOST_ALIAS` to change
++what a container should call the host. The refresh never raises: a provider
++that maps to nothing, or a read-only data directory, is logged and skipped
++rather than costing the user the settings they just saved.
+ 
+ Confirm OpenMAIC agrees, rather than assuming the mount was enough:
+ 
+diff --git a/deploy/openmaic-patches/build_server_providers.py b/deploy/openmaic-patches/build_server_providers.py
+index 8ce2b9953..0fbf647b1 100644
+--- a/deploy/openmaic-patches/build_server_providers.py
++++ b/deploy/openmaic-patches/build_server_providers.py
+@@ -1,37 +1,17 @@
+ #!/usr/bin/env python3
+-"""Write OpenMAIC's `server-providers.yml` from DeepTutor's own provider settings.
++"""Write OpenMAIC's `server-providers.yml` from DeepTutor's provider settings.
+ 
+-Two applications side by side, each with its own provider configuration, is the
+-seam a customer notices first: nobody expects to type the same API key twice.
+-Closing it needed no patch. OpenMAIC already reads a server-side
+-`server-providers.yml` covering `providers` (LLM), `tts`, `asr`, `pdf`, `image`,
+-`video` and `web-search` — its own `docker-compose.yml` even carries the mount
+-line, commented out. What was missing was something to write the file.
++The mapping itself lives in `deeptutor.services.config.openmaic_bridge`, which
++ships inside the application — DeepTutor rewrites this file itself whenever
++provider settings are saved, so a rotated key reaches OpenMAIC without anybody
++opening a shell.
+ 
+-    DeepTutor  data/user/settings/model_catalog.json
+-                        │  this script
+-                        ▼
+-    OpenMAIC   /app/server-providers.yml   (read-only mount)
++This CLI stays for the times you want to run it by hand: a first bring-up
++before the app has saved anything, a dry run to read the mapping decisions, or
++a deployment whose settings were edited on disk.
+ 
+-Three things this has to get right, and each was learned the hard way:
+-
+-**Container addresses.** A URL that works in DeepTutor's settings page may be
+-`http://localhost:11434`, and inside OpenMAIC's container `localhost` is that
+-container. Every rewritten URL is checked and loopback is replaced with
+-`host.docker.internal`, which the compose file maps. Getting this wrong produces
+-"connection refused" from a service that is plainly running.
+-
+-**Names differ.** DeepTutor calls it `gemini`, `stt` and `search`; OpenMAIC calls
+-the same things `google`, `asr` and `web-search`. An unmapped name is skipped and
+-reported rather than guessed at, because a provider id OpenMAIC does not know is
+-silently ignored by its loader — a wrong guess would look exactly like success.
+-
+-**The output holds secrets.** It is written under `data/`, which is gitignored,
+-and nothing here prints a key: `--dry-run` shows the file with every credential
+-masked, which is what makes it safe to paste into a bug report.
+-
+-    python build_server_providers.py --dry-run     # show it, keys masked
+-    python build_server_providers.py               # write it
++    python build_server_providers.py --dry-run
++    python build_server_providers.py --out data/user/openmaic/server-providers.yml
+ """
+ 
+ from __future__ import annotations
+@@ -41,252 +21,9 @@ import json
+ from pathlib import Path
+ import sys
+ 
+-# DeepTutor's `binding` → the provider id OpenMAIC knows, **per section**.
+-#
+-# Not one table, because the same vendor is named differently in each capability:
+-# OpenAI is `openai` for LLM, `openai-tts` for speech and `openai-whisper` for
+-# recognition. A first version used a single table and emitted `openai` in all
+-# three; OpenMAIC's loader ignores ids it does not recognise, so the TTS and ASR
+-# entries would have been dropped in silence and the file would have looked
+-# entirely correct. Verified against provider-config.ts's own env maps.
+-#
+-# Anything absent here is reported and skipped rather than guessed at.
+-BINDING_TO_PROVIDER: dict[str, dict[str, str]] = {
+-    "providers": {
+-        "openai": "openai",
+-        "azure": "azure",
+-        "azure_openai": "azure",
+-        "anthropic": "anthropic",
+-        "claude": "anthropic",
+-        "gemini": "google",
+-        "google": "google",
+-        "deepseek": "deepseek",
+-        "qwen": "qwen",
+-        "dashscope": "qwen",
+-        "kimi": "kimi",
+-        "moonshot": "kimi",
+-        "minimax": "minimax",
+-        "glm": "glm",
+-        "zhipu": "glm",
+-        "siliconflow": "siliconflow",
+-        "doubao": "doubao",
+-        "volcengine": "doubao",
+-        "ollama": "ollama",
+-        "lemonade": "lemonade",
+-        "atlascloud": "atlascloud",
+-        # OpenAI-compatible relays have no id of their own; they are `openai`
+-        # with a different base URL, which is exactly how OpenMAIC models them.
+-        "groq": "openai",
+-        "custom": "openai",
+-    },
+-    "tts": {
+-        "openai": "openai-tts",
+-        "custom": "openai-tts",
+-        "groq": "openai-tts",
+-        "azure": "azure-tts",
+-        "glm": "glm-tts",
+-        "qwen": "qwen-tts",
+-        "doubao": "doubao-tts",
+-        "elevenlabs": "elevenlabs-tts",
+-        "minimax": "minimax-tts",
+-        "lemonade": "lemonade-tts",
+-        "voxcpm": "voxcpm-tts",
+-    },
+-    "asr": {
+-        "openai": "openai-whisper",
+-        "custom": "openai-whisper",
+-        "groq": "openai-whisper",
+-        "whisper": "openai-whisper",
+-        "azure": "azure-asr",
+-        "qwen": "qwen-asr",
+-        "funasr": "funasr-asr",
+-        "lemonade": "lemonade-asr",
+-    },
+-    "web-search": {
+-        "tavily": "tavily",
+-        "bocha": "bocha",
+-        "brave": "brave",
+-        "baidu": "baidu",
+-        "searxng": "searxng",
+-        "minimax": "minimax",
+-        "doubao": "doubao",
+-        "claude": "claude",
+-        "anthropic": "claude",
+-    },
+-    "pdf": {
+-        "mineru": "mineru",
+-        "mineru-cloud": "mineru-cloud",
+-        "unpdf": "unpdf",
+-    },
+-    # OpenMAIC's image and video sections exist; no DeepTutor binding has been
+-    # seen for them yet, so they stay empty rather than being guessed at.
+-    "image": {},
+-    "video": {},
+-}
+-
+-# DeepTutor service → OpenMAIC YAML section. `embedding` and `task` have no
+-# counterpart: OpenMAIC does its own retrieval and has no second model slot.
+-SERVICE_TO_SECTION = {
+-    "llm": "providers",
+-    "tts": "tts",
+-    "stt": "asr",
+-    "search": "web-search",
+-    "imagegen": "image",
+-    "videogen": "video",
+-}
+-
+-LOOPBACK = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+-
+-
+-def container_reachable(url: str, replacement: str) -> tuple[str, bool]:
+-    """Point a host-loopback URL at the host as the container sees it."""
+-    if not url:
+-        return url, False
+-    for host in LOOPBACK:
+-        for prefix in (f"//{host}:", f"//{host}/"):
+-            if prefix in url:
+-                return url.replace(host, replacement, 1), True
+-        if url.endswith(f"//{host}"):
+-            return url.replace(host, replacement, 1), True
+-    return url, False
+-
+-
+-def active_profile(service: dict) -> dict | None:
+-    """The profile the operator actually selected, not merely the first one."""
+-    profiles = service.get("profiles") or []
+-    if not profiles:
+-        return None
+-    wanted = service.get("active_profile_id")
+-    for profile in profiles:
+-        if profile.get("id") == wanted:
+-            return profile
+-    return profiles[0]
+-
+-
+-def build(catalog: dict, host_alias: str) -> tuple[dict, list[str]]:
+-    sections: dict[str, dict] = {}
+-    notes: list[str] = []
+-
+-    for service_name, service in (catalog.get("services") or {}).items():
+-        section = SERVICE_TO_SECTION.get(service_name)
+-        if section is None:
+-            if (service.get("profiles") or []) and service_name not in ("embedding", "task"):
+-                notes.append(f"skipped service '{service_name}' — OpenMAIC has no section for it")
+-            continue
+-
+-        profile = active_profile(service)
+-        if not profile:
+-            continue
+-
+-        binding = (profile.get("binding") or profile.get("provider") or "").strip().lower()
+-        raw_base = (profile.get("base_url") or "").strip()
+-
+-        # A vendor's own id and its OpenAI-compatible shim are different
+-        # protocols wearing the same name. DeepTutor talks to Gemini through
+-        # `.../v1beta/openai/`; OpenMAIC's `google` provider is `type: 'google'`
+-        # and appends native Gemini paths to whatever base it is given, so it
+-        # built `.../v1beta/openai/models/...` and every call returned
+-        # `AI_APICallError: Not Found`.
+-        #
+-        # The URL says which protocol is meant, so read it rather than the name:
+-        # a base ending in `/openai` is the compatible shim, and OpenMAIC models
+-        # exactly that as its generic `openai` provider.
+-        compat = raw_base.rstrip("/").endswith("/openai")
+-        if compat and section == "providers":
+-            provider_id = "openai"
+-            notes.append(
+-                f"{service_name}: base URL is an OpenAI-compatible endpoint, so it is "
+-                f"configured as 'openai' rather than '{binding}' — the native provider "
+-                f"would append its own paths and 404."
+-            )
+-        else:
+-            provider_id = BINDING_TO_PROVIDER.get(section, {}).get(binding)
+-        if not provider_id:
+-            notes.append(
+-                f"skipped {service_name}: binding '{binding}' has no OpenMAIC id in section "
+-                f"'{section}'. Add it to BINDING_TO_PROVIDER[{section!r}] if OpenMAIC "
+-                f"supports that provider there."
+-            )
+-            continue
+-
+-        api_key = (profile.get("api_key") or "").strip()
+-        base_url, rewritten = container_reachable(raw_base, host_alias)
+-        if rewritten:
+-            notes.append(f"{service_name}: rewrote a loopback base_url to {host_alias}")
+-
+-        if not api_key and not base_url:
+-            notes.append(f"skipped {service_name}: neither an API key nor a base URL is set")
+-            continue
+-
+-        entry: dict[str, object] = {}
+-        if api_key:
+-            entry["apiKey"] = api_key
+-        if base_url:
+-            entry["baseUrl"] = base_url
+-        models = [m.get("model") or m.get("name") for m in (profile.get("models") or [])]
+-        models = [m for m in models if m]
+-        if models:
+-            entry["models"] = models
+-
+-        # Speech is the one section where the model does not settle the request.
+-        # A self-hosted engine ships its own voices, and the built-in default the
+-        # client would otherwise send — `alloy` for `openai-tts` — is a name it
+-        # has never heard of:
+-        #
+-        #   provider=openai-tts, voice=alloy -> OpenAI TTS API error: Bad Request
+-        #
+-        # `voices:` is authoritative server-side and is surfaced to the picker,
+-        # so the reader is offered the voice the request will actually use.
+-        if section == "tts":
+-            voices = [m.get("voice") for m in (profile.get("models") or []) if m.get("voice")]
+-            voices = list(dict.fromkeys(v for v in voices if v))
+-            if voices:
+-                entry["voices"] = voices
+-            else:
+-                notes.append(
+-                    f"{service_name}: no voice named in DeepTutor's profile, so the "
+-                    "provider's own default will be used. If this endpoint has its own "
+-                    "voice list, name one on the model in DeepTutor's settings."
+-                )
+-
+-        sections.setdefault(section, {})[provider_id] = entry
+-
+-    return sections, notes
+-
+-
+-def to_yaml(sections: dict, mask: bool) -> str:
+-    """Emit YAML by hand — one dependency fewer, and the shape is this simple."""
+-
+-    def scalar(value: str) -> str:
+-        return json.dumps(value)  # quotes and escapes exactly like YAML wants
++sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+ 
+-    lines = [
+-        "# Generated by deploy/openmaic-patches/build_server_providers.py",
+-        "# from DeepTutor's data/user/settings/model_catalog.json.",
+-        "#",
+-        "# Do not edit by hand: the next run overwrites it. Change the provider in",
+-        "# DeepTutor's settings and run the script again.",
+-        "#",
+-        "# Contains credentials. It lives under data/, which is gitignored.",
+-        "",
+-    ]
+-    for section in ("providers", "tts", "asr", "pdf", "image", "video", "web-search"):
+-        entries = sections.get(section)
+-        if not entries:
+-            continue
+-        lines.append(f"{section}:")
+-        for provider_id, entry in sorted(entries.items()):
+-            lines.append(f"  {provider_id}:")
+-            for key, value in entry.items():
+-                if isinstance(value, list):
+-                    lines.append(f"    {key}:")
+-                    lines.extend(f"      - {scalar(v)}" for v in value)
+-                elif key == "apiKey" and mask:
+-                    lines.append(f"    {key}: {scalar('***' + str(value)[-4:] if value else '')}")
+-                else:
+-                    lines.append(f"    {key}: {scalar(str(value))}")
+-        lines.append("")
+-    return "\n".join(lines)
++from deeptutor.services.config.openmaic_bridge import build, to_yaml  # noqa: E402
+ 
+ 
+ def main() -> int:
+@@ -329,7 +66,7 @@ def main() -> int:
+     args.out.parent.mkdir(parents=True, exist_ok=True)
+     args.out.write_text(to_yaml(sections, mask=False), encoding="utf-8", newline="\n")
+     print(f"[server-providers] wrote {args.out}")
+-    print("[server-providers] mount it read-only at /app/server-providers.yml and restart openmaic.")
++    print("[server-providers] OpenMAIC re-reads it on change; no restart needed.")
+     return 0
+ 
+ 
+diff --git a/deploy/openmaic-patches/check_openmaic_contract.py b/deploy/openmaic-patches/check_openmaic_contract.py
+index 0656ea96f..d6b678c55 100644
+--- a/deploy/openmaic-patches/check_openmaic_contract.py
++++ b/deploy/openmaic-patches/check_openmaic_contract.py
+@@ -36,7 +36,6 @@ from __future__ import annotations
+ import argparse
+ import json
+ from pathlib import Path
+-import subprocess
+ import sys
+ from typing import Any
+ import urllib.error
+diff --git a/deploy/openmaic-patches/export_upstream_patches.py b/deploy/openmaic-patches/export_upstream_patches.py
+index 345357c50..9a8ea940f 100644
+--- a/deploy/openmaic-patches/export_upstream_patches.py
++++ b/deploy/openmaic-patches/export_upstream_patches.py
+@@ -30,7 +30,6 @@ import argparse
+ from pathlib import Path
+ import re
+ import subprocess
+-import sys
+ 
+ PREFIX = "integration/maic"
+ SQUASH_SUBJECT = re.compile(r"^Squashed '" + re.escape(PREFIX) + r"/?' content from commit")
+-- 
+2.51.0.windows.2
+
