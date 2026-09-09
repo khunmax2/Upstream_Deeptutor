@@ -439,13 +439,51 @@ Draft upstream PRs for the generic work. Attapon sends them.
 
 ## 5. What is not decided
 
-All six questions this file originally listed have been answered, in §3.8–§3.14.
-Nothing in the design is knowingly left open.
+All six questions this file originally listed have been answered, in §3.8–§3.14,
+and the decision is recorded as **ADR-0005** (`docs/adr/0005-course-studio-sibling-application.md`).
 
-What remains unknown is a measurement, not a decision: **nobody has yet tried
-threading `authenticatedOwnerId` through OpenMAIC's call sites**, so the size of
-§3.3 step 2 is an estimate. That is phase 1's first real task and the first place
-this plan can turn out to be wrong.
+### 5.1 The one estimate has since been measured
+
+**A working checkout of upstream OpenMAIC is on this machine** at
+`/Users/attapon/Project/antigravity/OpenMAIC`, `origin` pointing at
+`THU-MAIC/OpenMAIC` — a plain clone, **not yet a fork**. Fast-forwarded on
+2026-09-10 to `29735f10` (`fix(ssrf): keep cloud metadata endpoints blocked
+under ALLOW_LOCAL_NETWORKS`). One local edit is stashed in the working tree:
+`.gitignore` gains pnpm store paths. Note the pin file still names `d4ef5faa`
+(2026-09-01), so the checkout is already ahead of it.
+
+Threading `authenticatedOwnerId` was measured against that checkout, and it is
+smaller than feared:
+
+| | count | files to edit |
+|---|---|---|
+| call sites reaching it through `withRequestOwnerId` | **33** | **1** — changing the wrapper covers all of them |
+| routes calling `resolveRequestOwnerId` directly | 3 | `stages/[id]/freshness`, `agent/owner-events`, `agent/sessions/[id]/events` |
+| duplicated cookie logic | 1 | `lib/workbench/workspace-actions.ts`, a server action with no `Request`, so it reads `next/headers` instead |
+
+**About six files.** Three things make it smaller still:
+
+- the third parameter is **still present at upstream HEAD**, not something that
+  decayed since the archive was taken;
+- **their own test already covers it** — `tests/agent-runtime/owner.test.ts:73`
+  asserts `resolveRequestOwnerId(req, headers, 'user-42') === 'user-42'` *and*
+  that no cookie is minted;
+- their tests establish a naming convention: authenticated owners carry a
+  `user:` prefix (`user:mine`, `user:requestor`) against `anon:` for
+  cookie-minted ones. **Send `user:<uid>`, not a bare uid.**
+
+### 5.2 What is genuinely still open
+
+The design has no threat model. Every isolation guarantee in it rests on one
+assumption — that the studio container is reachable *only* through the
+gatekeeper, which strips any client-supplied identity header and injects a
+verified one. That assumption was reasoned about, never tested against a
+framework, and its failure mode is the quiet one: everybody collapses into one
+owner and nothing turns red.
+
+**The agreed next step is a STRIDE / data-flow threat model of the whole path**
+— browser → nginx → gatekeeper → studio → PostgreSQL — using the
+`senior-security` skill. Do that before writing the phase 1 code, not after.
 
 ---
 

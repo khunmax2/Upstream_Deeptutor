@@ -6,6 +6,27 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-10 — The course-studio decision is an ADR, and its one estimate is
+  now a measurement.** `docs/adr/0005-course-studio-sibling-application.md`
+  records the decision in the house format the four existing ADRs use: the studio
+  runs as a separate application in its own container, built from our fork,
+  pinned by commit and image digest, coupled to DeepWitya by one URL and one
+  identity header. Seven alternatives are recorded with the reason each was
+  rejected — the first attempt had none of this, which is why re-deriving its
+  intent from commit messages took a whole session.
+
+  The plan's only remaining estimate was measured against a working checkout of
+  upstream OpenMAIC (fast-forwarded to `29735f10`): threading
+  `authenticatedOwnerId` touches about six files, because 33 of its 37 call
+  sites reach it through one wrapper. Upstream's own test already covers the
+  parameter, and their tests set the convention that authenticated owners carry
+  a `user:` prefix.
+
+  What the ADR states plainly, because it is the assumption everything else
+  rests on: trusting an identity header is sound **only** while the studio
+  container is unreachable except through the gatekeeper. The next step is a
+  threat model of that path, before any phase 1 code.
+
 - **2026-09-10 — The second OpenMAIC integration has a design, and it is
   written down.** `docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md`
   records what was decided, the evidence behind each decision, the phases, and —
