@@ -6,6 +6,34 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-10 — One word per concept in the Thai partner surface.** Walking the
+  wizard end to end showed the same idea spelled three ways at once, so 59 keys
+  in `web/locales/th/app.json` were settled onto one term each.
+
+  `Soul` had been left as English in 16 keys, translated as `จิตวิญญาณ` in 8, and
+  as `บุคลิก` in the menu labels — three spellings a reader met on one screen. It
+  is now `สไตล์` where the space is tight (the step label, the section titles,
+  the review row) and `บทบาทและสไตล์` in the sentences that have room. `SOUL.md`
+  stays as it is: that is a filename, not a label. The custom-soul placeholder
+  keeps its `# Soul` heading so it still matches the markdown that
+  `deeptutor/services/partners/soul_templates_th.py` actually ships.
+
+  `persona` had the same three-way split — `เพอร์โซนา`, bare `persona`, and
+  `บุคลิก`. It is now `บุคลิก` in the short controls and `บุคลิกและตัวตน` in
+  prose, with `Clone a persona` reading `คัดลอกบุคลิกต้นแบบ`. Nothing collides
+  with the Soul term, which is why Soul moved to `สไตล์`.
+
+  `partner` is `คู่หู AI` everywhere again; the two keys that had become
+  `เพื่อน AI` put two names for the same object on one screen. And the
+  description placeholder now shows what to write rather than restating the
+  field's own question.
+
+  One comment in `deeptutor/services/voice_realtime/ui_control.py` cited
+  `เพอร์โซนา` as an example of what the screen says. The cross-script matcher
+  itself compares consonant skeletons and has no hard-coded vocabulary, so the
+  rename could not break it — but the example named a string that no longer
+  exists, so it now uses one that does.
+
 - **2026-09-09 — A Latin word run into Thai script, in 22 places.** Walking the
   partner wizard end to end in Thai showed `คู่หู AIนี้มีไว้เพื่ออะไร?` — the
   translations concatenate the product term `AI` directly onto the Thai that
