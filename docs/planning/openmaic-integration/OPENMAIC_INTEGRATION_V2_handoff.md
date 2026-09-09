@@ -235,6 +235,88 @@ Hosting the studio for users to reach over the web is not distribution of copies
 publishing an image or a public repo is, and both are satisfied by the files
 above. (Not legal advice — read the license text.)
 
+### 3.8 CI proves isolation in two halves, joined by a contract
+
+Agreed. The two-account proof does **not** run as one end-to-end job per PR.
+
+| where | asserts | needs |
+|---|---|---|
+| the fork's CI | an identity header `X` yields owner `X`; owner A cannot read, mutate or delete owner B's document | a Postgres service + OpenMAIC's own `vitest`. **Not DeepWitya** |
+| this repository's CI | the gatekeeper injects the *verified* uid, **strips any client-supplied copy**, and sends no header at all for an unverified request | extends the existing 198 lines of gatekeeper tests. **Not OpenMAIC** |
+| both | the header's name and shape | one more assertion in `check_openmaic_contract.py` |
+
+Stripping a client-supplied identity header is not optional: without it the hole
+`server-auth.ts` warns about has simply moved one layer out.
+
+The contract half matters more than it looks. If either side renames the header
+silently, everyone collapses into one owner and **nothing turns red** — the
+system keeps working, and every user sees every other user's data. That is the
+quietest failure available in this design.
+
+A real end-to-end run belongs on the nightly `schedule: cron "17 3 * * *"` that
+`tests.yml` already carries, not on every PR — a job that needs two containers
+and a network fails for reasons that are not our code far more often than for
+reasons that are.
+
+`tests.yml`'s `paths:` filter must gain the gatekeeper and compose paths, or the
+whole thing is invisible again — which is exactly how the first attempt died.
+Service containers are not new ground here: `python-tests` already runs Redis
+with a health check (`tests.yml:236`).
+
+### 3.9 Schema drift is the only silent data-corrupting path
+
+OpenMAIC has **no versioned migration tool**. Tables are created in code, and
+`packages/@openmaic/storage/test/pg-schema-contract.test.ts` says why that
+matters:
+
+> Golden pins for the two PostgreSQL schemas this package exports… every
+> statement here is guarded by `IF NOT EXISTS`, so PostgreSQL silently accepts
+> whatever table already exists under the name. A column type, a nullability, an
+> index, or a FK action can drift apart from a downstream migration without a
+> single error being raised; the first symptom is a store query failing in
+> production, or — **worse — succeeding against the wrong types**.
+
+`DOCUMENT_PG_SCHEMA`, `RUNTIME_PG_SCHEMA` and the rest are public API, so the
+defence is to pin them:
+
+1. `check_openmaic_contract.py` gains a DDL assertion beside the checks it
+   already makes against `openmaic-pin.json` (pinned commit, locale key count).
+   A rebase that changes the DDL then fails at rebase time, with a name, rather
+   than when a user cannot open their course.
+2. When it does drift, we write the `ALTER TABLE` by hand. Accepted: upstream
+   ships no tool for this and will not.
+3. **`pg_dump` is a required step before every rebase**, written into the
+   procedure rather than left to memory.
+
+### 3.10 Deleted accounts leave data, and a script cleans it up
+
+`deeptutor/multi_user/identity.py:369` — `delete_user()` removes the account
+record and revokes guardian relationships, and **leaves `data/users/<uid>/` on
+disk**. Since uids are generated, re-registering the same username produces a new
+uid and the old tree is orphaned permanently. This is DeepTutor's behaviour
+today, not something the studio introduces.
+
+Agreed: match it, and add an **admin-run reconciliation script** — read
+DeepTutor's user list, list `owner_id`s in Postgres, report the ones with no
+account left, and let an admin purge them. Default is to **export each owner's
+rows to a file before deleting**, because deleting the wrong account is not
+recoverable.
+
+Rejected: deleting studio rows the moment an account is deleted. That needs a
+hook from DeepTutor into the studio, which is the provider bridge again in the
+opposite direction — the coupling Attapon cut on purpose. The script reads both
+sides only when a person runs it; nothing calls anything during normal operation.
+
+The same script answers the pre-existing DeepTutor gap.
+
+### 3.11 A no-authentication install has a uid already
+
+No design needed. `LOCAL_ADMIN_ID = "local-admin"`
+(`deeptutor/multi_user/models.py:89`) and `deeptutor/api/routers/auth.py:511`
+returns `user_id="local-admin"` when authentication is off, which the gatekeeper
+already reads. A single-user install therefore has one well-defined owner, and
+OpenMAIC's anonymous-cookie owner is never reached.
+
 ---
 
 ## 4. The phased plan
@@ -278,27 +360,17 @@ Draft upstream PRs for the generic work. Attapon sends them.
 
 ## 5. Still open — the questions this session did not reach
 
-The design interview stopped here. These are genuinely undecided:
+The design interview stopped here. Questions 1, 2, 4 of the original six were answered after this file was first
+written and now live in §3.8–§3.11. These three remain genuinely undecided:
 
-1. **What does CI actually assert, and where does it live?** Agreed it exists
-   from day one; never designed. The fork can run OpenMAIC's own `vitest` and
-   `check-i18n-keys`. This repository has the gatekeeper tests and
-   `openmaic-embed` tests. Nobody has decided where the two-account isolation
-   test runs, since it needs both halves plus Postgres.
-2. **Database operations.** Backups, migrations, and what happens to a user's
-   documents when OpenMAIC changes its schema on a rebase. Untouched.
-3. **How seamless must the embed feel?** The first attempt had `?lang=`,
+1. **How seamless must the embed feel?** The first attempt had `?lang=`,
    `?theme=` and `?embed=1` to hide host-owned chrome. Whether that is enough for
    *"ให้ผู้ใช้คิดว่าเป็น 1 ฟีเจอร์ของ deeptutor"* was never asked.
-4. **Accounts with no authentication.** With `DEEPTUTOR_AUTH_ENABLED=0` there is
-   no uid; the gatekeeper's documented fourth outcome is "DeepTutor has no
-   authentication to check against". OpenMAIC's anonymous-cookie owner is the
-   obvious fallback, but this was never confirmed as the intended behaviour.
-5. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
+2. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
    decides. `deploy/openmaic-patches/openmaic-pin.json` (pinned at `d4ef5faa`,
    2026-09-01) and `check_openmaic_contract.py` exist for exactly this and need
    re-pointing at the fork.
-6. **The seven tools in `deploy/openmaic-patches/`.** `export_upstream_patches.py`
+3. **The seven tools in `deploy/openmaic-patches/`.** `export_upstream_patches.py`
    and `check_openmaic_contract.py` both need an `integration/maic` checkout and
    will fail until one exists. Under a fork they should point at the fork
    instead — nobody has decided their new home.
