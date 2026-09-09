@@ -8,6 +8,11 @@ on:
     branches:
       - main
       - dev
+      # The Course Studio integration lives on a long branch and merges into
+      # main only when a phase is finished. Without it here, every PR in that
+      # phase runs no CI at all — which is how the first attempt became
+      # unreviewable. See docs/planning/openmaic-integration/, §2.
+      - feat/course-studio
     paths:
       - "deeptutor/**"
       - "deeptutor_cli/**"
@@ -17,10 +22,20 @@ on:
       - "pyproject.toml"
       - "web/**"
       - ".github/workflows/tests.yml"
+      # The gatekeeper is the only thing between the studio and an
+      # unauthenticated request, and it was invisible to CI for the whole of
+      # the first attempt.
+      - "deploy/openmaic-gatekeeper/**"
+      - "deploy/docker-compose.openmaic.yml"
   pull_request:
     branches:
       - main
       - dev
+      # The Course Studio integration lives on a long branch and merges into
+      # main only when a phase is finished. Without it here, every PR in that
+      # phase runs no CI at all — which is how the first attempt became
+      # unreviewable. See docs/planning/openmaic-integration/, §2.
+      - feat/course-studio
     paths:
       - "deeptutor/**"
       - "deeptutor_cli/**"
@@ -30,6 +45,11 @@ on:
       - "pyproject.toml"
       - "web/**"
       - ".github/workflows/tests.yml"
+      # The gatekeeper is the only thing between the studio and an
+      # unauthenticated request, and it was invisible to CI for the whole of
+      # the first attempt.
+      - "deploy/openmaic-gatekeeper/**"
+      - "deploy/docker-compose.openmaic.yml"
 
 jobs:
   lint:
@@ -299,10 +319,31 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
           DEEPTUTOR_TEST_REDIS_URL: redis://127.0.0.1:6379/0
 
+  gatekeeper-tests:
+    name: Course Studio Gatekeeper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No install step and no lockfile: the gatekeeper and its tests import
+      # only node: builtins, on purpose. It runs in a `node:22-alpine` container
+      # with no package.json, so a dependency here would be a dependency the
+      # deployed thing does not have.
+      - name: Run gatekeeper tests
+        working-directory: deploy/openmaic-gatekeeper
+        run: node gatekeeper.test.mjs
+
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [lint, web-tests, multi-worker-web, import-check, python-tests]
+    needs: [lint, web-tests, multi-worker-web, import-check, python-tests, gatekeeper-tests]
     if: always()
 
     steps:
@@ -317,7 +358,8 @@ jobs:
           echo "| Four-worker browser acceptance | ${{ needs.multi-worker-web.result == 'success' && '✅ Passed' || needs.multi-worker-web.result == 'skipped' && '⏭️ Fixture not configured' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Import/lazy/worker check (3.11–3.14; 3.14 on Linux/macOS/Windows) | ${{ needs.import-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Python tests (3.11/3.12/3.13/3.14) | ${{ needs.python-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Course Studio gatekeeper | ${{ needs.gatekeeper-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail if tests failed
-        if: needs.lint.result == 'failure' || needs.web-tests.result == 'failure' || needs.multi-worker-web.result == 'failure' || needs.import-check.result == 'failure' || needs.python-tests.result == 'failure'
+        if: needs.lint.result == 'failure' || needs.web-tests.result == 'failure' || needs.multi-worker-web.result == 'failure' || needs.import-check.result == 'failure' || needs.python-tests.result == 'failure' || needs.gatekeeper-tests.result == 'failure'
         run: exit 1
