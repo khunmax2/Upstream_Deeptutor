@@ -878,11 +878,12 @@ def match_edit_intent(text: str) -> dict[str, str] | None:
     return None
 
 
-# Cross-script matching for transliterated loanwords: the screen says
-# "เพอร์โซนา" but STT romanises the caller's word to "persona" (or the UI is
-# English and the caller speaks Thai). Comparing *consonant skeletons* in
-# Latin bridges the scripts: vowels are the unstable part of transliteration,
-# consonants survive. Karan-marked consonants (ร์ in เพอร์) are silent — drop.
+# Cross-script matching for transliterated loanwords: a Thai screen may show a
+# transliteration such as "โมเดล" while STT romanises the caller's word to
+# "model" (or the UI is English and the caller speaks Thai). Comparing
+# *consonant skeletons* in Latin bridges the scripts: vowels are the unstable
+# part of transliteration, consonants survive. Karan-marked consonants (the ร์
+# in a spelling like เพอร์) are silent — drop them.
 _KARAN = "์"
 _TH_CONSONANT_LATIN = {
     "ก": "k",
@@ -935,7 +936,7 @@ _SKELETON_NOISE = frozenset("hy")
 
 
 def _consonant_skeleton(s: str) -> str:
-    """Latin consonant skeleton of Thai or Latin text ("เพอร์โซนา"/"persona" → psn/prsn)."""
+    """Latin consonant skeleton of Thai or Latin text ("โมเดล"/"model" → mdl)."""
     s = re.sub(f".{_KARAN}", "", s.lower())  # karan'd consonant is silent
     out: list[str] = []
     for ch in s:

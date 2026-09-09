@@ -45,7 +45,7 @@ export default function NewPartnerPage() {
     { key: "soul", label: t("Soul") },
     { key: "mind", label: t("Mind") },
     { key: "library", label: t("Library") },
-    { key: "review", label: t("Review") },
+    { key: "review", label: t("partner.step.review") },
   ];
   const [stepIndex, setStepIndex] = useState(0);
   const step = steps[stepIndex].key;
@@ -231,7 +231,7 @@ export default function NewPartnerPage() {
       <div className="flex items-center justify-between px-6 pt-5">
         <Link
           href="/partners"
-          className="inline-flex items-center gap-1.5 text-[13px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
         >
           <ArrowLeft className="h-4 w-4" />
           {t("Partners")}
@@ -272,7 +272,7 @@ export default function NewPartnerPage() {
                     )}
                   </span>
                   <span
-                    className={`hidden text-[12.5px] transition-colors sm:block ${
+                    className={`hidden whitespace-nowrap text-[12.5px] transition-colors sm:block ${
                       index === stepIndex
                         ? "font-medium text-[var(--foreground)]"
                         : "text-[var(--muted-foreground)] group-enabled:group-hover:text-[var(--foreground)]"

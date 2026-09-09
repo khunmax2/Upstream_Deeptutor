@@ -17,8 +17,22 @@ module.exports = {
         // Latin in Lora and its Chinese in whatever the browser happened to
         // pick. Naming the CJK faces makes both scripts deterministic and
         // pairs a Latin serif with a proper 宋体 rather than a stray fallback.
+        //
+        // Thai had the same hole and this fork is Thai-by-default, so the Thai
+        // faces are named too: Sukhumvit Set is the modern macOS Thai UI face,
+        // Thonburi covers older macOS, Leelawadee UI is Windows, Noto Sans Thai
+        // is everywhere else. They sit ahead of the CJK block only for reading
+        // order — neither script's fonts carry the other's glyphs, so they
+        // cannot shadow each other, and Latin still resolves to Geist/Lora
+        // first. Thai has no established serif tradition for UI, so the serif
+        // chain leads with Noto Serif Thai where it exists and otherwise falls
+        // back to the same Thai sans rather than to a stray generic.
         sans: [
           "var(--font-sans)",
+          "Sukhumvit Set",
+          "Thonburi",
+          "Leelawadee UI",
+          "Noto Sans Thai",
           "PingFang SC",
           "Hiragino Sans GB",
           "Microsoft YaHei",
@@ -28,6 +42,10 @@ module.exports = {
         ],
         serif: [
           "var(--font-serif)",
+          "Noto Serif Thai",
+          "Sukhumvit Set",
+          "Thonburi",
+          "Leelawadee UI",
           "Songti SC",
           "STSong",
           "Noto Serif SC",

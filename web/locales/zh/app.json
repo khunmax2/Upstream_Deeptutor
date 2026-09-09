@@ -800,6 +800,7 @@
   "Copy code": "复制代码",
   "Copied": "已复制",
   "Review": "审阅",
+  "partner.step.review": "审阅",
   "Failed to render chart": "图表渲染失败",
   "Chart rendering error": "图表渲染错误",
   "SVG rendering error": "SVG 渲染错误",
