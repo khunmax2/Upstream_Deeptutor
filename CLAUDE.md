@@ -118,9 +118,18 @@ deploy patches, and the commit message behind each — are on `main` under
 `docs/maic-fork-export/`. Read that folder before starting the integration
 again; it records traps that cost real time.
 
-Three branches hold work the archive does not, so do not delete them:
-`fix/openmaic-prompt-cjk-only`, `fix/openmaic-prompt-cjk-examples`,
-`page-agent-clean-eval`.
+Every branch here holds work that is nowhere else, so read the name before
+deleting one:
+
+| branch | what it is |
+|---|---|
+| `archive/main-2026-09-09` | `main` as it stood before the rewrite — the whole OpenMAIC integration |
+| `archive/page-agent-clean-eval` | five commits behind `eval/inpage_agent/`: a standalone OpenAI-compatible upstream for the in-page agent, an `LLM_PROXY_MODEL` override, a voice-free baseline. Parked, not abandoned — the computer-use work resumes from here |
+| `fix/openmaic-prompt-cjk-only` | the Chinese labels come from the **prompt templates**, not the locale files, and its test is the guard. Kept under a working name because it is queued for testing |
+| `fix/openmaic-prompt-cjk-examples` | the earlier attempt at the same thing |
+
+`archive/*` means finished and set aside; a working prefix means someone is
+still going to touch it.
 
 **An existing clone must reset, not pull.** `git fetch origin && git reset --hard
 origin/main`. A plain `git pull` fails, and a force-push from a stale clone would
