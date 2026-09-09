@@ -1,0 +1,351 @@
+# OpenMAIC integration, second attempt — handoff
+
+**Status:** design agreed in outline, not started. No code exists for it yet.
+**Written:** 2026-09-10, at the end of a design session with Attapon.
+**Read before this:** `docs/maic-fork-export/README.md` — what the first attempt
+did and what bit it. This document does not repeat it.
+
+This file exists because the session that produced these decisions ended at a
+usage limit. Everything below was either agreed with Attapon in that session or
+measured from the code during it. Where something is a measurement, the command
+or the file is named so the next agent can re-check rather than trust.
+
+---
+
+## 1. Where the repository stands
+
+`main`'s history was rewritten on 2026-09-09 to take the first OpenMAIC
+integration off it. Nothing was lost:
+
+| | |
+|---|---|
+| `archive/main-2026-09-09` (`5c6ed4295`) | the whole first attempt, including `integration/maic` (2,832 files) and the five files never exported |
+| `docs/maic-fork-export/` on `main` | 22 subtree patches + 7 deploy patches + `why.md` / `why-deploy.md` carrying every commit message |
+| `deploy/openmaic-patches/` on `main` | 7 tools a rebuild **runs**, above all `th-TH.partial.json` — the Thai translation source, 1,862/1,862 keys |
+
+There is no `integration/` directory on `main` and no design document for the
+second attempt other than this one.
+
+---
+
+## 2. What Attapon asked for
+
+Quoted where the wording matters.
+
+- **Every account, isolated.** *"ฉันต้องการให้ทุกคนใช้ได้ทั้งหมดทุก user ทุก
+  preset ใน deeptutor เข้าถึงได้ แต่ไม่เห็นข้อมูลกัน"* — not a teacher-only tool,
+  not a shared workspace.
+- **No bridge, no shared configuration.** *"เรื่อง bridge การตั้งค่า ไม่ต้องทำแล้ว
+  แยกอิสระกันไปเลย ไม่ต้องมาผูกกัน แค่ดูว่า api ไม่ชน กับ ผูก uid ที่เข้ามาใช้ พอ
+  ที่เหลือแยกหมด เพราะรันคนละ container อยู่แล้ว"* The provider bridge
+  (`openmaic_bridge.py`, `build_server_providers.py`) is **out of scope**.
+  OpenMAIC gets its own provider configuration, entered in its own UI.
+- **No LLM in the deploy path.** *"เพราะเราหวังพึ่ง llm ตลอดทุกครั้งที่ deploy หรือ
+  build ถูกไหม"* — this killed one option outright, see §3.
+- **The brand must be gone, completely.** *"ไม่อยากให้ผู้ใช้สับสนว่าเป็นคนละ
+  ผลิตภัณฑ์ มีเหตุผลห้ามโชว์ด้วย ให้ผู้ใช้คิดว่าเป็น 1 ฟีเจอร์ของ deeptutor พอ"*
+- **CI from day one.** Agreed in the previous session and re-confirmed: the first
+  attempt was abandoned rather than repaired *because* nothing in
+  `.github/workflows/` matched `integration/**` or `deploy/**`, so its state was
+  never knowable. Re-verified 2026-09-10: `tests.yml`'s `paths:` filter still
+  lists only `deeptutor/** deeptutor_cli/** tests/** requirements/**
+  requirements.txt pyproject.toml web/** .github/workflows/tests.yml`.
+- **Phase 1 may ship un-branded work and in English.** Confirmed explicitly:
+  *"ยอมได้"*. Isolation and CI are the things that cannot be wrong; brand and
+  language can be fixed later without anyone losing data.
+
+---
+
+## 3. Decisions settled, and the evidence for each
+
+### 3.1 A separate fork of OpenMAIC — not a vendored subtree
+
+`khunmax2/OpenMAIC` forked from `THU-MAIC/OpenMAIC`, the same relationship this
+repository already has with `HKUDS/DeepTutor`. DeepWitya pins a commit, builds an
+image, and points at the studio **by URL**.
+
+Three options were compared:
+
+| | build / deploy | when OpenMAIC releases |
+|---|---|---|
+| A — vendored subtree, as last time | deterministic (files are in the repo) | merge conflict, every time |
+| B — pin + patch series applied at build | **not deterministic — a reject breaks the build and needs a human** | fix rejects |
+| **C — fork, pinned, built to an image** | deterministic (built from a fixed commit) | rebase a branch |
+
+**B is rejected** on Attapon's objection: nothing that needs a person (or an LLM)
+to resolve may sit in the deploy path. Deploy pulls an **image by digest**;
+nothing is applied or re-applied at deploy time. Rebasing onto a new OpenMAIC is
+deliberate work in a branch with CI, never something that happens during a
+deploy.
+
+**A is rejected** because its one real advantage turns out to be narrower than it
+looks. The archived `deploy/docker-compose.openmaic.yml` states the case for A
+plainly — *"a clone of this repo is everything the build needs — no sibling
+checkout, no fetch step, no pinned commit to resolve"* — but that is true only on
+the Docker path. `deeptutor start` never launched OpenMAIC (verified: only
+`model_catalog.py` and `openmaic_bridge.py` mention it on the Python side, and
+both are now out of scope). A non-Docker user must run the studio themselves
+either way; with A they would still have to `pnpm install && pnpm build` inside
+`integration/maic` by hand. On that path A and C differ by one `git clone`.
+
+**C also wins on inspectability.** A imported OpenMAIC as a *squashed* subtree:
+you get the files but not their history, and our 22 changes end up interleaved
+inside upstream's files. A fork keeps upstream's real history with our commits on
+top, so `git log`, `blame` and `bisect` all work and "what did we change" is a
+branch diff.
+
+### 3.2 The coupling is one URL
+
+`web/lib/openmaic-embed.ts` already resolves the studio from
+`DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/integrations.json`, with a test
+rejecting dangerous URLs (`javascript:alert(1)`). `MaicWorkspace.tsx` already
+shows configuration instructions when it is unset. Keep this shape — it is the
+loosest possible coupling and it matches *"แยกอิสระกันไปเลย"*.
+
+This also settles how the two run: **they must run separately**. The archived
+compose records why, and it is not a preference:
+
+> OpenMAIC ships Tailwind v4 against our v3, and its **69 Next API routes**
+> collide with `web/proxy.ts`, which forwards **every** `/api/*` path to FastAPI.
+
+### 3.3 Per-user isolation is achievable — one container, partitioned by owner
+
+This is the most important finding of the session and it reverses an earlier,
+**wrong** claim made in conversation ("every document sits in one pile"). That
+claim came from reading `lib/persistence/server-auth.ts`, whose *DEVELOPMENT-ONLY*
+docstring describes the **runtime/asset** path, not documents.
+
+What is actually true, read from the archived source:
+
+- `lib/persistence/owner-bound-document-store.ts` takes an `ownerId` and there is
+  a real `owner_id` column, enforced inside every mutation transaction, with
+  ownership modes `create | mutate | read | delete | library`.
+- `app/api/persistence/[...path]/route.ts` binds documents to a
+  server-resolved owner via `withRequestOwnerId`.
+- `lib/server/agent-runtime/owner.ts` — the decisive file — has this signature:
+
+  ```ts
+  resolveRequestOwnerId(req, responseHeaders, authenticatedOwnerId?)
+  ```
+
+  and this docstring:
+
+  > An explicit `authenticatedOwnerId` (**from the host's auth layer**) is
+  > returned verbatim … Current callers (the agent event-stream routes) pass no
+  > authenticated owner … **A future auth integration must thread
+  > `authenticatedOwnerId` through those call sites**, or sessions created under
+  > authenticated identities would be unreachable by their own owner.
+
+  Without it, every browser gets its own anonymous owner from an `anonymous_id`
+  cookie — so the model is per-browser today, not one shared pile.
+
+**So a container per user is not needed.** The shape is the same one DeepTutor
+already uses — one process, per-user partition — only in SQL rather than
+directories. Compare `deeptutor/multi_user/paths.py`:
+
+```
+data/user          admin workspace
+data/users/<uid>   one workspace per non-admin user
+data/partners/<id> partner workspaces
+data/system        accounts, grants, audit
+```
+
+The work is therefore:
+
+1. **`deploy/openmaic-gatekeeper/`** (336 lines + 198 lines of tests, on
+   `archive/main-2026-09-09`) already stands in front of OpenMAIC, verifies a
+   DeepTutor session against `/api/auth/status`, and **strips `dt_token` before
+   forwarding** so OpenMAIC never sees it. It does **not** currently forward a
+   uid, although it already reads `user_id` from the auth status. Add: inject a
+   server-controlled identity header, and strip any client-supplied copy of it.
+2. **In the fork:** thread that identity into `authenticatedOwnerId` at the call
+   sites the docstring names.
+3. **Replace `lib/persistence/server-auth.ts`** for the runtime/asset routes —
+   upstream says production must, and its `x-learner-key` is client-supplied and
+   therefore unenforced today.
+
+**Do not skip step 1's stripping half.** A client-supplied identity header is
+exactly the hole `server-auth.ts` warns about, moved one layer out.
+
+### 3.4 PostgreSQL, as a compose service
+
+`OwnerBoundDocumentStore` is built on `PgDocumentStore` — server-side per-owner
+documents require a database. The archived compose deliberately left the
+`server-persistence` profile off. Attapon confirmed there is no PostgreSQL on the
+deploy host but adding one as a compose service is fine.
+
+Browser-side storage was considered and rejected: it isolates trivially but a
+learner who opens the studio on a phone would not see their own work. That is
+data loss dressed as isolation, and it contradicts *"ทุก user ทุก preset"* —
+which is a statement about **accounts**, not browsers.
+
+### 3.5 Upstream is worth contributing to, but must not be depended on
+
+Measured 2026-09-10 against `THU-MAIC/OpenMAIC` (34,299 stars, MIT, pushed that
+day):
+
+| | |
+|---|---|
+| closed PRs, last 100 | **82 merged** |
+| authors of the last 30 merged PRs | **20 distinct**, most with one merge each — outside contributors |
+| merge latency for outside contributors | 12–169 hours |
+| largest outside PR merged | +1,385 / 24 files |
+| **but** open PRs | **79**, median age 17 days, oldest 176 |
+
+Read: they accept outside work, including large changes, usually within days —
+and a real queue sits for weeks. **Send patches upstream; never block a phase on
+their queue.**
+
+Roughly 86% of the first attempt's touched lines are generic work upstream would
+plausibly want (Thai locale, basePath, `?lang`/`?theme`/`?embed`, hardcoded-Chinese
+i18n bugs, TTS voices, PCM playback, container fixes). Two patches were written
+to be upstreamable on purpose: patch 20 is inert when `NEXT_PUBLIC_BASE_PATH` is
+unset, and patch 13 made every surface read the `lib/brand/brand-config.ts` that
+already existed, overridable through `NEXT_PUBLIC_BRAND_*`.
+
+**Opening PRs on THU-MAIC/OpenMAIC is Attapon's action, not an agent's.** Draft
+them; do not send them.
+
+### 3.6 De-branding is required in full — and is the only permanent fork cost
+
+Attapon confirmed both a product reason and a hard requirement. Everything else
+in the fork can eventually land upstream; this cannot (nobody merges a PR that
+removes their own brand). The first attempt's de-brand is 79 files, +248/−582,
+and it reached past the UI — a User-Agent sent to SearXNG, an `MM-API-Source`
+header sent to MiniMax, `open.maic.chat` printed on every exported video cover,
+and `.maic.zip` on every saved course.
+
+The *refactor* half (making surfaces read the brand config) is upstreamable; the
+**values** are env vars.
+
+### 3.7 MIT attribution: files, not UI
+
+**The first attempt shipped OpenMAIC without ever adding it to `NOTICE`** —
+verified on both `main` and `archive/main-2026-09-09`, which name Alibaba and
+browser-use but not THU-MAIC. The subtree did keep `integration/maic/LICENSE`.
+
+MIT requires the notice be *included* in copies, not *displayed*. Agreed
+resolution — no About entry, no UI credit:
+
+- `LICENSE` stays in the fork repo (it is upstream's own file, automatic)
+- one `COPY LICENSE …` line so it travels inside the image
+- a paragraph in this repository's `NOTICE`, alongside the existing MIT entries
+
+Hosting the studio for users to reach over the web is not distribution of copies;
+publishing an image or a public repo is, and both are satisfied by the files
+above. (Not legal advice — read the license text.)
+
+---
+
+## 4. The phased plan
+
+Agreed shape: **do not do everything at once**, which is how the first attempt
+became unreviewable. Isolation and CI are the two things that cannot be wrong
+later; brand and language can be corrected without data loss.
+
+### Phase 1 — it runs, and data is separated correctly
+
+Ships **with the OpenMAIC brand still visible and in English.** Explicitly
+accepted.
+
+- fork `THU-MAIC/OpenMAIC` → `khunmax2/OpenMAIC`, pin a commit
+- basePath work (first attempt: 36 files, +434) so it serves under a path
+- Postgres as a compose service; `server-persistence` profile on
+- gatekeeper: inject a server-controlled uid header, strip any client copy
+- fork: thread `authenticatedOwnerId`; replace `server-auth.ts`
+- `NOTICE` + `COPY LICENSE` into the image
+- **CI in both repositories, before any of this is called done**
+- a test that proves two accounts cannot see each other's documents — this is
+  the phase's actual acceptance criterion, not "it loads"
+
+### Phase 2 — it stops looking like a second product
+
+- de-brand, all 79 files, including the video cover, the `.zip` extension and
+  the outbound headers
+- `NEXT_PUBLIC_BRAND_*` values
+
+### Phase 3 — Thai
+
+- `build_th_locale.py` generates `th-TH.json` from `th-TH.partial.json`
+  (1,862/1,862 keys, already written). **Edit the partial, never the output.**
+- `?lang=` / `?theme=` so the studio follows DeepWitya's interface
+
+### In parallel, not on the critical path
+
+Draft upstream PRs for the generic work. Attapon sends them.
+
+---
+
+## 5. Still open — the questions this session did not reach
+
+The design interview stopped here. These are genuinely undecided:
+
+1. **What does CI actually assert, and where does it live?** Agreed it exists
+   from day one; never designed. The fork can run OpenMAIC's own `vitest` and
+   `check-i18n-keys`. This repository has the gatekeeper tests and
+   `openmaic-embed` tests. Nobody has decided where the two-account isolation
+   test runs, since it needs both halves plus Postgres.
+2. **Database operations.** Backups, migrations, and what happens to a user's
+   documents when OpenMAIC changes its schema on a rebase. Untouched.
+3. **How seamless must the embed feel?** The first attempt had `?lang=`,
+   `?theme=` and `?embed=1` to hide host-owned chrome. Whether that is enough for
+   *"ให้ผู้ใช้คิดว่าเป็น 1 ฟีเจอร์ของ deeptutor"* was never asked.
+4. **Accounts with no authentication.** With `DEEPTUTOR_AUTH_ENABLED=0` there is
+   no uid; the gatekeeper's documented fourth outcome is "DeepTutor has no
+   authentication to check against". OpenMAIC's anonymous-cookie owner is the
+   obvious fallback, but this was never confirmed as the intended behaviour.
+5. **The pin policy.** When does the fork rebase onto a new OpenMAIC, and who
+   decides. `deploy/openmaic-patches/openmaic-pin.json` (pinned at `d4ef5faa`,
+   2026-09-01) and `check_openmaic_contract.py` exist for exactly this and need
+   re-pointing at the fork.
+6. **The seven tools in `deploy/openmaic-patches/`.** `export_upstream_patches.py`
+   and `check_openmaic_contract.py` both need an `integration/maic` checkout and
+   will fail until one exists. Under a fork they should point at the fork
+   instead — nobody has decided their new home.
+
+---
+
+## 6. Facts worth not re-deriving
+
+- `deeptutor start` never launches OpenMAIC and never did.
+- OpenMAIC cannot be merged into `web/`: Tailwind v4 vs v3, and 69 Next API
+  routes against a `web/proxy.ts` that forwards all of `/api/*` to FastAPI.
+- The deployment host opens only 443 and already serves `/sansarnnews`,
+  `/research-helper`, `/dol`, `/deepwitya`, `/opdc-assistant`, `/deepwitya2`, so
+  `/api` at the root belongs to other people's applications. A path, never a
+  port, and never a proxy rule at `/api`.
+- Next's `basePath` prefixes `<Link>`, the router and `/_next/` assets. It does
+  **not** touch the 74 `fetch('/api/...')` calls across 44 files, nor three
+  `EventSource` streams. The first symptom of getting this wrong is not a network
+  error — it is an access-code login box nobody configured, because
+  `/api/access-code/status` fails and the guard reads an error as locked.
+- `.github/workflows/docker-release.yml` publishes to `ghcr.io` already, but
+  under upstream's name (`ghcr.io/hkuds/deeptutor`) — it has never been renamed
+  for this fork.
+- Labels built from ternaries survive a literal grep; token substitution across
+  ja/th/zh leaves stray spaces. Both cost real time in the first attempt. See
+  `docs/maic-fork-export/README.md`.
+
+---
+
+## 7. If you are the agent picking this up
+
+Read in this order: this file → `docs/maic-fork-export/README.md` →
+`docs/maic-fork-export/why.md` for any patch you are about to redo. The archived
+source is browsable without checking anything out:
+
+```bash
+git show archive/main-2026-09-09:integration/maic/lib/server/agent-runtime/owner.ts
+git show archive/main-2026-09-09:deploy/openmaic-gatekeeper/README.md
+git log archive/main-2026-09-09 -- deploy/openmaic-gatekeeper/
+```
+
+The repository rules still apply and are not optional: `CLAUDE.md` §1 (every
+change recorded in `CHANGES.md`, and a `docs/reports/REPORT_*.md` closing each
+phase), §3 (prefer new files over editing upstream ones), §5 (never commit on
+`main` — branch, PR, green CI, merge). `gh` resolves to `HKUDS/DeepTutor`, so
+every `gh` command needs `--repo khunmax2/Upstream_Deeptutor`.
+
+Attapon works in Thai. He checks claims, and he has caught unverified assertions
+more than once — measure before asserting, and say plainly when something is an
+estimate rather than a measurement.

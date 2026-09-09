@@ -6,6 +6,28 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-10 — The second OpenMAIC integration has a design, and it is
+  written down.** `docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md`
+  records what was decided, the evidence behind each decision, the phases, and —
+  named as such — the six questions the design session did not reach.
+
+  The first attempt left rebuild notes but no design, so this session spent its
+  time re-deriving intent from commit messages. The decisions: a real fork of
+  `THU-MAIC/OpenMAIC` rather than a vendored subtree (a patch series applied at
+  build time was rejected outright — nothing that needs a person to resolve may
+  sit in the deploy path); one URL as the only coupling; PostgreSQL as a compose
+  service; and per-user isolation through OpenMAIC's own `owner_id`, whose
+  `resolveRequestOwnerId(req, headers, authenticatedOwnerId?)` seam upstream
+  documents as the one "a future auth integration must thread".
+
+  Two things the reading corrected. OpenMAIC does **not** put every document in
+  one pile — that reading came from `server-auth.ts`, which describes the
+  runtime/asset path; documents are owner-partitioned in SQL, so a container per
+  user is not needed. And the first attempt **never added OpenMAIC to `NOTICE`**,
+  on `main` or on the archive, while carrying 2,832 of its MIT-licensed files.
+  Phase 1 fixes that with files rather than a UI credit, which is what MIT asks
+  for.
+
 - **2026-09-10 — One word per concept in the Thai partner surface.** Walking the
   wizard end to end showed the same idea spelled three ways at once, so 59 keys
   in `web/locales/th/app.json` were settled onto one term each.
