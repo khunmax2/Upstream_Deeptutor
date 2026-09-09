@@ -4436,6 +4436,15 @@ install to the *real checkout*, still on `main`. `PYTHONPATH=<worktree>` took th
 run from 4 failed to **7,583 passed**. Two wrong hypotheses came first, including
 one where excluding a directory made the suite green and looked like proof.
 
+**`perf:check` was measuring nothing on any machine with an account.** Every
+route redirects to `/login` there, `fetch` follows it, and each row ends up with
+the login page's chunks — identical sets, so the intersection that defines the
+app shell swallows them and every route reports **0KB against its budget**. The
+shell is overstated by the login page's own 9KB on top. `loadRouteChunks` now
+uses `redirect: "manual"` and throws, naming the redirect and the fix
+(`web/scripts/route_budgets.mjs`). Silently passing every budget is worse than
+failing, and this predates the sync — `main` read 403 against 410 the same way.
+
 Verified: ruff (0.16.0, the CI pin) · pytest 7,583 · `test:node` 1,202 ·
 `i18n:check` · `npm run build` · `perf:check` · a live Thai turn. The locale delta
 is +252 keys to `th` at exact parity with `en` (5,137 each). Full write-up in

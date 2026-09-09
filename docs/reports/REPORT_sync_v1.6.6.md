@@ -166,6 +166,17 @@ from a machine that can log in** — and note this predates the sync: the same
 0KB pattern appears on `main` before the merge, where it read 403 against 410
 and passed by luck rather than by measurement.
 
+The arithmetic closes exactly. `/login` loads 10 chunks (955KB raw); the
+intersection across every route target plus `/login` is 9 (945KB). The one extra
+is `app/(auth)/login/page-*.js` at **9KB** — and 423 − 414 is 9. Nothing else
+contributes: both builds produce an identical 306 chunks totalling 12,162KB.
+
+`loadRouteChunks` now fetches with `redirect: "manual"` and throws on a 3xx,
+naming the redirect target and what to do about it. Reporting 0KB was the worse
+failure: every budget passed without a byte being weighed, on every developer
+machine that has an account. This is an upstream file and the fix is
+upstream-shaped — a Stage 7 candidate.
+
 ## 6. Still open
 
 - **252 new `th` keys carry their English text.** Parity is exact, so the gate is
