@@ -134,8 +134,30 @@ identity header that now nobody sets or strips.
 **Existing control.** Its default is off, and that is all.
 
 **Control.** Make the dangerous combination impossible to reach by accident:
-refuse to start when `ALLOW_ANONYMOUS=1` and `NODE_ENV=production`, and log the
-mode loudly at startup so it appears in the first line of any bug report.
+refuse to start when `ALLOW_ANONYMOUS=1` and the deployment does not look local,
+and log the mode loudly at startup so it appears in the first line of any bug
+report.
+
+**Corrected while implementing, 2026-09-10.** This originally said
+`NODE_ENV=production`, which was checked before being written and **would never
+have fired**: the compose file passes seven variables to the gatekeeper and
+`NODE_ENV` is not among them, and `node:22-alpine` does not set it either.
+
+The signal that does exist is the one the compose file already documents as the
+difference between the two worlds:
+
+```
+local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
+deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+```
+
+Both are honoured — `NODE_ENV=production` because it is conventional and costs
+nothing, and a non-local auth target because it is the one that fires here.
+Either refuses to start.
+
+Demonstrated rather than argued: removing the guard fails three assertions, and
+keeping **only** the `NODE_ENV` half — the control as originally written — still
+fails one.
 
 ---
 

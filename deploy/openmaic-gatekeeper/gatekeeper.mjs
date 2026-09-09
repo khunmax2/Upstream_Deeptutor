@@ -70,6 +70,69 @@ const ALLOW_ANONYMOUS = process.env.ALLOW_ANONYMOUS === '1';
 const AUTH_TIMEOUT_MS = 5_000;
 
 /**
+ * Hostnames that mean "this is somebody's laptop", which is the only place the
+ * gate is meant to be switched off.
+ */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'host.docker.internal']);
+
+/**
+ * Whether the DeepTutor this gate verifies against looks like a local trial.
+ *
+ * Unparseable or unset counts as local: an unset AUTH_URL already refuses every
+ * request with `gatekeeper_misconfigured`, so there is nothing to protect and
+ * refusing to start would only replace a clear error with a confusing one.
+ */
+function authTargetIsLocal() {
+  if (!AUTH_URL) return true;
+  try {
+    const host = new URL(AUTH_URL).hostname;
+    return LOCAL_HOSTS.has(host) || host.endsWith('.local') || host.endsWith('.localhost');
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * `ALLOW_ANONYMOUS=1` turns the gate off completely. It exists for a local
+ * trial, and the threat model (T4) is about the copied `.env`: one inherited
+ * compose override and a public deployment is serving the studio to anyone,
+ * with the identity header now set by nobody and stripped from nobody.
+ *
+ * The control the threat model proposed was `NODE_ENV=production`. Checked
+ * before implementing: **nothing sets it.** The compose file passes seven
+ * variables to this service and `NODE_ENV` is not among them, and `node:22-alpine`
+ * does not set it either — so that guard alone would never once have fired.
+ *
+ * The signal that does exist is the one the compose file already documents as
+ * the difference between the two worlds:
+ *
+ *   local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
+ *   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+ *
+ * So both are honoured: `NODE_ENV=production` because it is the conventional
+ * signal and costs nothing to support, and a non-local auth target because it is
+ * the one that actually fires here. Either refuses to start.
+ *
+ * Refusing to start rather than warning is deliberate. A warning in a container
+ * log is a thing nobody reads; a container that will not come up is a thing
+ * somebody has to look at, and the message says exactly which of the two
+ * conditions tripped it.
+ */
+function refuseUnsafeAnonymous() {
+  if (!ALLOW_ANONYMOUS) return;
+  const reasons = [];
+  if (process.env.NODE_ENV === 'production') reasons.push('NODE_ENV=production');
+  if (!authTargetIsLocal()) reasons.push(`DEEPTUTOR_AUTH_URL is not local (${AUTH_URL})`);
+  if (!reasons.length) return;
+
+  console.error('[gatekeeper] REFUSING TO START');
+  console.error('[gatekeeper] ALLOW_ANONYMOUS=1 turns the gate off entirely, and this does not');
+  console.error('[gatekeeper] look like a local trial: ' + reasons.join('; '));
+  console.error('[gatekeeper] Unset ALLOW_ANONYMOUS to run gated, which is what a deployment wants.');
+  process.exit(1);
+}
+
+/**
  * One page load is fifty to a hundred requests. Asking DeepTutor to verify each
  * one would turn its auth endpoint into this app's bottleneck, so a verdict is
  * reused briefly. The TTL is the window in which a logged-out session still
@@ -401,6 +464,8 @@ server.on('upgrade', async (req, socket, head) => {
   upstream.on('error', () => socket.destroy());
   socket.on('error', () => upstream.destroy());
 });
+
+refuseUnsafeAnonymous();
 
 server.listen(PORT, () => {
   console.log(`[gatekeeper] listening on :${PORT} -> ${UPSTREAM.origin}`);
