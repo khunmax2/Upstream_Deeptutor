@@ -254,6 +254,39 @@ upstream.
 
 ---
 
+## Phase 1 opens with the thing that killed the first attempt — 2026-09-10
+
+`OPENMAIC_INTEGRATION_V2_handoff.md` §2 is blunt about why the first integration
+was abandoned rather than repaired: nothing in `.github/workflows/` matched
+`integration/**` or `deploy/**`, so its state was never knowable. This puts CI
+in front of the code rather than behind it.
+
+Two problems, and the second was worse than the one being looked for.
+
+**The `paths:` filter did not watch the gatekeeper.** Added
+`deploy/openmaic-gatekeeper/**` and `deploy/docker-compose.openmaic.yml`. The
+gatekeeper is the only thing standing between the studio and an unauthenticated
+request, and it ran unwatched for the whole first attempt.
+
+**The workflow only fires on `main` and `dev`.** The integration lives on a long
+branch that merges into `main` only when a phase finishes, so every PR of every
+phase would have run **no CI at all** — the same invisibility, arriving by a
+different door. `feat/course-studio` is now a trigger branch.
+
+Restored the gatekeeper from `archive/main-2026-09-09` **byte for byte**, hashed
+against the archive to prove it, and unmodified: the point of this step is a
+green baseline to change things against, not a change. **21 of 21 checks pass.**
+
+The new `gatekeeper-tests` job installs nothing and carries no lockfile, because
+the gatekeeper imports only `node:` builtins — verified, five of them — and runs
+in `node:22-alpine` with no `package.json`. A dependency in CI would be a
+dependency the deployed thing does not have.
+
+Wired into `test-summary`'s `needs`, its table and its failure condition, so a
+red gatekeeper fails the run rather than being reported and ignored.
+
+Files: `.github/workflows/tests.yml`, `deploy/openmaic-gatekeeper/` (restored).
+
 ## The studio fork, pinned — and two claims that had gone stale — 2026-09-10
 
 Phase 1 opens by pinning the studio. `khunmax2/OpenMAIC` turned out to exist
