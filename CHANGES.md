@@ -6,6 +6,21 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — Branch names now say whether a branch is finished.**
+  `page-agent-clean-eval` moves to **`archive/page-agent-clean-eval`**: five
+  commits behind `eval/inpage_agent/` that exist on no other ref, parked rather
+  than abandoned because the computer-use work resumes from them. The two
+  `fix/openmaic-prompt-cjk-*` branches keep their working names — they are queued
+  for testing, and the naming now carries that difference: `archive/*` is set
+  aside, a working prefix means someone is still going to touch it. `CLAUDE.md`
+  carries the map with a line on what each one holds (`CLAUDE.md`).
+
+  Recorded because a mistake made it matter: renaming those two was done as
+  create-then-delete on one line, the create failed silently, and the delete
+  succeeded — leaving both unreachable from any ref until they were pushed back
+  by SHA. Objects survive a branch deletion; a ref does not. Verify the new name
+  exists before removing the old one.
+
 - **2026-09-09 — `CLAUDE.md` describes the repository as it is now.** The
   history rewrite and the v1.6.6 sync left two gaps a fresh clone would have hit.
 
