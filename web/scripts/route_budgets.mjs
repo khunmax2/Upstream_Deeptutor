@@ -127,6 +127,12 @@ async function startBuildServer() {
         ...process.env,
         NEXT_TELEMETRY_DISABLED: "1",
         DEEPTUTOR_API_BASE_URL: "http://127.0.0.1:9",
+        // Measure the routes, not the login page. `proxy.ts` redirects every
+        // route to `/login` when auth is on, and a developer machine has auth on
+        // the moment it has an account — so this ran against `/login` there and
+        // reported every route as 0KB. Off for the measurement server only; it is
+        // a throwaway process on a random port with no backend behind it.
+        DEEPTUTOR_AUTH_ENABLED: "0",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -175,8 +181,9 @@ async function loadRouteChunks(baseUrl, requestPath) {
   if (response.status >= 300 && response.status < 400) {
     throw new Error(
       `${requestPath} redirected to ${response.headers.get("location")} during route ` +
-        "measurement — every route would be measured as the login page. Run this " +
-        "against a checkout with no accounts in data/system/auth/users.json.",
+        "measurement — every route would be measured as the login page. The server " +
+        "this starts sets DEEPTUTOR_AUTH_ENABLED=0 to prevent exactly that, so a " +
+        "redirect here means something else is forcing one.",
     );
   }
   if (!response.ok) {

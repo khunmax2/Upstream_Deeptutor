@@ -171,11 +171,19 @@ intersection across every route target plus `/login` is 9 (945KB). The one extra
 is `app/(auth)/login/page-*.js` at **9KB** — and 423 − 414 is 9. Nothing else
 contributes: both builds produce an identical 306 chunks totalling 12,162KB.
 
-`loadRouteChunks` now fetches with `redirect: "manual"` and throws on a 3xx,
-naming the redirect target and what to do about it. Reporting 0KB was the worse
-failure: every budget passed without a byte being weighed, on every developer
-machine that has an account. This is an upstream file and the fix is
-upstream-shaped — a Stage 7 candidate.
+Two halves. The measurement server now starts with `DEEPTUTOR_AUTH_ENABLED=0`
+— `proxy.ts` reads that at runtime and stops redirecting, so the routes get
+measured wherever this runs; it is a throwaway process on a random port with no
+backend behind it, so nothing is weakened. And `loadRouteChunks` fetches with
+`redirect: "manual"` and throws if a redirect happens anyway, which now means
+something *else* forced one.
+
+Throwing alone was the first fix and was not enough: it would have left
+`precheck` permanently red on every machine that has an account, and a gate
+people learn to ignore is worse than one that lies. Verified on this machine,
+which has four accounts: 414KB against the 420 budget, identical to CI.
+
+This is an upstream file and the fix is upstream-shaped — a Stage 7 candidate.
 
 ## 6. Still open
 
