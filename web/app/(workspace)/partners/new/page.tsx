@@ -45,7 +45,7 @@ export default function NewPartnerPage() {
     { key: "soul", label: t("Soul") },
     { key: "mind", label: t("Mind") },
     { key: "library", label: t("Library") },
-    { key: "review", label: t("Review") },
+    { key: "review", label: t("partner.step.review") },
   ];
   const [stepIndex, setStepIndex] = useState(0);
   const step = steps[stepIndex].key;

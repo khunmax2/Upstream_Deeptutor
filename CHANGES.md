@@ -6,6 +6,42 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — Thai wording in the partner wizard, and a Thai font that is
+  actually named.** Two problems that only show up once the interface is Thai.
+
+  The five-step indicator in `web/app/(workspace)/partners/new/page.tsx` is one
+  `flex` row with no `flex-wrap`, and its labels appear only at `sm` and wider —
+  a row sized for English. Measured in the browser at 12.5px, the five English
+  labels take 177px of the 224px available at exactly 640px; the descriptive
+  Thai wording took 364px and overflowed by 140px. `Soul`, `Mind` and `Library`
+  are now the short forms (`บุคลิก`, `โมเดล`, `ความรู้`) at 207px, and the
+  descriptive phrasing survives where it has room — each step's own heading
+  ("เลือกโมเดลและเครื่องมือ", "เพิ่มความรู้และทักษะ") still carries the full
+  meaning. `System tools` went back to `เครื่องมือระบบ`; the longer
+  `เครื่องมือของระบบ` bought nothing.
+
+  `Review` could not simply become `ตรวจสอบ`: three of its four call sites are
+  spaced repetition, where the word is "revisit" and reads as `Review` + a
+  relative date (`components/space/learning/LearningBoard.tsx`), or filters a
+  capture list down to what is due
+  (`app/(workspace)/books/components/LearningCapturePanel.tsx`). Only the wizard
+  step means "check this before creating". It now uses a scoped
+  `partner.step.review` in all three locales — the catalogue already carries 322
+  dotted keys such as `language.english`, so this needs no new mechanism — and
+  the shared `Review` stays `ทบทวน`.
+
+  `web/tailwind.config.js` named CJK faces after the Latin-only Geist and Lora
+  precisely so Chinese would not fall through to a per-machine generic, but Thai
+  was never given the same treatment — so on a fork that boots in Thai, every
+  UI string and every `font-serif` heading (login, settings, courses, the whole
+  reading surface) rendered in whatever `system-ui` happened to resolve to. Both
+  chains now name Sukhumvit Set, Thonburi, Leelawadee UI and Noto Sans/Serif
+  Thai. The two blocks cannot shadow each other: Sukhumvit Set and Thonburi
+  carry zero CJK codepoints and Hiragino Sans GB carries 20,992 CJK and no Thai,
+  checked against the font `cmap` tables rather than assumed. Measured before
+  and after, Latin (103.3px) and Chinese (82.8px) are byte-identical and only
+  Thai changes (148.5 → 141.5px).
+
 - **2026-09-09 — The Thai locale is translated again after the v1.6.6 sync.**
   292 of the 361 keys that still carried their English text are now Thai; `th`
   went from 4,765 to 5,057 translated keys against a 5,137-key catalogue.
