@@ -254,6 +254,38 @@ upstream.
 
 ---
 
+## The threat model's one unverified finding, measured — 2026-09-10
+
+T6 said `dt_token` reaches five neighbouring applications, and said plainly that
+it had not checked whether they share a hostname: *"if they are separate
+hostnames, the finding collapses to nothing."* Checked before starting phase 1.
+
+It did not collapse. There is no hostname to collapse to — the TLS certificate
+carries one SAN, `IP Address:203.185.144.41`, with no `DNS:` entry, and `nginx -T`
+reports only that IP and `_`. Two corrections to the original list:
+`/research-helper` only redirects (the app is `/sansarn-research-helper`), and the
+catch-all at `/` answers 200 and was missed, so it is seven paths. Attapon
+confirmed the neighbours belong to another team, not to him — this is a genuine
+cross-owner exposure, not tidiness.
+
+`Secure` is set, so port 80 does not carry the cookie in the clear, and that
+sub-concern closes. But `auth.py:31` derives `SameSite` from `cookie_secure`
+(`"none" if _SECURE else "lax"`) for a stated local-development reason, so
+production inherits `None` without anyone choosing it. That widens the finding
+from "those apps receive it when their own users browse them" to "any website can
+cause a browser to attach a live session to a request against that host".
+Re-scored 7.2 → 8.1.
+
+Decision taken: `SameSite=Lax` in production, into phase 1. Narrowing `path=` is
+the real fix and stays open with an owner, because the gatekeeper receives
+`dt_token` precisely *because* the cookie goes everywhere — the two must move
+together.
+
+Also re-checked handoff §5.1 against upstream `29735f10` rather than trusting it:
+the third parameter survives, the wrapper count is exactly 33, the four direct
+call sites are those four files, and T3's `SHARED_ASSET_PRINCIPAL = 'shared'` is
+still there. Recorded as §5.1a. Nothing decayed between the archive and HEAD.
+
 ## Local production deploy — nginx subpath `/deepwitya2` over HTTPS — 2026-09-04
 
 Second deployment of this fork on the ai4thai host, built from upstream

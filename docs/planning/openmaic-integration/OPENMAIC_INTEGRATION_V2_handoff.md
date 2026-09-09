@@ -472,6 +472,22 @@ smaller than feared:
   `user:` prefix (`user:mine`, `user:requestor`) against `anon:` for
   cookie-minted ones. **Send `user:<uid>`, not a bare uid.**
 
+### 5.1a Those measurements re-checked against `29735f10`, 2026-09-10
+
+Verified independently before starting phase 1, against the checkout at
+`D:\Vscode\OpenMAIC` (`origin` = `THU-MAIC/OpenMAIC`, HEAD `29735f10`, clean):
+
+| claim | measured | |
+|---|---|---|
+| the third parameter survives at HEAD | `owner.ts:52-57`, and `if (authenticatedOwnerId) return authenticatedOwnerId;` | ✅ |
+| 33 call sites through the wrapper | 34 raw matches minus the definition = **33** | ✅ |
+| 3 direct routes + 1 server action | exactly those four files, by name | ✅ |
+| upstream's own test covers it | `tests/agent-runtime/owner.test.ts:73` | ✅ |
+| `user:` / `anon:` convention | both present (`user:mine`, `user:foreign`, `anon:alice`) | ✅ |
+| T3 still true | `SHARED_ASSET_PRINCIPAL = 'shared'` (`server-auth.ts:30`), docstring still says *no user isolation* | ✅ |
+
+**Six files, confirmed.** Nothing decayed between the archive and HEAD.
+
 ### 5.2 What is genuinely still open
 
 The design has no threat model. Every isolation guarantee in it rests on one
