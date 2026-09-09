@@ -6,6 +6,31 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-10 — The course-studio design has a threat model, and it found two
+  things the design missed.** `docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`
+  works STRIDE across every data flow and trust boundary and ranks the results by
+  DREAD. Five findings score ≥ 7 and are mandatory for phase 1.
+
+  The one most likely to have been missed is **T3**: threading
+  `authenticatedOwnerId` partitions *documents*, and nothing else. Runtime and
+  asset routes authenticate through `lib/persistence/server-auth.ts`, which its
+  own docstring calls DEVELOPMENT-ONLY, and every asset is stored under a single
+  `SHARED_ASSET_PRINCIPAL = 'shared'`. Do only the planned work and each user's
+  uploaded images and media stay readable by everyone, while the feature looks
+  finished. Replacing that module moves into phase 1, and the acceptance test has
+  to cover an asset rather than only a document.
+
+  **T7 corrects a claim made while designing.** A silently renamed identity
+  header does not collapse everyone into one owner; `resolveRequestOwnerId` falls
+  back to the anonymous cookie and mints a UUID per browser, so every user
+  quietly loses sight of their own work while the app appears healthy. Less
+  severe than claimed, still silent, and a different test.
+
+  A secret scan over both repositories found no leak. The one real credential —
+  a Google Cloud API key under `data/system/user-secrets/` — is untracked,
+  ignored by `.gitignore:9`, and has never been committed; everything else was a
+  test fixture or a lock-file integrity hash matching the Twilio pattern.
+
 - **2026-09-10 — The course-studio decision is an ADR, and its one estimate is
   now a measurement.** `docs/adr/0005-course-studio-sibling-application.md`
   records the decision in the house format the four existing ADRs use: the studio
