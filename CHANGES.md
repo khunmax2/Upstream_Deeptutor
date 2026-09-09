@@ -6,6 +6,28 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — The Thai locale is translated again after the v1.6.6 sync.**
+  292 of the 361 keys that still carried their English text are now Thai; `th`
+  went from 4,765 to 5,057 translated keys against a 5,137-key catalogue.
+
+  The bulk is v1.6.6's own new surface: the whole `readiness.*` namespace behind
+  "Settings separates *not set up* from *broken*" (77 keys, including every
+  `readiness.detail.*` reason), the Codex OAuth callback-recovery flow, the three
+  `masteryMode.*` labels, and the mastery-outline redesign.
+
+  **69 keys stay English on purpose**, and they are the fork's standing rule
+  rather than an omission: product and protocol names (`LLM`, `TTS`, `RAG`,
+  `Redis`, `Obsidian`, `Docling`, `Tika`, `MinerU PDF`, `RAG-Anything`,
+  `Responses API`, `Anthropic Messages`), identifiers and paths (`gpt-4o`,
+  `*.md`, `docs/`, `main`, `youtube-transcript-api`), cache-tier labels
+  (`L1`/`L2`/`L3`), and strings that are only placeholders
+  (`{{unit}} {{locator}}`, `{{done}} / {{total}}`).
+
+  Two details the applier enforces rather than trusts: every `{{placeholder}}`
+  set is compared against `en` before a value is written — a mismatch is skipped,
+  not applied — and Thai has no plural, so each `_one`/`_other` pair gets the
+  same text rather than an invented distinction (`web/locales/th/app.json`).
+
 - **2026-09-09 — Branch names now say whether a branch is finished.**
   `page-agent-clean-eval` moves to **`archive/page-agent-clean-eval`**: five
   commits behind `eval/inpage_agent/` that exist on no other ref, parked rather
