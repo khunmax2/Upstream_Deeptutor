@@ -166,14 +166,54 @@ than rediscovered.
 
 ---
 
-### T6 — `dt_token` is delivered to five unrelated applications · **7.2** · Information disclosure
+### T6 — `dt_token` is delivered to six applications owned by another team · **8.1** · Information disclosure
 
-**How.** DeepWitya sets `dt_token` host-only with `path=/`. The deployment host
-serves `/sansarnnews`, `/research-helper`, `/dol`, `/deepwitya`,
-`/opdc-assistant` and `/deepwitya2`. A host-only cookie with `path=/` is sent to
-**every path on that host** — so each of those applications receives a valid
-DeepWitya session token on every request their users make, and any of them can
-replay it.
+**Measured 2026-09-10, and it did not collapse — it got worse.** This section was
+written as inferred; every claim below is now checked. Re-score from 7.2 to 8.1:
+Affected and Discoverability both rise once the neighbours are confirmed to
+belong to other people, and Exploitability rises on the `SameSite` finding.
+
+**How.** DeepWitya sets `dt_token` host-only with `path=/`, and the host has no
+hostname to separate anything by. Every path below is one origin.
+
+| checked | result |
+|---|---|
+| `nginx -T` server names | `203.185.144.41` and `_` (catch-all). **No domain name anywhere** |
+| TLS certificate | one SAN, `IP Address:203.185.144.41`, no `DNS:` entry |
+| the paths | **seven**, not six — `/sansarnnews`, `/sansarn-research-helper`, `/dol`, `/deepwitya`, `/opdc-assistant`, `/deepwitya2`, and the catch-all `/` which answers 200 |
+| cookie attributes, live | `Path=/; HttpOnly; Secure; SameSite=none` |
+| who owns the neighbours | **another team.** Confirmed by Attapon |
+
+A host-only cookie with `path=/` is sent to **every path on that host**, so each
+of those applications receives a valid DeepWitya session token on every request
+their users make, and any of them can replay it. Their access logs, error
+trackers and APM traces hold it too, and a compromise of any one of them yields
+live sessions for every DeepWitya user who has visited it.
+
+Two corrections to the original list: `/research-helper` only redirects — the app
+is at `/sansarn-research-helper` — and the catch-all at `/` was missed entirely.
+
+**`Secure` is set, so port 80 does not carry it in the clear.** That sub-concern
+is closed: port 80 is open (`/` answers 502, `/deepwitya2` redirects to HTTPS),
+but the cookie will not travel over it.
+
+**The `SameSite=none` finding, which is new.** `auth.py:31` reads
+
+```python
+_SAMESITE = "none" if _SECURE else "lax"
+```
+
+and the comment above it gives a **local-development** reason: the cookie has to
+survive a frontend on `127.0.0.1` talking to a backend on `localhost`. Because
+the value is derived from `cookie_secure`, production inherits `None` without
+anyone choosing it. That changes what T6 means:
+
+- as written: those applications receive the token when *their own users* browse
+  them;
+- as measured: **any website on the internet** can cause a browser to attach a
+  live DeepWitya session to a request against any path on that host — an `<img>`,
+  a form post, a credentialed `fetch`. `HttpOnly` stops JavaScript reading the
+  cookie; it does not stop the browser sending it.
 
 **This is not caused by the studio.** The gatekeeper's own comment identifies the
 mechanism and calls it *"a real leak (an app that should not hold that token
@@ -181,16 +221,23 @@ receives it on every request)"* — and then uses it, because it is what makes t
 gate cheap. The studio inherits an exposure that already reaches five other
 tenants.
 
-**Inferred, not measured.** I have not verified that all six paths share one
-hostname; the list comes from patch 20's commit message. **Check this before
-acting on it** — if they are separate hostnames, the finding collapses to
-nothing.
+**Decision — `SameSite=Lax` in production, taken 2026-09-10.** Of the three
+options, this is the one that goes into phase 1:
 
-**Control, if confirmed.** Scope the cookie to the paths that need it, or move
-DeepWitya to its own hostname. Note that narrowing `path=` would also remove the
-mechanism the gatekeeper relies on, so the two decisions are coupled: the
-gatekeeper would then need the token forwarded deliberately rather than
-accidentally.
+| | effect | cost |
+|---|---|---|
+| **chosen — `SameSite=Lax` in production** | removes "any website can trigger it"; the neighbours still receive it on their own users' requests | one line, but `_SAMESITE` is currently *derived* from `cookie_secure`, so the two must be separated. Must first confirm the same-origin embed does not need `None` |
+| narrow `path=` | removes the cross-application delivery itself | breaks the mechanism the gatekeeper depends on — it receives `dt_token` precisely *because* the cookie goes everywhere. The two are coupled and must move together |
+| a hostname of its own | removes the shared origin entirely | needs a domain; there is none today |
+
+`Lax` still sends the cookie on top-level navigation to that host, so the
+neighbours keep receiving it when a user clicks through. **Narrowing `path=` or
+moving to a hostname remains the real fix** and stays open with an owner.
+
+One thing to verify before changing the value: the embed is same-origin under the
+new design (`/studio` on the same host), so `SameSite=None` should not be needed
+for it. That is reasoning, not yet a measurement — check it against a running
+studio before shipping the change.
 
 ---
 
@@ -256,8 +303,11 @@ other people's data.
 | T4 | refuse `ALLOW_ANONYMOUS=1` in production |
 | T5 | cache `{ ok, uid }` under the token key |
 
-Deferrable with a written owner: T6 (verify the hostname claim first), T8 (pin
-the origin value), T9 (audit).
+| T6 | `SameSite=Lax` in production — the hostname claim is now measured, and confirmed |
+
+Deferrable with a written owner: the rest of T6 (narrow `path=`, or a hostname of
+its own — both coupled to the gatekeeper's token delivery), T8 (pin the origin
+value), T9 (audit).
 
 ---
 
@@ -327,8 +377,9 @@ it is scoped and still wanted.
 - The PostgreSQL boundary (B5) has had only the ownership question asked of it —
   not connection secrets, not encryption at rest, not who can reach 5432. It
   will hold every user's course content, so it deserves its own pass.
-- **T6's hostname assumption is unverified** and is the one finding that could
-  be either serious or nothing. Check it first.
+- ~~**T6's hostname assumption is unverified.**~~ **Answered 2026-09-10.** One
+  origin, no domain, seven paths, neighbours owned by another team, and
+  `SameSite=None` on top. See T6.
 - No dependency/CVE audit of the studio's tree. Upstream's most recent commit at
   the time of writing was `fix(ssrf): keep cloud metadata endpoints blocked
   under ALLOW_LOCAL_NETWORKS` — evidence that this class of issue is live in
