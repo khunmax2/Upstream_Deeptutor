@@ -1,24 +1,58 @@
 {
   "_comment": [
-    "The OpenMAIC commit this fork's patches and translation were verified against.",
-    "Updating OpenMAIC should be a decision, not a surprise: check_openmaic_contract.py",
-    "compares the checkout's HEAD to this and says so when they differ, which is the",
-    "cue to re-run the guard, re-check the patches and re-measure the key count.",
-    "Bump `commit` and `verified` only after that pass is green — see deploy/OPENMAIC_SYNC.md."
+    "Which Course Studio this repository expects. Under ADR-0005 the studio is a",
+    "sibling application built from our own fork, so this file names three things:",
+    "the fork commit our work sits on, the upstream commit it is level with, and",
+    "the image digest a deploy actually pulls.",
+    "",
+    "The digest is the one that matters at deploy time. A commit says what the",
+    "source was; only a digest says what ran. `image.digest` is null until the",
+    "first image is published — a deploy must not proceed on a null.",
+    "",
+    "Updating the studio is a decision, not a surprise: check_openmaic_contract.py",
+    "compares a checkout's HEAD against `commit` and reports the distance. It",
+    "reports; it does not force the move. Every rebase carries the DDL-drift risk",
+    "in OPENMAIC_INTEGRATION_V2_handoff.md §3.9, so bump `commit` and `verified`",
+    "only after a green pass — pg_dump, rebase, contract check, CI both sides.",
+    "",
+    "`commit`/`commit_short`/`commit_date`/`verified`/`verified_against.locale_keys_en_us`",
+    "are read by check_openmaic_contract.py. Do not rename them without changing it."
   ],
+  "fork": {
+    "repo": "https://github.com/khunmax2/OpenMAIC",
+    "branch": "main",
+    "note": "fork of THU-MAIC/OpenMAIC; our commits sit on top of upstream's real history"
+  },
+  "upstream": {
+    "repo": "https://github.com/THU-MAIC/OpenMAIC",
+    "level_with": true,
+    "note": "fork/main was fast-forwarded to this commit on 2026-09-10; no fork commits exist yet"
+  },
+  "image": {
+    "ref": null,
+    "digest": null,
+    "built": false,
+    "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
+  },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "d4ef5faa7636d507dbfe8e17d69e2aeea9083a58",
-  "commit_short": "d4ef5faa",
-  "commit_date": "2026-09-01",
-  "commit_subject": "fix: replace rm -rf with cross-platform fs.rmSync in package scripts (#1338)",
-  "verified": "2026-09-07",
+  "commit": "29735f10d0081859ac3db1a50a0cc92f46436004",
+  "commit_short": "29735f10",
+  "commit_date": "2026-09-08",
+  "commit_subject": "fix(ssrf): keep cloud metadata endpoints blocked under ALLOW_LOCAL_NETWORKS (#1419)",
+  "verified": "2026-09-10",
   "verified_against": {
-    "locale_keys_en_us": 1862,
-    "locale_keys_translated": 1751,
-    "patches": [
-      "0001-register-th-TH-locale.patch",
-      "0002-thai-script-support.patch"
-    ],
-    "upstream_gate": "node scripts/check-i18n-keys.mjs — 13 locale files, exact key alignment"
+    "locale_keys_en_us": 1801,
+    "locale_files": 12,
+    "th_partial_keys": 1751,
+    "th_keys_matching_upstream": 1687,
+    "th_keys_missing": 114,
+    "th_keys_stale": 64,
+    "owner_threading": {
+      "call_sites_via_wrapper": 33,
+      "direct_call_sites": 4,
+      "files_to_edit": 6,
+      "third_parameter_present": true
+    },
+    "upstream_gate": "node scripts/check-i18n-keys.mjs — exact key alignment across the locale files"
   }
 }

@@ -21,7 +21,7 @@ integration off it. Nothing was lost:
 |---|---|
 | `archive/main-2026-09-09` (`5c6ed4295`) | the whole first attempt, including `integration/maic` (2,832 files) and the five files never exported |
 | `docs/maic-fork-export/` on `main` | 22 subtree patches + 7 deploy patches + `why.md` / `why-deploy.md` carrying every commit message |
-| `deploy/openmaic-patches/` on `main` | 7 tools a rebuild **runs**, above all `th-TH.partial.json` — the Thai translation source, 1,862/1,862 keys |
+| `deploy/openmaic-patches/` on `main` | 7 tools a rebuild **runs**, above all `th-TH.partial.json` — the Thai translation source. **Not 1,862/1,862; see §5.1b** |
 
 There is no `integration/` directory on `main` and no design document for the
 second attempt other than this one.
@@ -427,8 +427,10 @@ accepted.
 
 ### Phase 3 — Thai
 
-- `build_th_locale.py` generates `th-TH.json` from `th-TH.partial.json`
-  (1,862/1,862 keys, already written). **Edit the partial, never the output.**
+- `build_th_locale.py` generates `th-TH.json` from `th-TH.partial.json`.
+  **Not "already written" — measured 2026-09-10 against `29735f10`: 1,687 of
+  upstream's 1,801 keys are covered, 114 are missing, and 64 in the partial no
+  longer exist upstream.** See §5.1b. **Edit the partial, never the output.**
 - `?lang=` / `?theme=` so the studio follows DeepWitya's interface
 
 ### In parallel, not on the critical path
@@ -471,6 +473,27 @@ smaller than feared:
 - their tests establish a naming convention: authenticated owners carry a
   `user:` prefix (`user:mine`, `user:requestor`) against `anon:` for
   cookie-minted ones. **Send `user:<uid>`, not a bare uid.**
+
+### 5.1b The Thai coverage claim was stale, measured 2026-09-10
+
+This document said the translation source is complete at 1,862/1,862. That was
+true at the old pin `d4ef5faa` (2026-09-01) and is not true at `29735f10`:
+
+| | |
+|---|---|
+| `en-US.json` at `29735f10` | **1,801** keys — upstream removed keys as well as adding them |
+| `th-TH.partial.json` | 1,751 keys |
+| covered | **1,687 of 1,801** (93.7%) |
+| **missing** | **114** — e.g. `home.slogan`, `settings.lang_en`, `settings.providerNames.exa` |
+| **stale** | **64** in the partial with no upstream key left — e.g. `toolbar.toggleSidebar`, `toolbar.playbackSpeed` |
+
+Phase 3 is therefore not free: 114 keys to translate and 64 to drop. That is
+small work, but it is work, and it grows every week upstream moves
+(handoff §3.14 puts the drift at roughly 50–90 keys a week).
+
+`build_th_locale.py` already checks exactly this — coverage, interpolation
+parity, and keys that no longer exist upstream — so the numbers above are
+re-derivable rather than something to trust from this table.
 
 ### 5.2 What is genuinely still open
 
