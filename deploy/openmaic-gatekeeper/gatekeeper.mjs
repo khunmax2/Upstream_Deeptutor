@@ -47,6 +47,24 @@ const UPSTREAM = new URL(process.env.OPENMAIC_UPSTREAM || 'http://127.0.0.1:3000
 const AUTH_URL = process.env.DEEPTUTOR_AUTH_URL || '';
 const COOKIE_NAME = process.env.COOKIE_NAME || 'dt_token';
 const CACHE_TTL_MS = Number(process.env.AUTH_CACHE_TTL_MS || 30_000);
+
+/**
+ * The header that tells the studio who is asking. Server-controlled: this
+ * process is the only thing allowed to set it, and any copy arriving from a
+ * client is deleted before the request is forwarded.
+ *
+ * The value is `user:<uid>`, not a bare uid. OpenMAIC's own tests establish that
+ * convention — `user:mine` and `user:foreign` for authenticated owners against
+ * `anon:` for cookie-minted ones — so an authenticated owner is distinguishable
+ * from an anonymous one by looking at it.
+ *
+ * Both sides must agree on this name. If either renames it silently nothing
+ * turns red: the studio falls back to minting an anonymous owner per browser and
+ * every user quietly stops seeing their own work. That is why the name is
+ * asserted in check_openmaic_contract.py rather than left as a convention.
+ */
+const IDENTITY_HEADER = (process.env.STUDIO_IDENTITY_HEADER || 'x-deeptutor-owner').toLowerCase();
+const IDENTITY_PREFIX = 'user:';
 const LOGIN_URL = process.env.LOGIN_URL || '';
 const ALLOW_ANONYMOUS = process.env.ALLOW_ANONYMOUS === '1';
 const AUTH_TIMEOUT_MS = 5_000;
@@ -67,18 +85,35 @@ const verdicts = new Map();
  */
 const MODE_KEY = '\0auth-mode';
 
-function cachedVerdict(token) {
+/**
+ * Returns the whole entry, not just the boolean, because phase 1 needs the uid
+ * on every request and the three cheap ways to get it are all wrong: calling
+ * /api/auth/status per request turns DeepTutor's auth endpoint into the studio's
+ * bottleneck, which is what this cache exists to prevent; keying the uid by
+ * anything but the token invites one reader's identity being served to another;
+ * and resolving it from something the client sends is the spoof this gate is
+ * here to stop.
+ *
+ * So: same key, same TTL, one more field.
+ */
+function cachedEntry(token) {
   const hit = verdicts.get(token);
   if (!hit) return null;
   if (Date.now() > hit.expires) {
     verdicts.delete(token);
     return null;
   }
-  return hit.ok;
+  return hit;
 }
 
-function remember(token, ok) {
-  verdicts.set(token, { ok, expires: Date.now() + CACHE_TTL_MS });
+/** The boolean alone, for the callers that only ask yes or no. */
+function cachedVerdict(token) {
+  const hit = cachedEntry(token);
+  return hit ? hit.ok : null;
+}
+
+function remember(token, ok, uid) {
+  verdicts.set(token, { ok, uid, expires: Date.now() + CACHE_TTL_MS });
   // The map only ever holds live sessions; sweep on write so it cannot grow
   // without bound on a host that sees many short-lived tokens.
   if (verdicts.size > 1000) {
@@ -97,6 +132,21 @@ function readCookie(header, name) {
 }
 
 /** Remove one cookie from a Cookie header, preserving the rest. */
+/**
+ * Delete every copy of a header a client may have sent, before this process sets
+ * its own. The mirror of stripCookie, and needed for the same reason.
+ *
+ * Written over the keys rather than as `delete headers[name]` because the object
+ * is a spread of req.headers: Node lowercases what it parses, but missing a
+ * differently-cased key would forward two values, most headers join with ', ',
+ * and whichever end the studio's parser takes decides who you are.
+ */
+function stripHeader(headers, name) {
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === name) delete headers[key];
+  }
+}
+
 function stripCookie(header, name) {
   const kept = (header || '')
     .split(';')
@@ -128,8 +178,8 @@ function stripCookie(header, name) {
  * verify against.
  */
 async function verify(token) {
-  const cached = cachedVerdict(token);
-  if (cached !== null) return cached ? 'allow' : 'deny';
+  const cached = cachedEntry(token);
+  if (cached) return { verdict: cached.ok ? 'allow' : 'deny', uid: cached.uid };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
@@ -141,27 +191,31 @@ async function verify(token) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      if (token !== null) remember(token, false);
-      return 'deny';
+      if (token !== null) remember(token, false, undefined);
+      return { verdict: 'deny' };
     }
     const body = await response.json();
     // Unwrap either shape: the payload directly, or wrapped in `data`.
     const status = body?.data ?? body;
 
     if (status?.enabled === false) {
-      remember(MODE_KEY, false);
-      return 'auth_disabled';
+      remember(MODE_KEY, false, undefined);
+      return { verdict: 'auth_disabled' };
     }
-    remember(MODE_KEY, true);
-    if (token === null) return 'deny';
+    remember(MODE_KEY, true, undefined);
+    if (token === null) return { verdict: 'deny' };
 
     const ok = status?.authenticated === true;
-    remember(token, ok);
-    return ok ? 'allow' : 'deny';
+    // Read the uid from the same answer that granted the verdict. Anything else
+    // — a second call, a different cache key, a value the client sends — either
+    // costs a round trip per request or hands identity to the caller.
+    const uid = ok ? String(status?.user_id ?? '').trim() : '';
+    remember(token, ok, uid || undefined);
+    return { verdict: ok ? 'allow' : 'deny', uid: uid || undefined };
   } catch {
     // Deliberately not cached: a transient outage must not lock a reader out
     // for the whole TTL after the checker comes back.
-    return 'unavailable';
+    return { verdict: 'unavailable' };
   } finally {
     clearTimeout(timer);
   }
@@ -174,7 +228,7 @@ async function verify(token) {
 async function authIsEnabled() {
   const cached = cachedVerdict(MODE_KEY);
   if (cached !== null) return cached;
-  const verdict = await verify(null);
+  const { verdict } = await verify(null);
   if (verdict === 'auth_disabled') return false;
   if (verdict === 'unavailable') return null;
   return true;
@@ -215,11 +269,24 @@ function refuseAuthDisabled(res) {
   );
 }
 
-function forward(req, res) {
+/**
+ * `ownerId` is the verified uid, or undefined when nothing verified one — which
+ * is the ALLOW_ANONYMOUS path. Undefined sends **no** identity header at all
+ * rather than an empty one, so the studio falls back to its own anonymous owner
+ * instead of being handed a blank identity it might treat as a name.
+ *
+ * Strip before set, always, including on the anonymous path: a client-supplied
+ * copy is exactly the hole this header exists to close, and leaving it in place
+ * when the gate is off would make ALLOW_ANONYMOUS a spoofing tool rather than a
+ * development convenience.
+ */
+function forward(req, res, ownerId) {
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
   const headers = { ...req.headers, host: UPSTREAM.host };
   if (cookie) headers.cookie = cookie;
   else delete headers.cookie;
+  stripHeader(headers, IDENTITY_HEADER);
+  if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
 
   const proxied = http.request(
     {
@@ -251,7 +318,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (ALLOW_ANONYMOUS) return forward(req, res);
+  if (ALLOW_ANONYMOUS) return forward(req, res, undefined);
 
   if (!AUTH_URL) {
     return refuse(
@@ -281,8 +348,8 @@ const server = http.createServer(async (req, res) => {
     );
   }
 
-  const verdict = await verify(token);
-  if (verdict === 'allow') return forward(req, res);
+  const { verdict, uid } = await verify(token);
+  if (verdict === 'allow') return forward(req, res, uid);
   if (verdict === 'auth_disabled') return refuseAuthDisabled(res);
   if (verdict === 'unavailable') return refuseUnavailable(res);
   return refuse(
@@ -301,15 +368,23 @@ const server = http.createServer(async (req, res) => {
  */
 server.on('upgrade', async (req, socket, head) => {
   const token = readCookie(req.headers.cookie, COOKIE_NAME);
+  let ownerId;
   if (!ALLOW_ANONYMOUS) {
     if (!token) return socket.destroy();
-    if ((await verify(token)) !== 'allow') return socket.destroy();
+    const result = await verify(token);
+    if (result.verdict !== 'allow') return socket.destroy();
+    ownerId = result.uid;
   }
 
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
   const headers = { ...req.headers, host: UPSTREAM.host };
   if (cookie) headers.cookie = cookie;
   else delete headers.cookie;
+  // The same strip-then-set as forward(). An upgrade that skipped this would be
+  // a way around the header entirely, and a socket is exactly where nobody
+  // thinks to look.
+  stripHeader(headers, IDENTITY_HEADER);
+  if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
 
   const upstream = net.connect(Number(UPSTREAM.port || 80), UPSTREAM.hostname, () => {
     upstream.write(
@@ -329,7 +404,7 @@ server.on('upgrade', async (req, socket, head) => {
 
 server.listen(PORT, () => {
   console.log(`[gatekeeper] listening on :${PORT} -> ${UPSTREAM.origin}`);
-  console.log(`[gatekeeper] cookie=${COOKIE_NAME} ttl=${CACHE_TTL_MS}ms`);
+  console.log(`[gatekeeper] cookie=${COOKIE_NAME} ttl=${CACHE_TTL_MS}ms identity=${IDENTITY_HEADER}`);
   if (ALLOW_ANONYMOUS) console.warn('[gatekeeper] ALLOW_ANONYMOUS=1 — the gate is OFF');
   else if (!AUTH_URL) console.error('[gatekeeper] DEEPTUTOR_AUTH_URL unset — every request is refused');
   else console.log(`[gatekeeper] verifying against ${AUTH_URL}`);
