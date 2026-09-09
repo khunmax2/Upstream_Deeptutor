@@ -147,6 +147,25 @@ Locale: `en` and `zh` at 5,137 keys, `th` at exact parity (+252 this sync).
 `lightrag-hku` upgraded `1.5.7rc2` → `1.5.7` to match what the merged
 `pyproject.toml` declares.
 
+## 5b. `perf:check` cannot be trusted on a checkout that has accounts
+
+The real checkout reports every route at **0KB** and `root-app-shell` at 423KB;
+a clean worktree reports real per-route numbers and **414KB**. Same tree, same
+`node_modules`, stable across repeats.
+
+`route_budgets.mjs` starts `next start` and fetches each route to collect its
+chunks. The real checkout has four accounts in `data/system/auth/users.json`, so
+every route redirects to `/login` — every row collapses onto the login chunk set,
+the intersection that defines the app shell swallows them, and what is left for
+each route is nothing. The shell number is inflated by exactly the route weight
+it should have excluded.
+
+CI checks out clean and has no accounts, so it measures like the worktree. The
+414 is the number this sync's 420 budget was set from. **Do not tune a budget
+from a machine that can log in** — and note this predates the sync: the same
+0KB pattern appears on `main` before the merge, where it read 403 against 410
+and passed by luck rather than by measurement.
+
 ## 6. Still open
 
 - **252 new `th` keys carry their English text.** Parity is exact, so the gate is
