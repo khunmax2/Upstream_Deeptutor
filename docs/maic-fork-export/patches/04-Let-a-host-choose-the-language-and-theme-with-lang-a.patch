@@ -1,0 +1,126 @@
+From 37fc2ae6035657ef1e743d21325a7fc47ffd5676 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 02:23:35 +0700
+Subject: [PATCH] Let a host choose the language and theme with ?lang= and
+ ?theme=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+An app embedding OpenMAIC in an iframe currently has no way to tell it which
+language or theme to use. Both are read once on mount from bare localStorage
+keys, which an embedder can only write by sharing an origin with it — and
+sharing an origin is exactly the arrangement an embedder should not be pushed
+into, since it also merges every other storage key and collapses the two apps
+into one browser security principal.
+
+Two query parameters close that gap without any of it:
+
+  ?lang=th        resolved through the existing resolveLocale, so a host may
+                  pass a loose code ('th', 'pt') without knowing the exact
+                  locale identifier, and anything unrecognised falls back
+                  rather than erroring
+  ?theme=dark     validated against the same light/dark/system list already
+                  used for the stored value
+
+Precedence is query > stored > browser/system, and a host-supplied value is
+persisted so it survives in-app navigation, which does not carry the query
+along. With no query present nothing changes for anyone.
+
+In use-i18n the query is read outside the try block on purpose: location.search
+cannot throw, and a browser with storage blocked should still honour the host's
+choice of language rather than losing it with the failed read.
+
+Verified against a dev server with localStorage cleared first, so the query is
+demonstrably what applied it: loading /?lang=th&theme=dark comes up in Thai with
+the dark class set, and locale/theme are persisted as 'th-TH' and 'dark'.
+
+Unrelated and left alone: app/layout.tsx hardcodes <html lang="en">, so the
+document language attribute does not follow the resolved locale. Fixing that
+needs locale detection to move server-side and is a separate change.
+---
+ integration/maic/lib/hooks/use-i18n.tsx  | 37 ++++++++++++++++++++----
+ integration/maic/lib/hooks/use-theme.tsx |  8 ++++-
+ 2 files changed, 39 insertions(+), 6 deletions(-)
+
+diff --git a/integration/maic/lib/hooks/use-i18n.tsx b/integration/maic/lib/hooks/use-i18n.tsx
+index 18936cc1c..d3632cb59 100644
+--- a/integration/maic/lib/hooks/use-i18n.tsx
++++ b/integration/maic/lib/hooks/use-i18n.tsx
+@@ -6,6 +6,19 @@ import { type Locale, defaultLocale, supportedLocales } from '@/lib/i18n';
+ import '@/lib/i18n/config';
+ 
+ const LOCALE_STORAGE_KEY = 'locale';
++/**
++ * Query parameter a host can use to choose the language, e.g. `?lang=th`.
++ *
++ * Exists for embedded deployments: an app framing OpenMAIC in an iframe has
++ * no other way to hand it a language. Same-origin hosts could write the
++ * storage key directly, but that only works when both sides share an origin,
++ * which is precisely the arrangement an embedder should not be forced into.
++ *
++ * The value goes through `resolveLocale`, so a host may pass a loose code
++ * (`th`, `pt`) without knowing the exact locale identifier, and anything
++ * unrecognised falls back rather than erroring.
++ */
++const LOCALE_QUERY_PARAM = 'lang';
+ 
+ /** Match a browser language code (e.g. 'en', 'zh-TW') to a supported locale */
+ function resolveLocale(lang: string): Locale {
+@@ -35,13 +48,27 @@ export function I18nProvider({ children }: { children: ReactNode }) {
+   // i18next handles fallback automatically: if the detected language
+   // has no matching JSON file, it falls back to fallbackLng.
+   useEffect(() => {
++    // Read the query first and outside the try: `location.search` cannot throw,
++    // and a blocked localStorage must not cost the host its choice of language.
++    const fromQuery = new URLSearchParams(window.location.search).get(LOCALE_QUERY_PARAM);
++    let stored: string | null = null;
+     try {
+-      const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+-      const raw = stored || navigator.language || defaultLocale;
+-      const target = resolveLocale(raw);
+-      if (target !== i18n.language) i18n.changeLanguage(target);
++      stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+     } catch {
+-      // localStorage unavailable, keep default
++      // localStorage unavailable; the query and the browser language still apply.
++    }
++
++    const target = resolveLocale(fromQuery || stored || navigator.language || defaultLocale);
++    if (target !== i18n.language) i18n.changeLanguage(target);
++
++    // Persist a host-supplied language so it survives in-app navigation, which
++    // does not carry the query along.
++    if (fromQuery) {
++      try {
++        localStorage.setItem(LOCALE_STORAGE_KEY, target);
++      } catch {
++        // Storage is optional here — the language is already applied.
++      }
+     }
+   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ 
+diff --git a/integration/maic/lib/hooks/use-theme.tsx b/integration/maic/lib/hooks/use-theme.tsx
+index 2f0010617..ac317900a 100644
+--- a/integration/maic/lib/hooks/use-theme.tsx
++++ b/integration/maic/lib/hooks/use-theme.tsx
+@@ -21,9 +21,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
+   // Hydrate from localStorage after mount (avoids SSR mismatch)
+   /* eslint-disable react-hooks/set-state-in-effect -- Hydration from localStorage must happen in effect */
+   useEffect(() => {
+-    const stored = localStorage.getItem('theme') as Theme | null;
++    // `?theme=dark` lets a host choose the theme, the counterpart to `?lang=`
++    // in use-i18n. An embedder on another origin cannot reach this storage key,
++    // and matching the surrounding app's light/dark state is the difference
++    // between an embed that reads as one product and one that reads as two.
++    const fromQuery = new URLSearchParams(window.location.search).get('theme');
++    const stored = (fromQuery ?? localStorage.getItem('theme')) as Theme | null;
+     if (stored && ['light', 'dark', 'system'].includes(stored)) {
+       setThemeState(stored);
++      if (fromQuery) localStorage.setItem('theme', stored);
+     }
+     setSystemTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+   }, []);
+-- 
+2.51.0.windows.2
+

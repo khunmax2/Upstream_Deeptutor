@@ -1,0 +1,104 @@
+From 2b95d2f0b2b3c9c920a62db35c5a17ea23e8c22b Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 20:11:11 +0700
+Subject: [PATCH] fix(bridge): a rotated key reaches the course studio without
+ a shell
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The provider bridge was a script under deploy/ plus a container restart. Both
+are things a user cannot do, and the person whose key expires is a user with a
+settings page, not an operator with SSH. Their key runs out, they paste a new
+one into DeepTutor, and the embedded studio keeps using the dead one — alive and
+broken at the same time.
+
+The mapping moves out of build_server_providers.py into
+deeptutor/services/config/openmaic_bridge.py, which ships inside the image
+(deploy/ does not), and ModelCatalogService.save() calls it. save() is the one
+place every settings path funnels through, so the settings page, the connection
+tester and the partner flows are covered by hooking it once. Best-effort by
+construction: an unmappable provider or a read-only data directory is logged and
+skipped rather than costing the user the settings they just saved.
+DEEPTUTOR_OPENMAIC_BRIDGE=0 disables it.
+
+OpenMAIC's getConfig() cached the parsed YAML for the life of the process, which
+is the wrong shape for a read-only mount another process rewrites. It is now
+keyed on mtime + size; a statSync per call is nothing beside the LLM round trip
+that follows.
+
+The script stays as a thin CLI over the same module — one implementation, two
+entry points — for a first bring-up and for --dry-run.
+
+Also: the bridge's image and video binding tables were empty, so a configured
+image provider was skipped entirely. Filled in, including openrouter, which
+answers the same /images/generations contract openai-image calls and returns
+data[0].b64_json as that adapter expects — verified against the real endpoint at
+1024x576, the 16:9 size slides ask for.
+
+Verified with no restart: change the model, save, and /api/server-providers in
+the studio returns it, while docker inspect reports restarts: 0 and the log
+shows three "Loaded (server-providers.yml)" lines in one process.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ .../maic/lib/server/provider-config.ts        | 29 ++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/integration/maic/lib/server/provider-config.ts b/integration/maic/lib/server/provider-config.ts
+index b1c5d2fca..6864d7454 100644
+--- a/integration/maic/lib/server/provider-config.ts
++++ b/integration/maic/lib/server/provider-config.ts
+@@ -373,6 +373,8 @@ const BEDROCK_PROVIDER_ID = 'bedrock';
+ 
+ /** Cache keyed by YAML filename (empty string = default file). */
+ const _configs: Map<string, ServerConfig> = new Map();
++/** File identity the cached config was built from; '' before the first read. */
++let _configStamp = '';
+ 
+ /**
+  * AliDocMind is server-configured when AK/SK are provided via env
+@@ -567,14 +569,39 @@ function logConfig(config: ServerConfig, label: string): void {
+   }
+ }
+ 
++/**
++ * A cheap identity for the config file: mtime + size, or '' when it is absent.
++ * Rewrites land as a whole new file (the writer replaces it atomically), so a
++ * changed stamp means changed content.
++ */
++function configStamp(filename: string): string {
++  try {
++    const s = fs.statSync(path.join(process.cwd(), filename));
++    return `${s.mtimeMs}:${s.size}`;
++  } catch {
++    return '';
++  }
++}
++
++/**
++ * The parsed server config, re-read when the file behind it changes.
++ *
++ * Caching this for the life of the process meant a rotated key needed a
++ * container restart to take effect — and whoever owns the key is rarely
++ * whoever has a shell on the host. The file is a read-only mount that another
++ * process rewrites, so the cache is keyed on its mtime and size rather than
++ * held forever.
++ */
+ function getConfig(): ServerConfig {
++  const stamp = configStamp(DEFAULT_FILENAME);
+   const cached = _configs.get('');
+-  if (cached) return cached;
++  if (cached && _configStamp === stamp) return cached;
+ 
+   const yamlData = loadYamlFile(DEFAULT_FILENAME);
+   const config = buildConfig(yamlData);
+   logConfig(config, DEFAULT_FILENAME);
+   _configs.set('', config);
++  _configStamp = stamp;
+   return config;
+ }
+ 
+-- 
+2.51.0.windows.2
+

@@ -1,0 +1,81 @@
+From db1da78955efc99d3908b9d8720a0a662efc1a06 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 02:23:36 +0700
+Subject: [PATCH] Make the container build reproducible off a clean checkout
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two fixes that a `docker build` needs and that upstream's files do not have.
+Written by the repository owner while getting the image to build at all; kept
+here as a patch for the same reason as the others — so the OpenMAIC checkout
+stays a pristine mirror and this survives a re-clone.
+
+.dockerignore — Docker matches patterns from the context root only, not at
+every level the way .gitignore does, so a pnpm workspace needs explicit `**`
+globs for its nested copies. Without them, and specifically on a Windows host,
+pnpm's nested `node_modules` are absolute `D:/...` symlinks: they are copied
+into the image, are dead there, and shadow the real ones the deps stage built.
+`**/dist` is the same story for package build output, which the deps stage
+postinstall regenerates anyway.
+
+Dockerfile — `NEXT_PUBLIC_PRO_WORKBENCH_ENABLED` was the one build-time flag in
+this family with no matching ARG/ENV pair, so it could not be set at build time
+like its neighbours. Next inlines `NEXT_PUBLIC_*` at build, so a runtime
+environment variable does not reach the browser bundle; the ARG is the only way.
+
+Both are upstream candidates: neither mentions DeepTutor, and the .dockerignore
+one is a plain bug for anyone building on Windows.
+---
+ integration/maic/.dockerignore | 8 ++++++++
+ integration/maic/Dockerfile    | 2 ++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/integration/maic/.dockerignore b/integration/maic/.dockerignore
+index 9caa957a6..9c8558eee 100644
+--- a/integration/maic/.dockerignore
++++ b/integration/maic/.dockerignore
+@@ -1,12 +1,20 @@
+ # dependencies
++# Docker matches .dockerignore patterns from the context root, not at every
++# level like .gitignore, so the nested workspace copies need explicit globs.
++# On a Windows host pnpm writes them as absolute D:/... symlinks, which are
++# dead inside the container and shadow the ones the deps stage built.
+ node_modules
++**/node_modules
+ .pnpm-store
+ 
+ # build output
++# Package dist/ is rebuilt by the deps stage postinstall; copying the host copy
++# only risks staleness.
+ .next
+ out
+ build
+ dist
++**/dist
+ 
+ # git
+ .git
+diff --git a/integration/maic/Dockerfile b/integration/maic/Dockerfile
+index c326ae627..d4faad060 100644
+--- a/integration/maic/Dockerfile
++++ b/integration/maic/Dockerfile
+@@ -51,6 +51,7 @@ FROM base AS builder
+ ARG ALLOWED_FRAME_ANCESTORS
+ ARG NEXT_PUBLIC_PERSISTENCE
+ ARG NEXT_PUBLIC_PERSISTENCE_TOKEN
++ARG NEXT_PUBLIC_PRO_WORKBENCH_ENABLED
+ ARG NEXT_PUBLIC_MAIC_EDITOR_ENABLED
+ ARG NEXT_PUBLIC_MAIC_EDITOR_RENDERER_ENABLED
+ ARG NEXT_PUBLIC_MAIC_PLAYBACK_RENDERER_ENABLED
+@@ -62,6 +63,7 @@ ARG NEXT_PUBLIC_ENABLE_PPTX_IMPORT
+ ENV ALLOWED_FRAME_ANCESTORS=$ALLOWED_FRAME_ANCESTORS
+ ENV NEXT_PUBLIC_PERSISTENCE=$NEXT_PUBLIC_PERSISTENCE
+ ENV NEXT_PUBLIC_PERSISTENCE_TOKEN=$NEXT_PUBLIC_PERSISTENCE_TOKEN
++ENV NEXT_PUBLIC_PRO_WORKBENCH_ENABLED=$NEXT_PUBLIC_PRO_WORKBENCH_ENABLED
+ ENV NEXT_PUBLIC_MAIC_EDITOR_ENABLED=$NEXT_PUBLIC_MAIC_EDITOR_ENABLED
+ ENV NEXT_PUBLIC_MAIC_EDITOR_RENDERER_ENABLED=$NEXT_PUBLIC_MAIC_EDITOR_RENDERER_ENABLED
+ ENV NEXT_PUBLIC_MAIC_PLAYBACK_RENDERER_ENABLED=$NEXT_PUBLIC_MAIC_PLAYBACK_RENDERER_ENABLED
+-- 
+2.51.0.windows.2
+

@@ -1,0 +1,45 @@
+From e0dfe6888ea3dbb209d0269ea0f8f8b77b4d5e1a Mon Sep 17 00:00:00 2001
+From: Pond500 <pond500@gmail.com>
+Date: Mon, 7 Sep 2026 10:35:17 +0700
+Subject: [PATCH] docs(deploy): note that saving settings in the UI re-locks
+ system.json
+
+The perms note covered the container restart path only. A second, separate
+trigger surfaced during the 2026-09-07 update: the app writes system.json
+atomically (temp file + rename), so the replacement takes its mode from umask
+rather than inheriting the 644 we set. Anyone saving a setting in the web UI
+therefore re-locks the file, and the next --build dies before it starts.
+
+docker.env escapes this because the wrapper writes it, not the app.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ deploy/REDEPLOY.md | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/deploy/REDEPLOY.md b/deploy/REDEPLOY.md
+index 9fbb6a0a2..1de470921 100644
+--- a/deploy/REDEPLOY.md
++++ b/deploy/REDEPLOY.md
+@@ -189,8 +189,16 @@ upstream เพิ่ม `deeptutor-redis` (`redis:7.4-alpine`, volume `./data/r
+   **บน deploy สดปี v1.6.4 พบว่า container สร้าง `data/user` เป็น 700 และ
+   `data/user/settings` เป็น 700 ด้วย → host เข้าไม่ถึงแม้แต่จะ `ls`**
+ 
+-  **⚠️ ต้องทำซ้ำก่อน `up -d` / `--build` ทุกครั้ง** — file mode (644/666) รอด แต่
+-  **directory mode ถูกรีเซ็ตกลับเป็น 700 ทุกครั้งที่คอนเทนเนอร์ start/restart**
++  **⚠️ ต้องทำซ้ำก่อน `up -d` / `--build` ทุกครั้ง** — มีสองกลไกที่รีเซ็ตคนละแบบ:
++
++  1. **directory mode กลับเป็น 700 ทุกครั้งที่คอนเทนเนอร์ start/restart**
++  2. **`system.json` กลับเป็น 600 เมื่อมีคนกด save setting ในหน้าเว็บ** — แอปเขียน
++     ไฟล์แบบ atomic (temp + rename) ไฟล์ใหม่จึงได้ mode ตาม umask ไม่ใช่ของเดิม
++     ที่เรา chmod ไว้ เจอจริงตอน update 2026-09-07: ไฟล์ถูกแก้ตอน 09-05 06:11
++     แล้ว build ถัดมาก็ตายทันที ต่างจาก `docker.env` ที่ 666 รอด เพราะ wrapper
++     เป็นคนเขียน ไม่ใช่แอป
++
++  (ข้อ 1 คือ)
+   (โค้ด multi-user เรียก `os.chmod(path, stat.S_IRWXU)` ดู `deeptutor/multi_user/paths.py`)
+   อาการ: `python3 scripts/docker_compose.py ... --build` ตายคาที่
+   `PermissionError: '/…/data/user/settings'` **ก่อน build จะเริ่มด้วยซ้ำ**
+-- 
+2.51.0.windows.2
+

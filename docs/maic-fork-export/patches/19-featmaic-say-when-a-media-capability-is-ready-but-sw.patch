@@ -1,0 +1,564 @@
+From acfc22e3e2c9293e9b66e791f76800cb846f88f0 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 21:23:15 +0700
+Subject: [PATCH] feat(maic): say when a media capability is ready but switched
+ off
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Configuring an image provider and switching image generation on are two
+controls in two places — the settings page owns the first, the popover beside
+the compose box owns the second — and nothing connected them. A credit key, a
+working provider and a bridge that carried it through still produced courses
+with no pictures, because imageGenerationEnabled defaults to false and the
+prompt never asks for an image while it is.
+
+The default is right; images cost money per call. The silence was not:
+
+- an enabled tab carried a violet dot, and a tab whose provider is configured
+  but switched off looked identical to one with no provider at all. It now
+  carries a hollow dot.
+- the image tab says so when off with a usable provider.
+- the settings page, where the provider was configured, names the state and
+  where the switch actually lives.
+
+Four keys, 13 languages, two files — both small UI insertions rather than
+changes to existing logic, and none of it is DeepTutor-specific, so it is an
+upstream candidate rather than something to carry.
+
+Found in passing: the popover's tab labels (Image/Video/TTS/ASR) were hardcoded
+English in every language, in the file being edited. Now media.tab*.
+
+Verified in the browser: hollow dot on the image tab, the hint under its switch,
+and "การสร้างภาพยังปิดอยู่ เปิดได้ที่ปุ่มสื่อ ข้างช่องพิมพ์ในหน้าแรก" on the
+settings tab. tsc clean, eslint clean, i18n gate 13 locales, contract green
+after the pin bump (1798 -> 1862 keys).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ .../components/generation/media-popover.tsx   | 46 +++++++++++++++----
+ .../components/settings/image-settings.tsx    | 12 +++++
+ integration/maic/lib/i18n/locales/ar-SA.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/de-DE.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/en-US.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/es-MX.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/fr-FR.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/ja-JP.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/ko-KR.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/pt-BR.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/ru-RU.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/th-TH.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/vi-VN.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/zh-CN.json  | 11 ++++-
+ integration/maic/lib/i18n/locales/zh-TW.json  | 11 ++++-
+ 15 files changed, 166 insertions(+), 35 deletions(-)
+
+diff --git a/integration/maic/components/generation/media-popover.tsx b/integration/maic/components/generation/media-popover.tsx
+index 35f7986ab..18e40950e 100644
+--- a/integration/maic/components/generation/media-popover.tsx
++++ b/integration/maic/components/generation/media-popover.tsx
+@@ -57,11 +57,13 @@ const VIDEO_PROVIDER_ICONS: Record<string, string> = {
+ 
+ type TabId = 'image' | 'video' | 'tts' | 'asr';
+ 
+-const TABS: Array<{ id: TabId; icon: LucideIcon; label: string }> = [
+-  { id: 'image', icon: ImageIcon, label: 'Image' },
+-  { id: 'video', icon: Video, label: 'Video' },
+-  { id: 'tts', icon: Volume2, label: 'TTS' },
+-  { id: 'asr', icon: Mic, label: 'ASR' },
++// The label is a key, not a string: this table is module scope and `t` lives
++// in the component.
++const TABS: Array<{ id: TabId; icon: LucideIcon; labelKey: string }> = [
++  { id: 'image', icon: ImageIcon, labelKey: 'media.tabImage' },
++  { id: 'video', icon: Video, labelKey: 'media.tabVideo' },
++  { id: 'tts', icon: Volume2, labelKey: 'media.tabTts' },
++  { id: 'asr', icon: Mic, labelKey: 'media.tabAsr' },
+ ];
+ 
+ function providerModels<T extends { id: string; name: string }>(
+@@ -187,6 +189,16 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
+     [cfgOk, videoProvidersConfig],
+   );
+ 
++  // A capability whose provider is configured but whose switch is off. The
++  // grouped-select lists are already filtered to usable providers, so a
++  // non-empty list is exactly "there is something here to turn on".
++  const readyMap: Record<TabId, boolean> = {
++    image: imageGroups.length > 0,
++    video: videoGroups.length > 0,
++    tts: ttsEnabled,
++    asr: asrEnabled,
++  };
++
+   // ASR: built-in + custom providers
+   const asrGroups = useMemo(() => {
+     const groups: SelectGroupData[] = [];
+@@ -273,10 +285,15 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
+                   )}
+                 >
+                   <Icon className="size-3.5" />
+-                  <span className="hidden sm:inline">{tab.label}</span>
+-                  {isEnabled && !isActive && (
+-                    <span className="absolute top-1 right-1 size-1.5 rounded-full bg-violet-500" />
+-                  )}
++                  <span className="hidden sm:inline">{t(tab.labelKey)}</span>
++                  {!isActive &&
++                    (isEnabled ? (
++                      <span className="absolute top-1 right-1 size-1.5 rounded-full bg-violet-500" />
++                    ) : readyMap[tab.id] ? (
++                      // Ready but off: hollow, so it reads as "available" rather
++                      // than competing with the on state.
++                      <span className="absolute top-1 right-1 size-1.5 rounded-full border border-violet-400/70" />
++                    ) : null)}
+                 </button>
+               );
+             })}
+@@ -291,6 +308,11 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
+               label={t('media.imageCapability')}
+               enabled={imageGenerationEnabled}
+               onToggle={setImageGenerationEnabled}
++              hint={
++                !imageGenerationEnabled && imageGroups.length > 0
++                  ? t('media.providerReadyHint')
++                  : undefined
++              }
+             >
+               <GroupedSelect
+                 groups={imageGroups}
+@@ -376,12 +398,15 @@ function TabPanel({
+   label,
+   enabled,
+   onToggle,
++  hint,
+   children,
+ }: {
+   icon: LucideIcon;
+   label: string;
+   enabled: boolean;
+   onToggle: (v: boolean) => void;
++  /** Shown under the switch when the capability is off but usable. */
++  hint?: string;
+   children?: React.ReactNode;
+ }) {
+   return (
+@@ -407,6 +432,9 @@ function TabPanel({
+           className="scale-[0.85] origin-right"
+         />
+       </div>
++      {hint ? (
++        <p className="text-[11px] leading-snug text-muted-foreground/80 -mt-1">{hint}</p>
++      ) : null}
+       {enabled && children}
+     </div>
+   );
+diff --git a/integration/maic/components/settings/image-settings.tsx b/integration/maic/components/settings/image-settings.tsx
+index 66f280d35..b6db5005b 100644
+--- a/integration/maic/components/settings/image-settings.tsx
++++ b/integration/maic/components/settings/image-settings.tsx
+@@ -34,6 +34,7 @@ interface WorkflowEntry {
+ 
+ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
+   const { t } = useI18n();
++  const imageGenerationEnabled = useSettingsStore((s) => s.imageGenerationEnabled);
+ 
+   const imageModelId = useSettingsStore((state) => state.imageModelId);
+   const imageProvidersConfig = useSettingsStore((state) => state.imageProvidersConfig);
+@@ -178,6 +179,17 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
+ 
+   return (
+     <div className="space-y-6 max-w-3xl">
++      {/* Configuring a provider and switching the capability on are two
++          different controls in two different places — this page owns the
++          first, the media popover beside the compose box owns the second.
++          Saying so here is the difference between "not set up yet" and
++          "set up, and quietly doing nothing". */}
++      {!imageGenerationEnabled && (
++        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-300">
++          {t('settings.imageGenerationOff')} {t('settings.imageGenerationOffWhere')}
++        </div>
++      )}
++
+       {/* Server-configured notice */}
+       {isServerConfigured && (
+         <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
+diff --git a/integration/maic/lib/i18n/locales/ar-SA.json b/integration/maic/lib/i18n/locales/ar-SA.json
+index f0a0df7f7..7c107b041 100644
+--- a/integration/maic/lib/i18n/locales/ar-SA.json
++++ b/integration/maic/lib/i18n/locales/ar-SA.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "لا يدعم تحويل النص إلى كلام المدمج في المتصفح ميزات الصوت في الخط الزمني للمحرر (المعاينة وإعادة التوليد والتعليق الصوتي الجماعي). بدّل إلى مزود TTS مُدار لتوليد صوت كل سطر وإدارته.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "توليد الصور مُعطَّل حاليًا.",
++    "imageGenerationOffWhere": "فعّله من زر الوسائط بجانب حقل الإدخال في الصفحة الرئيسية."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "النموذج",
+     "voice": "الصوت",
+     "speed": "السرعة",
+-    "language": "اللغة"
++    "language": "اللغة",
++    "providerReadyHint": "تم إعداد مزوّد وهو جاهز. فعّل هذا الخيار لاستخدامه.",
++    "tabImage": "صورة",
++    "tabVideo": "فيديو",
++    "tabTts": "نطق",
++    "tabAsr": "إملاء"
+   },
+   "accessCode": {
+     "title": "أدخل رمز الوصول",
+diff --git a/integration/maic/lib/i18n/locales/de-DE.json b/integration/maic/lib/i18n/locales/de-DE.json
+index 52ad0604f..b5194d771 100644
+--- a/integration/maic/lib/i18n/locales/de-DE.json
++++ b/integration/maic/lib/i18n/locales/de-DE.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "Browserintegrierte TTS unterstützt die Audiofunktionen der Editor-Zeitleiste nicht (Vorschau, erneute Generierung und Sammelvertonung). Wechsle zu einem verwalteten TTS-Anbieter, um Audio für einzelne Zeilen zu generieren und zu verwalten.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "Die Bildgenerierung ist derzeit aus.",
++    "imageGenerationOffWhere": "Einschalten über die Medien-Schaltfläche neben dem Eingabefeld auf der Startseite."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Modell",
+     "voice": "Stimme",
+     "speed": "Geschwindigkeit",
+-    "language": "Sprache"
++    "language": "Sprache",
++    "providerReadyHint": "Ein Anbieter ist eingerichtet und bereit. Schalte dies ein, um ihn zu nutzen.",
++    "tabImage": "Bild",
++    "tabVideo": "Video",
++    "tabTts": "Sprache",
++    "tabAsr": "Spracheingabe"
+   },
+   "accessCode": {
+     "title": "Zugangscode eingeben",
+diff --git a/integration/maic/lib/i18n/locales/en-US.json b/integration/maic/lib/i18n/locales/en-US.json
+index c1d058268..ad0ec0971 100644
+--- a/integration/maic/lib/i18n/locales/en-US.json
++++ b/integration/maic/lib/i18n/locales/en-US.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "Browser-native TTS doesn't support the editor timeline's audio features (preview, regenerate, and bulk voiceover). Switch to a managed TTS provider to generate and manage per-line audio.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "Image generation is currently off.",
++    "imageGenerationOffWhere": "Turn it on from the media button beside the prompt box on the home page."
+   },
+   "workspace": {
+     "untitledCourse": "Untitled course",
+@@ -2004,7 +2006,12 @@
+     "model": "Model",
+     "voice": "Voice",
+     "speed": "Speed",
+-    "language": "Language"
++    "language": "Language",
++    "providerReadyHint": "A provider is configured and ready. Turn this on to use it.",
++    "tabImage": "Image",
++    "tabVideo": "Video",
++    "tabTts": "Speech",
++    "tabAsr": "Voice"
+   },
+   "proMode": {
+     "attach": "Attach material",
+diff --git a/integration/maic/lib/i18n/locales/es-MX.json b/integration/maic/lib/i18n/locales/es-MX.json
+index efd6245a1..04a4ff6f4 100644
+--- a/integration/maic/lib/i18n/locales/es-MX.json
++++ b/integration/maic/lib/i18n/locales/es-MX.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "El TTS nativo del navegador no admite las funciones de audio de la línea de tiempo del editor (vista previa, regenerar y voz en off masiva). Cambia a un proveedor de TTS administrado para generar y administrar el audio por línea.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "La generación de imágenes está desactivada.",
++    "imageGenerationOffWhere": "Actívala con el botón de medios junto al campo de texto en la página de inicio."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Modelo",
+     "voice": "Voz",
+     "speed": "Velocidad",
+-    "language": "Idioma"
++    "language": "Idioma",
++    "providerReadyHint": "Hay un proveedor configurado y listo. Actívalo para usarlo.",
++    "tabImage": "Imagen",
++    "tabVideo": "Video",
++    "tabTts": "Voz",
++    "tabAsr": "Dictado"
+   },
+   "accessCode": {
+     "title": "Ingresa el código de acceso",
+diff --git a/integration/maic/lib/i18n/locales/fr-FR.json b/integration/maic/lib/i18n/locales/fr-FR.json
+index f61ff89d1..9795c96c2 100644
+--- a/integration/maic/lib/i18n/locales/fr-FR.json
++++ b/integration/maic/lib/i18n/locales/fr-FR.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "La synthèse vocale native du navigateur ne prend pas en charge les fonctions audio de la piste de l’éditeur (écoute, régénération et sonorisation groupée). Choisissez un fournisseur de synthèse vocale géré pour produire et gérer l’audio réplique par réplique.",
+     "alidocmindAccessKeyId": "Identifiant de clé d’accès",
+-    "alidocmindAccessKeySecret": "Secret de clé d’accès"
++    "alidocmindAccessKeySecret": "Secret de clé d’accès",
++    "imageGenerationOff": "La génération d’images est actuellement désactivée.",
++    "imageGenerationOffWhere": "Activez-la via le bouton média à côté du champ de saisie sur la page d’accueil."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Modèle",
+     "voice": "Voix",
+     "speed": "Vitesse",
+-    "language": "Langue"
++    "language": "Langue",
++    "providerReadyHint": "Un fournisseur est configuré et prêt. Activez ceci pour l’utiliser.",
++    "tabImage": "Image",
++    "tabVideo": "Vidéo",
++    "tabTts": "Lecture",
++    "tabAsr": "Dictée"
+   },
+   "accessCode": {
+     "title": "Saisissez le code d’accès",
+diff --git a/integration/maic/lib/i18n/locales/ja-JP.json b/integration/maic/lib/i18n/locales/ja-JP.json
+index 7f4c26f5d..eb203db8e 100644
+--- a/integration/maic/lib/i18n/locales/ja-JP.json
++++ b/integration/maic/lib/i18n/locales/ja-JP.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "ブラウザ内蔵 TTS はエディターのタイムライン音声機能（試聴・再生成・一括音声生成）に対応していません。マネージド TTS プロバイダーに切り替えると、行ごとの音声を生成・管理できます。",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "画像生成は現在オフです。",
++    "imageGenerationOffWhere": "ホーム画面の入力欄の横にあるメディアボタンからオンにできます。"
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "モデル",
+     "voice": "ボイス",
+     "speed": "速度",
+-    "language": "言語"
++    "language": "言語",
++    "providerReadyHint": "プロバイダーは設定済みで利用できます。オンにすると使えます。",
++    "tabImage": "画像",
++    "tabVideo": "動画",
++    "tabTts": "読み上げ",
++    "tabAsr": "音声入力"
+   },
+   "accessCode": {
+     "title": "アクセスコードを入力",
+diff --git a/integration/maic/lib/i18n/locales/ko-KR.json b/integration/maic/lib/i18n/locales/ko-KR.json
+index 87e2657f7..4880f3796 100644
+--- a/integration/maic/lib/i18n/locales/ko-KR.json
++++ b/integration/maic/lib/i18n/locales/ko-KR.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "브라우저 내장 TTS는 편집기 타임라인의 오디오 기능(미리듣기·다시 생성·전체 음성 생성)을 지원하지 않습니다. 관리형 TTS 공급자로 전환하면 줄별 오디오를 생성·관리할 수 있습니다.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "이미지 생성이 현재 꺼져 있습니다.",
++    "imageGenerationOffWhere": "홈 화면 입력창 옆의 미디어 버튼에서 켤 수 있습니다."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "모델",
+     "voice": "음성",
+     "speed": "속도",
+-    "language": "언어"
++    "language": "언어",
++    "providerReadyHint": "제공자가 설정되어 사용할 수 있습니다. 켜면 사용됩니다.",
++    "tabImage": "이미지",
++    "tabVideo": "비디오",
++    "tabTts": "음성 출력",
++    "tabAsr": "음성 입력"
+   },
+   "accessCode": {
+     "title": "접근 코드 입력",
+diff --git a/integration/maic/lib/i18n/locales/pt-BR.json b/integration/maic/lib/i18n/locales/pt-BR.json
+index 5f4c34082..f1a154aa2 100644
+--- a/integration/maic/lib/i18n/locales/pt-BR.json
++++ b/integration/maic/lib/i18n/locales/pt-BR.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "O TTS nativo do navegador não suporta os recursos de áudio da linha do tempo do editor (pré-visualizar, regenerar e narração em lote). Mude para um provedor de TTS gerenciado para gerar e gerenciar o áudio de cada linha.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "A geração de imagens está desativada.",
++    "imageGenerationOffWhere": "Ative pelo botão de mídia ao lado do campo de texto na página inicial."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Modelo",
+     "voice": "Voz",
+     "speed": "Velocidade",
+-    "language": "Idioma"
++    "language": "Idioma",
++    "providerReadyHint": "Há um provedor configurado e pronto. Ative para usá-lo.",
++    "tabImage": "Imagem",
++    "tabVideo": "Vídeo",
++    "tabTts": "Fala",
++    "tabAsr": "Ditado"
+   },
+   "accessCode": {
+     "title": "Digite o Código de Acesso",
+diff --git a/integration/maic/lib/i18n/locales/ru-RU.json b/integration/maic/lib/i18n/locales/ru-RU.json
+index 32be79eb9..a7267a809 100644
+--- a/integration/maic/lib/i18n/locales/ru-RU.json
++++ b/integration/maic/lib/i18n/locales/ru-RU.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "Встроенный в браузер TTS не поддерживает функции аудио на таймлайне редактора (прослушивание, повторная генерация и массовая озвучка). Переключитесь на управляемый TTS-провайдер, чтобы генерировать и управлять аудио для каждой строки.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "Генерация изображений сейчас выключена.",
++    "imageGenerationOffWhere": "Включите её кнопкой медиа рядом с полем ввода на главной странице."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Модель",
+     "voice": "Голос",
+     "speed": "Скорость",
+-    "language": "Язык"
++    "language": "Язык",
++    "providerReadyHint": "Провайдер настроен и готов. Включите, чтобы использовать.",
++    "tabImage": "Изображение",
++    "tabVideo": "Видео",
++    "tabTts": "Озвучка",
++    "tabAsr": "Голос"
+   },
+   "accessCode": {
+     "title": "Введите код доступа",
+diff --git a/integration/maic/lib/i18n/locales/th-TH.json b/integration/maic/lib/i18n/locales/th-TH.json
+index d3d5a892f..a23ce66ba 100644
+--- a/integration/maic/lib/i18n/locales/th-TH.json
++++ b/integration/maic/lib/i18n/locales/th-TH.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "TTS ในเบราว์เซอร์ไม่รองรับความสามารถด้านเสียงของไทม์ไลน์ในตัวแก้ไข (ฟังตัวอย่าง สร้างใหม่ และพากย์เสียงเป็นชุด) กรุณาเปลี่ยนไปใช้ผู้ให้บริการ TTS แบบจัดการเต็มรูปแบบ เพื่อสร้างและจัดการเสียงรายบรรทัด",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "การสร้างภาพยังปิดอยู่",
++    "imageGenerationOffWhere": "เปิดได้ที่ปุ่มสื่อ ข้างช่องพิมพ์ในหน้าแรก"
+   },
+   "workspace": {
+     "untitledCourse": "คอร์สไม่มีชื่อ",
+@@ -2004,7 +2006,12 @@
+     "model": "โมเดล",
+     "voice": "เสียง",
+     "speed": "ความเร็ว",
+-    "language": "ภาษา"
++    "language": "ภาษา",
++    "providerReadyHint": "ตั้งผู้ให้บริการไว้แล้วและพร้อมใช้ เปิดสวิตช์นี้เพื่อใช้งาน",
++    "tabImage": "ภาพ",
++    "tabVideo": "วิดีโอ",
++    "tabTts": "อ่านออกเสียง",
++    "tabAsr": "รู้จำเสียง"
+   },
+   "proMode": {
+     "attach": "แนบเอกสาร",
+diff --git a/integration/maic/lib/i18n/locales/vi-VN.json b/integration/maic/lib/i18n/locales/vi-VN.json
+index 9ff541bc9..e200e0bd8 100644
+--- a/integration/maic/lib/i18n/locales/vi-VN.json
++++ b/integration/maic/lib/i18n/locales/vi-VN.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "Giọng đọc của trình duyệt không hỗ trợ các chức năng âm thanh trên dòng thời gian của trình sửa (nghe thử, tạo lại, lồng tiếng hàng loạt). Hãy chuyển sang một nhà cung cấp giọng đọc có quản lý để tạo và quản lý âm thanh theo từng dòng.",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "Tính năng tạo ảnh hiện đang tắt.",
++    "imageGenerationOffWhere": "Bật ở nút phương tiện cạnh ô nhập trên trang chủ."
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "Mô hình",
+     "voice": "Giọng đọc",
+     "speed": "Tốc độ",
+-    "language": "Ngôn ngữ"
++    "language": "Ngôn ngữ",
++    "providerReadyHint": "Đã cấu hình nhà cung cấp và sẵn sàng. Bật lên để sử dụng.",
++    "tabImage": "Ảnh",
++    "tabVideo": "Video",
++    "tabTts": "Đọc",
++    "tabAsr": "Giọng nói"
+   },
+   "accessCode": {
+     "title": "Nhập mã truy cập",
+diff --git a/integration/maic/lib/i18n/locales/zh-CN.json b/integration/maic/lib/i18n/locales/zh-CN.json
+index a217b4856..f4efbd91a 100644
+--- a/integration/maic/lib/i18n/locales/zh-CN.json
++++ b/integration/maic/lib/i18n/locales/zh-CN.json
+@@ -1882,7 +1882,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "浏览器内置 TTS 不支持编辑器时间轴的音频功能（试听、重新生成、全部配音）。切换到托管 TTS 提供方即可逐句生成和管理音频。",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "图片生成当前处于关闭状态。",
++    "imageGenerationOffWhere": "可在首页输入框旁的媒体按钮中打开。"
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -2004,7 +2006,12 @@
+     "model": "模型",
+     "voice": "音色",
+     "speed": "语速",
+-    "language": "语言"
++    "language": "语言",
++    "providerReadyHint": "已配置好可用的服务商，打开此开关即可使用。",
++    "tabImage": "图片",
++    "tabVideo": "视频",
++    "tabTts": "朗读",
++    "tabAsr": "语音"
+   },
+   "accessCode": {
+     "title": "请输入访问码",
+diff --git a/integration/maic/lib/i18n/locales/zh-TW.json b/integration/maic/lib/i18n/locales/zh-TW.json
+index a82c91ec4..77d3d293e 100644
+--- a/integration/maic/lib/i18n/locales/zh-TW.json
++++ b/integration/maic/lib/i18n/locales/zh-TW.json
+@@ -1867,7 +1867,9 @@
+     },
+     "ttsBrowserNativeTimelineNotice": "瀏覽器內建 TTS 不支援編輯器時間軸的音訊功能（試聽、重新生成、全部配音）。切換到受管 TTS 供應商即可逐句生成和管理音訊。",
+     "alidocmindAccessKeyId": "AccessKey ID",
+-    "alidocmindAccessKeySecret": "AccessKey Secret"
++    "alidocmindAccessKeySecret": "AccessKey Secret",
++    "imageGenerationOff": "圖片生成目前為關閉狀態。",
++    "imageGenerationOffWhere": "可在首頁輸入框旁的媒體按鈕中開啟。"
+   },
+   "workspace": {
+     "untitledCourse": "未命名课堂",
+@@ -1989,7 +1991,12 @@
+     "model": "模型",
+     "voice": "聲線",
+     "speed": "語速",
+-    "language": "語言"
++    "language": "語言",
++    "providerReadyHint": "已設定好可用的服務商，開啟此開關即可使用。",
++    "tabImage": "圖片",
++    "tabVideo": "影片",
++    "tabTts": "朗讀",
++    "tabAsr": "語音"
+   },
+   "accessCode": {
+     "title": "請輸入課堂碼",
+-- 
+2.51.0.windows.2
+
