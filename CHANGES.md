@@ -20,6 +20,15 @@ upstream.
   meaning. `System tools` went back to `เครื่องมือระบบ`; the longer
   `เครื่องมือของระบบ` bought nothing.
 
+  Shortening alone was not enough. Thai is written without spaces, so a browser
+  breaks it by dictionary lookup and the labels split mid-phrase —
+  `ข้อมูลพื้น/ฐาน`, `ตรวจ/สอบ`, and the back link as `คู่หู/AI`. English never
+  showed this because each label is a single unbreakable word, so the row was
+  never given `whitespace-nowrap`; it has it now, on the step label and on the
+  back link. Measured at 640px with wrapping off, the row needs 743px with the
+  long wording, 585px with the short — 557px in English. Both changes were
+  needed: neither alone puts the row on one line.
+
   `Review` could not simply become `ตรวจสอบ`: three of its four call sites are
   spaced repetition, where the word is "revisit" and reads as `Review` + a
   relative date (`components/space/learning/LearningBoard.tsx`), or filters a
