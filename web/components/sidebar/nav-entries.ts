@@ -116,6 +116,14 @@ export const PRIMARY_NAV: NavEntry[] = [
     // Dashboard: the learner's own overview, with Learner Anima as its second
     // page (/dashboard/anima). The companion kept its one-click reach while
     // giving up its own sidebar slot, so the two live behind one entry.
+    //
+    // The label names both, because an entry reading only "Dashboard" is the
+    // whole signpost a learner gets: the companion is a tab *inside* the route,
+    // invisible until you are already there. An administrator never had that
+    // problem — they land on the admin dashboard, which carries an explicit
+    // "Learner Anima" quick action (components/admin/AdminDashboard.tsx) — so
+    // the one account that did not need a signpost was the only one with it.
+    //
     // Ungated — both pages only read learning state, no model grant needed.
     //
     // Marked "unrestricted" for the same reason as Settings, and with the same
@@ -128,7 +136,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     // by typing the URL.
     href: "/dashboard",
     surface: "unrestricted",
-    label: "Dashboard",
+    label: "Dashboard & Anima",
     icon: LayoutDashboard,
     tooltipKey: "Dashboard tooltip",
   },

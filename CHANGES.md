@@ -6,6 +6,35 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-10 — The sidebar entry now names the companion it hides.** Learner
+  Anima gave up its own sidebar slot to become the second page of `/dashboard`,
+  which left the entry reading only "Dashboard" — the whole signpost a learner
+  gets for a feature that is a tab *inside* the route, invisible until you are
+  already there. An administrator never met that problem: they land on the admin
+  dashboard, which carries an explicit "Learner Anima" quick action
+  (`components/admin/AdminDashboard.tsx`), so the one account that did not need a
+  signpost was the only one that had one.
+
+  The entry in `components/sidebar/nav-entries.ts` now uses a label that names
+  both pages, in all three locales — `Dashboard & Anima`, `仪表盘与学习伙伴`,
+  `แดชบอร์ด · เพื่อนเรียนรู้` — and the tooltip mentions the companion. The old
+  `Dashboard` key stays: it is still the tab strip's `aria-label`.
+
+  The label had to be measured, not guessed. Sidebar labels render in a
+  `min-w-0 flex-1 truncate` span that ellipsises at 134px, and the longest
+  existing Thai label already sits at 130px. The chosen Thai wording measures
+  123px in the app's own font; the more literal `แดชบอร์ดและเพื่อนเรียนรู้` came
+  to 131px, which fits on this machine and would not survive a wider Thai face
+  on another OS.
+
+  This is discoverability only. Learner Anima remains **closed to every
+  policy-bound account**, and not by this entry: `_learning_surface_for_path`
+  in `deeptutor/api/routers/auth.py` has no mapping for the pet router, so
+  `require_learning_surface` default-denies it whatever a policy's
+  `allowed_surfaces` say. `learningPolicyAccessFor` mirrors that with a flat
+  `allowsAnima: false`, and the tab is hidden rather than shown locked. Opening
+  it needs a line in that backend map and mastery becoming assignable first.
+
 - **2026-09-10 — One word per concept in the Thai partner surface.** Walking the
   wizard end to end showed the same idea spelled three ways at once, so 59 keys
   in `web/locales/th/app.json` were settled onto one term each.
