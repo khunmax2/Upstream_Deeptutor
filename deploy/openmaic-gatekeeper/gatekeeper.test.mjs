@@ -73,15 +73,25 @@ const auth = http.createServer((req, res) => {
 // "did this reach OpenMAIC" is answered by OpenMAIC rather than by the status.
 const upstream = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ reachedUpstream: true, cookieSeen: req.headers.cookie ?? null }));
+  // `identitySeen` is read straight off the request, because the thing under
+  // test is what the upstream literally receives. Node joins repeated headers
+  // with ', ', so a failed strip shows up here as two values in one string
+  // rather than as a test that quietly checks the wrong copy.
+  res.end(
+    JSON.stringify({
+      reachedUpstream: true,
+      cookieSeen: req.headers.cookie ?? null,
+      identitySeen: req.headers['x-deeptutor-owner'] ?? null,
+    }),
+  );
 });
 
 const listen = (server, port) => new Promise((r) => server.listen(port, r));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function call(cookie, port = GATE_PORT) {
+async function call(cookie, port = GATE_PORT, extraHeaders = {}) {
   const res = await fetch(`http://127.0.0.1:${port}/anything`, {
-    headers: cookie ? { cookie } : {},
+    headers: { ...(cookie ? { cookie } : {}), ...extraHeaders },
   });
   let body = null;
   try {
@@ -183,6 +193,49 @@ check('even a real-looking token is refused', offReal.status, 503);
 const opened = await call('dt_token=anything', OPEN_GATE_PORT);
 check('ALLOW_ANONYMOUS=1 still serves it deliberately', opened.status, 200);
 check('ALLOW_ANONYMOUS=1 reaches upstream', opened.body?.reachedUpstream, true);
+
+console.log('\n  -- identity header (T2, T5) --');
+
+// The section above leaves the stub answering `enabled: false`, where every
+// request is refused and none reaches the upstream to be inspected. Put auth
+// back on and wait out the TTL, or these assertions would read a refusal body
+// and report undefined — which is what they did before this line existed.
+mode = 'up';
+await sleep(TTL_MS * 2);
+
+// The verdict and the uid come from the same answer, so an allowed request
+// carries a name. `user:` is upstream's own convention for an authenticated
+// owner, against `anon:` for a cookie-minted one.
+const identified = await call(`dt_token=${GOOD}`);
+check('verified request carries the identity', identified.body?.identitySeen, 'user:u-1');
+
+// A client that sets the header itself does not get to choose who it is.
+//
+// Worth being exact about what this proves, because the obvious reading is
+// wrong: it passes even with stripHeader removed. Node lowercases incoming
+// header names, so the client's copy and the one set here are the same key on
+// the spread object, and assignment overwrites it. What the strip actually
+// defends is the case assignment cannot reach — the anonymous path below, where
+// nothing is assigned because nothing was verified. Confirmed by removing the
+// strip: only that assertion goes red.
+const spoofed = await call(`dt_token=${GOOD}`, GATE_PORT, { 'x-deeptutor-owner': 'user:admin' });
+check("a client's own value never survives", spoofed.body?.identitySeen, 'user:u-1');
+
+// A header that is present but empty is still a header, and the studio would
+// have to decide what an empty owner means. Nothing verified anyone here, so
+// nothing is sent.
+const openNoHeader = await call(null, OPEN_GATE_PORT);
+check('ALLOW_ANONYMOUS sends no identity at all', openNoHeader.body?.identitySeen, null);
+
+// ALLOW_ANONYMOUS turns the gate off; it must not turn the strip off with it,
+// or a development convenience becomes a spoofing tool.
+const openSpoof = await call(null, OPEN_GATE_PORT, { 'x-deeptutor-owner': 'user:admin' });
+check('ALLOW_ANONYMOUS still strips a client header', openSpoof.body?.identitySeen, null);
+
+// T5: the second call inside the TTL is answered from cache. Had the cache kept
+// only the boolean, this one would arrive with no name.
+const cachedId = await call(`dt_token=${GOOD}`);
+check('a cached verdict still carries the uid', cachedId.body?.identitySeen, 'user:u-1');
 
 console.log('\n  -- health --');
 const health = await fetch(`http://127.0.0.1:${GATE_PORT}/__gatekeeper/health`);

@@ -254,6 +254,46 @@ upstream.
 
 ---
 
+## The gatekeeper learns who is asking — 2026-09-10
+
+Phase 1, T2 and T5 from `THREAT_MODEL_course_studio.md`. The gate already knew
+whether a reader was allowed; it did not know *who* they were, and the studio
+needs a name to partition anything by.
+
+**The cache holds `{ ok, uid }` under the same token key and the same TTL.** The
+threat model names the three cheap ways to get the uid and rejects all of them:
+calling `/api/auth/status` per request turns DeepTutor's auth endpoint into the
+studio's bottleneck, which is the thing the cache exists to prevent; keying the
+uid by anything but the token invites one reader's identity being served to
+another; and resolving it from something the client sends is the spoof the gate
+is there to stop. Same key, same TTL, one more field.
+
+**The identity header is set after any client copy is deleted.** `stripHeader`
+mirrors the existing `stripCookie`, and both forwarding paths use it — including
+the **websocket upgrade**, which builds its own header block and would otherwise
+have been a way around the whole thing.
+
+The value is `user:<uid>`, not a bare uid: upstream's own tests use `user:` for
+an authenticated owner against `anon:` for a cookie-minted one, so the two stay
+distinguishable.
+
+An unverified request — the `ALLOW_ANONYMOUS` path — sends **no header at all**
+rather than an empty one, so the studio falls back to its own anonymous owner
+instead of being handed a blank identity it would have to interpret.
+
+Five tests, taking the file from 21 checks to 26.
+
+**One of them was overclaiming, and the comment now says so.** "A client's own
+header is replaced" passes even with `stripHeader` removed: Node lowercases
+incoming header names, so the client's copy and the injected one are the same key
+on the spread object and assignment overwrites it. What the strip actually
+defends is the case assignment cannot reach — the anonymous path, where nothing
+is assigned because nothing was verified. Confirmed by removing the strip and
+watching exactly one assertion go red, which is also why that assertion exists.
+
+Files: `deploy/openmaic-gatekeeper/gatekeeper.mjs`,
+`deploy/openmaic-gatekeeper/gatekeeper.test.mjs`.
+
 ## Phase 1 opens with the thing that killed the first attempt — 2026-09-10
 
 `OPENMAIC_INTEGRATION_V2_handoff.md` §2 is blunt about why the first integration
