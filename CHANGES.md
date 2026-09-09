@@ -254,6 +254,38 @@ upstream.
 
 ---
 
+## The studio fork, pinned — and two claims that had gone stale — 2026-09-10
+
+Phase 1 opens by pinning the studio. `khunmax2/OpenMAIC` turned out to exist
+already, forked on 2026-09-07 when two patches went upstream, so nothing needed
+creating — its `main` was three commits behind and fast-forwarded cleanly to
+`29735f10`, which is also upstream's HEAD. The two upstream PRs (#1408, #1409)
+are still open after three days, which is the queue handoff §3.5 measured and
+the reason no phase may wait on it.
+
+`openmaic-pin.json` was written for the subtree and named upstream directly.
+Rewritten for ADR-0005's shape: the fork, the upstream commit it is level with,
+and an `image` block whose `digest` is **null** with a note that a deploy must
+refuse a null rather than resolve a tag. A commit says what the source was; only
+a digest says what ran. Every key `check_openmaic_contract.py` reads is kept
+under its existing name.
+
+Two claims were checked rather than copied forward, and both were stale:
+
+**The Thai translation is not complete.** The handoff said 1,862/1,862, true at
+the old pin `d4ef5faa` (2026-09-01). At `29735f10` upstream's `en-US.json` holds
+**1,801** keys — it has removed keys as well as added them — and our partial
+covers **1,687**, with **114 missing** and **64 that no longer exist upstream**.
+Phase 3 is small work, not zero work, and it grows weekly.
+
+**A fabricated SHA nearly shipped.** The full commit hash was written out from
+the short one instead of being fetched, and it was wrong from the eleventh
+character. Caught by asking the API for the real value before committing. Worth
+recording because it is the failure mode a pin file exists to prevent.
+
+Files: `deploy/openmaic-patches/openmaic-pin.json`,
+`docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md` (§1, §4,
+new §5.1b).
 ## The threat model's one unverified finding, measured — 2026-09-10
 
 T6 said `dt_token` reaches five neighbouring applications, and said plainly that
