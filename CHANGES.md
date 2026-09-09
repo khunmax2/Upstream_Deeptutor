@@ -4396,6 +4396,51 @@ the caller's `PATH` is precisely the false signal that script exists to prevent.
 
 _Record each upstream version merged into this fork here._
 
+### v1.6.6 (`7a96bba1`) — merged 2026-09-09
+
+Two releases at once — v1.6.5 was skipped because its own `Tests` run is red, and
+the playbook's rule is to never sync onto that. **83 commits, 597 files,
++51.8k / −13.3k**, 81 colliding files, **24 conflicts**. Every check on the target
+was green, including the Windows import leg that had been failing since v1.6.2.
+
+**The seam moved rather than changed.** `agents/chat/agentic_pipeline.py` was
+reduced from 1,869 lines to a 48-line re-export shim and the pipeline moved to
+`agents/loop/`. Git followed the rename for `prompt_blocks.py`, so the fork's
+`normalize_agent_language` work survived across 17 files untouched — but the four
+edits *inside* the emptied file had to be re-applied by hand in three new homes.
+One of them deliberately was not: the fork's Thai turn-workspace prompt described
+a block upstream deleted outright in favour of the Content Workspace note, so
+`_shared/workspace_prompt.py` gets a `th` arm instead of the old text restored.
+Re-applying the fork's *behaviour* is not the same as re-applying its lines.
+
+**Three places where a clean merge would have lost Thai silently.** The
+interface-language picker moved into `SettingsOverview` offering `en`/`zh` only;
+`mastery`'s prompt became a pack that ships `en`/`zh` and answers anything else
+with English; `LearningBoard` arrived taking a `zh: boolean` while the two things
+it feeds already take a `Language`. `invariants.py --scope changed` found 15
+`th-ts` violations **after** the conflicts were resolved, every one of them in a
+file that never conflicted — which is exactly the case the re-run exists for.
+
+**Route budgets, measured rather than carried.** `/co-writer/[docId]` returns to
+upstream's 515 and now measures **290KB**: the fork's 525 described a bundle
+v1.6.6 no longer builds. `root-app-shell` goes 410 → 420 against a measured
+414KB, and that overage is upstream's 252 new `en` keys, not a fork feature —
+`web/scripts/route_budgets.mjs` records that distinction, and points at the 1,129
+fork-only keys as the place to look before raising it again.
+
+**A subprocess does not live in your worktree.** Four tests passed alone and
+failed in the full suite with `extract_document_text() got an unexpected keyword
+argument 'filename_hint'` — a v1.6.6 parameter. `isolated_worker` starts its
+subprocess from a sandbox directory, so `deeptutor` resolved through the editable
+install to the *real checkout*, still on `main`. `PYTHONPATH=<worktree>` took the
+run from 4 failed to **7,583 passed**. Two wrong hypotheses came first, including
+one where excluding a directory made the suite green and looked like proof.
+
+Verified: ruff (0.16.0, the CI pin) · pytest 7,583 · `test:node` 1,202 ·
+`i18n:check` · `npm run build` · `perf:check` · a live Thai turn. The locale delta
+is +252 keys to `th` at exact parity with `en` (5,137 each). Full write-up in
+`docs/reports/REPORT_sync_v1.6.6.md`.
+
 ### v1.6.4 (`93df3d48`) — merged 2026-09-03
 
 One upstream release commit on top of v1.6.3. **370 files, +17.5k / −9.8k**, but
