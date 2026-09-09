@@ -24,7 +24,7 @@ import {
 
 type Lang = { zh: string; en: string; th: string };
 
-/** The CLI default sentinel — empty model/effort means "let the CLI decide". */
+/** Empty model/effort means "let the selected runtime decide". */
 const CUSTOM = "__custom__";
 
 // Defaults mirror BackendConfig in deeptutor/services/subagent/config.py so the
@@ -142,6 +142,15 @@ const KIND_FEATURES: Record<string, KindFeatures> = {
     thinking: false,
     forwardImages: true, // --image
   },
+  hermes_remote: {
+    effort: true,
+    systemPrompt: true,
+    permissionMode: false,
+    codexSandbox: false,
+    autoApprove: true,
+    thinking: false,
+    forwardImages: false,
+  },
   openclaw: {
     effort: true, // --thinking
     systemPrompt: true,
@@ -171,6 +180,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   opencode: "opencode",
   mimo: "MiMo Code",
   hermes: "Hermes Agent",
+  hermes_remote: "Hermes Agent (remote)",
   openclaw: "OpenClaw",
   deepseek_harness: "DeepSeek Harness",
 };
@@ -202,6 +212,11 @@ const SYSTEM_PROMPT_HINT: Record<string, Lang> = {
     zh: "Hermes 没有系统提示 flag——该指令会前缀在每个新会话的第一条消息上。",
     en: "Hermes has no system-prompt flag — the instruction is prefixed to each new session's first message.",
     th: "Hermes has no system-prompt flag — the instruction is prefixed to each new session's first message.",
+  },
+  hermes_remote: {
+    zh: "新会话（或远端会话已失效）时，通过 Hermes 网关 API 的 instructions 字段注入。",
+    en: "Sent through the Hermes gateway API's instructions field for a fresh or expired session.",
+    th: "ส่งผ่านฟิลด์ instructions ของ Hermes gateway API เมื่อเป็นเซสชันใหม่หรือเซสชันหมดอายุ",
   },
   openclaw: {
     zh: "该指令会前缀在每个新 OpenClaw session key 的第一条消息上。",
@@ -242,12 +257,19 @@ const PERMISSION_MODES: { value: string; label: Lang }[] = [
   },
   {
     value: "plan",
-    label: { zh: "计划模式 · 只读", en: "Plan mode · read-only", th: "โหมดวางแผน · อ่านอย่างเดียว" },
+    label: {
+      zh: "计划模式 · 只读",
+      en: "Plan mode · read-only",
+      th: "โหมดวางแผน · อ่านอย่างเดียว",
+    },
   },
 ];
 
 const SANDBOXES: { value: string; label: Lang }[] = [
-  { value: "read-only", label: { zh: "只读", en: "Read-only", th: "อ่านอย่างเดียว" } },
+  {
+    value: "read-only",
+    label: { zh: "只读", en: "Read-only", th: "อ่านอย่างเดียว" },
+  },
   {
     value: "workspace-write",
     label: {
@@ -256,7 +278,10 @@ const SANDBOXES: { value: string; label: Lang }[] = [
       th: "เขียนในไดเรกทอรีทำงานได้ (แนะนำ)",
     },
   },
-  { value: "danger-full-access", label: { zh: "完全访问", en: "Full access", th: "เข้าถึงเต็มรูปแบบ" } },
+  {
+    value: "danger-full-access",
+    label: { zh: "完全访问", en: "Full access", th: "เข้าถึงเต็มรูปแบบ" },
+  },
   {
     value: "bypass",
     label: {
@@ -276,8 +301,14 @@ const APPROVALS: { value: string; label: Lang }[] = [
       th: "ไม่ถามเลย (แนะนำ)",
     },
   },
-  { value: "on-failure", label: { zh: "失败时询问", en: "On failure", th: "เมื่อทำงานล้มเหลว" } },
-  { value: "on-request", label: { zh: "按需询问", en: "On request", th: "เมื่อมีการร้องขอ" } },
+  {
+    value: "on-failure",
+    label: { zh: "失败时询问", en: "On failure", th: "เมื่อทำงานล้มเหลว" },
+  },
+  {
+    value: "on-request",
+    label: { zh: "按需询问", en: "On request", th: "เมื่อมีการร้องขอ" },
+  },
   {
     value: "untrusted",
     label: {
@@ -293,10 +324,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
   const lang = i18n.language?.toLowerCase();
   const zh = lang?.startsWith("zh");
   const th = lang?.startsWith("th");
-  const tr = useCallback(
-    (l: Lang) => (zh ? l.zh : th ? l.th : l.en),
-    [zh, th],
-  );
+  const tr = useCallback((l: Lang) => (zh ? l.zh : th ? l.th : l.en), [zh, th]);
   const tsLocale = zh ? "zh-CN" : th ? "th-TH" : "en-US";
 
   const [options, setOptions] = useState<SubagentBackendOptions | null>(null);
@@ -368,6 +396,7 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
   );
 
   const features = KIND_FEATURES[kind] ?? FALLBACK_FEATURES;
+  const isRemote = kind === "hermes_remote";
   const knownSlugs = useMemo(
     () => new Set((options?.models ?? []).map((m) => m.slug)),
     [options],
@@ -414,11 +443,19 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
     <div>
       <SettingsPageHeader
         title={displayName}
-        description={tr({
-          zh: `DeepWitya 通过 consult_subagent 调用本机 ${displayName} 时使用的模型、推理强度与运行参数。设置后即覆盖 CLI 的默认值；留空表示沿用 CLI 默认。`,
-          en: `Model, reasoning effort, and run parameters DeepWitya drives the local ${displayName} with when consulting it. These override the CLI defaults; leave blank to keep the CLI's own default.`,
-          th: `โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันที่ DeepWitya ใช้ขับ ${displayName} ในเครื่องเมื่อปรึกษาผ่าน consult_subagent ค่าเหล่านี้จะแทนที่ค่าเริ่มต้นของ CLI เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของ CLI เอง`,
-        })}
+        description={
+          isRemote
+            ? tr({
+                zh: "配置 DeepWitya 通过 HTTP 调用的远程 Hermes 网关、模型与运行参数。",
+                en: "Configure the remote Hermes gateway, model, and run parameters DeepWitya uses over HTTP.",
+                th: "ตั้งค่า Hermes gateway ระยะไกล โมเดล และพารามิเตอร์การรันที่ DeepWitya เรียกผ่าน HTTP",
+              })
+            : tr({
+                zh: `DeepWitya 通过 consult_subagent 调用本机 ${displayName} 时使用的模型、推理强度与运行参数。设置后即覆盖 CLI 的默认值；留空表示沿用 CLI 默认。`,
+                en: `Model, reasoning effort, and run parameters DeepWitya drives the local ${displayName} with when consulting it. These override the CLI defaults; leave blank to keep the CLI's own default.`,
+                th: `โมเดล ระดับการให้เหตุผล และพารามิเตอร์การรันที่ DeepWitya ใช้ขับ ${displayName} ในเครื่องเมื่อปรึกษา ค่าเหล่านี้จะแทนที่ค่าเริ่มต้นของ CLI เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของ CLI เอง`,
+              })
+        }
       />
 
       {loading && (
@@ -444,14 +481,34 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
               en: "Connection & sync",
               th: "การเชื่อมต่อและการซิงค์",
             })}
-            description={tr({
-              zh: "供应商会不定期增删模型与推理档位——随时点同步即可重新拉取最新列表。",
-              en: "Vendors add and retire models and effort levels over time — sync any time to re-pull the latest lists.",
-              th: "ผู้ให้บริการมีการเพิ่มและปลดโมเดลกับระดับการให้เหตุผลเป็นระยะ — กดซิงค์เมื่อใดก็ได้เพื่อดึงรายการล่าสุด",
-            })}
+            description={
+              isRemote
+                ? tr({
+                    zh: "检查已配置网关的连通性与认证状态。",
+                    en: "Check connectivity and authentication for the configured gateway.",
+                    th: "ตรวจการเชื่อมต่อและการยืนยันตัวตนของ gateway ที่ตั้งค่าไว้",
+                  })
+                : tr({
+                    zh: "供应商会不定期增删模型与推理档位——随时点同步即可重新拉取最新列表。",
+                    en: "Vendors add and retire models and effort levels over time — sync any time to re-pull the latest lists.",
+                    th: "ผู้ให้บริการมีการเพิ่มและปลดโมเดลกับระดับการให้เหตุผลเป็นระยะ — กดซิงค์เมื่อใดก็ได้เพื่อดึงรายการล่าสุด",
+                  })
+            }
           >
             <SettingRow
-              title={tr({ zh: "本机状态", en: "On this machine", th: "บนเครื่องนี้" })}
+              title={
+                isRemote
+                  ? tr({
+                      zh: "网关状态",
+                      en: "Gateway status",
+                      th: "สถานะ gateway",
+                    })
+                  : tr({
+                      zh: "本机状态",
+                      en: "On this machine",
+                      th: "บนเครื่องนี้",
+                    })
+              }
               description={
                 options.available
                   ? options.version
@@ -477,13 +534,25 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     <XCircle className="h-3.5 w-3.5" />
                   )}
                   {options.available
-                    ? tr({ zh: "已安装", en: "Installed", th: "ติดตั้งแล้ว" })
-                    : tr({ zh: "未检测到", en: "Not detected", th: "ไม่พบ" })}
+                    ? isRemote
+                      ? tr({
+                          zh: "可连接",
+                          en: "Reachable",
+                          th: "เชื่อมต่อได้",
+                        })
+                      : tr({ zh: "已安装", en: "Installed", th: "ติดตั้งแล้ว" })
+                    : isRemote
+                      ? tr({ zh: "不可用", en: "Unavailable", th: "ใช้ไม่ได้" })
+                      : tr({ zh: "未检测到", en: "Not detected", th: "ไม่พบ" })}
                 </span>
               }
             />
             <SettingRow
-              title={tr({ zh: "模型列表", en: "Model list", th: "รายการโมเดล" })}
+              title={tr({
+                zh: "模型列表",
+                en: "Model list",
+                th: "รายการโมเดล",
+              })}
               description={
                 options.synced_at
                   ? tr({
@@ -491,27 +560,165 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                       en: `Last synced: ${formatTs(options.synced_at, tsLocale)}`,
                       th: `ซิงค์ล่าสุด: ${formatTs(options.synced_at, tsLocale)}`,
                     })
-                  : tr({
-                      zh: "该 CLI 无可枚举的模型接口，下方为常用别名，可自定义任意模型名。",
-                      en: "This CLI has no model-list API; below are the common aliases, and any model name is accepted.",
-                      th: "CLI นี้ไม่มี API สำหรับแจกแจงโมเดล ด้านล่างเป็นชื่อเรียกที่ใช้บ่อย และรับชื่อโมเดลใดก็ได้",
-                    })
+                  : isRemote
+                    ? tr({
+                        zh: "远程网关当前不提供模型枚举；可以留空使用网关默认值，或手动填写模型名。",
+                        en: "The remote gateway does not currently enumerate models here; use its default or enter a model name manually.",
+                        th: "gateway ระยะไกลยังไม่แจกแจงโมเดลที่นี่ ใช้ค่าเริ่มต้นของมัน หรือพิมพ์ชื่อโมเดลเอง",
+                      })
+                    : tr({
+                        zh: "该 CLI 无可枚举的模型接口，下方为常用别名，可自定义任意模型名。",
+                        en: "This CLI has no model-list API; below are the common aliases, and any model name is accepted.",
+                        th: "CLI นี้ไม่มี API สำหรับแจกแจงโมเดล ด้านล่างเป็นชื่อเรียกที่ใช้บ่อย และรับชื่อโมเดลใดก็ได้",
+                      })
               }
               control={
-                <button
-                  type="button"
-                  disabled={syncing}
-                  onClick={() => void sync()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--foreground)]/40 disabled:opacity-60"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
-                  />
-                  {tr({ zh: "同步", en: "Sync", th: "ซิงค์" })}
-                </button>
+                isRemote ? (
+                  <span className="text-[12px] text-[var(--muted-foreground)]">
+                    {tr({
+                      zh: "网关模型由服务端提供",
+                      en: "Gateway models are server-managed",
+                      th: "โมเดลของ gateway จัดการที่ฝั่งเซิร์ฟเวอร์",
+                    })}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={syncing}
+                    onClick={() => void sync()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--foreground)]/40 disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+                    />
+                    {tr({ zh: "同步", en: "Sync", th: "ซิงค์" })}
+                  </button>
+                )
               }
             />
           </SettingSection>
+
+          {isRemote && (
+            <SettingSection
+              title={tr({
+                zh: "远程网关",
+                en: "Remote gateway",
+                th: "gateway ระยะไกล",
+              })}
+              description={tr({
+                zh: "密钥只从环境变量读取；这里仅保存变量名，不保存密钥值。",
+                en: "The bearer is read only from the environment; this stores the variable name, never the secret.",
+                th: "ค่า bearer อ่านจากตัวแปรสภาพแวดล้อมเท่านั้น ที่นี่เก็บแค่ชื่อตัวแปร ไม่เก็บตัวความลับ",
+              })}
+            >
+              <SettingRow
+                title={tr({
+                  zh: "网关 URL",
+                  en: "Gateway URL",
+                  th: "URL ของ gateway",
+                })}
+                control={
+                  <input
+                    className={`${inputClass} w-[260px]`}
+                    disabled={busy}
+                    value={config.base_url ?? ""}
+                    placeholder={tr({
+                      zh: "例如：http://hermes-uni:8642",
+                      en: "e.g. http://hermes-uni:8642",
+                      th: "เช่น http://hermes-uni:8642",
+                    })}
+                    onChange={(e) =>
+                      setConfig((p) => ({ ...p, base_url: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      void save({ base_url: e.target.value.trim() })
+                    }
+                  />
+                }
+              />
+              <SettingRow
+                title={tr({
+                  zh: "密钥环境变量",
+                  en: "API key environment variable",
+                  th: "ตัวแปรสภาพแวดล้อมของ API key",
+                })}
+                control={
+                  <input
+                    className={`${inputClass} w-[260px]`}
+                    disabled={busy}
+                    value={
+                      config.api_key_env ?? "DEEPTUTOR_HERMES_REMOTE_API_KEY"
+                    }
+                    onChange={(e) =>
+                      setConfig((p) => ({ ...p, api_key_env: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      void save({ api_key_env: e.target.value.trim() })
+                    }
+                  />
+                }
+              />
+              <SettingRow
+                title={tr({
+                  zh: "配置 profile",
+                  en: "Profile label",
+                  th: "ป้ายชื่อ profile",
+                })}
+                description={tr({
+                  zh: "仅作部署标识，不会把密钥写入设置。",
+                  en: "Informational deployment label; it never stores a key.",
+                  th: "เป็นป้ายบอกการติดตั้งเท่านั้น ไม่ได้เก็บคีย์ใดๆ",
+                })}
+                control={
+                  <input
+                    className={`${inputClass} w-[260px]`}
+                    disabled={busy}
+                    value={config.profile ?? ""}
+                    onChange={(e) =>
+                      setConfig((p) => ({ ...p, profile: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      void save({ profile: e.target.value.trim() })
+                    }
+                  />
+                }
+              />
+              <SettingRow
+                title={tr({
+                  zh: "空闲超时（秒）",
+                  en: "Idle timeout (seconds)",
+                  th: "หมดเวลาเมื่อไม่มีการใช้งาน (วินาที)",
+                })}
+                control={
+                  <input
+                    className={`${inputClass} w-[260px]`}
+                    disabled={busy}
+                    type="number"
+                    min={1}
+                    max={86400}
+                    value={config.idle_timeout_seconds ?? 600}
+                    onChange={(e) =>
+                      setConfig((p) => ({
+                        ...p,
+                        idle_timeout_seconds: Number.parseInt(
+                          e.target.value,
+                          10,
+                        ),
+                      }))
+                    }
+                    onBlur={(e) =>
+                      void save({
+                        idle_timeout_seconds: Number.parseInt(
+                          e.target.value,
+                          10,
+                        ),
+                      })
+                    }
+                  />
+                }
+              />
+            </SettingSection>
+          )}
 
           <SettingSection
             title={tr({ zh: "模型", en: "Model", th: "โมเดล" })}
@@ -547,7 +754,17 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     onChange={(e) => onModelSelect(e.target.value)}
                   >
                     <option value="">
-                      {tr({ zh: "CLI 默认", en: "CLI default", th: "ค่าเริ่มต้นของ CLI" })}
+                      {isRemote
+                        ? tr({
+                            zh: "网关默认",
+                            en: "Gateway default",
+                            th: "ค่าเริ่มต้นของ gateway",
+                          })
+                        : tr({
+                            zh: "CLI 默认",
+                            en: "CLI default",
+                            th: "ค่าเริ่มต้นของ CLI",
+                          })}
                     </option>
                     {options.models.map((m) => (
                       <option key={m.slug} value={m.slug}>
@@ -596,11 +813,17 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                     onChange={(e) => void save({ effort: e.target.value })}
                   >
                     <option value="">
-                      {tr({
-                        zh: "CLI 默认",
-                        en: "CLI default",
-                        th: "ค่าเริ่มต้นของ CLI",
-                      })}
+                      {isRemote
+                        ? tr({
+                            zh: "网关默认",
+                            en: "Gateway default",
+                            th: "ค่าเริ่มต้นของ gateway",
+                          })
+                        : tr({
+                            zh: "CLI 默认",
+                            en: "CLI default",
+                            th: "ค่าเริ่มต้นของ CLI",
+                          })}
                     </option>
                     {effortChoices.map((eff) => (
                       <option key={eff} value={eff}>
@@ -615,7 +838,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
 
           {features.systemPrompt && (
             <SettingSection
-              title={tr({ zh: "系统提示", en: "System prompt", th: "พรอมป์ตระบบ" })}
+              title={tr({
+                zh: "系统提示",
+                en: "System prompt",
+                th: "พรอมป์ตระบบ",
+              })}
               description={`${tr(
                 SYSTEM_PROMPT_HINT[kind] ?? SYSTEM_PROMPT_HINT.claude_code,
               )} ${tr({
@@ -644,7 +871,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           )}
 
           <SettingSection
-            title={tr({ zh: "运行参数", en: "Run parameters", th: "พารามิเตอร์การรัน" })}
+            title={tr({
+              zh: "运行参数",
+              en: "Run parameters",
+              th: "พารามิเตอร์การรัน",
+            })}
             description={tr({
               zh: "DeepWitya 无人值守地驱动该智能体——默认值确保它不会卡在等待确认上。",
               en: "DeepWitya drives the agent unattended — the defaults ensure it never stalls waiting for an approval prompt.",
@@ -653,7 +884,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
           >
             {features.permissionMode && (
               <SettingRow
-                title={tr({ zh: "权限模式", en: "Permission mode", th: "โหมดสิทธิ์" })}
+                title={tr({
+                  zh: "权限模式",
+                  en: "Permission mode",
+                  th: "โหมดสิทธิ์",
+                })}
                 description={tr({
                   zh: "非「绕过权限」的模式可能让无人值守的运行卡住等待确认。",
                   en: "Modes other than bypass may stall an unattended run waiting for a prompt.",
@@ -702,7 +937,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
 
             {features.thinking && (
               <SettingRow
-                title={tr({ zh: "思考过程", en: "Thinking", th: "กระบวนการคิด" })}
+                title={tr({
+                  zh: "思考过程",
+                  en: "Thinking",
+                  th: "กระบวนการคิด",
+                })}
                 description={tr({
                   zh: "流式展示模型的思考过程（--thinking）。",
                   en: "Stream the model's thinking (--thinking).",
@@ -738,7 +977,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "审批策略", en: "Approval policy", th: "นโยบายการอนุมัติ" })}
+                  title={tr({
+                    zh: "审批策略",
+                    en: "Approval policy",
+                    th: "นโยบายการอนุมัติ",
+                  })}
                   description={tr({
                     zh: "非「从不询问」可能让无人值守的运行卡住。",
                     en: "Anything but never may stall an unattended run.",
@@ -760,7 +1003,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "命令联网", en: "Command network access", th: "การเข้าถึงเครือข่ายของคำสั่ง" })}
+                  title={tr({
+                    zh: "命令联网",
+                    en: "Command network access",
+                    th: "การเข้าถึงเครือข่ายของคำสั่ง",
+                  })}
                   description={tr({
                     zh: "允许模型运行的 shell 命令访问网络（工作目录可写模式默认离线）。内置 web search 不受影响。",
                     en: "Let the model's shell commands reach the network (workspace-write is offline by default). The built-in web search is unaffected.",
@@ -775,7 +1022,11 @@ export function SubagentSettingsEditor({ kind }: { kind: string }) {
                   }
                 />
                 <SettingRow
-                  title={tr({ zh: "临时会话", en: "Ephemeral session", th: "เซสชันชั่วคราว" })}
+                  title={tr({
+                    zh: "临时会话",
+                    en: "Ephemeral session",
+                    th: "เซสชันชั่วคราว",
+                  })}
                   description={tr({
                     zh: "不在 ~/.codex/sessions 下持久化本次会话。",
                     en: "Don't persist the session under ~/.codex/sessions.",

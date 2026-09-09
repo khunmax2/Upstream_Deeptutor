@@ -180,3 +180,52 @@ candidates and never sent. The cost is not the deletion, it is everything carrie
 in between: the mechanism, its tests, and its share of every merge conflict until
 upstream's version lands. Stage 7 is not paperwork.
 
+
+## v1.6.6 — a subprocess does not live in your worktree
+
+83 commits, 81 colliding files, 24 conflicts. The merge itself held; three things
+are worth carrying forward, and the first cost the most time.
+
+**A worktree is not on `sys.path` for a subprocess that runs somewhere else.**
+Four tests passed alone and failed in the full suite, with
+`extract_document_text() got an unexpected keyword argument 'filename_hint'` — a
+parameter v1.6.6 adds. `isolated_worker` runs its task in a subprocess started
+from a sandbox working directory, so the worktree's implicit cwd entry is gone
+and `deeptutor` resolves through the editable install, which points at the *real
+checkout* — still on `main`, still without the new parameter. Nothing about the
+merge was wrong. `PYTHONPATH=<worktree> pytest …` took the suite from 4 failed to
+7,583 passed and settled it. This is the v1.5.16 lesson from the other side: that
+one was the worktree having something the real checkout lacked; this one is the
+real checkout leaking *into* the worktree. Any failure naming a signature upstream
+just changed, in a test that touches `isolated_worker`, `run_in_isolated_process`
+or a sandbox, is this — set `PYTHONPATH` before believing it.
+
+**Passing in isolation and failing in the suite is not automatically pollution.**
+Two hypotheses were wrong before the measurement was right: first that a new
+upstream test polluted global state, then that the failing RAG tests cleared the
+LLM config for everything after them. Excluding the RAG directory *did* turn the
+suite green, which looked like proof and was coincidence — removing files also
+changes collection order. Upgrading `lightrag-hku` to the version v1.6.6 pins
+removed those five failures and left the other four exactly where they were. When
+an exclusion makes a suite green, the exclusion is a hypothesis, not a result.
+
+**A moved seam needs its fork work moved, not merged.** Upstream reduced
+`agents/chat/agentic_pipeline.py` from 1,869 lines to a 48-line re-export shim and
+moved the pipeline to `agents/loop/`. Git followed the rename for
+`prompt_blocks.py`, so `normalize_agent_language` survived untouched — but the
+fork's other four edits in the emptied file had to be re-applied by hand in three
+different new homes, and one of them should *not* have been: the Thai
+turn-workspace prompt described a block upstream deleted outright, replaced by
+`_shared/workspace_prompt.py`. Porting the old text would have restored guidance
+for a workflow that no longer exists; adding a `th` arm to the replacement is what
+"re-apply the fork's behaviour" actually meant there. Ask what the fork's
+*behaviour* was, not which lines it owned.
+
+**A relocated control loses its third language silently.** v1.6.6 moved the
+interface-language picker from `AppearanceSettingsSection` into
+`SettingsOverview`, and the version that moved offers `en` and `zh` only. The
+merge was clean, `tsc` was happy, and a Thai reader would have had no way left to
+choose Thai. `invariants.py --scope changed` caught it as `th-ts` *after* the
+conflicts were resolved — which is exactly why the playbook says to re-run it
+then. Fifteen findings appeared that way; none of them were in a file that
+conflicted.

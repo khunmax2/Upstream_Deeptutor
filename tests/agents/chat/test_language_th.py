@@ -6,8 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
+# `AgenticChatPipeline` still lives here — v1.6.6 turned this module into a
+# shim that subclasses the moved `AgenticLoopPipeline`. The class is imported
+# from the shim, but the names the tests patch have to be patched on
+# `deeptutor.agents.loop.pipeline`, where they actually resolve.
 from deeptutor.agents.chat.agentic_pipeline import AgenticChatPipeline
-from deeptutor.agents.chat.prompt_blocks import ChatPromptAssembler
+from deeptutor.agents.loop.prompt_blocks import ChatPromptAssembler
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +24,7 @@ def _fake_llm_config(monkeypatch: pytest.MonkeyPatch) -> None:
         api_version=None,
     )
     monkeypatch.setattr(
-        "deeptutor.agents.chat.agentic_pipeline.get_llm_config",
+        "deeptutor.agents.loop.pipeline.get_llm_config",
         lambda: cfg,
     )
     monkeypatch.setattr("deeptutor.agents.base_agent.get_llm_config", lambda: cfg)
@@ -45,7 +49,7 @@ def test_agentic_chat_system_prompt_has_thai_directive(
             return "- tool"
 
     monkeypatch.setattr(
-        "deeptutor.agents.chat.agentic_pipeline.get_tool_registry",
+        "deeptutor.agents.loop.pipeline.get_tool_registry",
         lambda: FakeRegistry(),
     )
 

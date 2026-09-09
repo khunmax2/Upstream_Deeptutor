@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import AsyncGenerator
 
+from deeptutor.agents.notebook._text import clip_text as _clip_text
 from deeptutor.services.llm import clean_thinking_tags, get_llm_config, get_token_limit_kwargs
 from deeptutor.services.llm import stream as llm_stream
 from deeptutor.services.prompt.language import (
@@ -11,13 +12,6 @@ from deeptutor.services.prompt.language import (
     normalize_agent_language,
 )
 from deeptutor.services.prompt.manager import get_prompt_manager
-
-
-def _clip_text(value: str, limit: int) -> str:
-    text = str(value or "").strip()
-    if len(text) <= limit:
-        return text
-    return text[:limit].rstrip() + "\n...[truncated]"
 
 
 class NotebookSummarizeAgent:

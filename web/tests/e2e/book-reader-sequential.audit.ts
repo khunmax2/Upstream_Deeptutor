@@ -13,20 +13,18 @@ function json(data: unknown) {
   };
 }
 
-// Quarantined, not deleted, and the reason is upstream's to fix.
+// Un-quarantined at the v1.6.6 sync. This was `test.fixme` because the URL
+// assertion below had been left behind by v1.6.3's canonical-routes rename, and
+// correcting it exposed a second failure underneath: after ArrowLeft the
+// reader's scrollTop stayed 0 instead of landing mid-chapter. Both were
+// upstream's to fix, and upstream has since fixed the assertion itself
+// (`97cb143cb`, "stabilize current dependency and reading gates", #1210) —
+// their pattern is the one running here now.
 //
-// This is upstream's book reader, not fork surface. The test was already red in
-// upstream's own CI for v1.6.3, failing at the URL assertion further down (the
-// canonical-routes rename left it behind — corrected in this fork). Correcting
-// it revealed a *second* failure the first one had been masking: after
-// ArrowLeft the reader's scrollTop stays 0 where the test expects it to land
-// mid-chapter, so paging backwards does not restore the reading position.
-//
-// That is a real behaviour bug, but in a feature this fork does not own and
-// cannot verify a fix for. Marked `fixme` so the other 42 audits stay a live
-// gate instead of the whole job going red; drop this line once upstream fixes
-// the reader (or reports that the expectation itself is wrong).
-test.fixme("book arrows read the current chapter before turning chapters", async ({
+// Whether the scrollTop half is fixed too is the open question, and a live run
+// answers it where a carried-forward `fixme` never would. If it fails again,
+// re-quarantine on *that* evidence rather than on this history.
+test("book arrows read the current chapter before turning chapters", async ({
   page,
 }) => {
   const paragraph = (chapter: number, section: number) =>
@@ -147,12 +145,7 @@ test.fixme("book arrows read the current chapter before turning chapters", async
   // A hidden reader (for example when the mobile chapter sidebar is expanded)
   // must not turn the page and skip unread content.
   await page.keyboard.press("ArrowRight");
-  // The assertion, not the app, was left behind by v1.6.3's canonical routes:
-  // the reader used to be addressed as `?page=<id>` and is now
-  // `/books/<bookId>/pages/<pageId>`. The two lines above already navigate to
-  // the path form, so the old pattern could never match again — it is what
-  // upstream's own CI has been failing on.
-  await expect(page).toHaveURL(/\/pages\/page-2$/);
+  await expect(page).toHaveURL(/\/pages\/page-2(?:[?#]|$)/);
 
   await page.getByRole("button", { name: "Collapse chapters" }).click();
   await expect(
@@ -198,12 +191,14 @@ test.fixme("book arrows read the current chapter before turning chapters", async
     )
     .toBe(100);
   await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/\/pages\/page-3(?:[?#]|$)/);
   await expect(
     page.getByRole("heading", { name: "Next chapter" }),
   ).toBeVisible();
   await expect(await reader.evaluate((element) => element.scrollTop)).toBe(0);
 
   await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/\/pages\/page-2(?:[?#]|$)/);
   await expect(
     page.getByRole("heading", { name: "Current long chapter" }),
   ).toBeVisible();

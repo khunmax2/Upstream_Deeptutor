@@ -13,18 +13,15 @@ const ROUTE_TARGETS = [
   { route: "/", requestPath: "/", budgetKb: 300 },
   { route: "/chat/[sessionId]", requestPath: "/chat/perf-budget", budgetKb: 1_020 },
   { route: "/settings", requestPath: "/settings", budgetKb: 840 },
-  // 540 upstream, 550 here — but read upstream's own v1.6.4 CI before assuming
-  // that gap is ours: they ship this route at 541KB against their own 540KB
-  // budget, i.e. red in their repo too. This fork measures 542KB, so ~1KB is
-  // ours and the rest is a budget upstream broke and released anyway. Raised
-  // just enough to clear it; if upstream lowers the route back under 540, lower
-  // this with it rather than banking the headroom.
   { route: "/knowledge-bases", requestPath: "/knowledge-bases", budgetKb: 550 },
   { route: "/co-writer", requestPath: "/co-writer", budgetKb: 320 },
-  // 515 upstream, 525 here. This one upstream passes (512KB); this fork measures
-  // 516KB, so the ~4KB really is fork weight on the doc editor route. Small
-  // enough to carry, big enough to be worth re-measuring if it grows again.
-  { route: "/co-writer/[docId]", requestPath: "/co-writer/perf-budget", budgetKb: 525 },
+  // Back to upstream's 515 at the v1.6.6 sync. The 525 it replaces was set
+  // against a 516KB measurement taken before v1.6.6 moved weight out of the
+  // shared chunks — upstream's own notes put the home route at 305KB -> 203KB —
+  // so the old number describes a bundle that no longer exists. Measured again
+  // below; if this route genuinely needs headroom, raise it from a fresh
+  // measurement rather than carrying an old one forward.
+  { route: "/co-writer/[docId]", requestPath: "/co-writer/perf-budget", budgetKb: 515 },
   {
     route: "/reading/[workspaceId]/sessions/[sessionId]",
     requestPath: "/reading/perf-budget/sessions/perf-session",
@@ -43,10 +40,19 @@ const ROUTE_TARGETS = [
 // which is the whole overage. Deferring `en` too would trade a fixed 8KB for a
 // flash of untranslated UI on every first paint, a worse deal.
 //
-// Raise this only for the same reason — a fork feature's strings. Code weight
-// belongs behind `next/dynamic` instead: that is how the voice widget and action
-// bridge got out of the shell (514KB → 396KB) rather than by moving this line.
-const ROOT_SHELL_BUDGET_KB = 410;
+// Raise this only for a strings reason. Code weight belongs behind
+// `next/dynamic` instead: that is how the voice widget and action bridge got out
+// of the shell (514KB → 396KB) rather than by moving this line.
+//
+// 410 → 420 at the v1.6.6 sync, and this one is **not** a fork feature: the
+// release adds 252 keys to `en`, which measured 414KB against the old 410. The
+// number here is the measurement plus a little, not a guess.
+//
+// If it needs raising again, look first at what the fork is carrying rather than
+// at this line. `en` holds 5,137 keys against upstream's 4,008 — 1,129 of them
+// fork-only, and the last dead-key sweep found 270 that no `t()` call reaches.
+// Reclaiming those is worth more than the 10KB added here.
+const ROOT_SHELL_BUDGET_KB = 420;
 const SERVER_TIMEOUT_MS = 20_000;
 
 function assertBuildPresent() {

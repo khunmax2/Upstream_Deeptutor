@@ -50,15 +50,10 @@ _TOOL_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "zh": "广泛发散想法，并按理由组织结果。",
         "th": "ระดมความคิดอย่างกว้างขวางและจัดระเบียบพร้อมเหตุผล",
     },
-    "code_execution": {
-        "en": "Run sandboxed Python code for computation and data exploration.",
-        "zh": "在沙箱中运行 Python，用于计算和数据探索。",
-        "th": "รันโค้ด Python ในแซนด์บ็อกซ์เพื่อการคำนวณและสำรวจข้อมูล",
-    },
     "exec": {
-        "en": "Run shell commands inside an isolated sandbox workspace.",
-        "zh": "在隔离沙箱工作区中运行 shell 命令。",
-        "th": "รันคำสั่ง shell ในเวิร์กสเปซแซนด์บ็อกซ์ที่แยกออกมา",
+        "en": "Run source code or shell scripts inside an isolated workspace.",
+        "zh": "在隔离工作区中运行源码或 shell 脚本。",
+        "th": "รันซอร์สโค้ดหรือสคริปต์ shell ในเวิร์กสเปซที่แยกออกมา",
     },
     "kb_files": {
         "en": "List the documents a knowledge base holds, with the total count.",

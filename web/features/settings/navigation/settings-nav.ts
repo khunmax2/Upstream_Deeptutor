@@ -9,6 +9,7 @@ import {
   Clapperboard,
   Database,
   FileScan,
+  FolderOpen,
   Image as ImageIcon,
   Info,
   KeyRound,
@@ -407,6 +408,23 @@ const AGENT_CHILDREN: SettingsLeaf[] = [
     adminOnly: true,
   },
   {
+    key: "agent-hermes-remote",
+    href: "/settings#agent-hermes-remote",
+    label: {
+      zh: "Hermes Agent（远程）",
+      en: "Hermes Agent (remote)",
+      th: "Hermes Agent (ระยะไกล)",
+    },
+    blurb: {
+      zh: "通过 HTTP 网关调用远程 Hermes Agent，并按会话保持上下文。",
+      en: "Call a remote Hermes Agent over HTTP with per-chat session continuity.",
+      th: "เรียก Hermes Agent ระยะไกลผ่าน HTTP โดยคงบริบทเซสชันแยกตามแชต",
+    },
+    icon: HermesGlyph as unknown as LucideIcon,
+    tile: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    adminOnly: true,
+  },
+  {
     key: "agent-openclaw",
     href: "/settings#agent-openclaw",
     label: { zh: "OpenClaw", en: "OpenClaw", th: "OpenClaw" },
@@ -444,9 +462,9 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     learningSafe: true,
     label: { zh: "外观", en: "Appearance", th: "รูปลักษณ์" },
     blurb: {
-      zh: "视觉主题与界面语言",
-      en: "Theme and interface language",
-      th: "ธีมและภาษาของอินเทอร์เฟซ",
+      zh: "视觉主题与代码块",
+      en: "Theme and code blocks",
+      th: "ธีมและบล็อกโค้ด",
     },
     icon: Palette,
     href: "/settings#appearance",
@@ -461,6 +479,17 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     },
     icon: Network,
     href: "/settings#network",
+  },
+  {
+    key: "workspace",
+    label: { zh: "Workspace", en: "Workspace", th: "เวิร์กสเปซ" },
+    blurb: {
+      zh: "Agent 可读取的文件与统一输出目录",
+      en: "Agent-readable files and the shared output folder",
+      th: "ไฟล์ที่เอเจนต์อ่านได้ และโฟลเดอร์ผลลัพธ์ที่ใช้ร่วมกัน",
+    },
+    icon: FolderOpen,
+    href: "/settings#workspace",
   },
   {
     key: "models",
@@ -579,6 +608,7 @@ export function settingsAnchorHref(key: string): string {
 const STORAGE_PATHS: Record<string, string> = {
   "/settings#appearance": "data/user/settings/interface.json",
   "/settings#network": "data/user/settings/system.json",
+  "/settings#workspace": "data/user/settings/content_workspace.json",
   "/settings#llm": "data/user/settings/model_catalog.json",
   "/settings#embedding": "data/user/settings/model_catalog.json",
   "/settings#search": "data/user/settings/model_catalog.json",
@@ -591,6 +621,7 @@ const STORAGE_PATHS: Record<string, string> = {
   "/settings#memory": "data/user/settings/main.yaml",
   appearance: "data/user/settings/interface.json",
   network: "data/user/settings/system.json",
+  workspace: "data/user/settings/content_workspace.json",
   connections: "data/user/settings/model_catalog.json",
   "task-models": "data/user/settings/model_catalog.json",
   knowledge: "data/user/settings/document_parsing.json",
