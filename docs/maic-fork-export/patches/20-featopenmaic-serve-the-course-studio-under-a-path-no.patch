@@ -1,0 +1,522 @@
+From 7d29e1f31515c76202ec4c5bc4e5d52157e36c04 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Tue, 8 Sep 2026 02:47:43 +0700
+Subject: [PATCH] feat(openmaic): serve the course studio under a path, not a
+ port
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The deployment host will not open a second port — policy, not configuration —
+so the embed's port-of-its-own shape left the studio unreachable. The remaining
+route is a path on the 443 that is already open.
+
+basePath is not enough on its own. It prefixes <Link>, the router and /_next/
+assets; it does not touch a URL the app writes itself, and this app writes 74
+fetch('/api/...') calls across 44 files plus three EventSource streams. Under a
+prefix every one of them leaves for the root of the host.
+
+A reverse proxy would normally absorb that, but this host already serves
+/sansarnnews, /research-helper, /dol, /deepwitya, /opdc-assistant and
+/deepwitya2 — /api at its root belongs to other people's applications, and a
+rule there would sit in front of all of them. So the app prefixes its own URLs.
+Rewriting 44 files would be 44 files to re-apply on every subtree pull;
+rewriting the two globals they funnel through is one, and it is inert when
+NEXT_PUBLIC_BASE_PATH is unset, so the port shape and upstream are untouched.
+
+EventSource matters as much as fetch: the workbench streams over SSE, and
+wrapping only fetch would have left it silently dead. For /public, three choke
+points cover the 43 files that reference one — AvatarImage, DEFAULT_BRAND, and
+a pass over PROVIDERS beside the applyModelMetadata call already there.
+
+The failure this prevents is not a network error. It is the studio showing an
+access-code login box nobody configured, because /api/access-code/status fails
+and the guard treats an error as locked.
+
+Verified against a real build: the value is inlined into the CLIENT bundle
+(let t="/course-studio-app"), which is what would have made the wrapper a silent
+no-op otherwise. Under the prefix the page, /api, /brand-wordmark.png, /avatars
+and /logos all answer 200 and the page is byte-identical to the prerendered
+home page; at the root all of them 404. Eight unit tests cover the rewrite
+rules. The gatekeeper needed no change — it is path-transparent, and its one
+literal path is only reached directly on loopback.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+---
+ integration/maic/Dockerfile                   |   7 +
+ integration/maic/app/layout.tsx               |   5 +
+ .../maic/components/base-path-bridge.tsx      | 111 +++++++++++++
+ integration/maic/components/ui/avatar.tsx     |  12 +-
+ integration/maic/lib/ai/providers.ts          |  12 ++
+ integration/maic/lib/base-path.ts             |  38 +++++
+ integration/maic/lib/brand/brand-config.ts    |   6 +-
+ integration/maic/tests/lib/base-path.test.ts  | 157 ++++++++++++++++++
+ 8 files changed, 345 insertions(+), 3 deletions(-)
+ create mode 100644 integration/maic/components/base-path-bridge.tsx
+ create mode 100644 integration/maic/lib/base-path.ts
+ create mode 100644 integration/maic/tests/lib/base-path.test.ts
+
+diff --git a/integration/maic/Dockerfile b/integration/maic/Dockerfile
+index 37a19532b..a434c3ebb 100644
+--- a/integration/maic/Dockerfile
++++ b/integration/maic/Dockerfile
+@@ -48,6 +48,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+ # ---- Stage 3: Builder ----
+ FROM base AS builder
+ 
++# The subpath this app is served under, when a reverse proxy routes a prefix
++# to it rather than giving it a host of its own. Structural: Next generates
++# every /_next/ asset URL from it, so it has to be known at build time and
++# cannot be switched per request. Unset means "owns the domain root", which is
++# every deployment that does not need this.
++ARG NEXT_PUBLIC_BASE_PATH
+ ARG ALLOWED_FRAME_ANCESTORS
+ ARG NEXT_PUBLIC_PERSISTENCE
+ ARG NEXT_PUBLIC_PERSISTENCE_TOKEN
+@@ -60,6 +66,7 @@ ARG NEXT_PUBLIC_SHOW_VOCATIONAL_TEST_UI
+ ARG NEXT_PUBLIC_ENABLE_VIDEO_EXPORT
+ ARG NEXT_PUBLIC_VIDEO_EXPORT_CTA_DESTINATION
+ ARG NEXT_PUBLIC_ENABLE_PPTX_IMPORT
++ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+ ENV ALLOWED_FRAME_ANCESTORS=$ALLOWED_FRAME_ANCESTORS
+ ENV NEXT_PUBLIC_PERSISTENCE=$NEXT_PUBLIC_PERSISTENCE
+ ENV NEXT_PUBLIC_PERSISTENCE_TOKEN=$NEXT_PUBLIC_PERSISTENCE_TOKEN
+diff --git a/integration/maic/app/layout.tsx b/integration/maic/app/layout.tsx
+index 1018c09a4..fd531f84f 100644
+--- a/integration/maic/app/layout.tsx
++++ b/integration/maic/app/layout.tsx
+@@ -5,6 +5,10 @@ import './globals.css';
+ import '@openmaic/renderer/fonts.css';
+ import 'animate.css';
+ import 'katex/dist/katex.min.css';
++// Before the providers, because this one patches `fetch` and `EventSource`
++// while its module is evaluated and everything else reaches them later, from
++// an effect. Inert unless NEXT_PUBLIC_BASE_PATH is set.
++import { BasePathBridge } from '@/components/base-path-bridge';
+ import { ThemeProvider } from '@/lib/hooks/use-theme';
+ import { I18nProvider } from '@/lib/hooks/use-i18n';
+ import { Toaster } from '@/components/ui/sonner';
+@@ -53,6 +57,7 @@ export default function RootLayout({
+         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
+         suppressHydrationWarning
+       >
++        <BasePathBridge />
+         <ThemeProvider>
+           <I18nProvider>
+             <ServerProvidersInit />
+diff --git a/integration/maic/components/base-path-bridge.tsx b/integration/maic/components/base-path-bridge.tsx
+new file mode 100644
+index 000000000..4d79ab79f
+--- /dev/null
++++ b/integration/maic/components/base-path-bridge.tsx
+@@ -0,0 +1,111 @@
++'use client';
++
++import { BASE_PATH, withBasePath } from '@/lib/base-path';
++
++/**
++ * Teach the browser-side URL APIs about `basePath`.
++ *
++ * Next's `basePath` prefixes <Link>, the router and /_next/ assets. It does not
++ * prefix a URL the app writes itself, and this app writes a lot of them: 74
++ * `fetch('/api/...')` calls across 44 files, plus three `new EventSource(...)`,
++ * with no central helper to patch. Served under a prefix, every one of them
++ * leaves for the domain root instead of this app.
++ *
++ * Rewriting 44 files would be 44 files to re-apply on every upstream sync.
++ * Rewriting the two globals they all funnel through is one.
++ *
++ * Nothing about this is subtle when it goes wrong, but it is easy to
++ * misdiagnose: the first symptom is not a network error, it is OpenMAIC showing
++ * a login box that was never configured. `/api/access-code/status` fails,
++ * `AccessCodeGuard` treats an error as "locked" — the right default — and the
++ * app renders a modal for an access code nobody set.
++ *
++ * Not patched, deliberately:
++ *
++ * - `XMLHttpRequest`. The only browser-side use is inside the vendored
++ *   `packages/pptxgenjs`, which fetches absolute URLs.
++ * - `WebSocket` and `navigator.sendBeacon`. This app calls neither.
++ * - Relative paths (`api/x`). They already resolve against a page that is
++ *   itself under the prefix, so prefixing them again would be wrong.
++ *
++ * The whole module is inert when `NEXT_PUBLIC_BASE_PATH` is unset, which is
++ * every deployment that owns its domain root.
++ */
++
++/** Root-absolute paths this app owns and Next will not prefix for it. */
++const OWNED = /^\/api\//;
++
++const INSTALLED = '__openmaicBasePathBridge';
++
++function rewritePath(pathname: string): string {
++  return OWNED.test(pathname) ? withBasePath(pathname) : pathname;
++}
++
++/** Rewrite a fetch/EventSource target, leaving anything cross-origin alone. */
++function rewriteTarget<T extends string | URL>(target: T): T {
++  try {
++    if (typeof target === 'string') {
++      // Only root-absolute. A relative path resolves against the current page,
++      // which already carries the prefix.
++      return (target.startsWith('/') ? rewritePath(target) : target) as T;
++    }
++    if (target instanceof URL && target.origin === window.location.origin) {
++      const pathname = rewritePath(target.pathname);
++      if (pathname !== target.pathname) {
++        const next = new URL(target.href);
++        next.pathname = pathname;
++        return next as T;
++      }
++    }
++  } catch {
++    // A malformed target is the caller's problem, not ours — hand it back
++    // untouched and let the original API report it.
++  }
++  return target;
++}
++
++function install(): void {
++  const w = window as unknown as Record<string, unknown>;
++  if (w[INSTALLED]) return; // HMR and StrictMode both re-evaluate this module
++  w[INSTALLED] = true;
++
++  const nativeFetch = window.fetch.bind(window);
++  window.fetch = function patchedFetch(input: RequestInfo | URL, init?: RequestInit) {
++    if (typeof input === 'string' || input instanceof URL) {
++      return nativeFetch(rewriteTarget(input), init);
++    }
++    if (input instanceof Request) {
++      const rewritten = rewriteTarget(new URL(input.url));
++      if (rewritten.href !== input.url) {
++        return nativeFetch(new Request(rewritten.href, input), init);
++      }
++    }
++    return nativeFetch(input, init);
++  };
++
++  const NativeEventSource = window.EventSource;
++  if (NativeEventSource) {
++    class PatchedEventSource extends NativeEventSource {
++      constructor(url: string | URL, init?: EventSourceInit) {
++        super(rewriteTarget(url), init);
++      }
++    }
++    window.EventSource = PatchedEventSource;
++  }
++}
++
++if (typeof window !== 'undefined' && BASE_PATH) {
++  // At module scope, not in an effect: every caller reaches these APIs from an
++  // effect or an event handler, so patching while the module is evaluated puts
++  // it comfortably ahead of the first request.
++  install();
++}
++
++/**
++ * Renders nothing. It exists so `app/layout.tsx` — a server component — has a
++ * client boundary to mount, which is what pulls this module into the browser
++ * bundle at all.
++ */
++export function BasePathBridge() {
++  return null;
++}
+diff --git a/integration/maic/components/ui/avatar.tsx b/integration/maic/components/ui/avatar.tsx
+index e1cf75514..501016949 100644
+--- a/integration/maic/components/ui/avatar.tsx
++++ b/integration/maic/components/ui/avatar.tsx
+@@ -3,6 +3,7 @@
+ import * as React from 'react';
+ import { Avatar as AvatarPrimitive } from 'radix-ui';
+ 
++import { asset } from '@/lib/base-path';
+ import { cn } from '@/lib/utils';
+ 
+ function Avatar({
+@@ -25,11 +26,20 @@ function Avatar({
+   );
+ }
+ 
+-function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
++function AvatarImage({
++  className,
++  src,
++  ...props
++}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+   return (
+     <AvatarPrimitive.Image
+       data-slot="avatar-image"
+       className={cn('rounded-full aspect-square size-full object-cover', className)}
++      // Avatars are files under /public addressed root-absolutely, from a
++      // dozen call sites across agents, roundtable and the editor. Next does
++      // not prefix those, and prefixing them here covers all of them at once.
++      // `asset` is a no-op when the app owns its domain root.
++      src={typeof src === 'string' ? asset(src) : src}
+       {...props}
+     />
+   );
+diff --git a/integration/maic/lib/ai/providers.ts b/integration/maic/lib/ai/providers.ts
+index f2880df6e..01e0cfe11 100644
+--- a/integration/maic/lib/ai/providers.ts
++++ b/integration/maic/lib/ai/providers.ts
+@@ -48,6 +48,7 @@ import type {
+ } from '@/lib/types/provider';
+ import { applyModelMetadata, getCatalogThinkingCapability } from './model-metadata';
+ import { findModelById } from './model-aliases';
++import { asset } from '@/lib/base-path';
+ import {
+   getDefaultThinkingConfig,
+   getThinkingMode,
+@@ -1552,6 +1553,17 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
+ 
+ applyModelMetadata(PROVIDERS);
+ 
++// Provider logos are files under /public addressed root-absolutely, and Next
++// does not prefix those when the app is served under a subpath — only its own
++// /_next/ assets and router links. Doing it here, once, covers every consumer
++// (the generation toolbar, the media popover, each settings panel) instead of
++// a dozen render sites that are easy to miss one of. `asset` is idempotent and
++// a no-op when the app owns its domain root, which is every deployment that
++// does not set NEXT_PUBLIC_BASE_PATH.
++for (const provider of Object.values(PROVIDERS)) {
++  if (provider.icon) provider.icon = asset(provider.icon);
++}
++
+ /**
+  * Get provider config (from built-in or unified config in localStorage)
+  */
+diff --git a/integration/maic/lib/base-path.ts b/integration/maic/lib/base-path.ts
+new file mode 100644
+index 000000000..42d7feceb
+--- /dev/null
++++ b/integration/maic/lib/base-path.ts
+@@ -0,0 +1,38 @@
++// Subpath this app is served under when a reverse proxy routes a prefix to it,
++// or "" when it owns the domain root. Inlined at build time from the
++// NEXT_PUBLIC_BASE_PATH build arg — the same variable `next.config.ts` feeds to
++// Next's own `basePath`, so the two can never disagree.
++//
++// Next's basePath auto-prefixes <Link>, the router and /_next/ assets. It does
++// NOT touch anything the app addresses by hand: `fetch('/api/...')`,
++// `new EventSource('/api/...')`, or a root-absolute `src` pointing into
++// /public. Those are what this module exists for.
++//
++// Deliberately mirrors `web/lib/basePath.ts` in the DeepTutor app, down to the
++// function names, so the two halves of the product read the same way.
++export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
++
++/**
++ * Prefix a root-absolute path with BASE_PATH, **idempotently**.
++ *
++ * Idempotency is load-bearing here rather than merely tidy: the fetch wrapper
++ * applies this to every request, including ones whose caller already applied
++ * it, and a second prefix would produce `/prefix/prefix/api/...`. Anything
++ * already under BASE_PATH, and anything that is not a root-absolute path
++ * (a relative path, an absolute URL, a data: URI), is returned untouched.
++ */
++export function withBasePath(path: string): string {
++  if (!BASE_PATH) return path;
++  if (!path.startsWith('/')) return path;
++  if (path === BASE_PATH || path.startsWith(`${BASE_PATH}/`)) return path;
++  return `${BASE_PATH}${path}`;
++}
++
++/**
++ * Prefix a root-absolute /public asset path (`/avatars/x.png`, `/logos/y.svg`).
++ *
++ * Same operation as `withBasePath`; the separate name marks the call sites that
++ * are about static files, because those are the ones a reader will otherwise
++ * assume Next already handles.
++ */
++export const asset = withBasePath;
+diff --git a/integration/maic/lib/brand/brand-config.ts b/integration/maic/lib/brand/brand-config.ts
+index 07715af15..d43b12b18 100644
+--- a/integration/maic/lib/brand/brand-config.ts
++++ b/integration/maic/lib/brand/brand-config.ts
+@@ -13,6 +13,8 @@
+  * restart.
+  */
+ 
++import { asset } from '@/lib/base-path';
++
+ export interface BrandConfig {
+   /** Full product name (page titles, logo alt text). */
+   productName: string;
+@@ -36,9 +38,9 @@ const name = process.env.NEXT_PUBLIC_BRAND_NAME?.trim() || 'DeepWitya';
+ export const DEFAULT_BRAND: BrandConfig = {
+   productName: name,
+   shortName: process.env.NEXT_PUBLIC_BRAND_SHORT_NAME?.trim() || name,
+-  logoSrc: process.env.NEXT_PUBLIC_BRAND_LOGO?.trim() || '/brand-wordmark.png',
++  logoSrc: asset(process.env.NEXT_PUBLIC_BRAND_LOGO?.trim() || '/brand-wordmark.png'),
+   logoHasWordmark: true,
+-  markSrc: process.env.NEXT_PUBLIC_BRAND_MARK?.trim() || '/brand-mark.png',
++  markSrc: asset(process.env.NEXT_PUBLIC_BRAND_MARK?.trim() || '/brand-mark.png'),
+   themeColor: process.env.NEXT_PUBLIC_BRAND_THEME_COLOR?.trim() || '#b0501e',
+   tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE?.trim() || 'Agent-Native Learning',
+ };
+diff --git a/integration/maic/tests/lib/base-path.test.ts b/integration/maic/tests/lib/base-path.test.ts
+new file mode 100644
+index 000000000..cf25f3ddc
+--- /dev/null
++++ b/integration/maic/tests/lib/base-path.test.ts
+@@ -0,0 +1,157 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++
++/**
++ * The subpath bridge, tested at the two globals it patches.
++ *
++ * Worth testing rather than eyeballing: this is the one place that decides
++ * where 74 `fetch('/api/...')` calls and three `EventSource`s actually go when
++ * the app is served under a prefix, and getting it wrong does not look like a
++ * network failure — it looks like an access-code login box nobody configured.
++ */
++
++const ORIGIN = 'https://host.example';
++const PREFIX = '/course-studio-app';
++
++type FakeWindow = {
++  location: { origin: string; href: string };
++  fetch: (input: unknown, init?: unknown) => Promise<string>;
++  EventSource: new (url: string | URL, init?: unknown) => { url: string };
++};
++
++function makeWindow() {
++  const fetched: string[] = [];
++  const streamed: string[] = [];
++
++  class FakeEventSource {
++    url: string;
++    constructor(url: string | URL) {
++      this.url = String(url);
++      streamed.push(this.url);
++    }
++  }
++
++  const win = {
++    location: { origin: ORIGIN, href: `${ORIGIN}${PREFIX}/` },
++    fetch: (input: unknown) => {
++      fetched.push(input instanceof URL ? input.href : String(input));
++      return Promise.resolve('ok');
++    },
++    EventSource: FakeEventSource,
++  } as unknown as FakeWindow;
++
++  return { win, fetched, streamed };
++}
++
++/** Load the bridge fresh against a given basePath and window. */
++async function install(basePath: string, win: FakeWindow) {
++  vi.resetModules();
++  process.env.NEXT_PUBLIC_BASE_PATH = basePath;
++  (globalThis as Record<string, unknown>).window = win;
++  await import('@/components/base-path-bridge');
++}
++
++const originalEnv = process.env.NEXT_PUBLIC_BASE_PATH;
++
++beforeEach(() => {
++  delete (globalThis as Record<string, unknown>).window;
++});
++
++afterEach(() => {
++  delete (globalThis as Record<string, unknown>).window;
++  if (originalEnv === undefined) delete process.env.NEXT_PUBLIC_BASE_PATH;
++  else process.env.NEXT_PUBLIC_BASE_PATH = originalEnv;
++});
++
++describe('withBasePath / asset', () => {
++  it('is a no-op with no basePath, and prefixes with one', async () => {
++    vi.resetModules();
++    process.env.NEXT_PUBLIC_BASE_PATH = '';
++    const bare = await import('@/lib/base-path');
++    expect(bare.asset('/brand-wordmark.png')).toBe('/brand-wordmark.png');
++
++    vi.resetModules();
++    process.env.NEXT_PUBLIC_BASE_PATH = PREFIX;
++    const prefixed = await import('@/lib/base-path');
++    expect(prefixed.asset('/brand-wordmark.png')).toBe(`${PREFIX}/brand-wordmark.png`);
++  });
++
++  it('is idempotent, and leaves anything that is not a root-absolute path alone', async () => {
++    vi.resetModules();
++    process.env.NEXT_PUBLIC_BASE_PATH = PREFIX;
++    const { withBasePath } = await import('@/lib/base-path');
++
++    // Applied twice — the fetch wrapper runs over paths a caller may already
++    // have prefixed, and a second prefix would be silent and fatal.
++    expect(withBasePath(withBasePath('/api/x'))).toBe(`${PREFIX}/api/x`);
++    expect(withBasePath(PREFIX)).toBe(PREFIX);
++    expect(withBasePath('api/x')).toBe('api/x');
++    expect(withBasePath('https://elsewhere.example/api/x')).toBe('https://elsewhere.example/api/x');
++  });
++});
++
++describe('the fetch wrapper', () => {
++  it('prefixes the app\u2019s own /api calls', async () => {
++    const { win, fetched } = makeWindow();
++    await install(PREFIX, win);
++
++    await win.fetch('/api/access-code/status');
++    expect(fetched).toEqual([`${PREFIX}/api/access-code/status`]);
++  });
++
++  it('leaves alone what it does not own', async () => {
++    const { win, fetched } = makeWindow();
++    await install(PREFIX, win);
++
++    await win.fetch('/health'); // not ours; some other app may serve it
++    await win.fetch('api/relative'); // resolves against a page already prefixed
++    await win.fetch('https://api.openai.com/v1/models'); // cross-origin
++    await win.fetch(`${PREFIX}/api/already`); // prefixed by a caller
++
++    expect(fetched).toEqual([
++      '/health',
++      'api/relative',
++      'https://api.openai.com/v1/models',
++      `${PREFIX}/api/already`,
++    ]);
++  });
++
++  it('handles a URL object without disturbing a cross-origin one', async () => {
++    const { win, fetched } = makeWindow();
++    await install(PREFIX, win);
++
++    await win.fetch(new URL(`${ORIGIN}/api/stages`));
++    await win.fetch(new URL('https://elsewhere.example/api/stages'));
++
++    expect(fetched).toEqual([
++      `${ORIGIN}${PREFIX}/api/stages`,
++      'https://elsewhere.example/api/stages',
++    ]);
++  });
++
++  it('does not touch anything when the app owns its domain root', async () => {
++    const { win, fetched } = makeWindow();
++    const before = win.fetch;
++    await install('', win);
++
++    expect(win.fetch).toBe(before); // not even wrapped
++    await win.fetch('/api/access-code/status');
++    expect(fetched).toEqual(['/api/access-code/status']);
++  });
++});
++
++describe('the EventSource wrapper', () => {
++  it('prefixes a stream, which is what the workbench opens', async () => {
++    const { win, streamed } = makeWindow();
++    await install(PREFIX, win);
++
++    new win.EventSource('/api/stages/intro/freshness');
++    expect(streamed).toEqual([`${PREFIX}/api/stages/intro/freshness`]);
++  });
++
++  it('is left untouched when the app owns its domain root', async () => {
++    const { win } = makeWindow();
++    const before = win.EventSource;
++    await install('', win);
++    expect(win.EventSource).toBe(before);
++  });
++});
+-- 
+2.51.0.windows.2
+

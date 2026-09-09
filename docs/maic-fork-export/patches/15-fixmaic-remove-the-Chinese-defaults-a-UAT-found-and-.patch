@@ -1,0 +1,1208 @@
+From ee730e1efa164b0c69e55e79fbe74de0f5d84fc8 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 16:54:38 +0700
+Subject: [PATCH] fix(maic): remove the Chinese defaults a UAT found, and
+ de-brand the host frame
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Clicking every control and walking a course end to end, with the sweep done
+mechanically: every route fetched and scanned, every visible button clicked with
+real pointer events and the resulting DOM scanned, all 1,699 t() calls checked
+against both locale tables.
+
+The microphone toast was the thread. Denying permission printed
+"无法访问麦克风，请检查权限设置" in every language — the symptom reported days ago.
+use-audio-recorder.ts held nine hardcoded Chinese messages; all nine now go
+through t() in 13 languages.
+
+Pulling it found the root: defaultLocale was zh-CN, and lib/i18n/config.ts hands
+that value to i18next as BOTH lng and fallbackLng. The first paint was Chinese,
+and any key missing from a locale fell back to Chinese rather than English. Now
+en-US.
+
+Four more of the same shape:
+- Azure SSML hardcoded xml:lang='zh-CN' on both <speak> and <voice>, so Azure
+  read every language with Chinese phonetics. An Azure voice is named for its
+  locale (th-TH-PremwadeeNeural), so the tag now comes from the voice id.
+- asr-settings.tsx and use-browser-asr.ts fell back to zh-CN for browser speech
+  recognition; use-browser-tts.ts did the same for synthesis, plus its own
+  Chinese error string.
+- pbl/v2/submission.tsx looked receipts up under zh-CN.
+- components/agent/agent-config-panel.tsx — 11 Chinese strings, imported by
+  nothing — deleted.
+
+stage.proMode was called by header-controls.tsx and defined in no locale, so the
+label beside the Pro switch rendered the literal key. Upstream's gate compares
+locales against each other and never checks that a t() call resolves. Added in 13
+languages, with the six classroom transport controls whose aria-labels were
+hardcoded English beside translated neighbours.
+
+The host's own frame was still branded: the panel header, the new-tab tooltip,
+the iframe's accessible name, the sidebar tooltip and the voice widget all named
+OpenMAIC. Reworded in en/th/zh, and /maic is now /course-studio with a 308
+redirect.
+
+Verified: a Thai prompt produced a Thai course throughout with no language
+mixing, no server errors, and every route scans 0 brand / 0 external links / 0
+raw keys. tsc clean, eslint clean, i18n gate at 13 locales, DeepTutor node tests
+1105/1105.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ .../components/agent/agent-config-panel.tsx   | 152 ------------------
+ .../maic/components/canvas/canvas-toolbar.tsx |  12 +-
+ .../scene-renderers/pbl/v2/submission.tsx     |   3 +-
+ .../maic/components/settings/asr-settings.tsx |   5 +-
+ integration/maic/lib/audio/tts-providers.ts   |  23 ++-
+ .../maic/lib/hooks/use-audio-recorder.ts      |  29 ++--
+ integration/maic/lib/hooks/use-browser-asr.ts |   2 +-
+ integration/maic/lib/hooks/use-browser-tts.ts |  22 ++-
+ integration/maic/lib/i18n/locales/ar-SA.json  |  24 ++-
+ integration/maic/lib/i18n/locales/de-DE.json  |  24 ++-
+ integration/maic/lib/i18n/locales/en-US.json  |  24 ++-
+ integration/maic/lib/i18n/locales/es-MX.json  |  24 ++-
+ integration/maic/lib/i18n/locales/fr-FR.json  |  24 ++-
+ integration/maic/lib/i18n/locales/ja-JP.json  |  24 ++-
+ integration/maic/lib/i18n/locales/ko-KR.json  |  24 ++-
+ integration/maic/lib/i18n/locales/pt-BR.json  |  24 ++-
+ integration/maic/lib/i18n/locales/ru-RU.json  |  24 ++-
+ integration/maic/lib/i18n/locales/th-TH.json  |  24 ++-
+ integration/maic/lib/i18n/locales/vi-VN.json  |  24 ++-
+ integration/maic/lib/i18n/locales/zh-CN.json  |  24 ++-
+ integration/maic/lib/i18n/locales/zh-TW.json  |  24 ++-
+ integration/maic/lib/i18n/types.ts            |   6 +-
+ 22 files changed, 345 insertions(+), 221 deletions(-)
+ delete mode 100644 integration/maic/components/agent/agent-config-panel.tsx
+
+diff --git a/integration/maic/components/agent/agent-config-panel.tsx b/integration/maic/components/agent/agent-config-panel.tsx
+deleted file mode 100644
+index c7dc7a1b3..000000000
+--- a/integration/maic/components/agent/agent-config-panel.tsx
++++ /dev/null
+@@ -1,152 +0,0 @@
+-/**
+- * Agent Configuration Panel
+- * UI for viewing and managing AI agents in the registry
+- */
+-
+-'use client';
+-
+-import { useState } from 'react';
+-import { useAgentRegistry } from '@/lib/orchestration/registry/store';
+-import { Button } from '@/components/ui/button';
+-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+-import { Badge } from '@/components/ui/badge';
+-import { ScrollArea } from '@/components/ui/scroll-area';
+-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+-import { PlusIcon, Trash2Icon, EditIcon } from 'lucide-react';
+-
+-export function AgentConfigPanel() {
+-  const { listAgents, deleteAgent } = useAgentRegistry();
+-  const agents = listAgents();
+-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+-
+-  const handleDelete = (agentId: string) => {
+-    if (confirm('确定要删除这个智能体吗？')) {
+-      deleteAgent(agentId);
+-      if (selectedAgent === agentId) {
+-        setSelectedAgent(null);
+-      }
+-    }
+-  };
+-
+-  return (
+-    <div className="flex flex-col h-full p-4 gap-4">
+-      <div className="flex items-center justify-between">
+-        <div>
+-          <h2 className="text-lg font-semibold">智能体配置</h2>
+-          <p className="text-sm text-muted-foreground">管理课堂讨论的AI智能体</p>
+-        </div>
+-        <Button size="sm" variant="outline">
+-          <PlusIcon className="w-4 h-4 mr-2" />
+-          新建
+-        </Button>
+-      </div>
+-
+-      <ScrollArea className="flex-1">
+-        <div className="space-y-3">
+-          {agents.map((agent) => (
+-            <Card
+-              key={agent.id}
+-              className={`cursor-pointer transition-colors ${
+-                selectedAgent === agent.id ? 'border-primary' : ''
+-              }`}
+-              onClick={() => setSelectedAgent(agent.id)}
+-            >
+-              <CardHeader className="p-4">
+-                <div className="flex items-start justify-between">
+-                  <div className="flex items-center gap-3">
+-                    <Avatar
+-                      className="size-10"
+-                      style={{
+-                        borderColor: agent.color,
+-                        borderWidth: 2,
+-                      }}
+-                    >
+-                      <AvatarImage src={agent.avatar} alt={agent.name} />
+-                      <AvatarFallback
+-                        style={{
+-                          backgroundColor: `${agent.color}20`,
+-                          color: agent.color,
+-                        }}
+-                      >
+-                        {agent.name.charAt(0)}
+-                      </AvatarFallback>
+-                    </Avatar>
+-                    <div>
+-                      <CardTitle className="text-base">{agent.name}</CardTitle>
+-                      <CardDescription className="text-sm">{agent.role}</CardDescription>
+-                    </div>
+-                  </div>
+-                  <div className="flex gap-2">
+-                    <Badge variant="secondary" className="text-xs">
+-                      优先级 {agent.priority}
+-                    </Badge>
+-                    {agent.isDefault && (
+-                      <Badge variant="outline" className="text-xs">
+-                        默认
+-                      </Badge>
+-                    )}
+-                  </div>
+-                </div>
+-              </CardHeader>
+-              <CardContent className="p-4 pt-0">
+-                <div className="space-y-2">
+-                  <div>
+-                    <p className="text-xs font-medium text-muted-foreground mb-1">能力描述</p>
+-                    <p className="text-sm line-clamp-2">{agent.persona}</p>
+-                  </div>
+-                  <div>
+-                    <p className="text-xs font-medium text-muted-foreground mb-1">
+-                      可用动作 ({agent.allowedActions.length})
+-                    </p>
+-                    <div className="flex flex-wrap gap-1">
+-                      {agent.allowedActions.slice(0, 3).map((tool) => (
+-                        <Badge key={tool} variant="secondary" className="text-xs">
+-                          {tool}
+-                        </Badge>
+-                      ))}
+-                      {agent.allowedActions.length > 3 && (
+-                        <Badge variant="secondary" className="text-xs">
+-                          +{agent.allowedActions.length - 3}
+-                        </Badge>
+-                      )}
+-                    </div>
+-                  </div>
+-                  {!agent.isDefault && (
+-                    <div className="flex gap-2 pt-2">
+-                      <Button size="sm" variant="outline" className="flex-1">
+-                        <EditIcon className="w-3 h-3 mr-1" />
+-                        编辑
+-                      </Button>
+-                      <Button
+-                        size="sm"
+-                        variant="destructive"
+-                        onClick={(e) => {
+-                          e.stopPropagation();
+-                          handleDelete(agent.id);
+-                        }}
+-                      >
+-                        <Trash2Icon className="w-3 h-3" />
+-                      </Button>
+-                    </div>
+-                  )}
+-                </div>
+-              </CardContent>
+-            </Card>
+-          ))}
+-        </div>
+-      </ScrollArea>
+-
+-      {agents.length === 0 && (
+-        <div className="flex-1 flex items-center justify-center text-center p-8">
+-          <div className="max-w-sm">
+-            <p className="text-muted-foreground mb-4">还没有配置智能体</p>
+-            <Button>
+-              <PlusIcon className="w-4 h-4 mr-2" />
+-              创建第一个智能体
+-            </Button>
+-          </div>
+-        </div>
+-      )}
+-    </div>
+-  );
+-}
+diff --git a/integration/maic/components/canvas/canvas-toolbar.tsx b/integration/maic/components/canvas/canvas-toolbar.tsx
+index 562d96718..ca96d7f53 100644
+--- a/integration/maic/components/canvas/canvas-toolbar.tsx
++++ b/integration/maic/components/canvas/canvas-toolbar.tsx
+@@ -170,7 +170,7 @@ export function CanvasToolbar({
+                 ? 'text-gray-400 dark:text-gray-500'
+                 : 'text-gray-600 dark:text-gray-300',
+             )}
+-            aria-label="Toggle sidebar"
++            aria-label={t('toolbar.toggleSidebar')}
+           >
+             <LayoutList className="w-3.5 h-3.5" />
+           </button>
+@@ -277,7 +277,7 @@ export function CanvasToolbar({
+                         ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10 dark:bg-violet-400/10'
+                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                     )}
+-                    aria-label="Playback speed"
++                    aria-label={t('toolbar.playbackSpeed')}
+                   >
+                     {playbackSpeed === 1.5 ? '1.5x' : `${playbackSpeed}x`}
+                   </button>
+@@ -300,7 +300,7 @@ export function CanvasToolbar({
+                 ctrlBtn,
+                 'w-6 h-6 text-gray-500 dark:text-gray-400 disabled:opacity-20 disabled:pointer-events-none',
+               )}
+-              aria-label="Previous scene"
++              aria-label={t('toolbar.previousScene')}
+             >
+               <ChevronLeft className="w-3.5 h-3.5" />
+             </button>
+@@ -372,7 +372,7 @@ export function CanvasToolbar({
+                 ctrlBtn,
+                 'w-6 h-6 text-gray-500 dark:text-gray-400 disabled:opacity-20 disabled:pointer-events-none',
+               )}
+-              aria-label="Next scene"
++              aria-label={t('toolbar.nextScene')}
+             >
+               <ChevronRight className="w-3.5 h-3.5" />
+             </button>
+@@ -394,7 +394,7 @@ export function CanvasToolbar({
+                         ? 'text-violet-600 dark:text-violet-400'
+                         : 'text-gray-500 dark:text-gray-400',
+                     )}
+-                    aria-label="Auto-play"
++                    aria-label={t('toolbar.autoPlay')}
+                   >
+                     <Repeat className="w-3.5 h-3.5" />
+                   </button>
+@@ -490,7 +490,7 @@ export function CanvasToolbar({
+                 ? 'text-gray-400 dark:text-gray-500'
+                 : 'text-gray-600 dark:text-gray-300',
+             )}
+-            aria-label="Toggle chat"
++            aria-label={t('toolbar.toggleChat')}
+           >
+             <MessageSquare className="w-3.5 h-3.5" />
+           </button>
+diff --git a/integration/maic/components/scene-renderers/pbl/v2/submission.tsx b/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
+index 92630cb01..5122dc0b2 100644
+--- a/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
++++ b/integration/maic/components/scene-renderers/pbl/v2/submission.tsx
+@@ -29,6 +29,7 @@
+  */
+ 
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { defaultLocale } from '@/lib/i18n';
+ import {
+   CheckCircle2,
+   Download,
+@@ -176,7 +177,7 @@ function newClientMessageId(): string {
+ }
+ 
+ function submissionReceiptText(submission: PBLSubmission, language?: string): string {
+-  const lng = language || 'zh-CN';
++  const lng = language || defaultLocale;
+   const label =
+     submission.kind === 'file' && submission.filename
+       ? i18n.t('pbl.v2.submission.receiptFile', { lng, filename: submission.filename })
+diff --git a/integration/maic/components/settings/asr-settings.tsx b/integration/maic/components/settings/asr-settings.tsx
+index 1b137f359..b7f017614 100644
+--- a/integration/maic/components/settings/asr-settings.tsx
++++ b/integration/maic/components/settings/asr-settings.tsx
+@@ -106,7 +106,10 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
+         }
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vendor-prefixed API without standard typings
+         const recognition = new (SpeechRecognitionCtor as new () => any)();
+-        recognition.lang = asrLanguage || 'zh-CN';
++        recognition.lang =
++          asrLanguage && asrLanguage !== 'auto'
++            ? asrLanguage
++            : (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+         recognition.onresult = (event: {
+           results: {
+             [index: number]: { [index: number]: { transcript: string } };
+diff --git a/integration/maic/lib/audio/tts-providers.ts b/integration/maic/lib/audio/tts-providers.ts
+index acfd73003..f34503576 100644
+--- a/integration/maic/lib/audio/tts-providers.ts
++++ b/integration/maic/lib/audio/tts-providers.ts
+@@ -436,9 +436,7 @@ const DEFAULT_PCM_SAMPLE_RATE = 24_000;
+ const DEFAULT_PCM_CHANNELS = 1;
+ 
+ /** `(sampleRate, channels)` when the response is headerless PCM, else null. */
+-function parsePcmContentType(
+-  contentType: string,
+-): { sampleRate: number; channels: number } | null {
++function parsePcmContentType(contentType: string): { sampleRate: number; channels: number } | null {
+   const [mediaType, ...params] = (contentType || '').split(';');
+   if (!RAW_PCM_MEDIA_TYPES.has(mediaType.trim().toLowerCase())) return null;
+ 
+@@ -448,7 +446,13 @@ function parsePcmContentType(
+     const eq = param.indexOf('=');
+     if (eq === -1) continue;
+     const key = param.slice(0, eq).trim().toLowerCase();
+-    const parsed = Number.parseInt(param.slice(eq + 1).trim().replace(/^"|"$/g, ''), 10);
++    const parsed = Number.parseInt(
++      param
++        .slice(eq + 1)
++        .trim()
++        .replace(/^"|"$/g, ''),
++      10,
++    );
+     if (!Number.isFinite(parsed) || parsed <= 0) continue;
+     if (key === 'rate' || key === 'sample-rate' || key === 'samplerate') sampleRate = parsed;
+     else if (key === 'channels' || key === 'channel') channels = parsed;
+@@ -564,8 +568,7 @@ export function decodeAudioResponse(
+     const mediaType = (contentType || '').split(';')[0].trim().toLowerCase();
+     // WAV stores samples little-endian, so big-endian PCM has to be swapped
+     // rather than merely wrapped — a header alone would describe it wrongly.
+-    const samples =
+-      detectByteOrder(bytes, mediaType) === 'big' ? swapBytes(bytes) : bytes;
++    const samples = detectByteOrder(bytes, mediaType) === 'big' ? swapBytes(bytes) : bytes;
+     return {
+       audio: pcm16ToWav(samples, pcm.sampleRate, pcm.channels),
+       format: 'wav',
+@@ -792,9 +795,13 @@ async function generateAzureTTS(
+ 
+   // Build SSML
+   const rate = config.speed ? `${((config.speed - 1) * 100).toFixed(0)}%` : '0%';
++  // Azure names a voice for its locale (`th-TH-PremwadeeNeural`), so the
++  // first two segments are the language to pronounce. Hardcoding zh-CN here
++  // asked Azure to read every language with Chinese phonetics.
++  const voiceLocale = /^[a-z]{2,3}-[A-Za-z]{2,4}/.exec(config.voice ?? '')?.[0] ?? 'en-US';
+   const ssml = `
+-    <speak version='1.0' xml:lang='zh-CN'>
+-      <voice xml:lang='zh-CN' name='${config.voice}'>
++    <speak version='1.0' xml:lang='${voiceLocale}'>
++      <voice xml:lang='${voiceLocale}' name='${config.voice}'>
+         <prosody rate='${rate}'>${escapeXml(text)}</prosody>
+       </voice>
+     </speak>
+diff --git a/integration/maic/lib/hooks/use-audio-recorder.ts b/integration/maic/lib/hooks/use-audio-recorder.ts
+index b74212328..c15434919 100644
+--- a/integration/maic/lib/hooks/use-audio-recorder.ts
++++ b/integration/maic/lib/hooks/use-audio-recorder.ts
+@@ -3,6 +3,7 @@ import { ASR_PROVIDERS } from '@/lib/audio/constants';
+ import { getASRServerDisabledError } from '@/lib/audio/asr-enablement';
+ import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
+ import { createLogger } from '@/lib/logger';
++import { useI18n } from '@/lib/hooks/use-i18n';
+ 
+ const log = createLogger('AudioRecorder');
+ 
+@@ -18,6 +19,7 @@ export interface UseAudioRecorderOptions {
+ 
+ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+   const { onTranscription, onError, continuous = false } = options;
++  const { t } = useI18n();
+ 
+   const [isRecording, setIsRecording] = useState(false);
+   const [isProcessing, setIsProcessing] = useState(false);
+@@ -84,13 +86,13 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+         onTranscription?.(result.text);
+       } catch (error) {
+         log.error('Transcription error:', error);
+-        onError?.(error instanceof Error ? error.message : '语音识别失败，请重试');
++        onError?.(error instanceof Error ? error.message : t('audio.error.recognitionFailed'));
+       } finally {
+         setIsProcessing(false);
+         setRecordingTime(0);
+       }
+     },
+-    [onTranscription, onError],
++    [onTranscription, onError, t],
+   );
+ 
+   // Start recording
+@@ -116,7 +118,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+         if (asrProviderId === 'browser-native') {
+           // Check if Speech Recognition is supported
+           if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+-            onError?.('您的浏览器不支持语音识别功能');
++            onError?.(t('audio.error.browserUnsupported'));
+             return;
+           }
+ 
+@@ -125,7 +127,10 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Web Speech API instance shape isn't in lib.dom
+           const recognition: any = new SpeechRecognitionCtor();
+ 
+-          recognition.lang = asrLanguage || 'zh-CN';
++          recognition.lang =
++            asrLanguage && asrLanguage !== 'auto'
++              ? asrLanguage
++              : (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+           recognition.continuous = continuous;
+           recognition.interimResults = false;
+ 
+@@ -163,7 +168,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+ 
+           recognition.onerror = (event: { error: string }) => {
+             log.error('Speech recognition error:', event.error);
+-            let errorMessage = '语音识别失败';
++            let errorMessage = t('audio.error.recognitionFailed');
+ 
+             switch (event.error) {
+               case 'aborted':
+@@ -177,19 +182,19 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+                 }
+                 return;
+               case 'no-speech':
+-                errorMessage = '未检测到语音输入';
++                errorMessage = t('audio.error.noSpeech');
+                 break;
+               case 'audio-capture':
+-                errorMessage = '无法访问麦克风';
++                errorMessage = t('audio.error.micUnavailable');
+                 break;
+               case 'not-allowed':
+-                errorMessage = '麦克风权限被拒绝';
++                errorMessage = t('audio.error.micPermissionDenied');
+                 break;
+               case 'network':
+-                errorMessage = '网络错误';
++                errorMessage = t('audio.error.network');
+                 break;
+               default:
+-                errorMessage = `语音识别错误: ${event.error}`;
++                errorMessage = t('audio.error.recognitionError', { code: event.error });
+             }
+ 
+             onError?.(errorMessage);
+@@ -262,9 +267,9 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
+     } catch (error) {
+       busyRef.current = false;
+       log.error('Failed to start recording:', error);
+-      onError?.('无法访问麦克风，请检查权限设置');
++      onError?.(t('audio.error.micAccess'));
+     }
+-  }, [onTranscription, onError, transcribeAudio, continuous]);
++  }, [onTranscription, onError, transcribeAudio, continuous, t]);
+ 
+   // Stop recording
+   const stopRecording = useCallback(() => {
+diff --git a/integration/maic/lib/hooks/use-browser-asr.ts b/integration/maic/lib/hooks/use-browser-asr.ts
+index db8e8486b..6197e7097 100644
+--- a/integration/maic/lib/hooks/use-browser-asr.ts
++++ b/integration/maic/lib/hooks/use-browser-asr.ts
+@@ -32,7 +32,7 @@ export function useBrowserASR(options: UseBrowserASROptions = {}) {
+   const {
+     onTranscription,
+     onError,
+-    language = 'zh-CN',
++    language = typeof navigator !== 'undefined' ? navigator.language : 'en-US',
+     continuous = false,
+     interimResults = false,
+   } = options;
+diff --git a/integration/maic/lib/hooks/use-browser-tts.ts b/integration/maic/lib/hooks/use-browser-tts.ts
+index 119575fdc..951300bc4 100644
+--- a/integration/maic/lib/hooks/use-browser-tts.ts
++++ b/integration/maic/lib/hooks/use-browser-tts.ts
+@@ -5,6 +5,7 @@
+  */
+ 
+ import { useState, useCallback, useRef, useEffect } from 'react';
++import { useI18n } from '@/lib/hooks/use-i18n';
+ 
+ // Note: Window.SpeechSynthesis declaration is already in the global scope
+ 
+@@ -15,19 +16,14 @@ export interface UseBrowserTTSOptions {
+   rate?: number; // 0.1 to 10
+   pitch?: number; // 0 to 2
+   volume?: number; // 0 to 1
+-  lang?: string; // e.g., 'zh-CN', 'en-US'
++  /** BCP-47 tag; defaults to the UI language. */
++  lang?: string;
+ }
+ 
+ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
+-  const {
+-    onStart,
+-    onEnd,
+-    onError,
+-    rate = 1.0,
+-    pitch = 1.0,
+-    volume = 1.0,
+-    lang = 'zh-CN',
+-  } = options;
++  const { onStart, onEnd, onError, rate = 1.0, pitch = 1.0, volume = 1.0, lang } = options;
++  const { t, locale } = useI18n();
++  const speechLang = lang || locale;
+ 
+   const [isSpeaking, setIsSpeaking] = useState(false);
+   const [isPaused, setIsPaused] = useState(false);
+@@ -62,7 +58,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
+   const speak = useCallback(
+     (text: string, voiceURI?: string) => {
+       if (typeof window === 'undefined' || !window.speechSynthesis) {
+-        onError?.('浏览器不支持 Web Speech API');
++        onError?.(t('audio.error.ttsUnsupported'));
+         return;
+       }
+ 
+@@ -73,7 +69,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
+       utterance.rate = rate;
+       utterance.pitch = pitch;
+       utterance.volume = volume;
+-      utterance.lang = lang;
++      utterance.lang = speechLang;
+ 
+       // Set voice if specified
+       if (voiceURI) {
+@@ -114,7 +110,7 @@ export function useBrowserTTS(options: UseBrowserTTSOptions = {}) {
+       utteranceRef.current = utterance;
+       window.speechSynthesis.speak(utterance);
+     },
+-    [rate, pitch, volume, lang, availableVoices, onStart, onEnd, onError],
++    [rate, pitch, volume, speechLang, availableVoices, onStart, onEnd, onError, t],
+   );
+ 
+   const pause = useCallback(() => {
+diff --git a/integration/maic/lib/i18n/locales/ar-SA.json b/integration/maic/lib/i18n/locales/ar-SA.json
+index 9286a0e44..640839c79 100644
+--- a/integration/maic/lib/i18n/locales/ar-SA.json
++++ b/integration/maic/lib/i18n/locales/ar-SA.json
+@@ -43,7 +43,13 @@
+     "ttsTitle": "تحويل النص إلى كلام",
+     "ttsHint": "اختر صوتًا للمعلم الذكي",
+     "ttsPreview": "معاينة",
+-    "ttsPreviewing": "جارٍ التشغيل..."
++    "ttsPreviewing": "جارٍ التشغيل...",
++    "toggleSidebar": "إظهار الشريط الجانبي أو إخفاؤه",
++    "playbackSpeed": "سرعة التشغيل",
++    "previousScene": "المشهد السابق",
++    "nextScene": "المشهد التالي",
++    "autoPlay": "تشغيل تلقائي",
++    "toggleChat": "إظهار المحادثة أو إخفاؤها"
+   },
+   "export": {
+     "pptx": "تصدير PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "الخروج من ملء الشاشة",
+     "editCourse": "تحرير الدورة",
+     "doneEditing": "إنهاء التحرير",
+-    "proModeDisabledHint": "التحرير غير متاح في هذه الصفحة — افتح شريحة من الدورة للتحرير باستخدام وضع Pro."
++    "proModeDisabledHint": "التحرير غير متاح في هذه الصفحة — افتح شريحة من الدورة للتحرير باستخدام وضع Pro.",
++    "proMode": "الوضع الاحترافي"
+   },
+   "edit": {
+     "proMode": "احترافي",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "متصفحك لا يدعم التعرف على الكلام",
++      "noSpeech": "لم يتم اكتشاف أي كلام",
++      "micUnavailable": "تعذر الوصول إلى الميكروفون",
++      "micPermissionDenied": "تم رفض إذن الميكروفون",
++      "micAccess": "تعذر الوصول إلى الميكروفون. تحقق من إعدادات الأذونات.",
++      "network": "خطأ في الشبكة",
++      "recognitionFailed": "فشل التعرف على الكلام. يرجى المحاولة مرة أخرى.",
++      "recognitionError": "خطأ في التعرف على الكلام: {{code}}",
++      "ttsUnsupported": "متصفحك لا يدعم تركيب الكلام"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/de-DE.json b/integration/maic/lib/i18n/locales/de-DE.json
+index 1872dd5c2..03c0e499b 100644
+--- a/integration/maic/lib/i18n/locales/de-DE.json
++++ b/integration/maic/lib/i18n/locales/de-DE.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Vorschau",
+     "ttsPreviewing": "Wird abgespielt...",
+     "interactiveModeHint": "Aktiviere den interaktiven Modus, damit bevorzugt interaktive Inhalte erzeugt werden",
+-    "interactiveModeLabel": "Interaktiver Modus"
++    "interactiveModeLabel": "Interaktiver Modus",
++    "toggleSidebar": "Seitenleiste umschalten",
++    "playbackSpeed": "Wiedergabegeschwindigkeit",
++    "previousScene": "Vorherige Szene",
++    "nextScene": "Nächste Szene",
++    "autoPlay": "Automatische Wiedergabe",
++    "toggleChat": "Chat umschalten"
+   },
+   "export": {
+     "pptx": "PPTX exportieren",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Vollbild beenden",
+     "editCourse": "Kurs bearbeiten",
+     "doneEditing": "Bearbeitung abschließen",
+-    "proModeDisabledHint": "Diese Seite kann nicht bearbeitet werden — öffne eine Kursfolie, um sie im Pro-Modus zu bearbeiten."
++    "proModeDisabledHint": "Diese Seite kann nicht bearbeitet werden — öffne eine Kursfolie, um sie im Pro-Modus zu bearbeiten.",
++    "proMode": "Pro-Modus"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Dein Browser unterstützt keine Spracherkennung",
++      "noSpeech": "Keine Sprache erkannt",
++      "micUnavailable": "Kein Zugriff auf das Mikrofon",
++      "micPermissionDenied": "Mikrofonzugriff verweigert",
++      "micAccess": "Kein Zugriff auf das Mikrofon. Prüfe die Berechtigungen.",
++      "network": "Netzwerkfehler",
++      "recognitionFailed": "Spracherkennung fehlgeschlagen. Bitte erneut versuchen.",
++      "recognitionError": "Spracherkennungsfehler: {{code}}",
++      "ttsUnsupported": "Dein Browser unterstützt keine Sprachausgabe"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/en-US.json b/integration/maic/lib/i18n/locales/en-US.json
+index 81550dd4a..743c60bd5 100644
+--- a/integration/maic/lib/i18n/locales/en-US.json
++++ b/integration/maic/lib/i18n/locales/en-US.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Preview",
+     "ttsPreviewing": "Playing...",
+     "interactiveModeHint": "Enable interactive-first mode for more hands-on content",
+-    "interactiveModeLabel": "Interactive Mode"
++    "interactiveModeLabel": "Interactive Mode",
++    "toggleSidebar": "Toggle sidebar",
++    "playbackSpeed": "Playback speed",
++    "previousScene": "Previous scene",
++    "nextScene": "Next scene",
++    "autoPlay": "Auto-play",
++    "toggleChat": "Toggle chat"
+   },
+   "export": {
+     "pptx": "Export PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Exit Fullscreen",
+     "editCourse": "Edit course",
+     "doneEditing": "Done editing",
+-    "proModeDisabledHint": "Editing isn't available on this page — open a course slide to edit with Pro mode."
++    "proModeDisabledHint": "Editing isn't available on this page — open a course slide to edit with Pro mode.",
++    "proMode": "Pro mode"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Your browser does not support speech recognition",
++      "noSpeech": "No speech detected",
++      "micUnavailable": "Cannot access the microphone",
++      "micPermissionDenied": "Microphone permission denied",
++      "micAccess": "Cannot access the microphone. Check your permission settings.",
++      "network": "Network error",
++      "recognitionFailed": "Speech recognition failed. Please try again.",
++      "recognitionError": "Speech recognition error: {{code}}",
++      "ttsUnsupported": "Your browser does not support speech synthesis"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/es-MX.json b/integration/maic/lib/i18n/locales/es-MX.json
+index d92db6bd7..44b90853d 100644
+--- a/integration/maic/lib/i18n/locales/es-MX.json
++++ b/integration/maic/lib/i18n/locales/es-MX.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Probar",
+     "ttsPreviewing": "Reproduciendo...",
+     "interactiveModeHint": "Activa el modo interactivo para obtener contenido más práctico",
+-    "interactiveModeLabel": "Modo interactivo"
++    "interactiveModeLabel": "Modo interactivo",
++    "toggleSidebar": "Mostrar u ocultar la barra lateral",
++    "playbackSpeed": "Velocidad de reproducción",
++    "previousScene": "Escena anterior",
++    "nextScene": "Escena siguiente",
++    "autoPlay": "Reproducción automática",
++    "toggleChat": "Mostrar u ocultar el chat"
+   },
+   "export": {
+     "pptx": "Exportar PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Salir de pantalla completa",
+     "editCourse": "Editar curso",
+     "doneEditing": "Terminar edición",
+-    "proModeDisabledHint": "La edición no está disponible en esta página — abre una diapositiva del curso para editar con el modo Pro."
++    "proModeDisabledHint": "La edición no está disponible en esta página — abre una diapositiva del curso para editar con el modo Pro.",
++    "proMode": "Modo Pro"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Tu navegador no admite el reconocimiento de voz",
++      "noSpeech": "No se detectó voz",
++      "micUnavailable": "No se puede acceder al micrófono",
++      "micPermissionDenied": "Permiso de micrófono denegado",
++      "micAccess": "No se puede acceder al micrófono. Revisa los permisos.",
++      "network": "Error de red",
++      "recognitionFailed": "Falló el reconocimiento de voz. Inténtalo de nuevo.",
++      "recognitionError": "Error de reconocimiento de voz: {{code}}",
++      "ttsUnsupported": "Tu navegador no admite la síntesis de voz"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/fr-FR.json b/integration/maic/lib/i18n/locales/fr-FR.json
+index d882426b3..cbe1efb0b 100644
+--- a/integration/maic/lib/i18n/locales/fr-FR.json
++++ b/integration/maic/lib/i18n/locales/fr-FR.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Écouter",
+     "ttsPreviewing": "Lecture…",
+     "interactiveModeHint": "Activez le mode interactif pour obtenir un contenu plus pratique",
+-    "interactiveModeLabel": "Mode interactif"
++    "interactiveModeLabel": "Mode interactif",
++    "toggleSidebar": "Afficher ou masquer la barre latérale",
++    "playbackSpeed": "Vitesse de lecture",
++    "previousScene": "Scène précédente",
++    "nextScene": "Scène suivante",
++    "autoPlay": "Lecture automatique",
++    "toggleChat": "Afficher ou masquer le chat"
+   },
+   "export": {
+     "pptx": "Exporter en PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Quitter le plein écran",
+     "editCourse": "Modifier le cours",
+     "doneEditing": "Terminer les modifications",
+-    "proModeDisabledHint": "L’édition n’est pas disponible sur cette page. Ouvrez une diapositive de cours pour la modifier en mode Pro."
++    "proModeDisabledHint": "L’édition n’est pas disponible sur cette page. Ouvrez une diapositive de cours pour la modifier en mode Pro.",
++    "proMode": "Mode Pro"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Votre navigateur ne prend pas en charge la reconnaissance vocale",
++      "noSpeech": "Aucune parole détectée",
++      "micUnavailable": "Impossible d’accéder au microphone",
++      "micPermissionDenied": "Accès au microphone refusé",
++      "micAccess": "Impossible d’accéder au microphone. Vérifiez les autorisations.",
++      "network": "Erreur réseau",
++      "recognitionFailed": "Échec de la reconnaissance vocale. Veuillez réessayer.",
++      "recognitionError": "Erreur de reconnaissance vocale : {{code}}",
++      "ttsUnsupported": "Votre navigateur ne prend pas en charge la synthèse vocale"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/ja-JP.json b/integration/maic/lib/i18n/locales/ja-JP.json
+index a8ed92ece..281d5033d 100644
+--- a/integration/maic/lib/i18n/locales/ja-JP.json
++++ b/integration/maic/lib/i18n/locales/ja-JP.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "プレビュー",
+     "ttsPreviewing": "再生中...",
+     "interactiveModeHint": "インタラクティブ優先モードを有効にして、より実践的なコンテンツを生成",
+-    "interactiveModeLabel": "インタラクティブモード"
++    "interactiveModeLabel": "インタラクティブモード",
++    "toggleSidebar": "サイドバーの表示切替",
++    "playbackSpeed": "再生速度",
++    "previousScene": "前のシーン",
++    "nextScene": "次のシーン",
++    "autoPlay": "自動再生",
++    "toggleChat": "チャットの表示切替"
+   },
+   "export": {
+     "pptx": "PPTXエクスポート",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "全画面表示を終了",
+     "editCourse": "コースを編集",
+     "doneEditing": "編集を完了",
+-    "proModeDisabledHint": "このページでは編集できません。コースのスライドを開くと Pro モードで編集できます。"
++    "proModeDisabledHint": "このページでは編集できません。コースのスライドを開くと Pro モードで編集できます。",
++    "proMode": "プロモード"
+   },
+   "edit": {
+     "proMode": "プロモード",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "お使いのブラウザは音声認識に対応していません",
++      "noSpeech": "音声が検出されませんでした",
++      "micUnavailable": "マイクにアクセスできません",
++      "micPermissionDenied": "マイクの使用が許可されていません",
++      "micAccess": "マイクにアクセスできません。権限設定を確認してください。",
++      "network": "ネットワークエラー",
++      "recognitionFailed": "音声認識に失敗しました。もう一度お試しください。",
++      "recognitionError": "音声認識エラー: {{code}}",
++      "ttsUnsupported": "お使いのブラウザは音声合成に対応していません"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/ko-KR.json b/integration/maic/lib/i18n/locales/ko-KR.json
+index bff2719b9..fdd7dd6cc 100644
+--- a/integration/maic/lib/i18n/locales/ko-KR.json
++++ b/integration/maic/lib/i18n/locales/ko-KR.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "미리 듣기",
+     "ttsPreviewing": "재생 중...",
+     "interactiveModeHint": "체험 중심 콘텐츠를 위해 인터랙티브 우선 모드를 사용하세요",
+-    "interactiveModeLabel": "인터랙티브 모드"
++    "interactiveModeLabel": "인터랙티브 모드",
++    "toggleSidebar": "사이드바 전환",
++    "playbackSpeed": "재생 속도",
++    "previousScene": "이전 장면",
++    "nextScene": "다음 장면",
++    "autoPlay": "자동 재생",
++    "toggleChat": "채팅 전환"
+   },
+   "export": {
+     "pptx": "PPTX 내보내기",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "전체화면 종료",
+     "editCourse": "강좌 편집",
+     "doneEditing": "편집 완료",
+-    "proModeDisabledHint": "이 페이지에서는 편집할 수 없습니다 — 코스 슬라이드를 열면 Pro 모드로 편집할 수 있습니다."
++    "proModeDisabledHint": "이 페이지에서는 편집할 수 없습니다 — 코스 슬라이드를 열면 Pro 모드로 편집할 수 있습니다.",
++    "proMode": "프로 모드"
+   },
+   "edit": {
+     "proMode": "프로 모드",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "이 브라우저는 음성 인식을 지원하지 않습니다",
++      "noSpeech": "음성이 감지되지 않았습니다",
++      "micUnavailable": "마이크에 접근할 수 없습니다",
++      "micPermissionDenied": "마이크 권한이 거부되었습니다",
++      "micAccess": "마이크에 접근할 수 없습니다. 권한 설정을 확인하세요.",
++      "network": "네트워크 오류",
++      "recognitionFailed": "음성 인식에 실패했습니다. 다시 시도하세요.",
++      "recognitionError": "음성 인식 오류: {{code}}",
++      "ttsUnsupported": "이 브라우저는 음성 합성을 지원하지 않습니다"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/pt-BR.json b/integration/maic/lib/i18n/locales/pt-BR.json
+index 5a33e11ac..5b49b2869 100644
+--- a/integration/maic/lib/i18n/locales/pt-BR.json
++++ b/integration/maic/lib/i18n/locales/pt-BR.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Pré-visualizar",
+     "ttsPreviewing": "Reproduzindo...",
+     "interactiveModeHint": "Ative o modo interativo para conteúdos mais práticos",
+-    "interactiveModeLabel": "Modo Interativo"
++    "interactiveModeLabel": "Modo Interativo",
++    "toggleSidebar": "Mostrar ou ocultar a barra lateral",
++    "playbackSpeed": "Velocidade de reprodução",
++    "previousScene": "Cena anterior",
++    "nextScene": "Próxima cena",
++    "autoPlay": "Reprodução automática",
++    "toggleChat": "Mostrar ou ocultar o chat"
+   },
+   "export": {
+     "pptx": "Exportar PPTX",
+@@ -643,7 +649,8 @@
+     "exitFullscreen": "Sair da tela cheia",
+     "editCourse": "Editar curso",
+     "doneEditing": "Concluir edição",
+-    "proModeDisabledHint": "A edição não está disponível nesta página — abra um slide do curso para editar no modo Pro."
++    "proModeDisabledHint": "A edição não está disponível nesta página — abra um slide do curso para editar no modo Pro.",
++    "proMode": "Modo Pro"
+   },
+   "classroomComplete": {
+     "title": "Curso concluído",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Seu navegador não é compatível com reconhecimento de fala",
++      "noSpeech": "Nenhuma fala detectada",
++      "micUnavailable": "Não foi possível acessar o microfone",
++      "micPermissionDenied": "Permissão de microfone negada",
++      "micAccess": "Não foi possível acessar o microfone. Verifique as permissões.",
++      "network": "Erro de rede",
++      "recognitionFailed": "Falha no reconhecimento de fala. Tente novamente.",
++      "recognitionError": "Erro de reconhecimento de fala: {{code}}",
++      "ttsUnsupported": "Seu navegador não é compatível com síntese de fala"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/ru-RU.json b/integration/maic/lib/i18n/locales/ru-RU.json
+index 882d12c3c..283e9df3a 100644
+--- a/integration/maic/lib/i18n/locales/ru-RU.json
++++ b/integration/maic/lib/i18n/locales/ru-RU.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Прослушать",
+     "ttsPreviewing": "Воспроизведение...",
+     "interactiveModeHint": "Включить интерактивный режим для более практического контента",
+-    "interactiveModeLabel": "Интерактивный режим"
++    "interactiveModeLabel": "Интерактивный режим",
++    "toggleSidebar": "Показать или скрыть боковую панель",
++    "playbackSpeed": "Скорость воспроизведения",
++    "previousScene": "Предыдущая сцена",
++    "nextScene": "Следующая сцена",
++    "autoPlay": "Автовоспроизведение",
++    "toggleChat": "Показать или скрыть чат"
+   },
+   "export": {
+     "pptx": "Экспорт PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Свернуть",
+     "editCourse": "Редактировать курс",
+     "doneEditing": "Завершить редактирование",
+-    "proModeDisabledHint": "Редактирование недоступно на этой странице — откройте слайд курса, чтобы редактировать в Pro-режиме."
++    "proModeDisabledHint": "Редактирование недоступно на этой странице — откройте слайд курса, чтобы редактировать в Pro-режиме.",
++    "proMode": "Профи-режим"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Ваш браузер не поддерживает распознавание речи",
++      "noSpeech": "Речь не обнаружена",
++      "micUnavailable": "Нет доступа к микрофону",
++      "micPermissionDenied": "Доступ к микрофону запрещён",
++      "micAccess": "Нет доступа к микрофону. Проверьте разрешения.",
++      "network": "Ошибка сети",
++      "recognitionFailed": "Не удалось распознать речь. Попробуйте ещё раз.",
++      "recognitionError": "Ошибка распознавания речи: {{code}}",
++      "ttsUnsupported": "Ваш браузер не поддерживает синтез речи"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/th-TH.json b/integration/maic/lib/i18n/locales/th-TH.json
+index 62b4c3551..081852d99 100644
+--- a/integration/maic/lib/i18n/locales/th-TH.json
++++ b/integration/maic/lib/i18n/locales/th-TH.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "ฟังตัวอย่าง",
+     "ttsPreviewing": "กำลังเล่น...",
+     "interactiveModeHint": "เปิดโหมดเน้นการโต้ตอบ เพื่อให้ได้เนื้อหาที่ลงมือทำมากขึ้น",
+-    "interactiveModeLabel": "โหมดโต้ตอบ"
++    "interactiveModeLabel": "โหมดโต้ตอบ",
++    "toggleSidebar": "สลับแถบด้านข้าง",
++    "playbackSpeed": "ความเร็วการเล่น",
++    "previousScene": "ฉากก่อนหน้า",
++    "nextScene": "ฉากถัดไป",
++    "autoPlay": "เล่นอัตโนมัติ",
++    "toggleChat": "สลับหน้าต่างแชท"
+   },
+   "export": {
+     "pptx": "ส่งออก PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "ออกจากเต็มจอ",
+     "editCourse": "แก้ไขคอร์ส",
+     "doneEditing": "แก้ไขเสร็จแล้ว",
+-    "proModeDisabledHint": "หน้านี้แก้ไขไม่ได้ — เปิดสไลด์ของคอร์สเพื่อแก้ไขด้วยโหมด Pro"
++    "proModeDisabledHint": "หน้านี้แก้ไขไม่ได้ — เปิดสไลด์ของคอร์สเพื่อแก้ไขด้วยโหมด Pro",
++    "proMode": "โหมดโปร"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "เบราว์เซอร์ของคุณไม่รองรับการรู้จำเสียงพูด",
++      "noSpeech": "ไม่พบเสียงพูด",
++      "micUnavailable": "เข้าถึงไมโครโฟนไม่ได้",
++      "micPermissionDenied": "ไม่ได้รับอนุญาตให้ใช้ไมโครโฟน",
++      "micAccess": "เข้าถึงไมโครโฟนไม่ได้ กรุณาตรวจสอบการอนุญาต",
++      "network": "เครือข่ายขัดข้อง",
++      "recognitionFailed": "รู้จำเสียงพูดไม่สำเร็จ กรุณาลองใหม่",
++      "recognitionError": "รู้จำเสียงพูดผิดพลาด: {{code}}",
++      "ttsUnsupported": "เบราว์เซอร์ของคุณไม่รองรับการอ่านออกเสียง"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/vi-VN.json b/integration/maic/lib/i18n/locales/vi-VN.json
+index a3edafd32..a1f004f3f 100644
+--- a/integration/maic/lib/i18n/locales/vi-VN.json
++++ b/integration/maic/lib/i18n/locales/vi-VN.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "Nghe thử",
+     "ttsPreviewing": "Đang phát…",
+     "interactiveModeHint": "Bật chế độ ưu tiên tương tác để có nhiều nội dung thực hành hơn",
+-    "interactiveModeLabel": "Chế độ tương tác"
++    "interactiveModeLabel": "Chế độ tương tác",
++    "toggleSidebar": "Bật/tắt thanh bên",
++    "playbackSpeed": "Tốc độ phát",
++    "previousScene": "Cảnh trước",
++    "nextScene": "Cảnh sau",
++    "autoPlay": "Tự động phát",
++    "toggleChat": "Bật/tắt trò chuyện"
+   },
+   "export": {
+     "pptx": "Xuất PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "Thoát toàn màn hình",
+     "editCourse": "Sửa bài học",
+     "doneEditing": "Sửa xong",
+-    "proModeDisabledHint": "Trang này không sửa được — hãy mở một slide bài học để dùng chế độ Pro."
++    "proModeDisabledHint": "Trang này không sửa được — hãy mở một slide bài học để dùng chế độ Pro.",
++    "proMode": "Chế độ Pro"
+   },
+   "edit": {
+     "proMode": "Pro",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "Trình duyệt của bạn không hỗ trợ nhận dạng giọng nói",
++      "noSpeech": "Không phát hiện giọng nói",
++      "micUnavailable": "Không truy cập được micrô",
++      "micPermissionDenied": "Quyền truy cập micrô bị từ chối",
++      "micAccess": "Không truy cập được micrô. Hãy kiểm tra quyền truy cập.",
++      "network": "Lỗi mạng",
++      "recognitionFailed": "Nhận dạng giọng nói thất bại. Vui lòng thử lại.",
++      "recognitionError": "Lỗi nhận dạng giọng nói: {{code}}",
++      "ttsUnsupported": "Trình duyệt của bạn không hỗ trợ tổng hợp giọng nói"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/zh-CN.json b/integration/maic/lib/i18n/locales/zh-CN.json
+index e4d446a87..8d5f13793 100644
+--- a/integration/maic/lib/i18n/locales/zh-CN.json
++++ b/integration/maic/lib/i18n/locales/zh-CN.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "试听",
+     "ttsPreviewing": "播放中...",
+     "interactiveModeHint": "开启深度交互模式，生成更多互动内容",
+-    "interactiveModeLabel": "深度交互"
++    "interactiveModeLabel": "深度交互",
++    "toggleSidebar": "切换侧边栏",
++    "playbackSpeed": "播放速度",
++    "previousScene": "上一幕",
++    "nextScene": "下一幕",
++    "autoPlay": "自动播放",
++    "toggleChat": "切换聊天"
+   },
+   "export": {
+     "pptx": "导出 PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "退出全屏",
+     "editCourse": "编辑课程",
+     "doneEditing": "完成编辑",
+-    "proModeDisabledHint": "本页不支持编辑——打开任意课程页即可使用 Pro 模式编辑。"
++    "proModeDisabledHint": "本页不支持编辑——打开任意课程页即可使用 Pro 模式编辑。",
++    "proMode": "专业模式"
+   },
+   "edit": {
+     "proMode": "专业模式",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "您的浏览器不支持语音识别功能",
++      "noSpeech": "未检测到语音输入",
++      "micUnavailable": "无法访问麦克风",
++      "micPermissionDenied": "麦克风权限被拒绝",
++      "micAccess": "无法访问麦克风，请检查权限设置",
++      "network": "网络错误",
++      "recognitionFailed": "语音识别失败，请重试",
++      "recognitionError": "语音识别错误：{{code}}",
++      "ttsUnsupported": "浏览器不支持语音合成"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/locales/zh-TW.json b/integration/maic/lib/i18n/locales/zh-TW.json
+index eb6c16233..dfd7f9f6b 100644
+--- a/integration/maic/lib/i18n/locales/zh-TW.json
++++ b/integration/maic/lib/i18n/locales/zh-TW.json
+@@ -43,7 +43,13 @@
+     "ttsPreview": "試聽",
+     "ttsPreviewing": "播放中...",
+     "interactiveModeHint": "啟用互動優先模式以獲得更多實作內容",
+-    "interactiveModeLabel": "互動模式"
++    "interactiveModeLabel": "互動模式",
++    "toggleSidebar": "切換側邊欄",
++    "playbackSpeed": "播放速度",
++    "previousScene": "上一幕",
++    "nextScene": "下一幕",
++    "autoPlay": "自動播放",
++    "toggleChat": "切換聊天"
+   },
+   "export": {
+     "pptx": "匯出 PPTX",
+@@ -230,7 +236,8 @@
+     "exitFullscreen": "離開全螢幕",
+     "editCourse": "編輯課程",
+     "doneEditing": "完成編輯",
+-    "proModeDisabledHint": "此頁面無法編輯——開啟課程投影片以使用 Pro 模式編輯。"
++    "proModeDisabledHint": "此頁面無法編輯——開啟課程投影片以使用 Pro 模式編輯。",
++    "proMode": "專業模式"
+   },
+   "edit": {
+     "proMode": "專業模式",
+@@ -2028,5 +2035,18 @@
+         "materialExtraction": null
+       }
+     }
++  },
++  "audio": {
++    "error": {
++      "browserUnsupported": "您的瀏覽器不支援語音辨識功能",
++      "noSpeech": "未偵測到語音輸入",
++      "micUnavailable": "無法存取麥克風",
++      "micPermissionDenied": "麥克風權限遭拒",
++      "micAccess": "無法存取麥克風，請檢查權限設定",
++      "network": "網路錯誤",
++      "recognitionFailed": "語音辨識失敗，請重試",
++      "recognitionError": "語音辨識錯誤：{{code}}",
++      "ttsUnsupported": "瀏覽器不支援語音合成"
++    }
+   }
+ }
+diff --git a/integration/maic/lib/i18n/types.ts b/integration/maic/lib/i18n/types.ts
+index a58744507..7d990537c 100644
+--- a/integration/maic/lib/i18n/types.ts
++++ b/integration/maic/lib/i18n/types.ts
+@@ -2,4 +2,8 @@ import { supportedLocales } from './locales';
+ 
+ export type Locale = (typeof supportedLocales)[number]['code'];
+ 
+-export const defaultLocale: Locale = 'zh-CN';
++// i18next reads this as both `lng` and `fallbackLng`, so it is the first
++// paint AND what any key missing from a locale degrades to. English is the
++// language every locale file is written against, and the one a reader who
++// matched no locale is most likely to follow.
++export const defaultLocale: Locale = 'en-US';
+-- 
+2.51.0.windows.2
+

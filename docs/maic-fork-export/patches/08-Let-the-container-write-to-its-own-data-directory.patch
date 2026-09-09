@@ -1,0 +1,60 @@
+From fc93b9b72488a76ed5dcdfe5d0946ae644e9dd92 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 02:23:37 +0700
+Subject: [PATCH] Let the container write to its own data directory
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`docker-compose.yml` mounts a named volume at `/app/data`, and the app writes
+classrooms, classroom jobs, uploaded materials and usage records there —
+`lib/server/classroom-storage.ts`, `lib/server/materials/bytes.ts` and
+`lib/server/usage-storage.ts` all resolve under it. The Dockerfile never creates
+that path, so Docker creates the mount point when it seeds the volume, and a
+fresh named volume covering a path absent from the image comes up root-owned:
+
+    $ docker exec ... ls -ld /app/data
+    drwxr-xr-x 2 root root /app/data
+    $ docker exec ... id
+    uid=1001(nextjs) gid=65533(nogroup)
+
+Every write then fails. Observed once every few seconds in a running container:
+
+    [WARN] [UsageStorage] Failed to record usage (ignored):
+      Error: EACCES: permission denied, mkdir '/app/data/usage'
+
+Usage records are swallowed with a warning, which is why this survives unnoticed;
+the classroom and material paths are on the same directory and are not obviously
+so forgiving.
+
+Creating the directory as the runtime user before `USER nextjs` fixes it at the
+source: Docker seeds a new named volume with the ownership of the image path it
+covers, so the volume comes up writable. Existing volumes were created under the
+old behaviour and keep their root ownership — those need a one-off
+`chown 1001:1001 /app/data` from a privileged container.
+---
+ integration/maic/Dockerfile | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/integration/maic/Dockerfile b/integration/maic/Dockerfile
+index d4faad060..37a19532b 100644
+--- a/integration/maic/Dockerfile
++++ b/integration/maic/Dockerfile
+@@ -107,6 +107,14 @@ COPY --from=builder /app/public ./public
+ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+ 
++# Create the data directory as the runtime user before dropping privileges.
++# docker-compose.yml mounts a named volume here, and Docker seeds a fresh named
++# volume with the ownership of the image path it covers — so when that path does
++# not exist in the image, the mount point is created root-owned and `nextjs`
++# cannot write to its own data directory. Classrooms, materials and usage all
++# land here, and every write fails with EACCES.
++RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
++
+ USER nextjs
+ 
+ EXPOSE 3000
+-- 
+2.51.0.windows.2
+
