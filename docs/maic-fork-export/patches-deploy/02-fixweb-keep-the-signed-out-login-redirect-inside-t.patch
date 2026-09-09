@@ -1,0 +1,109 @@
+From dc87319eee4ca74c5c459d11fc09be38a93df53e Mon Sep 17 00:00:00 2001
+From: Pond500 <pond500@gmail.com>
+Date: Fri, 4 Sep 2026 17:59:26 +0700
+Subject: [PATCH] fix(web): keep the signed-out login redirect inside the
+ basePath
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A signed-out visitor to /deepwitya2 was sent to a bare /login, outside the
+subpath, where the reverse proxy answers 404. It looked browser-specific —
+Safari was fine, Chrome was not — but the real variable was the session cookie:
+whoever still held one never hit the redirect at all.
+
+loginHref() is assigned to window.location.href, which does not apply basePath
+the way the Next router does, so the prefix has to be added explicitly.
+browserReturnPath() needed the opposite treatment: window.location.pathname
+carries basePath, but `next` is consumed by router.replace(), which adds it
+again — /deepwitya2 as `next` would land on /deepwitya2/deepwitya2 after
+signing in. The middleware already emits a stripped `next`; both sides now
+produce the same shape.
+
+Verified by running the deployed bundle's own compiled helpers, and against the
+live URLs: /deepwitya2/login?next=%2Fdashboard now 200s and matches what the
+middleware redirects to.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ CHANGES.md                    | 14 ++++++++++++++
+ web/shared/auth/return-url.ts | 25 +++++++++++++++++++++++--
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/CHANGES.md b/CHANGES.md
+index a99f392c5..45aa0f2b5 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -66,6 +66,20 @@ the domain root: every hook is a no-op when `NEXT_PUBLIC_BASE_PATH` is empty.
+   whole engine-icon map), `web/components/agents/agent-icons.tsx` (likewise, via
+   `OfficialAssetGlyph`).
+ 
++**Login redirect (`web/shared/auth/return-url.ts`)** — the same class again, and
++it only shows up while **signed out**, so testing after a successful login never
++reaches it. Two sides that pull in opposite directions:
++
++- `loginHref()` is assigned to `window.location.href`, which does not apply
++  basePath the way the Next router does. It returned a bare `/login?…`, so a
++  signed-out visitor was thrown outside the subpath and the reverse proxy
++  answered 404 instead of showing the login page.
++- `browserReturnPath()` reads `window.location.pathname`, which *does* carry
++  basePath. The `next` value must not: the login page feeds it to
++  `router.replace()`, and the router adds basePath itself — `/deepwitya2` as
++  `next` would resolve to `/deepwitya2/deepwitya2` after signing in. The
++  middleware already emits a stripped `next`, so both paths now agree.
++
+ **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
+ HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
+ `/login` with basePath preserved, APIs 401), and a full streaming turn over
+diff --git a/web/shared/auth/return-url.ts b/web/shared/auth/return-url.ts
+index b5bf212dc..3881edeb4 100644
+--- a/web/shared/auth/return-url.ts
++++ b/web/shared/auth/return-url.ts
+@@ -1,5 +1,23 @@
++import { BASE_PATH, withBasePath } from "@/lib/basePath";
++
+ const RETURN_URL_BASE = "https://deeptutor.invalid";
+ 
++/**
++ * Drop the reverse-proxy subpath from a browser pathname.
++ *
++ * `window.location.pathname` carries BASE_PATH, but the `next` parameter must
++ * NOT: the login page feeds it to `router.replace()`, and the Next router adds
++ * BASE_PATH itself. The middleware already emits a stripped `next` (Next strips
++ * BASE_PATH before proxy.ts sees the request), so stripping here keeps the
++ * client-side and server-side redirects producing the same shape.
++ */
++function stripBasePath(pathname: string): string {
++  if (!BASE_PATH) return pathname;
++  if (pathname === BASE_PATH) return "/";
++  if (pathname.startsWith(`${BASE_PATH}/`)) return pathname.slice(BASE_PATH.length);
++  return pathname;
++}
++
+ export interface BrowserLocationParts {
+   pathname: string;
+   search?: string;
+@@ -40,7 +58,7 @@ export function normalizeInternalReturnPath(
+ 
+ export function browserReturnPath(location: BrowserLocationParts): string {
+   return normalizeInternalReturnPath(
+-    `${location.pathname}${location.search ?? ""}${location.hash ?? ""}`,
++    `${stripBasePath(location.pathname)}${location.search ?? ""}${location.hash ?? ""}`,
+   );
+ }
+ 
+@@ -48,7 +66,10 @@ export function loginHref(returnPath: string): string {
+   const query = new URLSearchParams({
+     next: normalizeInternalReturnPath(returnPath),
+   });
+-  return `/login?${query.toString()}`;
++  // Assigned straight to window.location, which does NOT apply basePath the way
++  // the Next router does — so the prefix has to be added here or the browser
++  // leaves the app entirely and the reverse proxy answers 404.
++  return `${withBasePath("/login")}?${query.toString()}`;
+ }
+ 
+ /**
+-- 
+2.51.0.windows.2
+

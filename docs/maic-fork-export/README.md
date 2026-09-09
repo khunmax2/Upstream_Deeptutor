@@ -124,3 +124,75 @@ into saved state and break whenever the prefix changes.
 one layer — `brand-config.ts` prefixes the logo and the sweep prefixes it again.
 Without the "already prefixed → return unchanged" guard that is
 `/prefix/prefix/brand-wordmark.png`.
+
+---
+
+# Beyond the subtree
+
+The integration is not only `integration/maic`. Three other groups carry it, and
+a rebuild that restores the subtree alone will find the studio unreachable, or
+reachable and unable to generate anything.
+
+## The tooling — `deploy/openmaic-patches/`
+
+Seven files, already tracked in the repository. Not copied here on purpose: a
+second copy is a second thing to keep in step, and it will drift.
+
+| | |
+|---|---|
+| `build_th_locale.py` | Builds a complete `th-TH.json` from `th-TH.partial.json`, and checks coverage, interpolation parity, and keys that no longer exist upstream. |
+| `th-TH.partial.json` | 150 KB. **The Thai translation source.** `th-TH.json` in the subtree is generated from it — edit this, not the output. |
+| `check_openmaic_i18n_gaps.py` | Finds the Thai gaps a translation file *cannot* close — strings that are not routed through `t()` at all. |
+| `check_openmaic_contract.py` | Checks the handful of runtime assumptions this fork makes about OpenMAIC. Nothing here imports anything there; the dependency is a contract, not code. |
+| `export_upstream_patches.py` | Turns our OpenMAIC commits into patches an upstream maintainer can apply. |
+| `build_server_providers.py` | Writes `server-providers.yml` from DeepTutor's provider settings, for a first bring-up. |
+| `openmaic-pin.json` | The upstream commit this fork's work was verified against — `d4ef5faa`, 2026-09-01. Updating OpenMAIC is meant to be a decision, not a surprise. |
+
+**Correction worth carrying forward:** `build_th_locale.py`'s docstring says
+OpenMAIC falls back to **`zh-CN`** for a missing key, which is why coverage
+mattered so much. That was true when it was written. `lib/i18n/types.ts` now
+sets `defaultLocale = 'en-US'` — this fork changed it — and `th-TH.json` is at
+**1,862 of 1,862 keys, zero missing**. Read that docstring as history, not as
+the current state.
+
+## The deploy side — `patches-deploy/` and `why-deploy.md`
+
+Seven commits outside the subtree, without which the integration does not run:
+
+| | |
+|---|---|
+| `28cb1760d` | Serve v1.6.4 under the nginx subpath `/deepwitya2` over HTTPS |
+| `dc87319ee` | Keep the signed-out login redirect inside the basePath |
+| `e0dfe6888` | Saving settings in the UI re-locks `system.json` |
+| `42d171981` | Raise the nginx upload ceiling to the app's 200 MB — below it, a large document died as a bare nginx 413 and the app never saw the request, so its own friendly message could never fire |
+| `1c4791ab0` | **Tesseract**, so the OCR fallback can actually run |
+| `2b95d2f0b` | A rotated API key reaches the course studio without anyone opening a shell |
+| `acfc22e3e` | Say when a media capability is ready but switched off |
+
+### Tesseract, specifically
+
+Three things must all be true, and the third is the one that looks optional:
+
+1. the `tesseract` binary → `tesseract-ocr`
+2. the traineddata per language → `tesseract-ocr-{eng,tha}`
+3. `TESSDATA_PREFIX` pointing at them
+
+Without (3), `pymupdf.get_tessdata()` raises *"No tessdata specified and
+Tesseract is not installed"* — **the same message you get when nothing is
+installed at all**, so a missing variable reads as a missing package.
+
+`tha` is not optional either: `ocr.py` maps the interface language to a
+traineddata name and always appends English, so a Thai deployment asks for
+`tha+eng` and fails if either half is absent.
+
+The path is version-numbered (`/usr/share/tesseract-ocr/5/tessdata`, verified
+against debian trixie / tesseract 5.5.0). Re-check it whenever the base image's
+tesseract major version moves.
+
+## What is still not here
+
+`deeptutor/services/config/openmaic_bridge.py`, the gatekeeper
+(`deploy/openmaic-gatekeeper/`) and the compose overlay
+(`deploy/docker-compose.openmaic.yml`) are live code in the repository, not
+exported. They are found through `deploy/OPENMAIC_RUNBOOK.md` and
+`deploy/OPENMAIC_EMBED.md`, which is where the reasoning for those lives.

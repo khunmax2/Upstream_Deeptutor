@@ -1,0 +1,99 @@
+From 42d171981fa2b2cff7455ca1c1d9d626b5eb55d4 Mon Sep 17 00:00:00 2001
+From: Pond500 <pond500@gmail.com>
+Date: Mon, 7 Sep 2026 10:45:36 +0700
+Subject: [PATCH] fix(deploy): raise the nginx upload ceiling to match the
+ app's 200 MB
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Immersive reading rejected anything over ~1 MB with a bare "Request failed:
+413". The app allows 200 MB, but the location block never set
+client_max_body_size, so nginx's 1 MB default cut the request off before the app
+saw it — which is also why the app's own "exceeds the 200 MB limit" message
+never appeared.
+
+The Next middleware was the other suspect, since /api/reading/materials is not
+excluded from its matcher the way the knowledge-base upload routes are, and the
+matcher comment warns that entering the proxy caps a multipart body. Posting
+straight to the frontend port ruled it out: 58 MB streamed through untouched.
+
+Re-running deploy/apply-nginx-deepwitya2.sh applies this — step 2 rewrites the
+snippet unconditionally and step 3 no-ops once the include is in place.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ CHANGES.md                             | 13 +++++++++++++
+ deploy/apply-nginx-deepwitya2.sh       | 10 ++++++++++
+ deploy/nginx-deepwitya2.locations.conf | 10 ++++++++++
+ 3 files changed, 33 insertions(+)
+
+diff --git a/CHANGES.md b/CHANGES.md
+index 101a9034f..78258bbbf 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -80,6 +80,19 @@ reaches it. Two sides that pull in opposite directions:
+   `next` would resolve to `/deepwitya2/deepwitya2` after signing in. The
+   middleware already emits a stripped `next`, so both paths now agree.
+ 
++**Upload ceiling (`deploy/nginx-deepwitya2.locations.conf`)** — immersive
++reading rejected anything over ~1 MB with a bare `Request failed: 413`. The app
++allows 200 MB (`MAX_MATERIAL_BYTES`), but the location block never set
++`client_max_body_size`, so nginx's 1 MB default cut the request off before the
++app ever saw it — which is also why the app's own "exceeds the 200 MB limit"
++message could never appear. Raised to `200m` to match the app.
++
++Measured rather than assumed: 500 KB reached the app (401), 2 MB came back as
++`server: nginx` / `text/html` 413. `/api/reading/materials` is *not* excluded
++from the Next middleware matcher the way the knowledge-base upload routes are,
++so the middleware was the other suspect — but posting straight to the frontend
++port streamed 58 MB through it untouched, leaving nginx as the only ceiling.
++
+ **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
+ HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
+ `/login` with basePath preserved, APIs 401), and a full streaming turn over
+diff --git a/deploy/apply-nginx-deepwitya2.sh b/deploy/apply-nginx-deepwitya2.sh
+index ceee39698..b42c90266 100644
+--- a/deploy/apply-nginx-deepwitya2.sh
++++ b/deploy/apply-nginx-deepwitya2.sh
+@@ -64,6 +64,16 @@ cat > "$SNIP_SSL" <<'CONF'
+ # or /deepwitya2/_next/... resolves to nothing.
+ location /deepwitya2 {
+     proxy_pass http://127.0.0.1:10320;
++
++    # Immersive reading accepts documents up to 200 MB (MAX_MATERIAL_BYTES ==
++    # DocumentValidator.MAX_FILE_SIZE). nginx defaults to 1m, so anything larger
++    # died as a bare nginx 413 HTML page — the browser showed "Request failed:
++    # 413" and the app never saw the request, so its own friendly size message
++    # could never fire. Matching the app's ceiling puts the error back in the
++    # app's hands. Verified: /api/reading/materials is NOT excluded from the
++    # Next middleware matcher, but the middleware streams 58 MB without
++    # capping, so nginx was the only ceiling.
++    client_max_body_size 200m;
+     proxy_http_version 1.1;
+     proxy_set_header Upgrade $http_upgrade;
+     proxy_set_header Connection "upgrade";
+diff --git a/deploy/nginx-deepwitya2.locations.conf b/deploy/nginx-deepwitya2.locations.conf
+index 6a23cfdd5..506a02ddc 100644
+--- a/deploy/nginx-deepwitya2.locations.conf
++++ b/deploy/nginx-deepwitya2.locations.conf
+@@ -36,6 +36,16 @@
+ 
+ location /deepwitya2 {
+     proxy_pass http://127.0.0.1:10320;
++
++    # Immersive reading accepts documents up to 200 MB (MAX_MATERIAL_BYTES ==
++    # DocumentValidator.MAX_FILE_SIZE). nginx defaults to 1m, so anything larger
++    # died as a bare nginx 413 HTML page — the browser showed "Request failed:
++    # 413" and the app never saw the request, so its own friendly size message
++    # could never fire. Matching the app's ceiling puts the error back in the
++    # app's hands. Verified: /api/reading/materials is NOT excluded from the
++    # Next middleware matcher, but the middleware streams 58 MB without
++    # capping, so nginx was the only ceiling.
++    client_max_body_size 200m;
+     proxy_http_version 1.1;
+     proxy_set_header Upgrade $http_upgrade;
+     proxy_set_header Connection "upgrade";
+-- 
+2.51.0.windows.2
+

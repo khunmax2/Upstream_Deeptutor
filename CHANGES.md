@@ -48,6 +48,19 @@ files were edited by more than thirty lines and need reading rather than
 merging, and git will ask about the three files we deleted if upstream ever
 touches them.
 
+Extended past the subtree, because restoring `integration/maic` alone leaves the
+studio unreachable or unable to generate. `patches-deploy/` and `why-deploy.md`
+carry seven commits from outside it — the nginx subpath, the login redirect, the
+200 MB upload ceiling, Tesseract, the key-rotation bridge — and the README
+explains the seven tools in `deploy/openmaic-patches/`, which are referenced
+rather than copied: a second copy is a second thing to keep in step.
+
+One correction the export records rather than repeats: `build_th_locale.py`'s
+docstring says a missing key falls back to `zh-CN`, which is why coverage
+mattered. That was true when written. `lib/i18n/types.ts` now sets
+`defaultLocale = 'en-US'` — this fork changed it — and `th-TH.json` sits at
+1,862 of 1,862 keys with none missing. It is history, not the current state.
+
 ## A Thai course showed Chinese labels — the prompt half only — 2026-09-09
 
 A Thai lesson came out with a start button reading 启动 and a fullwidth colon in

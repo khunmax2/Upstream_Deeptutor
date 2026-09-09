@@ -1,0 +1,266 @@
+From 1c4791ab02eced424d70d57430dc9036f69130bf Mon Sep 17 00:00:00 2001
+From: Pond500 <pond500@gmail.com>
+Date: Mon, 7 Sep 2026 10:56:01 +0700
+Subject: [PATCH] feat(deploy): install Tesseract so the OCR fallback can
+ actually run
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+deeptutor/reading/ocr.py shipped with the 2026-09-07 update but had nothing to
+call: the image carries no tesseract binary, so every scanned PDF and
+picture-only deck still failed the way it did before the feature existed.
+
+Three things had to be true, and only the first is obvious:
+
+- the tesseract binary;
+- traineddata for BOTH languages — ocr.py always appends English to the
+  interface language, so a Thai deployment asks for "tha+eng";
+- TESSDATA_PREFIX, because pymupdf.get_tessdata() reads it and otherwise raises
+  "No tessdata specified and Tesseract is not installed" — the same message you
+  get with nothing installed, so the missing variable looks like a missing
+  package.
+
+The tessdata path is version-numbered, so it was read out of a throwaway
+container built from the same base rather than guessed.
+
+Pinned DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng in the host override: main.yaml
+still says language: en, so Thai scans would otherwise be OCR'd as English.
+
+deploy/ocr_check.py proves the path end to end by rasterising a page and
+rebuilding a PDF from the raster alone, which is what makes it genuinely
+text-layer-free. English round-trips exactly.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ CHANGES.md                          |  33 ++++++++
+ Dockerfile                          |  27 +++++++
+ deploy/docker-compose.localhost.yml |   7 ++
+ deploy/ocr_check.py                 | 113 ++++++++++++++++++++++++++++
+ 4 files changed, 180 insertions(+)
+ create mode 100644 deploy/ocr_check.py
+
+diff --git a/CHANGES.md b/CHANGES.md
+index 78258bbbf..c6f8e7c7b 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -93,6 +93,39 @@ from the Next middleware matcher the way the knowledge-base upload routes are,
+ so the middleware was the other suspect — but posting straight to the frontend
+ port streamed 58 MB through it untouched, leaving nginx as the only ceiling.
+ 
++**OCR for scanned documents (`Dockerfile`, `deploy/docker-compose.localhost.yml`)**
++— `deeptutor/reading/ocr.py` arrived with the 2026-09-07 update and reaches
++Tesseract through PyMuPDF, which costs no extra Python dependency but needs
++three things present, not one:
++
++1. `tesseract-ocr` — the binary;
++2. `tesseract-ocr-eng` + `tesseract-ocr-tha` — ocr.py maps the interface
++   language to a traineddata name and *always* appends English, so a Thai
++   deployment asks for `tha+eng` and fails if either half is missing;
++3. `TESSDATA_PREFIX` — `pymupdf.get_tessdata()` reads it and otherwise raises
++   *"No tessdata specified and Tesseract is not installed"*, which is also the
++   message for nothing being installed at all. A missing variable therefore
++   reads as a missing package.
++
++The path (`/usr/share/tesseract-ocr/5/tessdata`) is version-numbered and was
++confirmed against this base image (debian trixie, tesseract 5.5.0) rather than
++assumed; re-check it whenever the base image's tesseract major version moves.
++
++`DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng` is pinned in the host override because
++this deployment's `main.yaml` still says `language: en` — without it a Thai scan
++would be read as English and come back as noise. Drop it if the interface
++language is switched to Thai, which derives the same spec.
++
++Checked with `deploy/ocr_check.py`, which builds a genuinely text-layer-free PDF
++(render to raster, rebuild from the raster) and pushes it through the real
++extractor. English round-trips exactly; `tha` and `tha+eng` load in Tesseract
++without error, though neither this image nor the host ships a Thai font, so Thai
++*glyph* accuracy is unproven here — only that the language data loads.
++
++**MinerU and Docling are not configured** (`engine = text_only`, no tokens, both
++with OCR off), so there was no lighter path: ocr.py's preferred heavyweight
++providers would have declined and fallen through to Tesseract anyway.
++
+ **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
+ HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to
+ `/login` with basePath preserved, APIs 401), and a full streaming turn over
+diff --git a/Dockerfile b/Dockerfile
+index 1e13269e3..57c84f448 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -149,8 +149,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
+     libsm6 \
+     libxext6 \
+     libxrender1 \
++    tesseract-ocr \
++    tesseract-ocr-eng \
++    tesseract-ocr-tha \
+     && rm -rf /var/lib/apt/lists/*
+ 
++# OCR for documents that carry no text layer at all — a scanned PDF or a
++# picture-only deck, which deeptutor/reading/ocr.py would otherwise have to
++# reject outright. It reaches Tesseract through PyMuPDF's binding, so no extra
++# Python dependency is involved, but three things must all be true:
++#
++#   1. the `tesseract` binary            -> tesseract-ocr
++#   2. the traineddata for each language -> tesseract-ocr-{eng,tha}
++#   3. TESSDATA_PREFIX pointing at them  -> the ENV below
++#
++# (3) is the one that looks optional and is not: ocr.py calls
++# `pymupdf.get_tessdata()`, which reads this variable and raises
++# "No tessdata specified and Tesseract is not installed" without it — the same
++# message you get when nothing is installed at all, so a missing variable reads
++# like a missing package.
++#
++# `tha` is not optional either: ocr.py maps the interface language to a
++# traineddata name and always appends English, so a Thai deployment asks for
++# "tha+eng" and fails if either half is absent.
++#
++# Path verified against this base image (debian trixie, tesseract 5.5.0); it is
++# version-numbered, so re-check it whenever the base image's tesseract major
++# version moves.
++ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
++
+ # Copy Node.js from node-runtime stage (platform-matched binary)
+ COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+ COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
+diff --git a/deploy/docker-compose.localhost.yml b/deploy/docker-compose.localhost.yml
+index 6b3a52300..8b6f0cb30 100644
+--- a/deploy/docker-compose.localhost.yml
++++ b/deploy/docker-compose.localhost.yml
+@@ -36,6 +36,13 @@ services:
+       # trips the default 60s embedding timeout when indexing real documents.
+       # Give generous headroom (read by resolve_embedding_runtime_config).
+       DEEPTUTOR_EMBEDDING_TIMEOUT: "600"
++      # OCR language for scanned documents. Left alone, ocr.py derives this from
++      # the interface language and appends English — and this deployment's
++      # main.yaml still says `language: en`, so a Thai scan would be read as
++      # English and come back as noise. Pinning it keeps Thai scans working
++      # regardless of what the UI is set to. Drop this line if the interface
++      # language is ever switched to Thai, which produces the same "tha+eng".
++      DEEPTUTOR_READING_OCR_LANGUAGE: "tha+eng"
+ 
+   redis:
+     container_name: deeptutor2-redis
+diff --git a/deploy/ocr_check.py b/deploy/ocr_check.py
+new file mode 100644
+index 000000000..55bf5c34f
+--- /dev/null
++++ b/deploy/ocr_check.py
+@@ -0,0 +1,113 @@
++"""Prove the OCR fallback actually works in this image.
++
++`deeptutor/reading/ocr.py` runs only for a document with no text layer at all,
++so a normal upload never exercises it and a missing Tesseract stays invisible
++until someone hands the reader a scanned PDF. This builds exactly that document
++— a PDF whose only content is a picture of text — and pushes it through the
++real extractor.
++
++Run inside the container:
++    docker exec -w /app -e PYTHONPATH=/app deeptutor2 python3 /tmp/ocr_check.py
++"""
++
++from __future__ import annotations
++
++import sys
++
++
++def _image_only_pdf(text: str, fontfile: str | None) -> bytes:
++    """A one-page PDF carrying a raster of `text` and no text layer."""
++    import pymupdf
++
++    typed = pymupdf.open()
++    page = typed.new_page()
++    if fontfile:
++        page.insert_text((60, 120), text, fontsize=28, fontfile=fontfile)
++    else:
++        page.insert_text((60, 120), text, fontsize=28)
++    # Rasterise, then rebuild a PDF from the raster alone — this is what makes
++    # it "scanned": the glyphs survive as pixels, the text layer does not.
++    pixmap = page.get_pixmap(dpi=200)
++    typed.close()
++
++    scanned = pymupdf.open()
++    scanned_page = scanned.new_page(width=pixmap.width, height=pixmap.height)
++    scanned_page.insert_image(scanned_page.rect, pixmap=pixmap)
++    return scanned.tobytes()
++
++
++def main() -> int:
++    import pymupdf
++
++    print("tesseract via PyMuPDF")
++    try:
++        tessdata = pymupdf.get_tessdata()
++        print(f"  ✓ get_tessdata() -> {tessdata}")
++    except Exception as exc:
++        print(f"  ✗ get_tessdata() failed: {exc}")
++        return 1
++
++    from deeptutor.reading.ocr import _ocr_language
++
++    language = _ocr_language()
++    print(f"  ✓ language spec  -> {language}")
++
++    # A Thai-capable font, if this image ships one. Without it the probe still
++    # proves the pipeline, just not the Thai glyph shaping.
++    import glob
++
++    thai_font = next(
++        iter(
++            glob.glob("/usr/share/fonts/**/NotoSansThai*.ttf", recursive=True)
++            or glob.glob("/usr/share/fonts/**/*Thai*.ttf", recursive=True)
++        ),
++        None,
++    )
++
++    cases = [("english", "Immersive reading OCR probe 12345", None)]
++    if thai_font:
++        cases.append(("thai", "ทดสอบการอ่านเอกสารสแกน", thai_font))
++    else:
++        print("  ! no Thai font in this image — skipping the Thai render")
++
++    failures = 0
++    for name, text, font in cases:
++        print(f"\n{name}: {text!r}")
++        pdf = _image_only_pdf(text, font)
++
++        doc = pymupdf.open("pdf", pdf)
++        residual = "".join(page.get_text() for page in doc).strip()
++        doc.close()
++        if residual:
++            print(f"  ✗ not actually scanned — a text layer survived: {residual[:60]!r}")
++            failures += 1
++            continue
++        print("  ✓ no text layer (a real scanned-PDF shape)")
++
++        doc = pymupdf.open("pdf", pdf)
++        try:
++            ocr_pdf = doc[0].get_pixmap(dpi=300).pdfocr_tobytes(
++                language=language, tessdata=tessdata
++            )
++        except Exception as exc:
++            print(f"  ✗ OCR raised: {exc}")
++            failures += 1
++            continue
++        finally:
++            doc.close()
++
++        out = pymupdf.open("pdf", ocr_pdf)
++        recovered = "".join(page.get_text() for page in out).strip()
++        out.close()
++        if recovered:
++            print(f"  ✓ recovered: {recovered[:80]!r}")
++        else:
++            print("  ✗ OCR produced no text")
++            failures += 1
++
++    print("\n" + ("ALL PASS" if not failures else f"{failures} FAILED"))
++    return 1 if failures else 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+-- 
+2.51.0.windows.2
+

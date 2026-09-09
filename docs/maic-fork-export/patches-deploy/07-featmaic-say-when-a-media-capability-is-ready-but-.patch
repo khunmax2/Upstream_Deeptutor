@@ -1,0 +1,129 @@
+From acfc22e3e2c9293e9b66e791f76800cb846f88f0 Mon Sep 17 00:00:00 2001
+From: khunmax2 <khuncharoenmax1@hotmail.com>
+Date: Mon, 7 Sep 2026 21:23:15 +0700
+Subject: [PATCH] feat(maic): say when a media capability is ready but switched
+ off
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Configuring an image provider and switching image generation on are two
+controls in two places — the settings page owns the first, the popover beside
+the compose box owns the second — and nothing connected them. A credit key, a
+working provider and a bridge that carried it through still produced courses
+with no pictures, because imageGenerationEnabled defaults to false and the
+prompt never asks for an image while it is.
+
+The default is right; images cost money per call. The silence was not:
+
+- an enabled tab carried a violet dot, and a tab whose provider is configured
+  but switched off looked identical to one with no provider at all. It now
+  carries a hollow dot.
+- the image tab says so when off with a usable provider.
+- the settings page, where the provider was configured, names the state and
+  where the switch actually lives.
+
+Four keys, 13 languages, two files — both small UI insertions rather than
+changes to existing logic, and none of it is DeepTutor-specific, so it is an
+upstream candidate rather than something to carry.
+
+Found in passing: the popover's tab labels (Image/Video/TTS/ASR) were hardcoded
+English in every language, in the file being edited. Now media.tab*.
+
+Verified in the browser: hollow dot on the image tab, the hint under its switch,
+and "การสร้างภาพยังปิดอยู่ เปิดได้ที่ปุ่มสื่อ ข้างช่องพิมพ์ในหน้าแรก" on the
+settings tab. tsc clean, eslint clean, i18n gate 13 locales, contract green
+after the pin bump (1798 -> 1862 keys).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ CHANGES.md                                 | 27 ++++++++++++++++++++++
+ deploy/openmaic-patches/openmaic-pin.json  |  4 ++--
+ deploy/openmaic-patches/th-TH.partial.json | 11 +++++++--
+ 3 files changed, 38 insertions(+), 4 deletions(-)
+
+diff --git a/CHANGES.md b/CHANGES.md
+index 7916f7334..127a98175 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -17,6 +17,33 @@ upstream.
+ 
+ ---
+ 
++## Saying when a capability is ready but switched off — 2026-09-07
++
++Configuring an image provider and switching image generation on are two
++different controls in two different places: the settings page owns the first,
++a popover beside the compose box owns the second. Nothing connected them. A
++credit key, a working provider, a bridge that carried it through — and courses
++still came out with no pictures, because `imageGenerationEnabled` defaults to
++false and the prompt never asks the model for an image while it is.
++
++That default is right; images cost money per call. The silence was not. Three
++places now say so:
++
++- **The popover's tab markers.** An enabled tab already carried a violet dot. A
++  tab whose provider is configured but switched off looked identical to one with
++  no provider at all, so it now carries a hollow dot — available, not on.
++- **The image tab itself**, when off with a usable provider: *a provider is
++  configured and ready; turn this on to use it.*
++- **The settings page**, where the provider was configured in the first place,
++  names the state and where the switch actually is — the two are far enough
++  apart that finding the second from the first was guesswork.
++
++Four keys, 13 languages, two files.
++
++**Found in passing.** The popover's own tab labels — `Image`, `Video`, `TTS`,
++`ASR` — were hardcoded English in every language, in the component being edited.
++Now `media.tab*`, translated with the rest.
++
+ ## A rotated key now reaches the course studio on its own — 2026-09-07
+ 
+ The provider bridge was a script under `deploy/` plus a container restart. Both
+diff --git a/deploy/openmaic-patches/openmaic-pin.json b/deploy/openmaic-patches/openmaic-pin.json
+index 22f09ea19..285c92f6e 100644
+--- a/deploy/openmaic-patches/openmaic-pin.json
++++ b/deploy/openmaic-patches/openmaic-pin.json
+@@ -13,8 +13,8 @@
+   "commit_subject": "fix: replace rm -rf with cross-platform fs.rmSync in package scripts (#1338)",
+   "verified": "2026-09-07",
+   "verified_against": {
+-    "locale_keys_en_us": 1798,
+-    "locale_keys_translated": 1687,
++    "locale_keys_en_us": 1862,
++    "locale_keys_translated": 1751,
+     "patches": [
+       "0001-register-th-TH-locale.patch",
+       "0002-thai-script-support.patch"
+diff --git a/deploy/openmaic-patches/th-TH.partial.json b/deploy/openmaic-patches/th-TH.partial.json
+index e939f5d2a..4b38844a1 100644
+--- a/deploy/openmaic-patches/th-TH.partial.json
++++ b/deploy/openmaic-patches/th-TH.partial.json
+@@ -342,7 +342,12 @@
+     "model": "โมเดล",
+     "voice": "เสียง",
+     "speed": "ความเร็ว",
+-    "language": "ภาษา"
++    "language": "ภาษา",
++    "providerReadyHint": "ตั้งผู้ให้บริการไว้แล้วและพร้อมใช้ เปิดสวิตช์นี้เพื่อใช้งาน",
++    "tabImage": "ภาพ",
++    "tabVideo": "วิดีโอ",
++    "tabTts": "อ่านออกเสียง",
++    "tabAsr": "รู้จำเสียง"
+   },
+   "quiz": {
+     "title": "แบบทดสอบ",
+@@ -1171,7 +1176,9 @@
+       "deleteTitle": "ลบสกิลนี้ไหม",
+       "deleteConfirm": "สกิลนี้จะถูกลบออกจากบัญชีของคุณ การกระทำนี้ย้อนกลับไม่ได้",
+       "deleteFailed": "ลบสกิลไม่สำเร็จ กรุณาลองใหม่"
+-    }
++    },
++    "imageGenerationOff": "การสร้างภาพยังปิดอยู่",
++    "imageGenerationOffWhere": "เปิดได้ที่ปุ่มสื่อ ข้างช่องพิมพ์ในหน้าแรก"
+   },
+   "edit": {
+     "line": {
+-- 
+2.51.0.windows.2
+
