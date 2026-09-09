@@ -6,6 +6,19 @@ Apache License 2.0. Per **Apache-2.0 Section 4(b)**, this file states that files
 in this distribution have been changed, and summarizes those changes relative to
 upstream.
 
+- **2026-09-09 — A Latin word run into Thai script, in 22 places.** Walking the
+  partner wizard end to end in Thai showed `คู่หู AIนี้มีไว้เพื่ออะไร?` — the
+  translations concatenate the product term `AI` directly onto the Thai that
+  follows it, with no separating space. Thai is written without spaces between
+  its own words, but an embedded Latin word still takes one on each side, and
+  without it the reader sees `AIนี้` as a single token.
+
+  A scan of `web/locales/th/app.json` found 22 occurrences and no instances of
+  the reverse (Thai run into Latin), so this is one bounded defect rather than a
+  habit: `New partner`, `Partner stopped`, `What is this partner for?`, the
+  delete confirmation, the tool and library helper text, and so on. All 22 now
+  carry the space.
+
 - **2026-09-09 — Thai wording in the partner wizard, and a Thai font that is
   actually named.** Two problems that only show up once the interface is Thai.
 
