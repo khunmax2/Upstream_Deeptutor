@@ -471,3 +471,13 @@ anywhere naming the container as the reason. It exposes
 | the studio does not run as root | `id` in the image: `uid=1001(nextjs)` |
 | there is no `postMessage` between the two apps | searched; ADR-0005's rejection of two-way binding is honoured in the code |
 | the embed URL cannot be turned into script execution | `normalizeEmbedUrl` rejects `//host`, and any protocol but http/https |
+
+### T2 — closed by measurement, 2026-09-10
+
+The client-supplied identity header (DREAD 8.8) was argued closed by reading
+`stripHeader` and by a stub test. It is now closed by running it: the real
+gatekeeper container in front of the real studio container, asked for one asset
+six ways. Another account's cookie carrying `x-deeptutor-owner: user:alice`
+answered **404**, and no cookie carrying the same header answered **401**. The
+identity the studio acts on is the one the gate verified, or the request does
+not arrive. Reproduction in `deploy/openmaic-gatekeeper/README.md`.
