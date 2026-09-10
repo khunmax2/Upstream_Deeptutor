@@ -47,7 +47,7 @@ services:
   # ============================================
   # The studio itself
   # ============================================
-  # Built from khunmax2/OpenMAIC and pinned by digest: deploys pull an image,
+  # Built from khunmax2/Ups_openMAIC and pinned by digest: deploys pull an image,
   # nothing is patched or resolved at deploy time (ADR-0005). The commit behind
   # the digest is recorded in deploy/openmaic-patches/openmaic-pin.json.
   #

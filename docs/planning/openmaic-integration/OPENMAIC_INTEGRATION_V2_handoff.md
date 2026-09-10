@@ -415,6 +415,16 @@ Ships **with the OpenMAIC brand still visible and in English.** Explicitly
 accepted.
 
 - fork `THU-MAIC/OpenMAIC` → `khunmax2/OpenMAIC`, pin a commit
+
+  *Amended 2026-09-11.* The fork lives at **`khunmax2/Ups_openMAIC`** now, and
+  it is deliberately *not* a GitHub fork. A repository GitHub classes as a fork
+  does not run Actions until someone enables them by hand, and upstream's
+  workflow triggers name upstream's branches — so the original fork's CI never
+  ran once, and every early change merged on local measurement alone. The move
+  cost nothing that matters: all 532 commits went across, `upstream` is still a
+  git remote, and the old repository is kept read-only for its pull request
+  pages, whose reasoning is also exported under
+  `docs/planning/openmaic-integration/fork-pull-requests/`.
 - basePath work (first attempt: 36 files, +434) so it serves under a path
 - Postgres as a compose service; `server-persistence` profile on
 - gatekeeper: inject a server-controlled uid header, strip any client copy

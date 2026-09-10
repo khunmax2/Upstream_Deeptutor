@@ -19,9 +19,9 @@
     "are read by check_openmaic_contract.py. Do not rename them without changing it."
   ],
   "fork": {
-    "repo": "https://github.com/khunmax2/OpenMAIC",
+    "repo": "https://github.com/khunmax2/Ups_openMAIC",
     "branch": "main",
-    "note": "fork of THU-MAIC/OpenMAIC; our commits sit on top of upstream's real history. The pin now names a commit on THIS fork, not on upstream: the studio is built from here, and the identity threading only exists here."
+    "note": "Not a fork on GitHub, on purpose: a repository GitHub classes as a fork does not run Actions until someone enables them by hand, and upstream's workflow triggers name upstream's branches. khunmax2/OpenMAIC (the original fork) is kept read-only for its pull request pages; every commit here descends from THU-MAIC/OpenMAIC's real history, and the `upstream` remote is how a rebase reaches it."
   },
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
@@ -35,11 +35,11 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "91b7423f41d46d401e11c328206827a7557013cc",
-  "commit_short": "91b7423f",
-  "commit_date": "2026-09-10",
+  "commit": "98b8fe8f6a74e4fcdfbfe27befd69de46726dd0d",
+  "commit_short": "98b8fe8f",
+  "commit_date": "2026-09-11",
   "commit_subject": "fix(ssrf): keep cloud metadata endpoints blocked under ALLOW_LOCAL_NETWORKS (#1419)",
-  "verified": "2026-09-10",
+  "verified": "2026-09-11",
   "verified_against": {
     "locale_keys_en_us": 1801,
     "locale_files": 12,
