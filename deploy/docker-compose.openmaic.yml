@@ -83,6 +83,15 @@ services:
       # have to change when the code catches up.
       # `/api/health` must stay exempt: the healthcheck below carries no
       # identity, and a studio that fails its own healthcheck never starts.
+      # Two flags, two subsystems, and the studio needs both. DATABASE_URL alone
+      # is not enough: `isAgentRuntimeConfigured()` in lib/config/feature-flags.ts
+      # is this flag AND the URL, and without it /api/stages and /api/folders
+      # answer 404 while everything else answers 200 -- which the studio surfaces
+      # as "Persistence is unavailable. Saved classrooms could not be loaded."
+      # Upstream even validates the inverse (config-validation.ts), so the pair
+      # is deliberate on their side too.
+      - OPENMAIC_AGENT_RUNTIME_ENABLED=true
+
       - STUDIO_REQUIRE_GATEWAY=1
 
       # One name, read by both sides. A rename on one side alone fails silently:
