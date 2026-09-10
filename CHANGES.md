@@ -254,6 +254,32 @@ upstream.
 
 ---
 
+## The base path has two halves, and now they have to agree — 2026-09-10
+
+Phase 1, item 8, the half that lives on this side. The studio serves under
+`/course-studio`, and **which path that is gets compiled into the image**:
+`NEXT_PUBLIC_STUDIO_BASE_PATH` feeds both Next's `basePath` (the URLs Next
+generates) and the fork's `apiPath()` (the URLs the app writes itself). After
+the build, nothing in the running system can be asked what it was.
+
+So the pin records it — `contract.base_path` in
+`deploy/openmaic-patches/openmaic-pin.json` — and
+`check_openmaic_contract.py` asserts the compose healthcheck probes the same
+path. Left alone, the failure is quiet in the worst way: the healthcheck asks
+for a path the image does not serve, the container never reports healthy, and
+nothing anywhere says why. Mutation-tested from both directions — compose left
+on the root, compose changed without a rebuild, and the pin changed while
+compose stayed — **3 of 3 caught**.
+
+The compose overlay's header block gained the reason: `STUDIO_BASE_PATH` there
+decides where the healthcheck probes **and nothing else**, and
+`NEXT_PUBLIC_STUDIO_BASE_PATH` joined the list of variables that belong to the
+image build rather than to `environment:`, beside `ALLOWED_FRAME_ANCESTORS` and
+the two persistence flags. A variable set in the wrong place reads as
+configured and does nothing.
+
+---
+
 ## The studio gets a database, and no way in — 2026-09-10
 
 Phase 1, item 7. `deploy/docker-compose.openmaic.yml` is new — written against

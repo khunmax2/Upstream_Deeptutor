@@ -15,8 +15,11 @@
 # Optional:
 #   STUDIO_GATEWAY_PORT     loopback port nginx forwards to (default 10330)
 #   STUDIO_IDENTITY_HEADER  must be identical on both sides (default x-deeptutor-owner)
-#   STUDIO_BASE_PATH        path the studio serves under, once the fork's
-#                           basePath work lands (default empty)
+#   STUDIO_BASE_PATH        where the healthcheck probes, and nothing else
+#                           (default /course-studio). The path the studio
+#                           actually serves under is baked into the image; this
+#                           only has to agree with it, and the contract check
+#                           fails if it stops agreeing.
 #   DEEPTUTOR_LOGIN_URL     quoted back to a signed-out visitor
 #
 # Set when the IMAGE is built, never here. Upstream declares each of these as a
@@ -30,6 +33,14 @@
 #                                  which means a rebuild, not a restart.
 #   NEXT_PUBLIC_PERSISTENCE        compiled into the browser bundle
 #   NEXT_PUBLIC_PERSISTENCE_TOKEN  compiled into the browser bundle
+#   NEXT_PUBLIC_STUDIO_BASE_PATH   the path the studio serves under. Next's
+#                                  `basePath` prefixes what Next generates, and
+#                                  the fork's `apiPath()` prefixes what the app
+#                                  writes; both read this one value, so it is
+#                                  compiled into both halves. Recorded in
+#                                  openmaic-pin.json as contract.base_path,
+#                                  because after the build nothing in the
+#                                  running system can be asked what it was.
 # ============================================
 
 services:
@@ -114,7 +125,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O - http://127.0.0.1:3000${STUDIO_BASE_PATH:-}/api/health > /dev/null",
+          "wget -q -O - http://127.0.0.1:3000${STUDIO_BASE_PATH:-/course-studio}/api/health > /dev/null",
         ]
       interval: 30s
       timeout: 10s
