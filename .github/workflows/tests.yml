@@ -27,6 +27,9 @@ on:
       # the first attempt.
       - "deploy/openmaic-gatekeeper/**"
       - "deploy/docker-compose.openmaic.yml"
+      # The pin and the contract checker: editing the pinned header name without
+      # a run would defeat the point of pinning it.
+      - "deploy/openmaic-patches/**"
   pull_request:
     branches:
       - main
@@ -50,6 +53,9 @@ on:
       # the first attempt.
       - "deploy/openmaic-gatekeeper/**"
       - "deploy/docker-compose.openmaic.yml"
+      # The pin and the contract checker: editing the pinned header name without
+      # a run would defeat the point of pinning it.
+      - "deploy/openmaic-patches/**"
 
 jobs:
   lint:
@@ -339,6 +345,20 @@ jobs:
       - name: Run gatekeeper tests
         working-directory: deploy/openmaic-gatekeeper
         run: node gatekeeper.test.mjs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The identity header is the only thing coupling this repository to the
+      # studio, and a rename on either side fails silently — the app keeps
+      # working while every reader stops seeing their own documents. The
+      # gatekeeper half of that assertion needs no studio checkout, which is why
+      # it can run here; --openmaic points at nothing on purpose, so the studio
+      # half reports SKIP rather than failing for a missing clone.
+      - name: Check the identity-header contract
+        run: python deploy/openmaic-patches/check_openmaic_contract.py --openmaic /nonexistent
 
   test-summary:
     name: Test Summary

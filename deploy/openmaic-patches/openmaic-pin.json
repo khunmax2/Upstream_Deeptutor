@@ -54,5 +54,20 @@
       "third_parameter_present": true
     },
     "upstream_gate": "node scripts/check-i18n-keys.mjs — exact key alignment across the locale files"
+  },
+  "contract": {
+    "_comment": [
+      "The name both sides must agree on. The gatekeeper sets it; the studio",
+      "reads it and turns it into an owner_id. Nothing else couples them.",
+      "",
+      "A silent rename is the quietest failure this design has: no error, no",
+      "log line, the app keeps working, and every reader stops seeing their own",
+      "documents because the studio falls back to minting an anonymous owner",
+      "per browser. Pinning the name here is what turns that into a red check."
+    ],
+    "identity_header": "x-deeptutor-owner",
+    "identity_prefix": "user:",
+    "studio_threaded": false,
+    "studio_threaded_note": "flip to true once the fork threads authenticatedOwnerId (phase 1, item 8). Until then the studio half of the assertion skips with a reason instead of failing for a known cause."
   }
 }

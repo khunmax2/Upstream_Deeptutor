@@ -254,6 +254,44 @@ upstream.
 
 ---
 
+## The one name both systems must agree on, pinned — 2026-09-10
+
+The gatekeeper sets an identity header; the studio reads it and turns it into an
+`owner_id`. Nothing else couples them. Handoff §3.8 calls a silent rename the
+quietest failure available in this design, and it is right: no error, no log
+line, the app keeps working, and every reader stops seeing their own documents
+because the studio falls back to minting an anonymous owner per browser.
+
+`openmaic-pin.json` gains a `contract` block naming the header
+(`x-deeptutor-owner`), the value prefix (`user:`), and a `studio_threaded` flag.
+`check_openmaic_contract.py` reads both sides from source and compares them
+against it rather than trusting either to still say what it said last week.
+
+The studio half **skips with a reason** while `studio_threaded` is false, because
+the fork does not thread `authenticatedOwnerId` yet (phase 1, item 8). Flipping
+the flag turns it into a real check. A check that skips forever would be
+decoration; this one converts on the day the other half lands.
+
+Demonstrated rather than asserted: renaming the header in `gatekeeper.mjs`
+turns the run red with `gatekeeper sets — gatekeeper.mjs does not mention
+'x-deeptutor-owner' — renamed on this side?`
+
+**The tool was already failing for an unrelated reason.** Its version pin looked
+for the `git subtree --squash` commit that recorded where `integration/maic` came
+from — provenance that stopped existing when the subtree came off `main` on
+2026-09-09. It now reads the studio checkout's HEAD, which is what a sibling
+repository has, and passes against `29735f10`.
+
+**And nothing ran it.** `check_openmaic_contract.py` was referenced by no
+workflow at all, so every assertion in it was advisory. The `gatekeeper-tests`
+job now runs the gatekeeper half — it needs no studio checkout, which is why it
+can run in CI — and `deploy/openmaic-patches/**` joins the `paths:` filter, since
+editing the pinned header name without a run would defeat the point of pinning it.
+
+Files: `deploy/openmaic-patches/openmaic-pin.json`,
+`deploy/openmaic-patches/check_openmaic_contract.py`,
+`.github/workflows/tests.yml`.
+
 ## The gate cannot be left open by accident — 2026-09-10
 
 Phase 1, T4. `ALLOW_ANONYMOUS=1` turns the gate off completely; it exists for a
