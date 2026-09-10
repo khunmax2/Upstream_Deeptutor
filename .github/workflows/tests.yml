@@ -357,7 +357,13 @@ jobs:
       # gatekeeper half of that assertion needs no studio checkout, which is why
       # it can run here; --openmaic points at nothing on purpose, so the studio
       # half reports SKIP rather than failing for a missing clone.
-      - name: Check the identity-header contract
+      # PyYAML is the checker's only dependency, and only for the compose half:
+      # the studio's network controls are asserted by parsing the overlay, because
+      # a grep cannot tell `ports:` from a comment explaining why there is none.
+      - name: Install the contract checker's dependency
+        run: pip install pyyaml
+
+      - name: Check the identity-header and compose contracts
         run: python deploy/openmaic-patches/check_openmaic_contract.py --openmaic /nonexistent
 
   test-summary:

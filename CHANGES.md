@@ -254,6 +254,64 @@ upstream.
 
 ---
 
+## The studio gets a database, and no way in — 2026-09-10
+
+Phase 1, item 7. `deploy/docker-compose.openmaic.yml` is new — written against
+the current base file and the real upstream, not restored from the archive, and
+every claim below was checked with `docker compose config` or a mutation.
+
+**T1's three controls, two of them now real.** The studio service has no
+`ports:` key, and `deploy/openmaic-patches/check_openmaic_contract.py` fails CI
+if one appears — parsing the overlay as YAML, because a grep cannot tell
+`ports:` from the comment explaining why there is none. Nine such controls are
+asserted, and each was mutation-tested: a published studio port, `network_mode:
+host`, the studio joining the shared network, `STUDIO_REQUIRE_GATEWAY` turned
+off, `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH` set, the gate bound to `0.0.0.0`, the
+identity header renamed on one side only, a published database port, and the
+database put back behind a profile. **9 of 9 defects caught.**
+
+**Three networks, not one.** The studio is deliberately *not* on
+`deeptutor-network`: it reaches the gatekeeper and its own database and nothing
+else in the stack, because the coupling is a URL and a header (ADR-0005), never
+a container-to-container call. The database sits alone on an `internal: true`
+network — no gateway, no route out, reachable from the studio only.
+
+**PostgreSQL always starts.** Upstream gates it behind a `server-persistence`
+profile because upstream's default deployment keeps everything in the browser.
+Per-account isolation is built on `PgDocumentStore`, so here the profile is
+gone: a stack that came up without the database would silently lose the property
+phase 1 exists to prove.
+
+**Two variables are required with no default.** `OPENMAIC_IMAGE` — a floating
+`:latest` lets two hosts run different code while both look correctly
+configured — and `OPENMAIC_POSTGRES_PASSWORD`, because a development default in
+a file that ships to the deploy host is how a weak password reaches production
+without anyone choosing one. Compose refuses to render without them, naming
+each.
+
+**What reading upstream changed.** `NEXT_PUBLIC_PERSISTENCE` is a *build-time*
+argument compiled into the browser bundle, so it belongs to the image build and
+not to compose. The runtime image sets `NODE_ENV=production`, which means
+upstream already refuses its own development authenticator — the one whose
+learner key comes from the client — unless `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH`
+switches the refusal off. That variable is therefore not merely absent but
+asserted absent. And `frame-ancestors` defaults to `'self'`, so the same-origin
+embed needs no `ALLOWED_FRAME_ANCESTORS` build argument at all.
+
+**One trap recorded in the file.** `STUDIO_REQUIRE_GATEWAY=1` must not apply to
+`/api/health`: the healthcheck carries no identity, and a studio that fails its
+own healthcheck never starts, which would make the fail-closed control look like
+a broken deployment.
+
+`deploy/openmaic-gatekeeper/README.md` was corrected while it was being pointed
+at compose: it still described TLS on a second port `:10330` (the host opens 443
+and nothing else, and the certificate has one `IP Address:` SAN), still said 21
+checks when the suite has 31, and still referred to two files that no longer
+exist. The threat model's phase-1 table gained a "landed" column, and its T6
+note now says `/course-studio` rather than `/studio`.
+
+---
+
 ## The door to the studio, back on the sidebar — 2026-09-10
 
 Phase 1, item 5. The web surface came off `main` with the rest of the
