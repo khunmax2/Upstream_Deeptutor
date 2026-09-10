@@ -254,6 +254,34 @@ upstream.
 
 ---
 
+## The build gets a script, because a forgotten argument is silent — 2026-09-10
+
+Two of the studio image's build arguments decide behaviour, and a forgotten one
+does not fail — it produces an image that starts, serves pages, and is wrong.
+
+`NEXT_PUBLIC_STUDIO_BASE_PATH` forgotten is the loud one: the studio serves at
+the origin root while the pin and the healthcheck say otherwise, so the
+container never reports healthy. `NEXT_PUBLIC_PERSISTENCE` forgotten is the
+quiet one, and much worse. The browser keeps everything locally and never calls
+the persistence API at all, so **every per-account isolation property this
+deployment is built around is simply never exercised** — no error, no log line,
+and a studio that looks like it works.
+
+Neither can be checked in the running system, because both are compiled in. So
+`deploy/build-studio.sh` is the one place that passes them, the pin records what
+it should pass (`contract.base_path`, `contract.persistence`), and the contract
+check asserts the two still agree. Mutation-tested in both directions: the
+script dropping the value, the script disagreeing with the pin, and the pin
+moving while the script stays — **3 of 3 caught**.
+
+The script also carries the Windows note that cost time twice: Git Bash rewrites
+any argument beginning with `/` into a Windows path, so
+`--build-arg NEXT_PUBLIC_STUDIO_BASE_PATH=/deepwitya/studio` arrives as
+`C:/Program Files/Git/deepwitya/studio` and Next refuses it. The same applies to
+`docker run -v` and `-w`.
+
+---
+
 ## The pin names the fork, and T2 stops being an argument — 2026-09-10
 
 **The pin points at us now.** `openmaic-pin.json` named upstream `29735f10`,
