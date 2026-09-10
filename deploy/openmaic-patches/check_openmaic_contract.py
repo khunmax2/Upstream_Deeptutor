@@ -276,6 +276,26 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
             "identity header would fall back to a fresh anonymous owner",
         )
 
+    # --- the flags the studio cannot work without ------------------------------
+    # Each of these is silent when missing. The agent runtime one answers 404 on
+    # exactly two routes while every other route answers 200, and the studio
+    # reports it as persistence being unavailable — a sentence that names
+    # neither the flag nor the routes.
+    for variable, value, why in (
+        (
+            "OPENMAIC_AGENT_RUNTIME_ENABLED",
+            "true",
+            "/api/stages and /api/folders answer 404 and saved classrooms cannot load",
+        ),
+    ):
+        if studio_env.get(variable) == value:
+            report.ok(f"studio sets {variable}", value)
+        else:
+            report.fail(
+                f"studio sets {variable}",
+                f"expected {value!r}, got {studio_env.get(variable)!r} — {why}",
+            )
+
     # --- T3: upstream's development authenticator stays refused -----------------
     # Read from the parsed services, not from the text: the overlay explains in a
     # comment why this variable is absent, and a checker that cannot tell a comment
