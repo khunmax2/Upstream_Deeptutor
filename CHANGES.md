@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## The gate cannot be left open by accident — 2026-09-10
+
+Phase 1, T4. `ALLOW_ANONYMOUS=1` turns the gate off completely; it exists for a
+local trial, and the risk is the copied `.env` — one inherited compose override
+and a public deployment serves the studio to anyone, with the identity header now
+set by nobody and stripped from nobody.
+
+**The control the threat model proposed would never have fired.** It said refuse
+when `ALLOW_ANONYMOUS=1` and `NODE_ENV=production`. Checked before implementing:
+the compose file passes seven variables to this service and `NODE_ENV` is not
+among them, and `node:22-alpine` does not set it either.
+
+The signal that does exist is the one the compose file already documents as the
+difference between the two worlds — a local `host.docker.internal` auth URL
+against a remote `https://` one. Both are honoured now: `NODE_ENV=production`
+because it is conventional and costs nothing to support, and a non-local auth
+target because it is the one that actually fires here. Either refuses to start.
+
+Refusing rather than warning is deliberate. A warning in a container log is a
+thing nobody reads; a container that will not come up is a thing somebody has to
+look at, and the message names which of the two conditions tripped it. An unset
+or unparseable auth URL counts as local, because an unset one already refuses
+every request with `gatekeeper_misconfigured` — there is nothing to protect, and
+refusing to start would replace a clear error with a confusing one.
+
+Five tests, 26 checks to 31, and both halves demonstrated rather than asserted:
+removing the guard fails three assertions, and keeping **only** the `NODE_ENV`
+half — the control as the threat model originally wrote it — still fails one.
+
+T4 in `THREAT_MODEL_course_studio.md` is corrected in place rather than left to
+mislead the next reader.
+
+Files: `deploy/openmaic-gatekeeper/gatekeeper.mjs`,
+`deploy/openmaic-gatekeeper/gatekeeper.test.mjs`,
+`docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`.
+
 ## The gatekeeper learns who is asking — 2026-09-10
 
 Phase 1, T2 and T5 from `THREAT_MODEL_course_studio.md`. The gate already knew

@@ -237,6 +237,60 @@ check('ALLOW_ANONYMOUS still strips a client header', openSpoof.body?.identitySe
 const cachedId = await call(`dt_token=${GOOD}`);
 check('a cached verdict still carries the uid', cachedId.body?.identitySeen, 'user:u-1');
 
+console.log('\n  -- ALLOW_ANONYMOUS guard (T4) --');
+
+/**
+ * Spawns a gatekeeper and reports how it ended: 'exited' with its code, or
+ * 'running' if it was still up after a moment. Reading the exit code is the
+ * whole point — a warning that nobody reads is what this guard replaces.
+ */
+function startAndSettle(extraEnv, ms = 600) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [GATEKEEPER], {
+      env: {
+        ...process.env,
+        PORT: '4899',
+        OPENMAIC_UPSTREAM: `http://127.0.0.1:${UPSTREAM_PORT}`,
+        DEEPTUTOR_AUTH_URL: `http://127.0.0.1:${AUTH_PORT}/api/auth/status`,
+        ...extraEnv,
+      },
+      stdio: 'ignore',
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve({ state: 'running' });
+    }, ms);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve({ state: 'exited', code });
+    });
+  });
+}
+
+// The escape hatch still works where it is meant to: a local trial.
+const localAnon = await startAndSettle({ ALLOW_ANONYMOUS: '1' });
+check('ALLOW_ANONYMOUS on a local target still starts', localAnon.state, 'running');
+
+// The conventional signal. Supported even though nothing in this repository's
+// compose sets it — checked before writing the guard, which is why it is not
+// the only condition.
+const prodAnon = await startAndSettle({ ALLOW_ANONYMOUS: '1', NODE_ENV: 'production' });
+check('ALLOW_ANONYMOUS + NODE_ENV=production refuses to start', prodAnon.state, 'exited');
+check('  and exits non-zero', prodAnon.code, 1);
+
+// The signal that actually fires here: the compose file documents a remote
+// https auth URL as the difference between a laptop and the server.
+const remoteAnon = await startAndSettle({
+  ALLOW_ANONYMOUS: '1',
+  DEEPTUTOR_AUTH_URL: 'https://203.185.144.41/deepwitya2/api/auth/status',
+});
+check('ALLOW_ANONYMOUS + a remote auth target refuses to start', remoteAnon.state, 'exited');
+
+// The guard is about the gate being off. With the gate on, neither signal is a
+// reason to refuse — a deployment is the normal case.
+const prodGated = await startAndSettle({ NODE_ENV: 'production' });
+check('the gate ON in production starts normally', prodGated.state, 'running');
+
 console.log('\n  -- health --');
 const health = await fetch(`http://127.0.0.1:${GATE_PORT}/__gatekeeper/health`);
 check('health endpoint answers', health.status, 200);
