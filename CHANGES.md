@@ -299,11 +299,15 @@ Three things needed care rather than copying:
 `?lang=`, `?theme=` and `?embed=1` come back with `MaicWorkspace`, which is the
 sending half of §3.13 — the receiving half is in the fork.
 
-`npm run check:fast` ends non-zero on one pre-existing failure:
+`npm run check:fast` ends non-zero **on Windows** on one pre-existing failure:
 `tests/co-writer-lazy-notebook.spec.tsx` passes alone and fails inside the full
-`vitest run`. Confirmed as a test interaction that predates this work by running
-the whole suite on `feat/course-studio` and on `main` — it fails identically on
-both, with none of these files present. Not caused here and not fixed here.
+`vitest run`. Not caused here — the whole suite fails identically on
+`feat/course-studio` and on `main`, with none of these files present.
+
+**And it is local, not repo-wide.** CI runs the same `npm run check` on Linux
+and is green, so this belongs with the other Windows-only local failures
+`CLAUDE.md` already lists rather than being a broken test in the repository.
+Recorded so the next person on Windows does not go hunting for a regression.
 
 Files: `web/lib/openmaic-embed.ts`, `web/tests/openmaic-embed.test.ts`,
 `web/components/maic/MaicWorkspace.tsx`,
