@@ -21,7 +21,7 @@
   "fork": {
     "repo": "https://github.com/khunmax2/OpenMAIC",
     "branch": "main",
-    "note": "fork of THU-MAIC/OpenMAIC; our commits sit on top of upstream's real history"
+    "note": "fork of THU-MAIC/OpenMAIC; our commits sit on top of upstream's real history. The pin now names a commit on THIS fork, not on upstream: the studio is built from here, and the identity threading only exists here."
   },
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
@@ -35,9 +35,9 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "29735f10d0081859ac3db1a50a0cc92f46436004",
-  "commit_short": "29735f10",
-  "commit_date": "2026-09-08",
+  "commit": "91b7423f41d46d401e11c328206827a7557013cc",
+  "commit_short": "91b7423f",
+  "commit_date": "2026-09-10",
   "commit_subject": "fix(ssrf): keep cloud metadata endpoints blocked under ALLOW_LOCAL_NETWORKS (#1419)",
   "verified": "2026-09-10",
   "verified_against": {
@@ -67,8 +67,8 @@
     ],
     "identity_header": "x-deeptutor-owner",
     "identity_prefix": "user:",
-    "studio_threaded": false,
-    "studio_threaded_note": "flip to true once the fork threads authenticatedOwnerId (phase 1, item 8). Until then the studio half of the assertion skips with a reason instead of failing for a known cause.",
+    "studio_threaded": true,
+    "studio_threaded_note": "The fork threads authenticatedOwnerId as of 91b7423f, so the studio half of the identity assertion is a real check rather than a SKIP: something under lib/ must mention the header name, or the two sides have drifted apart.",
     "base_path": "/deepwitya/studio",
     "base_path_note": "The path the studio image was BUILT to serve under. NEXT_PUBLIC_STUDIO_BASE_PATH is compiled in, so this is a property of the image, not of the deployment. The compose overlay's STUDIO_BASE_PATH only builds the healthcheck URL and must equal this value: if they drift, the healthcheck probes a path the image does not serve, the container never reports healthy, and nothing says why. It sits under DeepWitya's own base path on purpose: nginx picks the longest matching prefix, so `location /deepwitya/studio/` wins over `location /deepwitya/` without touching a rule that belongs to another team. It is NOT /deepwitya/course-studio, which is already taken -- that is DeepWitya's own page, the one holding the iframe. And it is /deepwitya, not the /deepwitya2 the second stack is validated under: that stack is shut down at cutover, and DeepWitya's own NEXT_PUBLIC_BASE_PATH is baked the same way, so both images are rebuilt together at that moment anyway."
   }
