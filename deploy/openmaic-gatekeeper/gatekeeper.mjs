@@ -107,7 +107,7 @@ function authTargetIsLocal() {
  * the difference between the two worlds:
  *
  *   local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
- *   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+ *   deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya/api/auth/status
  *
  * So both are honoured: `NODE_ENV=production` because it is the conventional
  * signal and costs nothing to support, and a non-local auth target because it is

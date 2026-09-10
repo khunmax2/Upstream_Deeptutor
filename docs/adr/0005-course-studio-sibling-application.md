@@ -61,14 +61,14 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   holding the iframe — and it is not the address the studio container answers
   on. The two were never distinguished here because until the fork gained a
   `basePath` there was only one of them. The studio serves under
-  **`/deepwitya2/studio`**, recorded as `contract.base_path` in
+  **`/deepwitya/studio`**, recorded as `contract.base_path` in
   `openmaic-pin.json` and asserted against the compose healthcheck.
 
   It sits under DeepWitya's own base path deliberately. nginx matches the
-  longest prefix, so `location /deepwitya2/studio/` wins over `location
-  /deepwitya2/` and no rule belonging to another team is touched — the host
+  longest prefix, so `location /deepwitya/studio/` wins over `location
+  /deepwitya/` and no rule belonging to another team is touched — the host
   serves seven applications and opening a new location at the root would need
-  their agreement, the same way opening a port did. `/deepwitya2/course-studio`
+  their agreement, the same way opening a port did. `/deepwitya/course-studio`
   was the obvious name and is the one address that cannot be used: DeepWitya
   already answers there.
 - Upstream's DDL constants are pinned in `check_openmaic_contract.py`, and

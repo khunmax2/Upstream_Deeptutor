@@ -282,7 +282,7 @@ check('  and exits non-zero', prodAnon.code, 1);
 // https auth URL as the difference between a laptop and the server.
 const remoteAnon = await startAndSettle({
   ALLOW_ANONYMOUS: '1',
-  DEEPTUTOR_AUTH_URL: 'https://203.185.144.41/deepwitya2/api/auth/status',
+  DEEPTUTOR_AUTH_URL: 'https://203.185.144.41/deepwitya/api/auth/status',
 });
 check('ALLOW_ANONYMOUS + a remote auth target refuses to start', remoteAnon.state, 'exited');
 

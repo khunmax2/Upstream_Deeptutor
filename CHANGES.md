@@ -257,7 +257,7 @@ upstream.
 ## The base path has two halves, and now they have to agree — 2026-09-10
 
 Phase 1, item 8, the half that lives on this side. The studio serves under
-`/deepwitya2/studio`, and **which path that is gets compiled into the image**:
+`/deepwitya/studio`, and **which path that is gets compiled into the image**:
 `NEXT_PUBLIC_STUDIO_BASE_PATH` feeds both Next's `basePath` (the URLs Next
 generates) and the fork's `apiPath()` (the URLs the app writes itself). After
 the build, nothing in the running system can be asked what it was.
@@ -276,11 +276,11 @@ be `/course-studio` at the origin root, which would have needed a new nginx
 location on a host that serves seven applications — the same permission that
 opening a port needed, and did not get. Under DeepWitya's own base path no
 permission is needed: nginx matches the longest prefix, so `location
-/deepwitya2/studio/` wins over `location /deepwitya2/` without touching a rule
+/deepwitya/studio/` wins over `location /deepwitya/` without touching a rule
 that belongs to anyone else.
 
-The obvious name for it, `/deepwitya2/course-studio`, is the one address that
-cannot be used. DeepWitya's web app sets `basePath: /deepwitya2` and has its own
+The obvious name for it, `/deepwitya/course-studio`, is the one address that
+cannot be used. DeepWitya's web app sets its `basePath` there and has its own
 route at `/course-studio` — **that page is the one holding the iframe**. Two
 paths had been collapsed into one name in ADR-0005 because until the fork gained
 a `basePath` there was only ever one of them; the ADR now separates them.

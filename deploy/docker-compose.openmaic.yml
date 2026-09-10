@@ -16,7 +16,7 @@
 #   STUDIO_GATEWAY_PORT     loopback port nginx forwards to (default 10330)
 #   STUDIO_IDENTITY_HEADER  must be identical on both sides (default x-deeptutor-owner)
 #   STUDIO_BASE_PATH        where the healthcheck probes, and nothing else
-#                           (default /deepwitya2/studio). The path the studio
+#                           (default /deepwitya/studio). The path the studio
 #                           actually serves under is baked into the image; this
 #                           only has to agree with it, and the contract check
 #                           fails if it stops agreeing.
@@ -125,7 +125,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O - http://127.0.0.1:3000${STUDIO_BASE_PATH:-/deepwitya2/studio}/api/health > /dev/null",
+          "wget -q -O - http://127.0.0.1:3000${STUDIO_BASE_PATH:-/deepwitya/studio}/api/health > /dev/null",
         ]
       interval: 30s
       timeout: 10s
