@@ -159,6 +159,20 @@ def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) ->
         )
         return
 
+    # No checkout is not drift. CI runs this half deliberately without one -- the
+    # gatekeeper side needs no studio source, which is the whole reason it can run
+    # there -- so a missing tree has to skip, the same way the checkout section
+    # above skips, rather than report the two sides as having come apart. Getting
+    # this wrong turned a green job red and said something untrue about the fork
+    # while doing it.
+    if not (repo / "lib").is_dir():
+        report.skip(
+            "studio reads",
+            f"no OpenMAIC source at {repo} — pass --openmaic <checkout> to verify "
+            "the studio half; contract.studio_threaded says it is there to be found",
+        )
+        return
+
     # Once the fork is threaded, the header must appear in its source too.
     hits = [
         path
