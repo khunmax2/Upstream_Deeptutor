@@ -406,3 +406,68 @@ it is scoped and still wanted.
   under ALLOW_LOCAL_NETWORKS` — evidence that this class of issue is live in
   that codebase, and that following their releases has a security value beyond
   features.
+
+---
+
+## Round 2 — reviewed against the built image, 2026-09-10
+
+The first pass modelled a design. This one read the running artefacts: the image
+that `docker build` actually produced, the compose file as `docker compose
+config` renders it, and the embed component as it ships. Four findings, and four
+things that were assumed and are now measured.
+
+### T10 — `dt_token` is `SameSite=None` in production (DREAD 7.6)
+
+`deeptutor/api/routers/auth.py:31` — `_SAMESITE = "none" if _SECURE else "lax"`.
+The comment above it justifies `None` by a **development** case: a frontend on
+`127.0.0.1` and a backend on `localhost` are different origins. The code applies
+`None` on the opposite branch — in production, behind nginx, where both are one
+origin and the case does not arise. Production therefore ships the weaker value
+for a reason that only holds where the stronger one is already used.
+
+`SameSite=None` attaches the session cookie to every cross-site request to this
+origin, which is the CSRF surface `Lax` exists to remove. The studio embed does
+not need it: the built image bakes `frame-ancestors 'self'` and the deployment
+is same-origin, so the frame carries the cookie under `Lax` unchanged.
+
+**Control:** `Lax` in production. This is phase-1 item 6, and the evidence it
+was waiting for now exists.
+
+### T11 — the same-origin embed removes every browser boundary (DREAD 5.4)
+
+Scored lower than it reads. Same origin means the studio can reach this app's
+`localStorage`, `sessionStorage`, IndexedDB and DOM, and can navigate the top
+window. What that is worth was measured rather than assumed: this app writes one
+localStorage key (`deeptutor-theme`), keeps no PocketBase auth store in the
+browser, and `dt_token` is HttpOnly — so the drawer the studio can open is
+nearly empty, and the one thing worth taking is not in it.
+
+**Control:** none needed today; the measurement is the control, and it has to be
+re-taken whenever this app starts storing something in the browser. A `sandbox`
+attribute would still block top-level navigation even alongside
+`allow-same-origin`, and is worth testing once the stack runs — the component's
+comment argues against `sandbox` without considering that flag.
+
+### T12 — this app sets no Content-Security-Policy at all (DREAD 5.0)
+
+Not specific to the studio, but it is the layer that would contain one. There is
+no `Content-Security-Policy` header anywhere in `web/` or the API — no
+`frame-src`, no `script-src`. The studio sets its own; the host sets none.
+
+### T13 — the gate had no healthcheck (DREAD 4.2) — **closed**
+
+The gatekeeper is the only service published to the host, so nginx forwarded to
+it whether or not it was alive, and a crashed gate was a 502 with nothing
+anywhere naming the container as the reason. It exposes
+`/__gatekeeper/health`; compose now probes it. Memory limits, log rotation and
+`no-new-privileges` were added to all three services in the same pass.
+
+### Measured, not assumed
+
+| claim | how it was checked |
+|---|---|
+| `frame-ancestors 'self'` is compiled at build, not read at runtime | `routes-manifest.json` inside the built image carries it |
+| `basePath` reaches the image | same manifest: `basePath = "/deepwitya/studio"` |
+| the studio does not run as root | `id` in the image: `uid=1001(nextjs)` |
+| there is no `postMessage` between the two apps | searched; ADR-0005's rejection of two-way binding is honoured in the code |
+| the embed URL cannot be turned into script execution | `normalizeEmbedUrl` rejects `//host`, and any protocol but http/https |

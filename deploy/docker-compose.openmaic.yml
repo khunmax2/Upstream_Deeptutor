@@ -115,6 +115,17 @@ services:
     volumes:
       - openmaic-data:/app/data
 
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     # A provider running on the deploy host (LM Studio, Ollama, vLLM) is
     # reachable under this name, the same way the base file documents it for
     # DeepTutor.
@@ -156,6 +167,17 @@ services:
     restart: unless-stopped
     command: ["node", "/app/gatekeeper.mjs"]
 
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     # Loopback only. nginx terminates TLS on the public address and forwards
     # here; binding 0.0.0.0 would publish this port on a host shared with six
     # other teams' applications.
@@ -176,6 +198,16 @@ services:
       # gatekeeper refuses to start when it is on while the auth URL points
       # anywhere but a local address, and `deeptutor` is a container, not
       # localhost. That refusal is the intended answer in a deployment.
+
+    # The gate is the only thing published on this host, so nginx forwards to it
+    # whether or not it is alive. Without this a crashed gatekeeper is a 502 with
+    # no signal anywhere that the container is the reason.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:10330/__gatekeeper/health > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
     depends_on:
       openmaic:
@@ -218,6 +250,17 @@ services:
       # deploy host is how a weak password reaches production without anyone
       # deciding to use one.
       - POSTGRES_PASSWORD=${OPENMAIC_POSTGRES_PASSWORD:?set OPENMAIC_POSTGRES_PASSWORD}
+
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openmaic -d openmaic"]
