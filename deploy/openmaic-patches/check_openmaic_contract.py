@@ -363,6 +363,34 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
                 f"{probe!r}",
             )
 
+    # --- the build script and the pin ------------------------------------------
+    # Both values below are compiled into the image, so nothing in the running
+    # system can be asked whether they were passed. What can be checked is that
+    # the one script that passes them still says what the pin says. A forgotten
+    # NEXT_PUBLIC_PERSISTENCE is the quiet one: the studio starts, serves pages,
+    # and keeps everything in the browser, so the isolation this deployment is
+    # built around is simply never exercised — with no error anywhere.
+    build = HERE.parent / "build-studio.sh"
+    if not build.is_file():
+        report.fail("build script", f"missing {build}")
+    else:
+        script = build.read_text(encoding="utf-8")
+        for key, want in (
+            ("BASE_PATH", (pin.get("contract") or {}).get("base_path")),
+            ("PERSISTENCE", (pin.get("contract") or {}).get("persistence")),
+        ):
+            if not want:
+                continue
+            line = f"{key}={want}"
+            if any(row.strip() == line for row in script.splitlines()):
+                report.ok(f"build passes {key}", want)
+            else:
+                report.fail(
+                    f"build passes {key}",
+                    f"build-studio.sh does not set {line!r} — the image would be built "
+                    f"with a value the pin does not record",
+                )
+
     # --- the database is not a second door --------------------------------------
     db = services.get(DB_SERVICE)
     if not isinstance(db, dict):
