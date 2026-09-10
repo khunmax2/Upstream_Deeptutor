@@ -181,3 +181,46 @@ token to a request against that host. Measured, scored and decided as T6 in
 `docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`: `SameSite=Lax`
 in production is phase 1's control, and a real domain with a host-only cookie on
 its own subdomain stays the structural fix.
+
+## Proving the chain, without a DeepWitya
+
+The 31 checks in `gatekeeper.test.mjs` exercise this file against stubs. What
+they cannot show is the real gatekeeper container talking to the real studio
+container, which is the seam that carries the whole design. That was run on
+2026-09-10 and is reproducible in about a minute — a stub stands in for
+DeepWitya's `/api/auth/status`, because what is under test is the hop after it.
+
+```bash
+# a stub that answers the way /api/auth/status answers, keyed by cookie
+cat > /tmp/stub-auth.mjs <<'JS'
+import { createServer } from 'node:http';
+const USERS = { 'alice-token': 'alice', 'bob-token': 'bob' };
+createServer((req, res) => {
+  const m = /(?:^|;\s*)dt_token=([^;]+)/.exec(req.headers.cookie || '');
+  const uid = m ? USERS[decodeURIComponent(m[1])] : undefined;
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(uid
+    ? { enabled: true, authenticated: true, user_id: uid, username: uid }
+    : { enabled: true, authenticated: false, user_id: null }));
+}).listen(8001, '0.0.0.0');
+JS
+
+docker run -d --name stub-auth --network <net> --network-alias deeptutor   -v /tmp:/w:ro node:22-alpine node /w/stub-auth.mjs
+```
+
+Then start the gatekeeper against it and ask for one asset six ways. On Windows,
+`MSYS_NO_PATHCONV=1` before every `docker` line — Git Bash rewrites `-v /w` and
+any argument beginning with `/` into a Windows path.
+
+| request | answer |
+|---|---|
+| no cookie | 401 `not_signed_in` |
+| the owner's cookie | 200, the bytes |
+| another account's cookie | 404 `ASSET_NOT_FOUND` |
+| a cookie that verifies against nothing | 401 `session_invalid` |
+| **another account's cookie plus `x-deeptutor-owner` claiming to be the owner** | **404** |
+| **no cookie plus that header** | **401** |
+
+The last two are T2. A client's own copy of the identity header changes nothing:
+the gate strips it, and what the studio sees is the identity the gate verified,
+or the request never arrives.
