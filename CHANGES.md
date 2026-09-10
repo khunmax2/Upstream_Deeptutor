@@ -263,12 +263,21 @@ every claim below was checked with `docker compose config` or a mutation.
 **T1's three controls, two of them now real.** The studio service has no
 `ports:` key, and `deploy/openmaic-patches/check_openmaic_contract.py` fails CI
 if one appears — parsing the overlay as YAML, because a grep cannot tell
-`ports:` from the comment explaining why there is none. Nine such controls are
+`ports:` from the comment explaining why there is none. Ten such controls are
 asserted, and each was mutation-tested: a published studio port, `network_mode:
 host`, the studio joining the shared network, `STUDIO_REQUIRE_GATEWAY` turned
-off, `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH` set, the gate bound to `0.0.0.0`, the
-identity header renamed on one side only, a published database port, and the
-database put back behind a profile. **9 of 9 defects caught.**
+off, `PERSISTENCE_DEV_TOKEN` set, `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH` set, the
+gate bound to `0.0.0.0`, the identity header renamed on one side only, a
+published database port, and the database put back behind a profile. **10 of 10
+defects caught.**
+
+Two of those mutations survived on the first run and the mutations were the
+thing at fault, not the checks: both added a second `environment:` key to the
+studio service, and a duplicate mapping key is silently dropped by the YAML
+parser, so the injected variable never reached the document. Rewritten to append
+to the existing list, both were caught. Worth writing down because it is the
+same failure a compose file can have for real — a second `environment:` block
+added below an existing one reads as configuration and sets nothing.
 
 **Three networks, not one.** The studio is deliberately *not* on
 `deeptutor-network`: it reaches the gatekeeper and its own database and nothing
@@ -289,14 +298,43 @@ a file that ships to the deploy host is how a weak password reaches production
 without anyone choosing one. Compose refuses to render without them, naming
 each.
 
-**What reading upstream changed.** `NEXT_PUBLIC_PERSISTENCE` is a *build-time*
-argument compiled into the browser bundle, so it belongs to the image build and
-not to compose. The runtime image sets `NODE_ENV=production`, which means
-upstream already refuses its own development authenticator — the one whose
-learner key comes from the client — unless `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH`
-switches the refusal off. That variable is therefore not merely absent but
-asserted absent. And `frame-ancestors` defaults to `'self'`, so the same-origin
-embed needs no `ALLOWED_FRAME_ANCESTORS` build argument at all.
+**What reading upstream changed.** Four things, read out of `29735f10` itself
+rather than carried over from the archive.
+
+`NEXT_PUBLIC_PERSISTENCE` is a *build-time* argument compiled into the browser
+bundle, so it belongs to the image build and not to compose.
+
+**The studio's persistence API is refused today, and that is the intended
+state.** `app/api/persistence/[...path]/route.ts` answers `503
+PERSISTENCE_DEV_TOKEN_MISSING` before it looks at anything else unless
+`PERSISTENCE_DEV_TOKEN` is set — and setting it is the obvious way to make the
+503 go away and the wrong one, because the matching
+`NEXT_PUBLIC_PERSISTENCE_TOKEN` is compiled into the public bundle and identity
+then comes from a client-supplied `x-learner-key`. Behind that sits a second
+lock: the runner image sets `NODE_ENV=production`, and in production upstream
+refuses its own development authenticator outright — 401 — unless
+`PERSISTENCE_ALLOW_INSECURE_DEV_AUTH` switches the refusal off. **Both are
+asserted absent**, and the entry above is why the token joined the check. So the
+database comes up wired, healthy and empty, and stays empty until the fork
+threads `authenticatedOwnerId`. Standing it up first is still worth doing: the
+schema is created on first use with `IF NOT EXISTS` and no versioned migrations,
+so the moment to learn whether it comes up clean is before there is data to
+lose. The overlay says all of this in place, so the 503 is a documented state
+rather than something to debug at 2am.
+
+**`ALLOWED_FRAME_ANCESTORS` is a build argument, and the runner stage never sets
+it.** `frame-ancestors` defaults to `'self'`, so the same-origin deployment
+needs no value — but a two-port local trial is cross-origin, and giving it one
+means rebuilding the image, not restarting the container. The overlay records
+that under a heading naming everything that belongs to the build and not to
+`environment:`, because a variable set in the wrong place reads as configured
+and does nothing.
+
+**Assets have no owner partition upstream.** `lib/persistence/server-auth.ts`
+files every asset under one principal — `SHARED_ASSET_PRINCIPAL = 'shared'` —
+while documents carry `owner_id`. The isolation test that closes phase 1 has to
+open an *asset*, not only a document; a document-only test passes straight over
+the hole.
 
 **One trap recorded in the file.** `STUDIO_REQUIRE_GATEWAY=1` must not apply to
 `/api/health`: the healthcheck carries no identity, and a studio that fails its

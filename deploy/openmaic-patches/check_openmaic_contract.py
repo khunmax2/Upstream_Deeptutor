@@ -266,19 +266,33 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
     # Read from the parsed services, not from the text: the overlay explains in a
     # comment why this variable is absent, and a checker that cannot tell a comment
     # from a setting would fail on the explanation.
-    setters = [
-        name
-        for name, service in services.items()
-        if isinstance(service, dict) and "PERSISTENCE_ALLOW_INSECURE_DEV_AUTH" in _env_map(service)
-    ]
-    if setters:
-        report.fail(
-            "no insecure dev auth",
-            f"{setters} set PERSISTENCE_ALLOW_INSECURE_DEV_AUTH — it re-enables the "
-            "authenticator whose learner key is client-supplied",
-        )
-    else:
-        report.ok("no insecure dev auth")
+    # Two variables, one authenticator, and they are read in this order:
+    # PERSISTENCE_DEV_TOKEN is what the route demands before it will serve at all
+    # (503 without it), and PERSISTENCE_ALLOW_INSECURE_DEV_AUTH is what lets that
+    # authenticator run under NODE_ENV=production (401 without it). Supplying the
+    # first is the plausible mistake — it is how a deployer makes a 503 go away —
+    # so it is checked in its own right, not only as the second one's companion.
+    for variable, why in (
+        (
+            "PERSISTENCE_DEV_TOKEN",
+            "its public half is compiled into the browser bundle, so identity would "
+            "come from a client-supplied x-learner-key",
+        ),
+        (
+            "PERSISTENCE_ALLOW_INSECURE_DEV_AUTH",
+            "it re-enables that authenticator under NODE_ENV=production",
+        ),
+    ):
+        setters = [
+            name
+            for name, service in services.items()
+            if isinstance(service, dict) and variable in _env_map(service)
+        ]
+        label = f"no {variable}"
+        if setters:
+            report.fail(label, f"{setters} set it — {why}")
+        else:
+            report.ok(label)
 
     # --- T1.1's companion: the gate is the only published thing -----------------
     gate = services.get(GATEKEEPER_SERVICE)
