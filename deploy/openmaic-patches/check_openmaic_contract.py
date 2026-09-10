@@ -76,18 +76,20 @@ def count_leaves(node: Any) -> int:
     return 1
 
 
-def subtree_import_commit(repo_root: Path) -> str | None:
-    """The upstream commit `integration/maic` was last imported from.
+def checkout_head(repo: Path) -> str | None:
+    """The commit the studio checkout is currently on.
 
-    `git subtree add|pull --squash` records it in the squash commit's subject, and
-    that is the only durable statement of where the vendored copy came from —
-    there is no second checkout with a HEAD to read any more.
+    Under ADR-0005 the studio is a sibling repository rather than a squashed
+    subtree, so this is simply its HEAD. The previous version of this function
+    read the subject of a `git subtree --squash` commit, which was the only
+    durable statement of provenance while the code was vendored — and which
+    stopped existing when the subtree came off `main` on 2026-09-09, leaving this
+    check failing for a reason that had nothing to do with the contract.
     """
-    import re as _re
     import subprocess as _sp
 
     result = _sp.run(
-        ["git", "-C", str(repo_root), "log", "--format=%H%x1f%s", "--all"],
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -95,37 +97,96 @@ def subtree_import_commit(repo_root: Path) -> str | None:
     )
     if result.returncode != 0:
         return None
-    pattern = _re.compile(r"^Squashed 'integration/maic/?' content from commit ([0-9a-f]+)")
-    for line in result.stdout.splitlines():
-        _, _, subject = line.partition("")
-        match = pattern.match(subject)
-        if match:
-            return match.group(1)
-    return None
+    head = result.stdout.strip()
+    return head or None
+
+
+GATEKEEPER = HERE.parent / "openmaic-gatekeeper" / "gatekeeper.mjs"
+
+
+def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) -> None:
+    """The one name the two systems must agree on.
+
+    The gatekeeper sets a header; the studio reads it and turns it into an
+    ``owner_id``. Nothing else couples them, and a rename on either side is the
+    quietest failure this design has: no error, no log line, the app keeps
+    working, and every reader silently stops seeing their own documents because
+    the studio falls back to minting an anonymous owner per browser.
+
+    So both sides are read from source and compared against the pin, rather than
+    either being trusted to still say what it said last week.
+    """
+    print("\n[contract] identity header")
+
+    contract = pin.get("contract") or {}
+    expected = contract.get("identity_header")
+    if not expected:
+        report.fail("identity pin", "openmaic-pin.json has no contract.identity_header")
+        return
+
+    if not GATEKEEPER.is_file():
+        report.fail("gatekeeper source", f"missing {GATEKEEPER}")
+    else:
+        source = GATEKEEPER.read_text(encoding="utf-8")
+        # The default in the `||` fallback is the value that ships. An env var can
+        # override it, but a deployment that overrides it has to override the
+        # studio too, and that is what this pin exists to force a decision about.
+        if f"'{expected}'" in source:
+            report.ok("gatekeeper sets", expected)
+        else:
+            report.fail(
+                "gatekeeper sets",
+                f"gatekeeper.mjs does not mention {expected!r} — renamed on this side?",
+            )
+
+        prefix = contract.get("identity_prefix")
+        if prefix and f"'{prefix}'" in source:
+            report.ok("identity prefix", prefix)
+        elif prefix:
+            report.fail("identity prefix", f"gatekeeper.mjs does not mention {prefix!r}")
+
+    if not contract.get("studio_threaded"):
+        report.skip(
+            "studio reads",
+            "the fork does not thread authenticatedOwnerId yet — flip "
+            "contract.studio_threaded once it does, and this becomes a real check",
+        )
+        return
+
+    # Once the fork is threaded, the header must appear in its source too.
+    hits = [
+        path
+        for path in (repo / "lib").rglob("*.ts")
+        if expected in path.read_text(encoding="utf-8", errors="replace")
+    ]
+    if hits:
+        report.ok("studio reads", f"{expected} in {hits[0].relative_to(repo)}")
+    else:
+        report.fail(
+            "studio reads",
+            f"contract.studio_threaded is true but no file under {repo / 'lib'} mentions "
+            f"{expected!r} — the two sides have drifted apart",
+        )
 
 
 def offline_checks(repo: Path, pin: dict[str, Any], report: Report) -> None:
     print("\n[contract] checkout")
 
-    # OpenMAIC is vendored at integration/maic, so there is no second checkout
-    # whose HEAD says where it came from. `git subtree` records that in the squash
-    # commit, and comparing it to the pin answers the question that matters:
-    # has somebody pulled a newer OpenMAIC without re-verifying against it?
-    imported = subtree_import_commit(repo.parent.parent)
+    # The studio is its own checkout now, so the question is simply whether it
+    # sits on the commit everything here was measured against.
+    head = checkout_head(repo)
     pinned = pin["commit"]
-    if imported is None:
-        report.fail(
-            "version pin",
-            "no subtree import commit found — is integration/maic still a git subtree?",
-        )
-    elif pinned.startswith(imported) or imported.startswith(pinned):
-        report.ok("version pin", f"subtree imported at the verified commit {pin['commit_short']}")
+    if head is None:
+        report.fail("version pin", f"{repo} is not a git checkout — cannot read HEAD")
+    elif pinned.startswith(head) or head.startswith(pinned):
+        report.ok("version pin", f"checkout is on the verified commit {pin['commit_short']}")
     else:
         # Not a failure of the code — moving forward is the point. It is a cue to
-        # re-measure before trusting the vendored copy again.
+        # re-measure before trusting the checkout again. Every rebase carries the
+        # DDL-drift risk, so this reports the distance and does not force the move.
         report.fail(
             "version pin",
-            f"subtree imported at {imported[:8]} != verified {pin['commit_short']} — "
+            f"checkout is on {head[:8]} != verified {pin['commit_short']} — "
             "re-run the checks, then bump the pin",
         )
 
@@ -218,13 +279,17 @@ def main() -> int:
         f"verified {pin['verified']}"
     )
 
-    # A vendored subtree has no `.git` of its own -- it is part of this repository --
-    # so the presence of package.json is what says "the source is here", and the
-    # checks read git from the enclosing repository instead.
+    # package.json is what says "the source is here". Under ADR-0005 the studio is
+    # a sibling checkout with its own .git, so the version pin reads that checkout's
+    # HEAD rather than a squash commit in this repository.
     if (args.openmaic / "package.json").is_file():
         offline_checks(args.openmaic, pin, report)
     else:
         print(f"\n[contract] checkout\n  SKIP  no OpenMAIC source at {args.openmaic}")
+
+    # The gatekeeper half of the identity contract needs no studio checkout, and it
+    # is the half that can drift without anyone noticing, so it runs either way.
+    identity_contract_checks(args.openmaic, pin, report)
 
     if args.url:
         runtime_checks(args.url, args.origin, report)
