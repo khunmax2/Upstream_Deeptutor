@@ -4,7 +4,7 @@ A small process that stands in front of the embedded OpenMAIC and refuses
 anything that is not a signed-in DeepTutor session.
 
 ```
-browser ──► nginx :443 /course-studio ──► gatekeeper ──► OpenMAIC container
+browser ──► nginx :443 /deepwitya2/studio ──► gatekeeper ──► OpenMAIC container
             (TLS, loopback hop)             │           (no published port)
                                             └─► DeepTutor /api/auth/status
 ```
@@ -156,7 +156,7 @@ A path on `:443`, not a second port. The deploy host opens 443 and nothing else,
 and opening one is a security decision that is not ours to take; the certificate
 also has a single `IP Address:` SAN and no DNS name, so a second hostname is not
 available either. nginx already owns the certificate and its renewal timer, so it
-matches `location /course-studio` and forwards to this process on loopback —
+matches `location /deepwitya2/studio/` and forwards to this process on loopback —
 which is why the compose overlay publishes the gate as `127.0.0.1:10330` and
 never on `0.0.0.0`.
 

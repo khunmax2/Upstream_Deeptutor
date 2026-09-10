@@ -1,6 +1,6 @@
 """Check the handful of assumptions this fork makes about OpenMAIC.
 
-The embed at `/course-studio` is not a code dependency — nothing here imports
+The embed is not a code dependency — nothing here imports
 anything there. What it depends on is a small contract: a URL that serves the
 app, `frame-ancestors` that admits our origin, an access gate that stays off, a
 container port, one identity header both sides agree on, and a compose file that
