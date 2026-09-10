@@ -76,6 +76,19 @@ DEFAULT_AUTH_SETTINGS: dict[str, Any] = {
     "password_hash": "",
     "token_expire_hours": 24,
     "cookie_secure": False,
+    # Lax, not None. None attaches the session cookie to every cross-site
+    # request to this origin, which is the CSRF surface Lax exists to remove.
+    # It was previously implied by cookie_secure, on the strength of a comment
+    # describing a development case -- a frontend on 127.0.0.1 and a backend on
+    # localhost -- that the insecure branch already handles. Deployments behind
+    # one reverse proxy do not need it, including the framed course studio: the
+    # studio is same-origin and its own frame-ancestors is 'self'.
+    #
+    # Still settable, because a genuinely cross-site frontend is a real shape.
+    # Browsers reject SameSite=None without Secure, so "none" without
+    # cookie_secure falls back to "lax" rather than issuing a cookie the browser
+    # will drop.
+    "cookie_samesite": "lax",
 }
 
 DEFAULT_INTEGRATIONS_SETTINGS: dict[str, Any] = {
@@ -364,6 +377,22 @@ DEFAULT_LIGHTRAG_SERVER_SETTINGS: dict[str, Any] = {
 IGNORE_PROCESS_OVERRIDES_ENV = "DEEPTUTOR_IGNORE_PROCESS_ENV_OVERRIDES"
 TRUTHY = {"1", "true", "yes", "on"}
 FALSY = {"0", "false", "no", "off"}
+
+
+def _normalize_cookie_samesite(value: Any, secure: bool) -> str:
+    """One of ``lax``, ``strict`` or ``none``, defaulting to ``lax``.
+
+    ``none`` requires ``Secure``; browsers drop the cookie otherwise, and a
+    dropped session cookie looks like a login that silently does not stick. So
+    ``none`` without ``cookie_secure`` degrades to ``lax`` rather than issuing
+    something the browser will refuse.
+    """
+    candidate = _string(value).strip().lower()
+    if candidate not in {"lax", "strict", "none"}:
+        return "lax"
+    if candidate == "none" and not secure:
+        return "lax"
+    return candidate
 
 
 def _coerce_bool(value: Any, default: bool = False) -> bool:
@@ -1195,6 +1224,10 @@ class RuntimeSettingsService:
             "password_hash": _string(settings.get("password_hash")),
             "token_expire_hours": max(1, _coerce_int(settings.get("token_expire_hours"), 24)),
             "cookie_secure": _coerce_bool(settings.get("cookie_secure"), False),
+            "cookie_samesite": _normalize_cookie_samesite(
+                settings.get("cookie_samesite"),
+                _coerce_bool(settings.get("cookie_secure"), False),
+            ),
         }
 
     def _normalize_integrations(self, settings: dict[str, Any]) -> dict[str, Any]:

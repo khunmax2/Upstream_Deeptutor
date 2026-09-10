@@ -254,6 +254,43 @@ upstream.
 
 ---
 
+## The session cookie stops being wider than it needs to be — 2026-09-10
+
+Phase 1, item 6, and it waited for evidence that now exists.
+
+`_SAMESITE` was `"none" if _SECURE else "lax"`. The comment above it justified
+`None` by a **development** case — a frontend reached at `127.0.0.1` while the
+backend answers at `localhost`, which are different origins — but that case runs
+without HTTPS and therefore took the *other* branch and got `Lax` anyway.
+`None` was applied only in production, behind one reverse proxy, where the case
+does not arise. There it attaches the session cookie to every cross-site request
+to this origin, which is the CSRF surface `Lax` exists to remove.
+
+The framed course studio does not need it either, and that is measured rather
+than assumed: the studio is served from this origin, and `frame-ancestors 'self'`
+was read out of `routes-manifest.json` inside the built image.
+
+So `cookie_samesite` is a setting now, defaulting to `lax`. A genuinely
+cross-site frontend is still a real shape, so `none` and `strict` remain
+available — but the loader refuses `none` without `cookie_secure`, because
+browsers drop that cookie and a dropped session cookie looks like a login that
+silently does not stick. Anything unrecognised falls to `lax`: a typo in a
+settings file must not widen a cookie.
+
+Two things this touched that are easy to miss. `_normalize_auth` rebuilds the
+auth payload from a dict literal on every load *and* save, so a key added to
+`DEFAULT_AUTH_SETTINGS` alone is not merely absent — it is deleted the next time
+the backend writes the file; the test asserts the value survives that path.
+And `settings.py` carried a second copy of the same `"none" if secure else
+"lax"` rule for the value it reports; both now read the setting, so the rule
+lives in one place.
+
+`.pytest-tmp/` joined `.gitignore` while this was being tested. `CLAUDE.md`
+tells Windows developers to point `PYTEST_DEBUG_TEMPROOT` there, and without the
+ignore a single run leaves thousands of files staged.
+
+---
+
 ## Two accounts, one studio, and neither can see the other — 2026-09-10
 
 Phase 1, item 9, and the first time any of this ran. The image builds, the stack

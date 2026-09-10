@@ -337,3 +337,8 @@ graphify-out/
 # Local secret env files (e.g. .env.llm-proxy) — never commit keys
 .env.*
 !.env.*.example
+
+# PYTEST_DEBUG_TEMPROOT target. CLAUDE.md tells Windows developers to point
+# pytest here because a stale ACL on %TEMP% makes tmp_path unusable; without
+# this line the run leaves thousands of files staged for commit.
+.pytest-tmp/

@@ -735,6 +735,10 @@ def _network_settings_payload() -> dict[str, Any]:
     )
     auth_enabled = bool(auth["enabled"])
     cookie_secure = bool(auth["cookie_secure"])
+    # Reported, not derived. It was `"none" if cookie_secure else "lax"` here and
+    # in auth.py, two copies of one rule that could drift; both read the setting
+    # now, and the loader is the only place the rule lives.
+    cookie_samesite = str(auth.get("cookie_samesite") or "lax")
     return {
         "settings": {
             "backend_port": file_system["backend_port"],
@@ -756,7 +760,7 @@ def _network_settings_payload() -> dict[str, Any]:
         "auth": {
             "enabled": auth_enabled,
             "cookie_secure": cookie_secure,
-            "cookie_samesite": "none" if cookie_secure else "lax",
+            "cookie_samesite": cookie_samesite,
             "cross_site_cookie_ready": bool(auth_enabled and cookie_secure),
         },
         "restart_required": True,
