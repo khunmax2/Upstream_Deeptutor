@@ -254,6 +254,66 @@ upstream.
 
 ---
 
+## The integration reviewed against what it actually builds — 2026-09-10
+
+Two review passes over the course-studio integration: containers and network,
+then the browser boundary. The first pass a month ago modelled a design; this
+one read the artefacts — the image `docker build` produced, the file `docker
+compose config` renders, and the embed component as it ships.
+
+**The build was tried, and it found four things no test could.**
+`NEXT_PUBLIC_STUDIO_BASE_PATH` was never declared as a build `ARG`, so a build
+would have dropped it and served at the root while the pin said otherwise —
+silently. Git Bash rewrites a build argument beginning with `/` into a Windows
+path, so the value arrived as `C:/Program Files/Git/deepwitya/studio`. And
+`.dockerignore` said `node_modules`, which matches only the top level: a
+developer who has run `pnpm install` ships `packages/**/node_modules` into the
+build context, `COPY . .` lays those over the ones the deps stage built, and
+pnpm's links are absolute — so inside a Linux image they pointed at `D:/…` and
+the build failed on a module the `ls` beside it could see. `**/node_modules`
+fixes it, and makes the build independent of whether anyone has installed
+locally.
+
+That last one also corrected a wrong conclusion recorded here in passing: the
+same failure on a clean upstream checkout was read as upstream's Dockerfile
+being broken. It was the same local `node_modules`, in the same build context,
+both times.
+
+**Containers.** The gatekeeper is the only service published to the host and had
+no healthcheck, so nginx forwarded to it whether or not it was alive and a
+crashed gate was a 502 with nothing naming the container. It exposes
+`/__gatekeeper/health`; compose probes it now. All three services gained a
+memory limit, `no-new-privileges`, and log rotation.
+
+**The browser boundary.** `dt_token` ships `SameSite=None` in production
+(`deeptutor/api/routers/auth.py:31`), justified by a comment describing a
+*development* case — a frontend on `127.0.0.1` and a backend on `localhost` —
+that the opposite branch already handles. Production is one origin behind nginx,
+where the case does not arise, and the embed does not need it: the built image
+bakes `frame-ancestors 'self'`. Recorded as T10 and left for a decision, because
+an auth cookie is not something to change while reviewing something else.
+
+`web/components/maic/MaicWorkspace.tsx` claimed the two apps are "deliberately
+on different origins" and reasoned from it. They are one origin in production,
+which means the studio can read this app's browser storage. What that is worth
+was measured instead of argued: one localStorage key (`deeptutor-theme`), no
+PocketBase auth store in the browser, and `dt_token` is HttpOnly. The comment
+now says that, and the frame carries `referrerPolicy="origin"`.
+
+**Five things that were assumed and are now measured**, from inside the built
+image: `frame-ancestors 'self'` really is compiled into `routes-manifest.json`
+at build rather than read at runtime; `basePath` really does reach the image
+(`/deepwitya/studio`); the studio runs as `uid=1001(nextjs)`, not root; there is
+no `postMessage` anywhere between the two apps, so ADR-0005's rejection of
+two-way binding is honoured in code and not only in prose; and
+`normalizeEmbedUrl` rejects `//host` and every protocol but http/https, so the
+embed URL cannot become script execution.
+
+Full round-2 findings, with DREAD scores, in
+`docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`.
+
+---
+
 ## The base path has two halves, and now they have to agree — 2026-09-10
 
 Phase 1, item 8, the half that lives on this side. The studio serves under

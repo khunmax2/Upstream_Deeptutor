@@ -33,10 +33,18 @@ function toEmbedTheme(theme: Theme): "dark" | "light" {
  * Hand the host's language and theme to OpenMAIC as query parameters.
  *
  * This is the sending half of the arrangement OpenMAIC's `?lang=`/`?theme=`/
- * `?embed=1` support was added for. Query parameters rather than shared storage
- * because the two apps are deliberately on different origins: OpenMAIC cannot
- * read this app's localStorage, and arranging for it to be able to would merge
- * every other key along with these two.
+ * `?embed=1` support was added for. Query parameters rather than shared storage,
+ * and **not** because the two apps cannot reach each other's storage — in the
+ * production shape they are one origin, so the studio can read every key this
+ * app writes and vice versa. The reason is narrower and survives either shape:
+ * a storage key is a second contract between two applications that must then
+ * stay in version step forever, while a query parameter is read once on mount
+ * and cannot drift.
+ *
+ * What that shared origin actually exposes was measured rather than assumed:
+ * this app writes exactly one localStorage key, `deeptutor-theme`, keeps no
+ * PocketBase auth store in the browser, and `dt_token` is HttpOnly, so no script
+ * on either side can read it.
  *
  * `embed=1` additionally tells OpenMAIC to hide its own language and theme
  * controls, since this app already renders those and two sets of them in one
@@ -55,7 +63,10 @@ function withHostPreferences(
   { embedded }: { embedded: boolean },
 ): string {
   const separator = src.includes("?") ? "&" : "?";
-  const params = new URLSearchParams({ lang: language, theme: toEmbedTheme(theme) });
+  const params = new URLSearchParams({
+    lang: language,
+    theme: toEmbedTheme(theme),
+  });
   // Only the framed copy is embedded. Opening OpenMAIC in its own tab should
   // give back the controls this app is standing in for, while still landing in
   // the language and theme the reader was just using.
@@ -116,8 +127,12 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
   // Only a same-origin path needs the reverse-proxy prefix; an absolute URL is
   // already complete, and withBasePath leaves it alone anyway.
   const base = sameOrigin ? withBasePath(url) : url;
-  const frameSrc = withHostPreferences(base, language, theme, { embedded: true });
-  const tabSrc = withHostPreferences(base, language, theme, { embedded: false });
+  const frameSrc = withHostPreferences(base, language, theme, {
+    embedded: true,
+  });
+  const tabSrc = withHostPreferences(base, language, theme, {
+    embedded: false,
+  });
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -165,6 +180,11 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
             title={t("Course studio")}
             onLoad={() => setLoadedSrc(frameSrc)}
             allow="clipboard-write; fullscreen; microphone"
+            /* The address of the page doing the framing is not the studio's
+               business, and in the cross-origin dev shape it would leave this
+               origin entirely. `origin` keeps enough for a server log without
+               the path. */
+            referrerPolicy="origin"
             className="h-full w-full border-0"
           />
         ) : null}
