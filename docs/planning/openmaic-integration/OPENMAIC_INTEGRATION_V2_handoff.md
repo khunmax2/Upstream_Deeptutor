@@ -96,10 +96,15 @@ branch diff.
 
 ### 3.2 The coupling is one URL
 
-`web/lib/openmaic-embed.ts` already resolves the studio from
-`DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/integrations.json`, with a test
-rejecting dangerous URLs (`javascript:alert(1)`). `MaicWorkspace.tsx` already
-shows configuration instructions when it is unset. Keep this shape — it is the
+`web/lib/openmaic-embed.ts` resolves the studio from `DEEPTUTOR_OPENMAIC_URL`
+or `data/user/settings/integrations.json`, with a test rejecting dangerous URLs
+(`javascript:alert(1)`). `MaicWorkspace.tsx` shows configuration instructions
+when it is unset.
+
+**Corrected 2026-09-10:** this said "already", which was true of `main` before
+the rewrite. None of it was on `main` — the whole surface came off with the
+integration on 2026-09-09 and was restored from the archive in phase 1 item 5.
+Keep this shape — it is the
 loosest possible coupling and it matches *"แยกอิสระกันไปเลย"*.
 
 This also settles how the two run: **they must run separately**. The archived
@@ -325,7 +330,7 @@ visible place there is:
 
 | | first attempt | second |
 |---|---|---|
-| route | `/maic` — **the brand leaks into the address bar** | `/studio` |
+| route | `/maic` at the start — **the brand leaks into the address bar** — but `/course-studio` by the end, with a permanent redirect | `/course-studio`, kept (ADR-0005, amended 2026-09-10) |
 | menu entry | `MaicWorkspace` | `Course Studio` / `สตูดิโอสร้างคอร์ส` / `课程工作室` |
 | env var | `DEEPTUTOR_OPENMAIC_URL` | unchanged — an operator sees it, a user does not, and it says plainly what is behind the door |
 
