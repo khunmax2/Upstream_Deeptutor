@@ -5136,5 +5136,7 @@
   "{{count}} sessions_one": "{{count}} เซสชัน",
   "{{count}} sessions_other": "{{count}} เซสชัน",
   "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library._one": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ สื่อที่อยู่ข้างในยังคงอยู่ในคลังของคุณ",
-  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library._other": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ สื่อ {{count}} รายการที่อยู่ข้างในยังคงอยู่ในคลังของคุณ"
+  "“{{title}}” and its reading conversations will be deleted. The {{count}} materials in it stay in your library._other": "“{{title}}” และบทสนทนาการอ่านของมันจะถูกลบ สื่อ {{count}} รายการที่อยู่ข้างในยังคงอยู่ในคลังของคุณ",
+  "Course Studio": "สตูดิโอสร้างคอร์ส",
+  "Course Studio tooltip": "สร้างคอร์สทั้งคอร์ส"
 }

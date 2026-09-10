@@ -5136,5 +5136,7 @@
   "Users": "Users",
   "{{count}} active": "{{count}} active",
   "{{count}} administrator account is excluded from the preset chart.": "{{count}} administrator account is excluded from the preset chart.",
-  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked."
+  "{{count}} assignment record could not be checked.": "{{count}} assignment record could not be checked.",
+  "Course Studio": "Course Studio",
+  "Course Studio tooltip": "Build a whole course"
 }

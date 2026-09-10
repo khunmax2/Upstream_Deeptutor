@@ -254,6 +254,66 @@ upstream.
 
 ---
 
+## The door to the studio, back on the sidebar — 2026-09-10
+
+Phase 1, item 5. The web surface came off `main` with the rest of the
+integration on 2026-09-09; this restores it from `archive/main-2026-09-09`,
+**byte for byte and verified as such** — every restored file diffs zero lines
+against the archive.
+
+Four files returned untouched: `web/lib/openmaic-embed.ts` (resolves the studio
+from `DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/integrations.json`, and
+rejects `javascript:` and `data:` sources), its test, `MaicWorkspace.tsx`, and
+the `/course-studio` route. Three existing files got their entry back: the
+sidebar, the spoken-navigation list, and the `/maic` redirect.
+
+**The handoff said this surface was still here.** §3.2 reads *"already
+resolves … Keep this shape"*, which describes the state before the rewrite;
+nothing of it was on `main`. Corrected there too.
+
+**The route stays `/course-studio`.** ADR-0005 said `/studio`, on the ground
+that the first attempt's `/maic` leaked the vendor into the address bar.
+Checked while restoring: that attempt had already fixed it — the archive serves
+`/course-studio`, labels the menu "Course Studio", and redirects `/maic`
+permanently. The comparison in §3.12 describes where that attempt *started*, not
+where it ended. Renaming again would buy a shorter path and cost a second
+redirect hop; Attapon chose to keep it. ADR-0005 and §3.12 are amended rather
+than left to contradict the code.
+
+Three things needed care rather than copying:
+
+- **`next.config.js` was merged, not overwritten.** `main` gained two Mastery
+  redirects in the v1.6.6 sync, and restoring the archive's `redirects()`
+  wholesale would have deleted them. Three redirects now, verified by calling
+  the function.
+- **The locale keys were missed on the first pass.** `Course Studio` and
+  `Course Studio tooltip` live in `web/locales/{en,th,zh}/app.json` and had gone
+  with everything else, so `npm run i18n:parity` failed — *"t() falls back to the
+  key, so every non-en reader is shown English."* Restored from the archive in
+  all three languages.
+- **Two entries were re-inserted in the wrong place** and moved back: the voice
+  entry belongs after `courses`, and the "Courses nav entry temporarily hidden"
+  comment belongs *after* the studio block, not before it, where it read as a
+  description of the studio.
+
+`?lang=`, `?theme=` and `?embed=1` come back with `MaicWorkspace`, which is the
+sending half of §3.13 — the receiving half is in the fork.
+
+`npm run check:fast` ends non-zero on one pre-existing failure:
+`tests/co-writer-lazy-notebook.spec.tsx` passes alone and fails inside the full
+`vitest run`. Confirmed as a test interaction that predates this work by running
+the whole suite on `feat/course-studio` and on `main` — it fails identically on
+both, with none of these files present. Not caused here and not fixed here.
+
+Files: `web/lib/openmaic-embed.ts`, `web/tests/openmaic-embed.test.ts`,
+`web/components/maic/MaicWorkspace.tsx`,
+`web/app/(workspace)/course-studio/page.tsx`,
+`web/components/sidebar/nav-entries.ts`,
+`web/components/voice/VoiceCallWidget.tsx`, `web/next.config.js`,
+`web/locales/{en,th,zh}/app.json`,
+`docs/adr/0005-course-studio-sibling-application.md`,
+`docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md`.
+
 ## The one name both systems must agree on, pinned — 2026-09-10
 
 The gatekeeper sets an identity header; the studio reads it and turns it into an

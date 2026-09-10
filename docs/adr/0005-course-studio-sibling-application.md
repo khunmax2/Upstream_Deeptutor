@@ -43,9 +43,19 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   any client-supplied copy. **Trusting the header is sound only while the studio
   container is unreachable except through the gatekeeper** — its README records
   that a direct `GET` with no cookie once answered `200`.
-- The route is `/studio` and the menu is "Course Studio". OpenMAIC's brand is
-  absent from the UI; its MIT notice travels as files (`NOTICE`, and `LICENSE`
-  copied into the image), which is what the licence asks for.
+- The route is **`/course-studio`** and the menu is "Course Studio". OpenMAIC's
+  brand is absent from the UI; its MIT notice travels as files (`NOTICE`, and
+  `LICENSE` copied into the image), which is what the licence asks for.
+
+  *Amended 2026-09-10.* This said `/studio`, on the stated ground that the first
+  attempt's `/maic` leaked the vendor into the address bar. Checked while
+  restoring the surface: the first attempt **had already fixed that** — the
+  archive serves `/course-studio`, labels the menu "Course Studio", and carries a
+  permanent redirect from `/maic`. The comparison in the handoff describes where
+  that attempt *started*, not where it ended. With the stated reason already
+  satisfied, renaming again would cost a second redirect hop and every reference
+  that names the route, and buy a shorter path. Attapon chose to keep
+  `/course-studio`.
 - Upstream's DDL constants are pinned in `check_openmaic_contract.py`, and
   `pg_dump` runs before every rebase.
 
