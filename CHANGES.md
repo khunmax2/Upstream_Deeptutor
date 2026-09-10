@@ -254,6 +254,56 @@ upstream.
 
 ---
 
+## Both products on one origin, running — 2026-09-10
+
+Phase 1's last piece before anyone can click on it. `deploy/uat/nginx.conf` and
+`deploy/docker-compose.uat.yml` put DeepWitya at `/deepwitya` and the studio at
+`/deepwitya/studio` on a single origin, which is the shape the deployment has
+and which several of this design's properties quietly depend on: `dt_token`
+rides along under `SameSite=Lax` only because it is the same origin, and the
+studio's own `frame-ancestors 'self'` is satisfied for the same reason. Run them
+on two ports instead and neither holds — the cookie is not sent and the browser
+refuses the frame, which is a confusing pair of symptoms for one cause.
+
+nginx routes by **prefix length**: `/deepwitya/studio` wins over `/deepwitya`
+without either needing to know about the other. That is the same property the
+real host relies on to let us add a location under our own path without touching
+a rule belonging to another team.
+
+**Eight containers, all healthy**, including the gatekeeper's new healthcheck.
+Measured through nginx rather than asserted:
+
+| | |
+|---|---|
+| `/` | 302 → `/deepwitya` |
+| `/deepwitya` | 200 |
+| `/deepwitya/api/auth/status` | 200 — `enabled: true` |
+| `/deepwitya/course-studio` | 307 to login, signed out |
+| `/deepwitya/studio` reached directly | **401**, the gate refusing |
+
+Three defects the run found, each invisible to a file.
+
+`return 302 /deepwitya` is not a relative redirect: nginx expands it using
+`$host`, which drops the published port, so a browser on `:8080` was sent to
+`http://localhost/deepwitya` and landed nowhere. `absolute_redirect off` fixes
+it.
+
+The overlay set `DEEPTUTOR_LOGIN_URL` on the gatekeeper service, and the studio
+overlay writes `LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}` — a substitution that reads
+the **host's** environment, not the service's. So the container got a variable
+nothing reads and `LOGIN_URL` stayed empty, and the gate refused with a message
+that could not say where to sign in. Found by running `printenv` inside the
+container rather than by reading the file.
+
+And the gate's own refusal called the product **DeepTutor**. That is our string,
+not upstream's, and the product is DeepWitya.
+
+`docker exec deeptutor-openmaic-postgres` and `docker port` remain the way to
+check the two properties that are easiest to lose: the asset row's `principal`
+column, and the studio publishing nothing to the host.
+
+---
+
 ## The build gets a script, because a forgotten argument is silent — 2026-09-10
 
 Two of the studio image's build arguments decide behaviour, and a forgotten one

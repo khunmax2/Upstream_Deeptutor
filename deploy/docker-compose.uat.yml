@@ -39,9 +39,14 @@ services:
 
   gatekeeper:
     environment:
-      # Where a signed-out visitor is sent. Under the base path, or they land on
-      # a 404 and the gate looks broken rather than closed.
-      - DEEPTUTOR_LOGIN_URL=/deepwitya/login
+      # LOGIN_URL, not DEEPTUTOR_LOGIN_URL. The studio overlay writes
+      # `LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}`, and that substitution reads the
+      # HOST's environment, not this service's -- so setting the outer name here
+      # puts a variable in the container that nothing reads, and leaves LOGIN_URL
+      # empty. The gate then refuses with a message that cannot say where to
+      # sign in. Found by reading `printenv` inside the container rather than the
+      # file.
+      - LOGIN_URL=/deepwitya/login
 
   nginx:
     image: nginx:1.27-alpine

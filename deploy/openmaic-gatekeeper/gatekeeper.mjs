@@ -406,8 +406,8 @@ const server = http.createServer(async (req, res) => {
       401,
       'not_signed_in',
       LOGIN_URL
-        ? `Open this through DeepTutor's Course Studio. Sign in at ${LOGIN_URL} first.`
-        : "Open this through DeepTutor's Course Studio rather than directly.",
+        ? `Open this through DeepWitya's Course Studio. Sign in at ${LOGIN_URL} first.`
+        : "Open this through DeepWitya's Course Studio rather than directly.",
     );
   }
 
