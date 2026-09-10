@@ -254,6 +254,50 @@ upstream.
 
 ---
 
+## The pin names the fork, and T2 stops being an argument — 2026-09-10
+
+**The pin points at us now.** `openmaic-pin.json` named upstream `29735f10`,
+because that is where the studio was built from before the fork had anything of
+its own. It has something of its own now, and the identity threading exists
+nowhere else, so the pin names `91b7423f` on `khunmax2/OpenMAIC`.
+`contract.studio_threaded` flips with it, which turns the studio half of the
+identity assertion from a SKIP into a check that runs — against the real
+checkout it reports `x-deeptutor-owner in lib/server/studio-identity.ts`, and
+the version and locale-key assertions now measure the fork instead of skipping.
+
+That flip immediately broke CI, correctly and instructively. The job runs
+`--openmaic /nonexistent` on purpose: the gatekeeper half needs no studio
+source, which is the only reason it can run in CI at all. The new check read a
+missing tree as evidence that the two sides had drifted, so a green job went red
+carrying a message that said something untrue about the fork. It skips now, with
+a reason that distinguishes *absent* from *wrong*. Found by CI and not locally,
+because every local run pointed `--openmaic` at a real checkout — a check that
+cannot tell those apart answers the wrong question in exactly the environment it
+was added to protect.
+
+**T2 was argued closed; now it is measured closed.** The client-supplied
+identity header (DREAD 8.8) had `stripHeader` and 31 stub checks behind it. What
+those could not show is the real gatekeeper container in front of the real studio
+container. One asset, asked for six ways, with a stub standing in for
+DeepWitya's `/api/auth/status` — what is under test is the hop after it:
+
+| request | answer |
+|---|---|
+| no cookie | 401 `not_signed_in` |
+| the owner's cookie | **200, and the bytes** |
+| another account's cookie | 404 `ASSET_NOT_FOUND` |
+| a cookie that verifies against nothing | 401 `session_invalid` |
+| **another account's cookie carrying `x-deeptutor-owner: user:alice`** | **404** |
+| **no cookie carrying that header** | **401** |
+
+The identity the studio acts on is the one the gate verified, or the request does
+not arrive. The reproduction is in `deploy/openmaic-gatekeeper/README.md` so it
+can be re-run in about a minute — including the Windows trap that cost time
+here: Git Bash rewrites `-v /w` and any argument beginning with `/` into a
+Windows path unless `MSYS_NO_PATHCONV=1` is set.
+
+---
+
 ## The session cookie stops being wider than it needs to be — 2026-09-10
 
 Phase 1, item 6, and it waited for evidence that now exists.
