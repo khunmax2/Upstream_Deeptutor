@@ -254,6 +254,66 @@ upstream.
 
 ---
 
+## Two accounts, one studio, and neither can see the other — 2026-09-10
+
+Phase 1, item 9, and the first time any of this ran. The image builds, the stack
+comes up, and the property the integration exists for was **measured** rather
+than asserted:
+
+| request | result |
+|---|---|
+| `GET /assets/<id>/content` as `user:alice`, the owner | **200**, `ALICE-SECRET-MATERIAL` |
+| the same id as `user:bob` | **404 ASSET_NOT_FOUND** — not 403, so it does not even confirm the asset exists |
+| the same id with no identity header | **401** |
+| the same id as `anon:<uuid>` | **401** — an unverified identity is not an identity |
+| `HEAD` as owner / as the other account | **200 / 404** — the metadata read leaks nothing either |
+
+And in the database, the row itself:
+
+```
+ principal  |               id               |    mime
+------------+--------------------------------+------------
+ user:alice | ast_s18y7te88nznfneh2wm26djfyc | text/plain
+```
+
+Under upstream's code that column reads `shared` for every asset from every
+account. **It had to be an asset, not a document** — documents already carry
+`owner_id` upstream, so a document-only test would have passed against the code
+this change replaced.
+
+`docker port deeptutor-openmaic` returns nothing, so T1's first control is now
+verified against a running container rather than a YAML file.
+
+**Three defects the running stack found, and one wrong diagnosis it corrected.**
+
+`NEXT_PUBLIC_STUDIO_BASE_PATH` reached the builder but not the runner. Next
+inlines `NEXT_PUBLIC_*` into the *browser* bundle; server code still reads
+`process.env` at run time. Measured: inside the image the runner's variable was
+empty and `grep -rl 'deepwitya/studio' /app/.next/server/` matched nothing — so
+the value was in neither place. The runner stage carries it now.
+
+Git Bash rewrites a build argument beginning with `/` into a Windows path, so
+`--build-arg NEXT_PUBLIC_STUDIO_BASE_PATH=/deepwitya/studio` arrived as
+`C:/Program Files/Git/deepwitya/studio` and Next refused it. Build from
+PowerShell, or set `MSYS_NO_PATHCONV=1` — the same applies to `docker run -v`
+and `-w`.
+
+`.dockerignore` said `node_modules`, which matches only the top level, so a
+developer who has run `pnpm install` ships `packages/**/node_modules` into the
+build context and `COPY . .` lays those over the ones the deps stage built.
+pnpm's links are absolute, so inside a Linux image they pointed at `D:/…` and
+the build failed on a module the `ls` beside it could see listed.
+
+The wrong diagnosis was mine. A 403 from the persistence route was read as a
+base-path bug in `ROUTE_PREFIX`, and the "fix" turned an authorization answer
+into a routing one — every path started answering `ROUTE_NOT_FOUND`. Next
+already strips `basePath` from `request.url` inside a route handler, which the
+original 403 had itself proved by reaching the document handler at all. The
+change was reverted. The 403 was never a defect: `decideDocumentAccess` forbids
+`list` outright, so `GET /documents` returning 403 is upstream's policy working.
+
+---
+
 ## The integration reviewed against what it actually builds — 2026-09-10
 
 Two review passes over the course-studio integration: containers and network,
