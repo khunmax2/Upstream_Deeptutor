@@ -4,7 +4,7 @@ A small process that stands in front of the embedded OpenMAIC and refuses
 anything that is not a signed-in DeepTutor session.
 
 ```
-browser ──► nginx :443 /course-studio ──► gatekeeper ──► OpenMAIC container
+browser ──► nginx :443 /deepwitya/studio ──► gatekeeper ──► OpenMAIC container
             (TLS, loopback hop)             │           (no published port)
                                             └─► DeepTutor /api/auth/status
 ```
@@ -156,12 +156,13 @@ A path on `:443`, not a second port. The deploy host opens 443 and nothing else,
 and opening one is a security decision that is not ours to take; the certificate
 also has a single `IP Address:` SAN and no DNS name, so a second hostname is not
 available either. nginx already owns the certificate and its renewal timer, so it
-matches `location /course-studio` and forwards to this process on loopback —
+matches `location /deepwitya/studio/` and forwards to this process on loopback —
 which is why the compose overlay publishes the gate as `127.0.0.1:10330` and
 never on `0.0.0.0`.
 
 That location block is the one step someone adds with `sudo`, alongside the
-existing `/deepwitya2` block in `deploy/nginx-deepwitya2.locations.conf`.
+block that already serves DeepWitya (today `deploy/nginx-deepwitya2.locations.conf`,
+written while the second stack was being validated under `/deepwitya2`).
 
 The consequence is that the studio and DeepWitya share an origin, which is what
 makes the embed work without any cross-origin cookie relaxation — and also what

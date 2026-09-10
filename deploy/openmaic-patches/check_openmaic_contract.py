@@ -1,6 +1,6 @@
 """Check the handful of assumptions this fork makes about OpenMAIC.
 
-The embed at `/course-studio` is not a code dependency — nothing here imports
+The embed is not a code dependency — nothing here imports
 anything there. What it depends on is a small contract: a URL that serves the
 app, `frame-ancestors` that admits our origin, an access gate that stays off, a
 container port, one identity header both sides agree on, and a compose file that
@@ -328,6 +328,26 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
             f"expected both services to default STUDIO_IDENTITY_HEADER to {expected!r}, "
             f"got {defaults}",
         )
+
+    # --- the two halves of the base path ---------------------------------------
+    # NEXT_PUBLIC_STUDIO_BASE_PATH is compiled into the image, so the path the
+    # studio serves under is a property of the IMAGE. The only thing compose
+    # decides is where the healthcheck probes. When the two drift the container
+    # never reports healthy and nothing says why — the healthcheck simply asks
+    # for a path the image does not serve.
+    expected_base = (pin.get("contract") or {}).get("base_path")
+    if expected_base:
+        probe = str(studio.get("healthcheck", {}).get("test", ""))
+        wanted = "STUDIO_BASE_PATH:-" + expected_base + "}"
+        if wanted in probe:
+            report.ok("healthcheck probes the built base path", expected_base)
+        else:
+            report.fail(
+                "healthcheck probes the built base path",
+                f"the image is pinned as built for {expected_base!r}, so the "
+                f"healthcheck must default STUDIO_BASE_PATH to it; the probe reads "
+                f"{probe!r}",
+            )
 
     # --- the database is not a second door --------------------------------------
     db = services.get(DB_SERVICE)

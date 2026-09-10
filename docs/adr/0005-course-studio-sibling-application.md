@@ -56,6 +56,21 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   satisfied, renaming again would cost a second redirect hop and every reference
   that names the route, and buy a shorter path. Attapon chose to keep
   `/course-studio`.
+
+  *Amended again 2026-09-10.* That is DeepWitya's **own** route — the page
+  holding the iframe — and it is not the address the studio container answers
+  on. The two were never distinguished here because until the fork gained a
+  `basePath` there was only one of them. The studio serves under
+  **`/deepwitya/studio`**, recorded as `contract.base_path` in
+  `openmaic-pin.json` and asserted against the compose healthcheck.
+
+  It sits under DeepWitya's own base path deliberately. nginx matches the
+  longest prefix, so `location /deepwitya/studio/` wins over `location
+  /deepwitya/` and no rule belonging to another team is touched — the host
+  serves seven applications and opening a new location at the root would need
+  their agreement, the same way opening a port did. `/deepwitya/course-studio`
+  was the obvious name and is the one address that cannot be used: DeepWitya
+  already answers there.
 - Upstream's DDL constants are pinned in `check_openmaic_contract.py`, and
   `pg_dump` runs before every rebase.
 
