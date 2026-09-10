@@ -4,9 +4,9 @@ A small process that stands in front of the embedded OpenMAIC and refuses
 anything that is not a signed-in DeepTutor session.
 
 ```
-browser ──► nginx :10330 (TLS)  ──►  gatekeeper  ──►  OpenMAIC container
-                                        │
-                                        └─► DeepTutor /api/auth/status
+browser ──► nginx :443 /course-studio ──► gatekeeper ──► OpenMAIC container
+            (TLS, loopback hop)             │           (no published port)
+                                            └─► DeepTutor /api/auth/status
 ```
 
 ## Why it exists
@@ -93,7 +93,14 @@ payloads copied from a live instance instead.
 | `COOKIE_NAME` | `dt_token` | session cookie to check |
 | `AUTH_CACHE_TTL_MS` | `30000` | how long one verdict is reused |
 | `LOGIN_URL` | — | included in the refusal message |
+| `STUDIO_IDENTITY_HEADER` | `x-deeptutor-owner` | the header the uid is injected as; the studio must read the same name |
 | `ALLOW_ANONYMOUS` | — | `1` turns the gate off — local development, or a DeepTutor deliberately run without auth |
+
+`ALLOW_ANONYMOUS=1` is refused at startup, with a non-zero exit, when `NODE_ENV`
+is `production` or `DEEPTUTOR_AUTH_URL` points anywhere but a local address. In
+compose the auth URL is `http://deeptutor:…`, which is a container and not a
+local address, so the gate cannot be switched off there by setting one variable —
+which is the intended answer in a deployment.
 
 `AUTH_CACHE_TTL_MS` is a real trade. One page load is fifty to a hundred
 requests; verifying each would make DeepTutor's auth endpoint this app's
@@ -105,8 +112,23 @@ it to `0` if that window matters more than the load.
 
 ```bash
 node deploy/openmaic-gatekeeper/gatekeeper.mjs
-node deploy/openmaic-gatekeeper/gatekeeper.test.mjs   # 21 checks, no services needed
+node deploy/openmaic-gatekeeper/gatekeeper.test.mjs   # 31 checks, no services needed
 ```
+
+In a deployment it is a compose service rather than a command — the source is
+mounted read-only into `node:22-alpine`, because it imports only `node:`
+builtins and so has nothing to install:
+
+```bash
+OPENMAIC_IMAGE=ghcr.io/khunmax2/openmaic@sha256:… \
+OPENMAIC_POSTGRES_PASSWORD=… \
+  docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml up -d
+```
+
+Both variables are required with no default. A floating `:latest` would let two
+hosts run different code while both look correctly configured, and a development
+password in a file that ships to the deploy host is how a weak password reaches
+production without anyone choosing one.
 
 The test runs against stubs so that every refusal path is exercised — a real
 DeepTutor cannot be made unreachable, or made to reject a token, on demand, and a
@@ -130,20 +152,31 @@ nothing" — which is how this test was first misread.
 
 ## TLS, and the one thing that needs a hand
 
-Serving HTTPS on a new port needs something holding the certificate key. nginx
-already owns the Let's Encrypt certificate and its renewal timer, so it
-terminates TLS on `:10330` and forwards to this process on loopback. That is one
-server block someone has to add with `sudo` — see
-`deploy/nginx-openmaic.locations.conf`.
+A path on `:443`, not a second port. The deploy host opens 443 and nothing else,
+and opening one is a security decision that is not ours to take; the certificate
+also has a single `IP Address:` SAN and no DNS name, so a second hostname is not
+available either. nginx already owns the certificate and its renewal timer, so it
+matches `location /course-studio` and forwards to this process on loopback —
+which is why the compose overlay publishes the gate as `127.0.0.1:10330` and
+never on `0.0.0.0`.
 
-There is no way around it: a second port cannot serve HTTPS without a key, and
-the alternative — giving this process read access to `/etc/letsencrypt` — is
-worse.
+That location block is the one step someone adds with `sudo`, alongside the
+existing `/deepwitya2` block in `deploy/nginx-deepwitya2.locations.conf`.
+
+The consequence is that the studio and DeepWitya share an origin, which is what
+makes the embed work without any cross-origin cookie relaxation — and also what
+puts `dt_token` within reach of the other applications on that host, measured and
+scored as T6 in
+`docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`.
 
 ## What this does not solve
 
 `dt_token` stays readable by anything else on the same host, because cookies are
 scoped by host and path and ignore the port. This process keeps the token away
 from OpenMAIC; it cannot keep it away from a third application deployed beside
-them. A real domain, and a host-only cookie on a separate subdomain, is the
-structural fix — see `deploy/OPENMAIC_EMBED.md`.
+them — and it is not five neighbours but seven paths, owned by another team, with
+`SameSite=none` in production, so *any* website can make a browser attach the
+token to a request against that host. Measured, scored and decided as T6 in
+`docs/planning/openmaic-integration/THREAT_MODEL_course_studio.md`: `SameSite=Lax`
+in production is phase 1's control, and a real domain with a host-only cookie on
+its own subdomain stays the structural fix.

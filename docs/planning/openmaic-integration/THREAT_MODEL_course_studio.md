@@ -257,8 +257,8 @@ neighbours keep receiving it when a user clicks through. **Narrowing `path=` or
 moving to a hostname remains the real fix** and stays open with an owner.
 
 One thing to verify before changing the value: the embed is same-origin under the
-new design (`/studio` on the same host), so `SameSite=None` should not be needed
-for it. That is reasoning, not yet a measurement — check it against a running
+new design (`/course-studio` on the same host, per ADR-0005 as amended), so
+`SameSite=None` should not be needed for it. That is reasoning, not yet a measurement — check it against a running
 studio before shipping the change.
 
 ---
@@ -317,15 +317,14 @@ other people's data.
 
 ## 3. What phase 1 must carry
 
-| | mandatory |
-|---|---|
-| T1 | studio publishes no host port · deploy-time assertion · `STUDIO_REQUIRE_GATEWAY` fail-closed |
-| T2 | strip-before-set, tested in both directions |
-| T3 | replace `server-auth.ts`; acceptance test covers an **asset**, not only a document |
-| T4 | refuse `ALLOW_ANONYMOUS=1` in production |
-| T5 | cache `{ ok, uid }` under the token key |
-
-| T6 | `SameSite=Lax` in production — the hostname claim is now measured, and confirmed |
+| | mandatory | landed |
+|---|---|---|
+| T1 | studio publishes no host port · deploy-time assertion · `STUDIO_REQUIRE_GATEWAY` fail-closed | controls 1 and 2 yes — `deploy/docker-compose.openmaic.yml` publishes nothing for the studio, and `check_openmaic_contract.py` fails CI on a `ports:` key, on `network_mode: host`, and on the studio joining the shared network. Control 3 is set in compose and inert until the fork honours it |
+| T2 | strip-before-set, tested in both directions | yes — `gatekeeper.mjs`, with the header stripped on both the HTTP and the websocket path |
+| T3 | replace `server-auth.ts`; acceptance test covers an **asset**, not only a document | no — fork work. Compose meanwhile refuses to carry `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH`, and the image's `NODE_ENV=production` makes upstream reject its own development authenticator |
+| T4 | refuse `ALLOW_ANONYMOUS=1` in production | yes — non-zero exit at startup, and in compose the auth URL is a container name, so the guard fires there by construction |
+| T5 | cache `{ ok, uid }` under the token key | yes |
+| T6 | `SameSite=Lax` in production — the hostname claim is now measured, and confirmed | no — needs a running studio first, to confirm the same-origin embed does not need `None` |
 
 Deferrable with a written owner: the rest of T6 (narrow `path=`, or a hostname of
 its own — both coupled to the gatekeeper's token delivery), T8 (pin the origin
