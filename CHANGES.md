@@ -254,6 +254,35 @@ upstream.
 
 ---
 
+## The studio's job runner had never started — 2026-09-11
+
+Pin bumped to fork `b7c54e1f` (PRs #6 and #7 on khunmax2/Ups_openMAIC).
+The trigger was a person clicking **Test connection** on the OpenAI Image
+settings page and reading `…ไม่สำเร็จ: undefined`. Three things behind it:
+
+- `undefined` — the verify routes answer `{error}`, the image and video
+  pages read `data.message`. Upstream bug; the other settings pages read the
+  right field.
+- The probe is `GET /models/{id}`; an OpenAI-compatible server (vLLM,
+  LiteLLM, a self-hosted image endpoint) commonly has no per-model route, so
+  the model it serves answers 404. Measured from inside the container
+  against the endpoint in question. On 404 the probe now asks `/models`.
+- **`Agent runtime startup failed … Could not load the "sharp" module`** in
+  the container log at boot. The standalone tracer follows `require()`, not
+  the dynamic linker, so libvips shipped as an empty `lib/`. After that line
+  the studio's job runner and material extraction never start while every
+  page serves — in every image we had built. Traced now, and the Dockerfile
+  asserts `require('sharp')` so a build cannot finish without it. After the
+  rebuild the log shows `[AgentRunner] runner … started` for the first time.
+- `EACCES mkdir /app/data/usage` every few seconds — patch 08 from the first
+  integration, now lifted: the image creates `/app/data` before `USER nextjs`.
+
+Also on this pin: raw-PCM (`audio/L16`) TTS responses decode to WAV (patch 07).
+Contract check 19/19 against the checkout; `commit_subject` and the
+`upstream.note` in the pin were stale (still describing an upstream commit
+and "no fork commits yet") and now say what is there.
+---
+
 ## The studio's model providers get a file of their own — 2026-09-11
 
 `deploy/docker-compose.openmaic.yml` passed the studio no provider

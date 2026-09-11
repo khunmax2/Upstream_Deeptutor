@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main was fast-forwarded to this commit on 2026-09-10; no fork commits exist yet"
+    "note": "fork/main descends from upstream 29735f10 with 35 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data) as of 2026-09-11"
   },
   "image": {
     "ref": null,
@@ -35,10 +35,10 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "98b8fe8f6a74e4fcdfbfe27befd69de46726dd0d",
-  "commit_short": "98b8fe8f",
+  "commit": "b7c54e1f7865b31515da8c241407416ca1340cdd",
+  "commit_short": "b7c54e1f",
   "commit_date": "2026-09-11",
-  "commit_subject": "fix(ssrf): keep cloud metadata endpoints blocked under ALLOW_LOCAL_NETWORKS (#1419)",
+  "commit_subject": "Merge pull request #7 from khunmax2/fix/image-probe-openai-compat",
   "verified": "2026-09-11",
   "verified_against": {
     "locale_keys_en_us": 1801,
