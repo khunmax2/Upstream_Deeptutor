@@ -254,6 +254,20 @@ upstream.
 
 ---
 
+## The test button asked the wrong provider's question — 2026-09-11
+
+Pin → fork `3d6c9d0d` (khunmax2/Ups_openMAIC #9). With the right key, the
+right URL and the right custom model one row below, the OpenAI Compatible
+page answered *model not found: gpt-image-2 (server lists: qwen-image-2512)*.
+The settings page's left-hand list only changes which provider is displayed;
+the store's `imageModelId` is the globally active model, chosen in the media
+popover, and the test button sent it verbatim — so it asked provider B
+whether it serves provider A's model. Video had the same shape. The probe now
+sends the viewed provider's own model (`resolveProbeModel`, five unit tests).
+Contract check 19/19.
+
+---
+
 ## An "OpenAI Compatible" image provider, and why the same click answered three things — 2026-09-11
 
 Fork PR #8 adds `custom-image` ("OpenAI Compatible" in the studio's image
