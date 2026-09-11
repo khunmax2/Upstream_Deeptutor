@@ -107,8 +107,9 @@ export const PRIMARY_NAV: NavEntry[] = [
     // OpenMAIC authenticates against its own providers. `surface` is left
     // undeclared, which keeps it hidden from restricted learning accounts.
     // Decided 2026-09-11: that is the intended state, not a placeholder, and
-    // the gatekeeper in front of the studio refuses the `learner` preset with
-    // 403 account_restricted so the hidden entry is not the only lock.
+    // the gatekeeper in front of the studio refuses any account with a
+    // learning policy (the same rule as `allowedSurfaces` here) with 403
+    // account_restricted, so the hidden entry is not the only lock.
     href: "/course-studio",
     label: "Course Studio",
     icon: GraduationCap,
