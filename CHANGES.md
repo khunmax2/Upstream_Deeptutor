@@ -254,6 +254,23 @@ upstream.
 
 ---
 
+## What removing a shared key leaves behind — 2026-09-11
+
+Pin → fork `8bbfe7b7` (khunmax2/Ups_openMAIC #17). An admin shared their
+key, then removed their own, and the page still showed it: the shared copy
+is its own row, and the only menu with "stop sharing" had been attached to
+an own key. Now the menu is on a shared key too, "remove my key" says the
+shared copy stays, and the admin's note says "shared with every account
+(you have no key of your own)". A removed row also takes its base URL out
+of the browser — it had stayed in the field as though it were a setting of
+its own, and for OpenAI Image hid api.openai.com's placeholder behind a URL
+from an earlier configuration. The key row wraps so three buttons cannot
+squeeze the field to nothing. Walked through on the real stack: remove own
+→ shared shown with the menu → stop sharing → key and URL empty, custom
+models untouched. Locale keys 1816 → 1819.
+
+---
+
 ## "Default" was the wrong word; it is sharing, and it lives in a menu — 2026-09-11
 
 Pin → fork `197bc6df` (khunmax2/Ups_openMAIC #16). Asked: does setting a
