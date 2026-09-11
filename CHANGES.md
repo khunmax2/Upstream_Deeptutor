@@ -254,6 +254,27 @@ upstream.
 
 ---
 
+## A stored key is no longer a click away — 2026-09-11
+
+Pin → fork `d53cab62` (khunmax2/Ups_openMAIC #13). Every studio settings
+page offered an eye button that revealed the stored API key, on every visit,
+to anyone at the screen. The shared `ApiKeyField` now shows a stored key as
+`sk-pr••••wxyz`, read-only, with **Change** / **Keep current**; the eye
+reveals only text typed in this session. Eight pages, five i18n keys
+(1802 → 1807). A source guard forbids the old toggle shape anywhere in
+`components/settings`.
+
+Stated limit, and the next decision: the key still lives in the browser's
+localStorage (upstream's account-less design), so a second person on the
+same machine, or a script injected into the page, can still read it. Closing
+that means storing keys server-side per owner, as DeepWitya does — and that
+first needs two product calls recorded here for the record: whether the
+`learner` preset may enter the studio at all (today the sidebar hides the
+entry but the gatekeeper admits any authenticated account), and whether keys
+are per user, admin-set, or admin default with per-user override.
+
+---
+
 ## Four things one classroom session showed — 2026-09-11
 
 Pin → fork `da4b4cff` (khunmax2/Ups_openMAIC #10, #11, #12). A person played
