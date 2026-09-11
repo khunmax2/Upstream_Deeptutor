@@ -342,3 +342,6 @@ graphify-out/
 # pytest here because a stale ACL on %TEMP% makes tmp_path unusable; without
 # this line the run leaves thousands of files staged for commit.
 .pytest-tmp/
+
+# Course Studio operator providers (deploy/openmaic.env.example is the template)
+deploy/openmaic.env

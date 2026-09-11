@@ -254,6 +254,20 @@ upstream.
 
 ---
 
+## The studio's model providers get a file of their own — 2026-09-11
+
+`deploy/docker-compose.openmaic.yml` passed the studio no provider
+configuration at all — keys, base URLs, model pins and voice lists could only
+come from the browser Settings page, per browser. The service now reads an
+optional `deploy/openmaic.env` (gitignored; `deploy/openmaic.env.example`
+lists the names, taken from `lib/server/provider-config.ts` in the fork). A
+pinned `IMAGE_OPENAI_MODELS` / `TTS_OPENAI_MODELS` / `TTS_OPENAI_VOICES` beats
+a client choice it does not list, which is how an OpenAI-compatible endpoint
+with its own model names is offered without a code change. `required: false`
+so a host without the file starts exactly as before.
+
+---
+
 ## Both products on one origin, running — 2026-09-10
 
 Phase 1's last piece before anyone can click on it. `deploy/uat/nginx.conf` and
