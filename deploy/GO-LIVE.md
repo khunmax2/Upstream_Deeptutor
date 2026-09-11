@@ -78,10 +78,10 @@ df -h / && docker system df
 
 ### 1.1 `feat/course-studio → main`
 
-PR เดียว merge เมื่อ CI เขียว (88 commits, merge-tree สะอาด ณ 2026-09-11) แล้ว tag:
+PR #69 merge แล้ว 2026-09-11 (`main` = `931431e97`) และ tag แล้ว — คำสั่งไว้อ้างอิงถ้าต้องทำรอบหน้า:
 
 ```bash
-git tag -a golive-2026-09-13 -m "Course studio go-live" origin/main && git push origin golive-2026-09-13
+git tag -a golive-2026-09-11 -m "Course studio go-live" origin/main && git push origin golive-2026-09-11
 ```
 
 host จะ checkout **tag** นี้ ไม่ใช่ `main` สด — สิ่งที่ deploy ต้องชี้ได้ว่าคือ commit ไหน
@@ -103,8 +103,8 @@ gh run watch --repo khunmax2/Upstream_Deeptutor   # ~10 นาที; job summar
 - [ ] package `deepwitya-studio` บน GitHub → Package settings → **Change visibility → Public**
       (ครั้งแรกที่ push GHCR ตั้งเป็น private; repo ทั้งสองเป็น public อยู่แล้ว image
       ไม่มี secret — ถ้าอยากเก็บ private ต้อง `docker login ghcr.io` บน host ด้วย PAT read:packages)
-- [ ] บันทึก `image.ref` / `image.digest` / `built: true` ลง pin (PR เล็ก) — deploy ต้อง
-      **ปฏิเสธ digest ว่าง** ตาม comment ในไฟล์ pin
+- [x] บันทึก `image.ref` / `image.digest` / `built: true` ลง pin — ทำแล้ว 2026-09-11:
+      `ghcr.io/khunmax2/deepwitya-studio@sha256:4f54b507257fdd8453495ac2bd7206ed8a1e59f79b473c67489b05765f4dee6d`
 - [ ] ทดสอบ pull จากเครื่อง dev: `docker pull ghcr.io/khunmax2/deepwitya-studio@sha256:<digest>`
       แล้ว `docker run --rm --entrypoint sh <ref> -c 'grep -rl /deepwitya/studio/_next .next/server/app | wc -l'` ต้อง > 0
 
@@ -152,7 +152,7 @@ git rev-parse HEAD > ../_deeptutor_backup/pre-golive-commit.txt
 
 ```bash
 git fetch origin --tags
-git checkout golive-2026-09-13
+git checkout golive-2026-09-11
 git log --oneline -1          # ต้องเป็น commit ที่ PR ใน §1.1 merge
 ```
 
