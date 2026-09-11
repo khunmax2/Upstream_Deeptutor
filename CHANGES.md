@@ -254,6 +254,35 @@ upstream.
 
 ---
 
+## The second decision, built: keys leave the browser — 2026-09-11
+
+Pin → fork `b98098ec` (khunmax2/Ups_openMAIC #14). Provider API keys now live
+in the studio's database per owner, with an admin-set default any account
+falls back to and a per-user override — DeepWitya's shape. The browser holds
+`***`; the server sees the sentinel and uses what it has for that owner.
+Existing keys in a browser migrate up once on the next visit. An admin sees
+"set as the system default" under their own key. Nothing about how a
+settings page reads or writes changed; the 23 routes that resolve keys are
+wrapped at the edge and the one resolver funnel consults the owner's rows,
+cached one read per owner per minute and invalidated on write.
+
+The role header the previous entry introduced is now read by the fork
+(`lib/server/studio-identity.ts`), so `contract.role_header_studio_reads`
+flips to true and the contract check's studio-side role assertion is a real
+PASS rather than a SKIP. Contract 22/22 against the checkout; locale keys
+1807 → 1810.
+
+Verified on the running stack against the real database: a user's key is
+stored under that owner only; another user cannot see it and cannot set a
+default (403); an admin can, and the other user then inherits it; the
+sentinel is refused as a key; a generate request carrying only `***`
+reached the operator's endpoint with the stored key and base URL.
+
+Stated limit, unchanged: plaintext at rest in Postgres on the internal
+network, as DeepWitya's own settings files are.
+
+---
+
 ## Two decisions at the gate — 2026-09-11
 
 Both questions the previous entry left open are answered, and the first is
