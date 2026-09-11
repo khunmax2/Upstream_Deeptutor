@@ -1,0 +1,116 @@
+name: Studio Image
+
+# Builds the Course Studio image from the fork commit recorded in
+# deploy/openmaic-patches/openmaic-pin.json and pushes it to GHCR, so a deploy
+# pulls a digest instead of building on the host (ADR-0005).
+#
+# Manual only. The pin is a decision, and so is publishing an image of it:
+#   gh workflow run studio-image.yml --repo khunmax2/Upstream_Deeptutor --ref <branch>
+#
+# The build arguments come from deploy/build-studio.sh, the one place they
+# live; the contract check keeps that script and the pin in agreement. The
+# job summary prints the digest to record as image.ref / image.digest in the
+# pin -- a deploy refuses a null digest, and the compose overlay refuses a
+# floating tag.
+#
+# Image: ghcr.io/khunmax2/deepwitya-studio
+# Tags:  <fork commit short sha>, <fork commit sha>
+# Platform: linux/amd64 (the deployment host); arm64 would double the build
+# for nothing.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/khunmax2/deepwitya-studio
+
+jobs:
+  build-and-push:
+    name: Build from the pinned fork commit and push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DeepWitya (pin, build script)
+        uses: actions/checkout@v4
+
+      - name: Read the pin
+        id: pin
+        shell: python
+        run: |
+            import json, os
+            pin = json.load(open("deploy/openmaic-patches/openmaic-pin.json", encoding="utf-8"))
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+                out.write(f"commit={pin['commit']}\n")
+                out.write(f"short={pin['commit_short']}\n")
+                out.write(f"repo={pin['fork']['repo']}\n")
+                out.write(f"base_path={pin['contract']['base_path']}\n")
+
+      - name: Checkout the fork at the pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: khunmax2/Ups_openMAIC
+          ref: ${{ steps.pin.outputs.commit }}
+          path: openmaic
+
+      - name: The checkout is the pinned commit, not a branch that moved
+        run: |
+          set -euo pipefail
+          actual=$(git -C openmaic rev-parse HEAD)
+          [ "$actual" = "${{ steps.pin.outputs.commit }}" ] || { echo "checked out $actual, pin says ${{ steps.pin.outputs.commit }}"; exit 1; }
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # deploy/build-studio.sh is the single source of the build arguments.
+      # It builds into the local daemon; the push is a separate step so the
+      # script stays what a developer runs on a laptop.
+      - name: Build with deploy/build-studio.sh
+        run: bash deploy/build-studio.sh "$PWD/openmaic" "$IMAGE:${{ steps.pin.outputs.short }}"
+
+      - name: The image serves the pinned base path
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint sh "$IMAGE:${{ steps.pin.outputs.short }}" -c \
+            'grep -rl "${{ steps.pin.outputs.base_path }}/_next" .next/server/app 2>/dev/null | head -1 | grep -q . || { echo "no ${{ steps.pin.outputs.base_path }}/_next in the built pages"; exit 1; }'
+          echo "built for ${{ steps.pin.outputs.base_path }}"
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          docker tag "$IMAGE:${{ steps.pin.outputs.short }}" "$IMAGE:${{ steps.pin.outputs.commit }}"
+          docker push "$IMAGE:${{ steps.pin.outputs.short }}"
+          docker push "$IMAGE:${{ steps.pin.outputs.commit }}"
+
+      - name: Record the digest
+        run: |
+          set -euo pipefail
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:${{ steps.pin.outputs.short }}" | sed 's/.*@//')
+          {
+            echo "## Studio image"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| fork commit | \`${{ steps.pin.outputs.commit }}\` |"
+            echo "| ref | \`$IMAGE:${{ steps.pin.outputs.short }}\` |"
+            echo "| digest | \`$digest\` |"
+            echo "| base path | \`${{ steps.pin.outputs.base_path }}\` |"
+            echo
+            echo "Record in \`deploy/openmaic-patches/openmaic-pin.json\`:"
+            echo
+            echo '```json'
+            echo "\"image\": { \"ref\": \"$IMAGE:${{ steps.pin.outputs.short }}\", \"digest\": \"$digest\", \"built\": true }"
+            echo '```'
+            echo
+            echo "Deploy with \`OPENMAIC_IMAGE=$IMAGE@$digest\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=$digest"

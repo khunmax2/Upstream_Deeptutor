@@ -254,6 +254,43 @@ upstream.
 
 ---
 
+## The go-live has a runbook, a rollback, and an image that is pulled, not built — 2026-09-11
+
+Four files, no code. `deploy/GO-LIVE.md` is the runbook for putting DeepWitya
+and the Course Studio on `/deepwitya` at 203.185.144.41: what to measure on the
+host before anything (ports, the checkout, disk — today the dev machine filled
+its disk mid-build and the docker daemon died with it), what is done from the
+dev machine ahead of time, backup, a build that never touches `:443`, a
+loopback-only preview on `127.0.0.1:8443` reached through an SSH tunnel so the
+whole stack — login, chat, studio, a Thai course, a learner refused — is
+exercised at its real path before the switch, a cutover that is one command and
+five seconds, and four rollbacks sorted by symptom, the first of which is one
+command and seconds. The old stack is not removed for seven days.
+
+`deploy/apply-nginx-golive.sh` makes the nginx changes the same way
+`apply-nginx-deepwitya2.sh` did — backup, edit, `nginx -t`, restore on any
+failure without ever reloading — and edits the two shared files in exactly two
+places: one `include` line and the port number inside `location /deepwitya`,
+which it refuses to touch unless that block points where the operator said it
+does. Cutover followed by revert leaves the file byte-identical (tested on a
+fixture). `deploy/docker-compose.production.yml` is the host overlay: the
+validated `/deepwitya2` stack rebuilt in place for `/deepwitya`, with the two
+lines that connect the app to the studio. `deploy/production.env.example`
+holds the two values the studio overlay refuses to default.
+
+`.github/workflows/studio-image.yml` builds the studio from the fork commit in
+the pin, with `deploy/build-studio.sh` as the single source of the build
+arguments, and pushes it to `ghcr.io/khunmax2/deepwitya-studio` — so a deploy
+pulls a digest (ADR-0005) and the host never builds the studio. Manual
+dispatch only; publishing a pin is a decision. The job summary prints the
+digest to record in the pin.
+
+Decided in the runbook: DeepWitya's `data/` continues from the validated
+stack; the studio database starts fresh (UAT courses are test data, and moving
+them means rewriting media addresses); studio API keys are re-entered.
+
+---
+
 ## The prompt templates show the model no Chinese output — 2026-09-11
 
 Pin → fork `d5585dd3` (khunmax2/Ups_openMAIC #19). Previous pin `05c86fd2`
