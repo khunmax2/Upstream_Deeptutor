@@ -121,6 +121,20 @@ services:
       #   ACCESS_CODE — a second gate in front of a DeepWitya session asks the
       #     visitor for a code nobody issued them.
 
+    # Model providers. Keys, base URLs, model pins and TTS voice lists are
+    # operator data, not deployment shape, so they live in a separate file that
+    # is gitignored and optional: with no file the studio starts with no
+    # server-side providers and the browser Settings page is the only source.
+    # deploy/openmaic.env.example lists the names the studio reads.
+    #
+    # A pin from here beats a client choice the pin does not list
+    # (resolveImageModel / resolveTTSVoice in lib/server/provider-config.ts),
+    # which is how an OpenAI-compatible endpoint with its own model names gets
+    # offered without a code change on either side.
+    env_file:
+      - path: ./deploy/openmaic.env
+        required: false
+
     volumes:
       - openmaic-data:/app/data
 

@@ -281,6 +281,19 @@ Also on this pin: raw-PCM (`audio/L16`) TTS responses decode to WAV (patch 07).
 Contract check 19/19 against the checkout; `commit_subject` and the
 `upstream.note` in the pin were stale (still describing an upstream commit
 and "no fork commits yet") and now say what is there.
+---
+
+## The studio's model providers get a file of their own — 2026-09-11
+
+`deploy/docker-compose.openmaic.yml` passed the studio no provider
+configuration at all — keys, base URLs, model pins and voice lists could only
+come from the browser Settings page, per browser. The service now reads an
+optional `deploy/openmaic.env` (gitignored; `deploy/openmaic.env.example`
+lists the names, taken from `lib/server/provider-config.ts` in the fork). A
+pinned `IMAGE_OPENAI_MODELS` / `TTS_OPENAI_MODELS` / `TTS_OPENAI_VOICES` beats
+a client choice it does not list, which is how an OpenAI-compatible endpoint
+with its own model names is offered without a code change. `required: false`
+so a host without the file starts exactly as before.
 
 ---
 
@@ -331,6 +344,36 @@ not upstream's, and the product is DeepWitya.
 `docker exec deeptutor-openmaic-postgres` and `docker port` remain the way to
 check the two properties that are easiest to lose: the asset row's `principal`
 column, and the studio publishing nothing to the host.
+
+---
+
+## One link found by a person, and a guard so it stays one — 2026-09-11
+
+The **Open in Co-Writer** button on a saved markdown note was a raw `<a href>`.
+Next prefixes `NEXT_PUBLIC_BASE_PATH` on its own router, its own `<Link>` and
+`/_next/` assets — and on nothing else — so under `/deepwitya` the anchor sent
+the reader to `/co-writer/<id>` at the origin root, which is nginx's 404 page
+rather than ours. It is a `<Link>` now, the way `MemorySection` already links
+the same route.
+
+Found by a person clicking it during UAT. Every other path had been proven by
+script — isolation through the API and the database row, the gate by six
+requests — and none of that would ever have clicked this button.
+
+A sweep of every shape that bypasses Next followed: raw `<a href>`, element
+`src`, `<form action>`, bare `fetch`, `EventSource`/`WebSocket`,
+`window.location`, `window.open`. **Exactly one hit, the one above.** Every
+same-origin URL builder that feeds an anchor — `exportUrl`, `rawMaterialUrl`,
+`previewUrl`, `fileUrl`, `resolveAssetUrl` — goes through `apiUrl()`, which
+applies `withBasePath()`; the first deploy's `apiFetch` centralisation had
+covered the rest.
+
+`web/tests/base-path-guard.test.ts` keeps the count at zero and runs in CI. It
+asserts it scanned more than 300 files before reporting a clean tree, because
+the first version walked a path that did not exist, read nothing, and passed in
+under two milliseconds — a guard that scans nothing is indistinguishable from
+one that scanned everything. Mutation-tested by putting the anchor back: it
+reports the file and line.
 
 ---
 
