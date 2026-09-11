@@ -254,6 +254,20 @@ upstream.
 
 ---
 
+## The studio image exists, and the pin says which one — 2026-09-11
+
+`feat/course-studio` merged to `main` (#69, `931431e97`, tagged
+`golive-2026-09-11`); nothing deployed on merge. The first studio image was
+then built by `studio-image.yml` on `main` from the pinned fork commit
+`d5585dd3` and pushed as `ghcr.io/khunmax2/deepwitya-studio:d5585dd3`, digest
+`sha256:4f54b507…4dee6d`. The pin's `image` block goes from `null` to that
+ref, digest, the commit it was built from and the run that built it, with the
+note that a rebuild of the same commit yields a different digest, so a new
+run is a new pin entry. The contract check passes on the result. The runbook
+now names the real tag and ticks the digest step.
+
+---
+
 ## The go-live has a runbook, a rollback, and an image that is pulled, not built — 2026-09-11
 
 Four files, no code. `deploy/GO-LIVE.md` is the runbook for putting DeepWitya
