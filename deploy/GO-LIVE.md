@@ -372,6 +372,8 @@ docker compose ... up -d
       `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`
       → `cd` ไปที่นั่น → `docker compose down` (**ไม่ใส่ `-v`** — volume/`data/` ของ v1 เก็บไว้อีก 30 วัน)
 - [ ] `docker image prune` เฉพาะ dangling; **อย่า** `system prune -a` (ลบ `pre-golive-*` ทิ้ง)
+- [ ] หลังถอน v1 **`--revert` ใช้ไม่ได้อีก** — script ปฏิเสธเองเมื่อพอร์ต 10310 ไม่มีใครฟัง (ต้อง `--force`)
+      ทางถอยที่เหลือคือ §7.3; ลบไฟล์ state ทิ้งได้: `sudo rm /etc/nginx/snippets/deepwitya-golive.state`
 - [ ] ลบ `location /deepwitya2` ที่ :80 ถ้ายังเหลือ (`apply-nginx-deepwitya2.sh --revert` ทำให้แล้ว)
 - [ ] `CHANGES.md` บันทึกวันที่ go-live + commit + digest
 
