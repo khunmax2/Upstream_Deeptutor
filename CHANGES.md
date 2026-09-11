@@ -254,6 +254,22 @@ upstream.
 
 ---
 
+## An admin default is usable at once, and says so — 2026-09-11
+
+Pin → fork `fd14be8f` (khunmax2/Ups_openMAIC #15). Asked: once an admin
+sets a default, can every account use it, and how would they know? Two
+gaps. Media providers carry `enabled: false` until someone types a key, and
+the credential sync left that flag alone — the server could resolve the
+default while the media popover did not offer the provider. The first time
+a browser sees a credential for a provider it is now switched on, as
+typing a key does; only the first time, so an opt-out survives later boots.
+And nothing in the provider lists said a default existed: a "ค่าเริ่มต้นระบบ"
+chip now does, in every list. Own keys still override (a second user's own
+row wins over the default; the trash icon returns them to it). Locale keys
+1810 → 1811; contract check green.
+
+---
+
 ## A demotion no longer waits for the token to expire — 2026-09-11
 
 Asked: what happens to an account promoted to admin, and demoted again?
