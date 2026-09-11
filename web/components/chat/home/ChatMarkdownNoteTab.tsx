@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import {
   AlertCircle,
@@ -132,14 +133,19 @@ export default function ChatMarkdownNoteTab({
             {t("Saved")}
           </span>
         ) : null}
+        {/* A <Link>, not an <a>: Next prefixes the base path on its own
+            router and components and on nothing else, so a raw anchor under
+            NEXT_PUBLIC_BASE_PATH=/deepwitya sent the reader to /co-writer/<id>
+            at the origin root — nginx's 404, not ours. MemorySection already
+            links the same route this way. */}
         {saved ? (
-          <a
+          <Link
             href={`/co-writer/${encodeURIComponent(saved.id)}`}
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--border)]/55 px-2 text-[11px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)]/35 hover:text-[var(--primary)]"
           >
             <ExternalLink size={11} strokeWidth={1.9} />
             {t("Open in Co-Writer")}
-          </a>
+          </Link>
         ) : null}
         <button
           type="submit"
