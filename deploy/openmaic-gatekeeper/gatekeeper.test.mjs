@@ -22,6 +22,8 @@ const AUTH_PORT = 4801;
 const UPSTREAM_PORT = 4802;
 const GATE_PORT = 4803;
 const OPEN_GATE_PORT = 4804;
+const ADMIN = 'admin-token-ok';
+const LEARNER = 'learner-token-ok';
 const GOOD = 'good-token';
 const TTL_MS = 200;
 
@@ -45,18 +47,31 @@ const AUTH_OFF = {
   learning_policy: null,
 };
 
-/** Same endpoint with auth enabled; `authenticated` then tracks the cookie. */
-const authOn = (ok) => ({
-  enabled: true,
-  authenticated: ok,
-  user_id: ok ? 'u-1' : null,
-  username: ok ? 'tester' : null,
-  role: ok ? 'user' : null,
-  is_admin: false,
-  avatar: '',
-  preset: ok ? 'standard' : null,
-  learning_policy: null,
-});
+/**
+ * Same endpoint with auth enabled; `authenticated` then tracks the cookie.
+ * Three accounts, told apart by token: an ordinary user, an admin, and a
+ * `learner` -- DeepWitya's restricted preset, which the gate must refuse.
+ */
+const ACCOUNTS = {
+  [GOOD]: { user_id: 'u-1', username: 'tester', role: 'user', is_admin: false, preset: 'standard' },
+  [ADMIN]: { user_id: 'u-9', username: 'boss', role: 'admin', is_admin: true, preset: 'standard' },
+  [LEARNER]: { user_id: 'u-5', username: 'pupil', role: 'user', is_admin: false, preset: 'learner' },
+};
+const authOn = (cookieHeader) => {
+  const token = Object.keys(ACCOUNTS).find((t) => cookieHeader.includes(`dt_token=${t}`));
+  const account = token ? ACCOUNTS[token] : null;
+  return {
+    enabled: true,
+    authenticated: account !== null,
+    user_id: account?.user_id ?? null,
+    username: account?.username ?? null,
+    role: account?.role ?? null,
+    is_admin: account?.is_admin ?? false,
+    avatar: '',
+    preset: account?.preset ?? null,
+    learning_policy: null,
+  };
+};
 
 const auth = http.createServer((req, res) => {
   if (mode === 'down') {
@@ -64,7 +79,7 @@ const auth = http.createServer((req, res) => {
     return;
   }
   const body =
-    mode === 'auth-off' ? AUTH_OFF : authOn((req.headers.cookie || '').includes(`dt_token=${GOOD}`));
+    mode === 'auth-off' ? AUTH_OFF : authOn(req.headers.cookie || '');
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
 });
@@ -82,6 +97,7 @@ const upstream = http.createServer((req, res) => {
       reachedUpstream: true,
       cookieSeen: req.headers.cookie ?? null,
       identitySeen: req.headers['x-deeptutor-owner'] ?? null,
+      roleSeen: req.headers['x-deeptutor-role'] ?? null,
     }),
   );
 });
@@ -236,6 +252,27 @@ check('ALLOW_ANONYMOUS still strips a client header', openSpoof.body?.identitySe
 // only the boolean, this one would arrive with no name.
 const cachedId = await call(`dt_token=${GOOD}`);
 check('a cached verdict still carries the uid', cachedId.body?.identitySeen, 'user:u-1');
+
+console.log('\n  -- role header and the learner preset (decided 2026-09-11) --');
+
+check('an ordinary account is forwarded as user', cachedId.body?.roleSeen, 'user');
+const asAdmin = await call(`dt_token=${ADMIN}`);
+check('an admin account is forwarded as admin', asAdmin.body?.roleSeen, 'admin');
+check('admin identity is its own uid', asAdmin.body?.identitySeen, 'user:u-9');
+const roleSpoof = await call(`dt_token=${GOOD}`, GATE_PORT, { 'x-deeptutor-role': 'admin' });
+check("a client's own role never survives", roleSpoof.body?.roleSeen, 'user');
+const openRole = await call(null, OPEN_GATE_PORT, { 'x-deeptutor-role': 'admin' });
+check('ALLOW_ANONYMOUS strips a client role too', openRole.body?.roleSeen, null);
+
+// The sidebar hides the studio from a learning account; the gate closes the
+// door that hidden entry led to. A refusal, not a login link -- the reader is
+// signed in, the account just does not include this.
+const pupil = await call(`dt_token=${LEARNER}`);
+check('learner preset -> 403', pupil.status, 403);
+check('learner preset -> account_restricted', pupil.body?.error?.code, 'account_restricted');
+check('learner never reaches OpenMAIC', pupil.body?.reachedUpstream, undefined);
+const pupilAgain = await call(`dt_token=${LEARNER}`);
+check('a cached learner verdict is still 403', pupilAgain.status, 403);
 
 console.log('\n  -- ALLOW_ANONYMOUS guard (T4) --');
 

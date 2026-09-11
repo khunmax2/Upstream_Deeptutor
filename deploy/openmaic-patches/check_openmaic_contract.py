@@ -151,6 +151,24 @@ def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) ->
         elif prefix:
             report.fail("identity prefix", f"gatekeeper.mjs does not mention {prefix!r}")
 
+        # The role header rides beside the identity header and would drift the
+        # same silent way: the studio's admin-only surface would simply treat
+        # every admin as a user.
+        role_header = contract.get("role_header")
+        if role_header and f"'{role_header}'" in source:
+            report.ok("gatekeeper sets role", role_header)
+        elif role_header:
+            report.fail("gatekeeper sets role", f"gatekeeper.mjs does not mention {role_header!r}")
+        # The learner refusal is a decision, not an accident; it is pinned by the
+        # error code the gatekeeper answers with.
+        if "'account_restricted'" in source:
+            report.ok("gatekeeper refuses the learner preset", "account_restricted")
+        else:
+            report.fail(
+                "gatekeeper refuses the learner preset",
+                "gatekeeper.mjs no longer answers account_restricted -- decided 2026-09-11",
+            )
+
     if not contract.get("studio_threaded"):
         report.skip(
             "studio reads",
@@ -187,6 +205,28 @@ def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) ->
             f"contract.studio_threaded is true but no file under {repo / 'lib'} mentions "
             f"{expected!r} — the two sides have drifted apart",
         )
+
+    role_header = contract.get("role_header")
+    if role_header and not contract.get("role_header_studio_reads"):
+        report.skip(
+            "studio reads role",
+            "the fork does not read the role header yet — flip "
+            "contract.role_header_studio_reads once it does",
+        )
+    elif role_header:
+        role_hits = [
+            path
+            for path in (repo / "lib").rglob("*.ts")
+            if role_header in path.read_text(encoding="utf-8", errors="replace")
+        ]
+        if role_hits:
+            report.ok("studio reads role", f"{role_header} in {role_hits[0].relative_to(repo)}")
+        else:
+            report.fail(
+                "studio reads role",
+                f"contract.role_header_studio_reads is true but nothing under {repo / 'lib'} "
+                f"mentions {role_header!r}",
+            )
 
 
 COMPOSE = HERE.parent / "docker-compose.openmaic.yml"
@@ -361,6 +401,19 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
             "compose passes one header name",
             f"expected both services to default STUDIO_IDENTITY_HEADER to {expected!r}, "
             f"got {defaults}",
+        )
+    expected_role = (pin.get("contract") or {}).get("role_header")
+    role_defaults = {
+        name: env.get("STUDIO_ROLE_HEADER", "")
+        for name, env in (("studio", studio_env), ("gatekeeper", gate_env))
+    }
+    if expected_role and all(f":-{expected_role}}}" in value for value in role_defaults.values()):
+        report.ok("compose passes one role header name", expected_role)
+    elif expected_role:
+        report.fail(
+            "compose passes one role header name",
+            f"expected both services to default STUDIO_ROLE_HEADER to {expected_role!r}, "
+            f"got {role_defaults}",
         )
 
     # --- the two halves of the base path ---------------------------------------

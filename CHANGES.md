@@ -254,6 +254,28 @@ upstream.
 
 ---
 
+## Two decisions at the gate — 2026-09-11
+
+Both questions the previous entry left open are answered, and the first is
+built. **The `learner` preset does not enter the studio.** The sidebar already
+hid the entry from that preset; the gatekeeper now refuses the account with
+`403 account_restricted` — a URL is not a menu. **Keys will live server-side
+per owner, admin default with per-user override** (DeepWitya's shape); that
+work is next. For it, the gatekeeper forwards a second verified claim,
+`x-deeptutor-role` (`admin` | `user`), stripped from the client and set from
+`/api/auth/status` exactly as the owner header is.
+
+`gatekeeper.mjs`, `gatekeeper.test.mjs` (40 checks: learner 403 and never
+reaching the studio, cached verdict still 403, admin/user forwarded, a
+client's own role never survives, ALLOW_ANONYMOUS strips it too),
+`docker-compose.openmaic.yml` (`STUDIO_ROLE_HEADER` on both services),
+`openmaic-pin.json` (`contract.role_header`, `role_header_studio_reads:
+false` until the fork reads it), `check_openmaic_contract.py` (three new
+checks, one SKIP until the fork side lands), README, ADR-0005 amendment,
+`nav-entries.ts` comment.
+
+---
+
 ## A stored key is no longer a click away — 2026-09-11
 
 Pin → fork `d53cab62` (khunmax2/Ups_openMAIC #13). Every studio settings
