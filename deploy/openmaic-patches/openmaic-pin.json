@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main descends from upstream 29735f10 with 60 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row) as of 2026-09-11"
+    "note": "fork/main descends from upstream 29735f10 with 62 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row) as of 2026-09-11"
   },
   "image": {
     "ref": null,
@@ -35,10 +35,10 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "8bbfe7b72eaaf703c3d42763ce469dca4eee4ac6",
-  "commit_short": "8bbfe7b7",
+  "commit": "05c86fd233a692977c3cb3581bbbcde50a7d601f",
+  "commit_short": "05c86fd2",
   "commit_date": "2026-09-11",
-  "commit_subject": "Merge pull request #17 from khunmax2/fix/shared-key-lifecycle",
+  "commit_subject": "Merge pull request #18 from khunmax2/fix/shared-chip-means-exists",
   "verified": "2026-09-11",
   "verified_against": {
     "locale_keys_en_us": 1819,
