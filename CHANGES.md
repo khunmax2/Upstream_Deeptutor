@@ -254,6 +254,28 @@ upstream.
 
 ---
 
+## What the host measured that the runbook had assumed — 2026-09-11
+
+§0 of `deploy/GO-LIVE.md` was run on the host and reported back. Every value
+matched but one: `/deepwitya` on port 80 is a `proxy_pass` to v1, not a
+redirect to HTTPS. The cutover script would have swapped that port too, and
+a visitor typing the address without `https://` would have reached the new
+stack over plain HTTP — where its `Secure` session cookie is never stored,
+so login silently loops (REDEPLOY §6b). `apply-nginx-golive.sh` now adds one
+`return 301 https://…` line at the top of that block instead (nginx runs
+`return` in the rewrite phase, before `proxy_pass`, so the existing line
+stays and the revert removes exactly one line); a block that already
+redirects is left alone. Cutover followed by revert is byte-identical on
+both shared files, tested on fixtures. §5 checks the 301.
+
+Two observations folded into §0 so the next run does not stop on them: the
+host already carries `deeptutor-openmaic` and a gatekeeper on 10331 from the
+earlier integration, in the same compose project, so §3.4 recreates them in
+place rather than creating them; and an untracked file in the checkout is
+moved out before the build so the tree matches the tag exactly.
+
+---
+
 ## The studio image exists, and the pin says which one — 2026-09-11
 
 `feat/course-studio` merged to `main` (#69, `931431e97`, tagged
