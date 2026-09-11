@@ -318,12 +318,17 @@ keys; contract check 19/19).
 
 Two things learned on the way:
 
-- **The studio's job runner reads only server-configured providers.**
-  `lib/server/agent-runtime/generate-image.ts` selects from
-  `getServerImageProviders()` — env and YAML — never the browser's Settings
-  page. In this deployment (runtime on) an image provider entered only in
-  Settings passes the test button and is invisible to course generation. The
-  env file is not a convenience here; it is the configuration.
+- **Which path reads which configuration.** Ordinary course generation
+  (Scene Content / Scene Actions / `ImageGeneration API`) runs through the
+  browser, which sends the user's Settings key with each request — it worked
+  with nothing server-side. Only the agent runtime's own tools
+  (`lib/server/agent-runtime/generate-image.ts`, `getServerImageProviders()`)
+  read server-configured providers exclusively. An earlier version of this
+  entry said Settings-only providers were "invisible to course generation";
+  that was wrong for the path users actually take. **Decision:** users enter
+  their own keys in Settings, the way DeepWitya itself works; the env file
+  stays optional and is not used in the deployment. A provider set there
+  becomes managed and Settings stops accepting a user key for it.
 - **Docker Desktop's DNS forwarding drops answers for some public names.**
   From inside the studio container a Tailscale Funnel host failed 8 of 12
   lookups (the host: 12/12; api.openai.com: 12/12). The SSRF guard turns that
