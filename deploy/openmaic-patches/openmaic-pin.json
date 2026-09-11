@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main descends from upstream 29735f10 with 47 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime) as of 2026-09-11"
+    "note": "fork/main descends from upstream 29735f10 with 49 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings) as of 2026-09-11"
   },
   "image": {
     "ref": null,
@@ -35,13 +35,13 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "da4b4cff04c073108aaa991da528a68e235840de",
-  "commit_short": "da4b4cff",
+  "commit": "d53cab62e82fa406b4bcf1fdbacbc59ee0b32024",
+  "commit_short": "d53cab62",
   "commit_date": "2026-09-11",
-  "commit_subject": "Merge pull request #12 from khunmax2/fix/glibc-runtime",
+  "commit_subject": "Merge pull request #13 from khunmax2/feat/api-key-masking",
   "verified": "2026-09-11",
   "verified_against": {
-    "locale_keys_en_us": 1802,
+    "locale_keys_en_us": 1807,
     "locale_files": 12,
     "th_partial_keys": 1751,
     "th_keys_matching_upstream": 1687,
