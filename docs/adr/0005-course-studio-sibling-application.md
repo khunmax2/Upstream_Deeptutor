@@ -36,6 +36,20 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   (`DEEPTUTOR_OPENMAIC_URL`, with `?lang`, `?theme`, `?embed=1` on open) and one
   identity header. Providers, API keys, model configuration and storage stay
   independent on both sides.
+
+  *Amended 2026-09-11.* The identity header gained a sibling,
+  `x-deeptutor-role` (`admin` or `user`), carried the same way. Two decisions
+  were taken together once the studio had accounts to reason about: the
+  `learner` preset — DeepWitya's restricted account, default-deny on every
+  surface nobody opened to it — is refused at the gate with `403
+  account_restricted`, closing the door the already-hidden sidebar entry led
+  to; and provider API keys move out of the browser's localStorage into the
+  studio's database per owner, with an admin-set default any account falls
+  back to and a per-user override — DeepWitya's own shape. The role header
+  exists for that second decision: the studio has exactly one admin-only
+  surface, and DeepWitya is the only thing that knows who is an admin.
+  "Independent on both sides" still holds for the *values*; what crossed the
+  boundary is one more verified claim about who is asking.
 - Per-user isolation threads DeepTutor's uid into `authenticatedOwnerId` as
   `user:<uid>`, matching the `user:` / `anon:` convention already in upstream's
   tests. PostgreSQL runs as a compose service; the studio owns its schema.

@@ -15,6 +15,7 @@
 # Optional:
 #   STUDIO_GATEWAY_PORT     loopback port nginx forwards to (default 10330)
 #   STUDIO_IDENTITY_HEADER  must be identical on both sides (default x-deeptutor-owner)
+#   STUDIO_ROLE_HEADER      same rule (default x-deeptutor-role); `admin` or `user`
 #   STUDIO_BASE_PATH        where the healthcheck probes, and nothing else
 #                           (default /deepwitya/studio). The path the studio
 #                           actually serves under is baked into the image; this
@@ -97,6 +98,9 @@ services:
       # One name, read by both sides. A rename on one side alone fails silently:
       # the app keeps working while every reader stops seeing their own work.
       - STUDIO_IDENTITY_HEADER=${STUDIO_IDENTITY_HEADER:-x-deeptutor-owner}
+      # The role the gatekeeper verified, `admin` or `user`. Same rule as the
+      # identity header: one name, both sides, pinned in openmaic-pin.json.
+      - STUDIO_ROLE_HEADER=${STUDIO_ROLE_HEADER:-x-deeptutor-role}
 
       # Deliberately NOT set — and the studio's persistence API answers an
       # error until the fork's identity threading lands. That is the intended
@@ -216,6 +220,7 @@ services:
       - DEEPTUTOR_AUTH_URL=http://deeptutor:${DEEPTUTOR_DOCKER_BACKEND_PORT:-8001}/api/auth/status
       - COOKIE_NAME=dt_token
       - STUDIO_IDENTITY_HEADER=${STUDIO_IDENTITY_HEADER:-x-deeptutor-owner}
+      - STUDIO_ROLE_HEADER=${STUDIO_ROLE_HEADER:-x-deeptutor-role}
       - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}
       # ALLOW_ANONYMOUS is not set, and cannot usefully be set here: the
       # gatekeeper refuses to start when it is on while the auth URL points

@@ -65,6 +65,15 @@ const CACHE_TTL_MS = Number(process.env.AUTH_CACHE_TTL_MS || 30_000);
  */
 const IDENTITY_HEADER = (process.env.STUDIO_IDENTITY_HEADER || 'x-deeptutor-owner').toLowerCase();
 const IDENTITY_PREFIX = 'user:';
+/**
+ * The second half of the identity contract. The studio has one admin-only
+ * surface -- the shared default credentials every account falls back to --
+ * and DeepWitya is the only thing that knows who is an admin. Carried the
+ * same way as the owner: stripped from the client, set from the verified
+ * status, never from anything the caller sent. Values are exactly `admin` or
+ * `user`; the studio treats anything else, including absence, as `user`.
+ */
+const ROLE_HEADER = (process.env.STUDIO_ROLE_HEADER || 'x-deeptutor-role').toLowerCase();
 const LOGIN_URL = process.env.LOGIN_URL || '';
 const ALLOW_ANONYMOUS = process.env.ALLOW_ANONYMOUS === '1';
 const AUTH_TIMEOUT_MS = 5_000;
@@ -175,8 +184,8 @@ function cachedVerdict(token) {
   return hit ? hit.ok : null;
 }
 
-function remember(token, ok, uid) {
-  verdicts.set(token, { ok, uid, expires: Date.now() + CACHE_TTL_MS });
+function remember(token, ok, uid, role, restricted = false) {
+  verdicts.set(token, { ok, uid, role, restricted, expires: Date.now() + CACHE_TTL_MS });
   // The map only ever holds live sessions; sweep on write so it cannot grow
   // without bound on a host that sees many short-lived tokens.
   if (verdicts.size > 1000) {
@@ -242,7 +251,10 @@ function stripCookie(header, name) {
  */
 async function verify(token) {
   const cached = cachedEntry(token);
-  if (cached) return { verdict: cached.ok ? 'allow' : 'deny', uid: cached.uid };
+  if (cached) {
+    const verdict = cached.ok ? 'allow' : cached.restricted ? 'restricted' : 'deny';
+    return { verdict, uid: cached.uid, role: cached.role };
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
@@ -268,13 +280,22 @@ async function verify(token) {
     remember(MODE_KEY, true, undefined);
     if (token === null) return { verdict: 'deny' };
 
-    const ok = status?.authenticated === true;
-    // Read the uid from the same answer that granted the verdict. Anything else
-    // — a second call, a different cache key, a value the client sends — either
-    // costs a round trip per request or hands identity to the caller.
+    const authenticated = status?.authenticated === true;
+    // The `learner` preset is DeepWitya's restricted account: default-deny on
+    // every surface nobody has explicitly opened to it, and nobody has opened
+    // this one. The sidebar already hides the entry for it; refusing here
+    // closes the door the hidden entry led to, since a URL is not a menu.
+    // Decided 2026-09-11.
+    const restricted = authenticated && status?.preset === 'learner';
+    const ok = authenticated && !restricted;
+    // Read the uid and role from the same answer that granted the verdict.
+    // Anything else — a second call, a different cache key, a value the
+    // client sends — either costs a round trip per request or hands identity
+    // to the caller.
     const uid = ok ? String(status?.user_id ?? '').trim() : '';
-    remember(token, ok, uid || undefined);
-    return { verdict: ok ? 'allow' : 'deny', uid: uid || undefined };
+    const role = ok && (status?.is_admin === true || status?.role === 'admin') ? 'admin' : 'user';
+    remember(token, ok, uid || undefined, role, restricted);
+    return { verdict: ok ? 'allow' : restricted ? 'restricted' : 'deny', uid: uid || undefined, role };
   } catch {
     // Deliberately not cached: a transient outage must not lock a reader out
     // for the whole TTL after the checker comes back.
@@ -304,6 +325,16 @@ function refuse(res, status, code, message) {
     'cache-control': 'no-store',
   });
   res.end(body);
+}
+
+function refuseRestricted(res) {
+  return refuse(
+    res,
+    403,
+    'account_restricted',
+    'This account is a learning account and the Course Studio is not part of what it can use. ' +
+      'Ask an administrator if you need it.',
+  );
 }
 
 function refuseUnavailable(res) {
@@ -343,13 +374,15 @@ function refuseAuthDisabled(res) {
  * when the gate is off would make ALLOW_ANONYMOUS a spoofing tool rather than a
  * development convenience.
  */
-function forward(req, res, ownerId) {
+function forward(req, res, ownerId, role) {
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
   const headers = { ...req.headers, host: UPSTREAM.host };
   if (cookie) headers.cookie = cookie;
   else delete headers.cookie;
   stripHeader(headers, IDENTITY_HEADER);
+  stripHeader(headers, ROLE_HEADER);
   if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
+  if (ownerId && role) headers[ROLE_HEADER] = role;
 
   const proxied = http.request(
     {
@@ -411,8 +444,9 @@ const server = http.createServer(async (req, res) => {
     );
   }
 
-  const { verdict, uid } = await verify(token);
-  if (verdict === 'allow') return forward(req, res, uid);
+  const { verdict, uid, role } = await verify(token);
+  if (verdict === 'allow') return forward(req, res, uid, role);
+  if (verdict === 'restricted') return refuseRestricted(res);
   if (verdict === 'auth_disabled') return refuseAuthDisabled(res);
   if (verdict === 'unavailable') return refuseUnavailable(res);
   return refuse(
@@ -432,11 +466,13 @@ const server = http.createServer(async (req, res) => {
 server.on('upgrade', async (req, socket, head) => {
   const token = readCookie(req.headers.cookie, COOKIE_NAME);
   let ownerId;
+  let role;
   if (!ALLOW_ANONYMOUS) {
     if (!token) return socket.destroy();
     const result = await verify(token);
     if (result.verdict !== 'allow') return socket.destroy();
     ownerId = result.uid;
+    role = result.role;
   }
 
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
@@ -447,7 +483,9 @@ server.on('upgrade', async (req, socket, head) => {
   // a way around the header entirely, and a socket is exactly where nobody
   // thinks to look.
   stripHeader(headers, IDENTITY_HEADER);
+  stripHeader(headers, ROLE_HEADER);
   if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
+  if (ownerId && role) headers[ROLE_HEADER] = role;
 
   const upstream = net.connect(Number(UPSTREAM.port || 80), UPSTREAM.hostname, () => {
     upstream.write(
