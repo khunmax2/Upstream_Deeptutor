@@ -211,6 +211,10 @@ docker ps --format '{{.Names}}\t{{.Status}}' | sort
 
 - [ ] 8 container `healthy` (deeptutor2, pocketbase2, redis, sandbox-runner, ollama, openmaic, gatekeeper, postgres)
       — ถ้า `deeptutor-openmaic` ค้าง `starting` เกิน 2 นาที ดู `docker logs deeptutor-openmaic`
+      ถ้า `deeptutor-openmaic-postgres` เป็น `Restarting (255)` และ log ขึ้น
+      `exec /usr/local/bin/docker-entrypoint.sh: operation not permitted` = quirk
+      `no-new-privileges` ของ host นี้ (REDEPLOY §6) overlay production ปลดให้ studio ทั้ง 3 ตัวแล้ว
+      ตั้งแต่ 2026-09-11 — ถ้ายังเจอ แปลว่า checkout ไม่ใช่ tag ล่าสุด
       ถ้าเห็น `EACCES` ที่ `/app/data`: volume `<project>_openmaic-data` มีอยู่ก่อนจาก image รุ่นเก่า
       (studio รันเป็น uid 1001) → `docker run --rm -v <project>_openmaic-data:/d alpine chown -R 1001:1001 /d`
       แล้ว `docker restart deeptutor-openmaic`; volume ที่สร้างใหม่ไม่เจอปัญหานี้

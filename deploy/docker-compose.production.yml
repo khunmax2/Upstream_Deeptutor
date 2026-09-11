@@ -45,11 +45,26 @@ services:
     container_name: deeptutor2-redis
   pocketbase:
     container_name: pocketbase2
+  # THIS HOST ONLY: kernel 6.8.0-63 + Docker 29 + AppArmor. Any container
+  # started with no-new-privileges:true dies at its very first exec --
+  # `exec /usr/local/bin/docker-entrypoint.sh: operation not permitted` --
+  # before the image's own code runs (deploy/REDEPLOY.md §6). The base file
+  # sets the flag on sandbox-runner and the studio overlay sets it on its
+  # three services, so all four are unset here. Measured 2026-09-11 at
+  # go-live §3.4: postgres in a restart loop on exit 255, the studio and the
+  # gatekeeper never started behind its depends_on. A host without this
+  # quirk should NOT copy these four blocks; the flag is a real control
+  # elsewhere. Nothing the studio's isolation relies on (the gatekeeper's
+  # network path and the headers it injects) depends on it.
   sandbox-runner:
     container_name: deeptutor2-sandbox-runner
     security_opt:
-      # kernel 6.8 + Docker 29 on this host: no-new-privileges makes the
-      # runner's execve fail with EPERM (deploy/REDEPLOY.md §6).
+      - "no-new-privileges:false"
+  openmaic:
+    security_opt:
+      - "no-new-privileges:false"
+  openmaic-postgres:
+    security_opt:
       - "no-new-privileges:false"
   ollama:
     image: ollama/ollama:latest
@@ -67,6 +82,8 @@ services:
       - deeptutor-network
 
   gatekeeper:
+    security_opt:
+      - "no-new-privileges:false"
     environment:
       # Quoted back to a signed-out visitor of the studio path. Same origin,
       # so a path is enough.
