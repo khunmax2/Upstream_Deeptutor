@@ -1,0 +1,332 @@
+# ============================================
+# Course Studio — overlay for the sibling application (ADR-0005)
+# ============================================
+# Use it alongside the base file, from the repository root:
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml up -d
+#
+# The first `-f` decides the project directory, so every relative path below is
+# written from the repository root, not from `deploy/`.
+#
+# Required in the environment (no defaults on purpose — see the note on each):
+#   OPENMAIC_IMAGE               digest-pinned studio image
+#   OPENMAIC_POSTGRES_PASSWORD   the studio database's password
+#
+# Optional:
+#   STUDIO_GATEWAY_PORT     loopback port nginx forwards to (default 10330)
+#   STUDIO_IDENTITY_HEADER  must be identical on both sides (default x-deeptutor-owner)
+#   STUDIO_ROLE_HEADER      same rule (default x-deeptutor-role); `admin` or `user`
+#   STUDIO_BASE_PATH        where the healthcheck probes, and nothing else
+#                           (default /deepwitya/studio). The path the studio
+#                           actually serves under is baked into the image; this
+#                           only has to agree with it, and the contract check
+#                           fails if it stops agreeing.
+#   DEEPTUTOR_LOGIN_URL     quoted back to a signed-out visitor
+#
+# Set when the IMAGE is built, never here. Upstream declares each of these as a
+# build argument in its Dockerfile and the runner stage carries none of them, so
+# an entry under `environment:` below would read as configured and do nothing:
+#   ALLOWED_FRAME_ANCESTORS        widens the studio's `frame-ancestors 'self'`.
+#                                  Left empty on purpose: the deployment serves
+#                                  both products from one origin, so `'self'`
+#                                  already covers the embed. A two-port local
+#                                  trial is cross-origin and needs a value —
+#                                  which means a rebuild, not a restart.
+#   NEXT_PUBLIC_PERSISTENCE        compiled into the browser bundle
+#   NEXT_PUBLIC_PERSISTENCE_TOKEN  compiled into the browser bundle
+#   NEXT_PUBLIC_STUDIO_BASE_PATH   the path the studio serves under. Next's
+#                                  `basePath` prefixes what Next generates, and
+#                                  the fork's `apiPath()` prefixes what the app
+#                                  writes; both read this one value, so it is
+#                                  compiled into both halves. Recorded in
+#                                  openmaic-pin.json as contract.base_path,
+#                                  because after the build nothing in the
+#                                  running system can be asked what it was.
+# ============================================
+
+services:
+  # ============================================
+  # The studio itself
+  # ============================================
+  # Built from khunmax2/Ups_openMAIC and pinned by digest: deploys pull an image,
+  # nothing is patched or resolved at deploy time (ADR-0005). The commit behind
+  # the digest is recorded in deploy/openmaic-patches/openmaic-pin.json.
+  #
+  # `:?` rather than a default tag: a floating `:latest` would let two hosts run
+  # different code while both look correctly configured.
+  openmaic:
+    image: ${OPENMAIC_IMAGE:?set OPENMAIC_IMAGE to the digest-pinned studio image, e.g. ghcr.io/khunmax2/openmaic@sha256:...}
+    container_name: deeptutor-openmaic
+    restart: unless-stopped
+
+    # No `ports:` — intentionally not published to the host. (T1, control 1.)
+    # The identity header below is trusted *because* the only route in is the
+    # gatekeeper. Publishing a port here — even on loopback — hands anyone
+    # already on the host the ability to send `x-deeptutor-owner: user:<victim>`
+    # and become that person. Measured history, not theory: before the
+    # gatekeeper existed, a plain GET with no cookie answered 200.
+    # deploy/openmaic-patches/check_openmaic_contract.py fails CI if this
+    # service ever grows a `ports:` key.
+
+    environment:
+      # Server-backed persistence. OwnerBoundDocumentStore is built on
+      # PgDocumentStore, so per-owner documents exist only with a database.
+      - DATABASE_URL=postgres://openmaic:${OPENMAIC_POSTGRES_PASSWORD:?set OPENMAIC_POSTGRES_PASSWORD}@openmaic-postgres:5432/openmaic
+
+      # Fail closed on a direct hit. (T1, control 3.) Controls 1 and 2 both
+      # protect a network property, and network properties change without
+      # anyone editing code. With this set the studio must refuse a request that
+      # arrives without the identity header rather than falling back to an
+      # anonymous owner — which would hand the visitor a fresh empty workspace
+      # and look like it worked.
+      # The fork half lands with the identity threading; until then the variable
+      # is inert, and setting it early is deliberate — the deployment does not
+      # have to change when the code catches up.
+      # `/api/health` must stay exempt: the healthcheck below carries no
+      # identity, and a studio that fails its own healthcheck never starts.
+      # Two flags, two subsystems, and the studio needs both. DATABASE_URL alone
+      # is not enough: `isAgentRuntimeConfigured()` in lib/config/feature-flags.ts
+      # is this flag AND the URL, and without it /api/stages and /api/folders
+      # answer 404 while everything else answers 200 -- which the studio surfaces
+      # as "Persistence is unavailable. Saved classrooms could not be loaded."
+      # Upstream even validates the inverse (config-validation.ts), so the pair
+      # is deliberate on their side too.
+      - OPENMAIC_AGENT_RUNTIME_ENABLED=true
+
+      - STUDIO_REQUIRE_GATEWAY=1
+
+      # One name, read by both sides. A rename on one side alone fails silently:
+      # the app keeps working while every reader stops seeing their own work.
+      - STUDIO_IDENTITY_HEADER=${STUDIO_IDENTITY_HEADER:-x-deeptutor-owner}
+      # The role the gatekeeper verified, `admin` or `user`. Same rule as the
+      # identity header: one name, both sides, pinned in openmaic-pin.json.
+      - STUDIO_ROLE_HEADER=${STUDIO_ROLE_HEADER:-x-deeptutor-role}
+
+      # Deliberately NOT set — and the studio's persistence API answers an
+      # error until the fork's identity threading lands. That is the intended
+      # state, not an unfinished one, so here is exactly what a deployer will
+      # see rather than a surprise to debug at 2am. Read from upstream
+      # 29735f10, app/api/persistence/[...path]/route.ts and
+      # lib/persistence/server-auth.ts:
+      #
+      #   PERSISTENCE_DEV_TOKEN — without it the route answers 503
+      #     PERSISTENCE_DEV_TOKEN_MISSING before it looks at anything else.
+      #     Setting it is the obvious way to "make persistence work" and it is
+      #     the wrong one: the matching NEXT_PUBLIC_PERSISTENCE_TOKEN is
+      #     compiled into the public bundle, so the credential is visible to
+      #     every visitor, and identity then comes from a client-supplied
+      #     x-learner-key. That is the whole of upstream's development auth.
+      #   PERSISTENCE_ALLOW_INSECURE_DEV_AUTH — with the token supplied, this is
+      #     the second lock. The image runs NODE_ENV=production (Dockerfile
+      #     runner stage), and in production upstream refuses its own
+      #     development authenticator outright — 401 — unless this opt-in turns
+      #     the refusal off. Both are refused here; the contract check fails if
+      #     either ever appears.
+      #   ACCESS_CODE — a second gate in front of a DeepWitya session asks the
+      #     visitor for a code nobody issued them.
+
+    # Model providers. Keys, base URLs, model pins and TTS voice lists are
+    # operator data, not deployment shape, so they live in a separate file that
+    # is gitignored and optional: with no file the studio starts with no
+    # server-side providers and the browser Settings page is the only source.
+    # deploy/openmaic.env.example lists the names the studio reads.
+    #
+    # A pin from here beats a client choice the pin does not list
+    # (resolveImageModel / resolveTTSVoice in lib/server/provider-config.ts),
+    # which is how an OpenAI-compatible endpoint with its own model names gets
+    # offered without a code change on either side.
+    env_file:
+      - path: ./deploy/openmaic.env
+        required: false
+
+    volumes:
+      - openmaic-data:/app/data
+
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # A provider running on the deploy host (LM Studio, Ollama, vLLM) is
+    # reachable under this name, the same way the base file documents it for
+    # DeepTutor.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # The probe runs inside the studio image, so it may use only what every
+    # studio image is certain to carry. `node` is certain -- it is what serves
+    # the app. `wget` is not: node:22-alpine ships it (busybox) and
+    # node:22-bookworm-slim, the base since the glibc change, does not. A probe
+    # on a missing tool exits 127 on every try, the container never turns
+    # healthy, and the gatekeeper's depends_on below then never lets it start
+    # on a fresh `compose up` -- while the studio itself answers fine.
+    # check_openmaic_contract.py refuses a probe that is not `node`.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000${STUDIO_BASE_PATH:-/deepwitya/studio}/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    depends_on:
+      openmaic-postgres:
+        condition: service_healthy
+
+    # Not on deeptutor-network. The studio talks to the gatekeeper and to its
+    # own database and to nothing else in the stack; the coupling is a URL and a
+    # header (ADR-0005), never a container-to-container call.
+    networks:
+      - studio-net
+      - studio-db
+
+  # ============================================
+  # The gatekeeper
+  # ============================================
+  # Verifies the DeepWitya session, then injects the identity header and strips
+  # any copy the client sent. Runs the source in deploy/openmaic-gatekeeper
+  # directly: it imports only `node:` builtins, so there is no build, no
+  # lockfile, and nothing to install.
+  gatekeeper:
+    image: node:22-alpine
+    container_name: deeptutor-openmaic-gatekeeper
+    restart: unless-stopped
+    command: ["node", "/app/gatekeeper.mjs"]
+
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Loopback only. nginx terminates TLS on the public address and forwards
+    # here; binding 0.0.0.0 would publish this port on a host shared with six
+    # other teams' applications.
+    ports:
+      - "127.0.0.1:${STUDIO_GATEWAY_PORT:-10330}:10330"
+
+    volumes:
+      - ./deploy/openmaic-gatekeeper:/app:ro
+
+    environment:
+      - PORT=10330
+      - OPENMAIC_UPSTREAM=http://openmaic:3000
+      - DEEPTUTOR_AUTH_URL=http://deeptutor:${DEEPTUTOR_DOCKER_BACKEND_PORT:-8001}/api/auth/status
+      - COOKIE_NAME=dt_token
+      - STUDIO_IDENTITY_HEADER=${STUDIO_IDENTITY_HEADER:-x-deeptutor-owner}
+      - STUDIO_ROLE_HEADER=${STUDIO_ROLE_HEADER:-x-deeptutor-role}
+      - LOGIN_URL=${DEEPTUTOR_LOGIN_URL:-}
+      # ALLOW_ANONYMOUS is not set, and cannot usefully be set here: the
+      # gatekeeper refuses to start when it is on while the auth URL points
+      # anywhere but a local address, and `deeptutor` is a container, not
+      # localhost. That refusal is the intended answer in a deployment.
+
+    # The gate is the only thing published on this host, so nginx forwards to it
+    # whether or not it is alive. Without this a crashed gatekeeper is a 502 with
+    # no signal anywhere that the container is the reason.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:10330/__gatekeeper/health > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    depends_on:
+      openmaic:
+        condition: service_healthy
+
+    networks:
+      - deeptutor-network
+      - studio-net
+
+  # ============================================
+  # The studio's database
+  # ============================================
+  # No profile: server-backed persistence is what makes per-account isolation
+  # possible, so it is part of the deployment rather than an opt-in. Upstream
+  # gates this service behind a `server-persistence` profile because upstream's
+  # default deployment keeps everything in the browser — which would mean a
+  # learner who opens the studio on a phone sees none of their own work.
+  #
+  # It starts empty and stays empty until the fork threads DeepWitya's uid into
+  # `authenticatedOwnerId`, because the route above refuses every write in the
+  # meantime. Standing the database up first is deliberate: the schema is
+  # created on first use, and the DDL is guarded by `IF NOT EXISTS` with no
+  # versioned migrations (ADR-0005), so the moment to find out whether it comes
+  # up clean is now, not on the deploy that finally has data to lose.
+  #
+  # One thing the database will not partition: assets. Upstream files every
+  # asset under one principal — `SHARED_ASSET_PRINCIPAL = 'shared'`,
+  # lib/persistence/server-auth.ts — while documents carry `owner_id`. So the
+  # isolation test at the end of this phase has to open an asset, not only a
+  # document; a document-only test passes over the hole.
+  openmaic-postgres:
+    image: postgres:16
+    container_name: deeptutor-openmaic-postgres
+    restart: unless-stopped
+
+    environment:
+      - POSTGRES_DB=openmaic
+      - POSTGRES_USER=openmaic
+      # No development default. A default password in a file that ships to the
+      # deploy host is how a weak password reaches production without anyone
+      # deciding to use one.
+      - POSTGRES_PASSWORD=${OPENMAIC_POSTGRES_PASSWORD:?set OPENMAIC_POSTGRES_PASSWORD}
+
+    # A studio render or a runaway query must not take the host down with it.
+    # The stack shares a host with DeepWitya's own containers.
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmaic -d openmaic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+    volumes:
+      - openmaic-postgres:/var/lib/postgresql/data
+
+    # `studio-db` only: the database is reachable from the studio and from
+    # nowhere else, and has no route out.
+    networks:
+      - studio-db
+
+networks:
+  # Declared in docker-compose.yml; named here so the gatekeeper can reach
+  # DeepTutor's API to verify a session.
+  deeptutor-network:
+
+  # gatekeeper → studio, plus the studio's own outbound to model providers.
+  studio-net:
+    driver: bridge
+
+  # studio → database. `internal: true` means no gateway: the database cannot
+  # reach the host or the internet, and nothing outside this network reaches it.
+  studio-db:
+    internal: true
+
+volumes:
+  openmaic-data:
+  openmaic-postgres:

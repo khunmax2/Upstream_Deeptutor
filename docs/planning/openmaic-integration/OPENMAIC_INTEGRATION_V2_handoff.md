@@ -21,7 +21,7 @@ integration off it. Nothing was lost:
 |---|---|
 | `archive/main-2026-09-09` (`5c6ed4295`) | the whole first attempt, including `integration/maic` (2,832 files) and the five files never exported |
 | `docs/maic-fork-export/` on `main` | 22 subtree patches + 7 deploy patches + `why.md` / `why-deploy.md` carrying every commit message |
-| `deploy/openmaic-patches/` on `main` | 7 tools a rebuild **runs**, above all `th-TH.partial.json` — the Thai translation source, 1,862/1,862 keys |
+| `deploy/openmaic-patches/` on `main` | 7 tools a rebuild **runs**, above all `th-TH.partial.json` — the Thai translation source. **Not 1,862/1,862; see §5.1b** |
 
 There is no `integration/` directory on `main` and no design document for the
 second attempt other than this one.
@@ -96,10 +96,15 @@ branch diff.
 
 ### 3.2 The coupling is one URL
 
-`web/lib/openmaic-embed.ts` already resolves the studio from
-`DEEPTUTOR_OPENMAIC_URL` or `data/user/settings/integrations.json`, with a test
-rejecting dangerous URLs (`javascript:alert(1)`). `MaicWorkspace.tsx` already
-shows configuration instructions when it is unset. Keep this shape — it is the
+`web/lib/openmaic-embed.ts` resolves the studio from `DEEPTUTOR_OPENMAIC_URL`
+or `data/user/settings/integrations.json`, with a test rejecting dangerous URLs
+(`javascript:alert(1)`). `MaicWorkspace.tsx` shows configuration instructions
+when it is unset.
+
+**Corrected 2026-09-10:** this said "already", which was true of `main` before
+the rewrite. None of it was on `main` — the whole surface came off with the
+integration on 2026-09-09 and was restored from the archive in phase 1 item 5.
+Keep this shape — it is the
 loosest possible coupling and it matches *"แยกอิสระกันไปเลย"*.
 
 This also settles how the two run: **they must run separately**. The archived
@@ -325,7 +330,7 @@ visible place there is:
 
 | | first attempt | second |
 |---|---|---|
-| route | `/maic` — **the brand leaks into the address bar** | `/studio` |
+| route | `/maic` at the start — **the brand leaks into the address bar** — but `/course-studio` by the end, with a permanent redirect | `/course-studio`, kept (ADR-0005, amended 2026-09-10) |
 | menu entry | `MaicWorkspace` | `Course Studio` / `สตูดิโอสร้างคอร์ส` / `课程工作室` |
 | env var | `DEEPTUTOR_OPENMAIC_URL` | unchanged — an operator sees it, a user does not, and it says plainly what is behind the door |
 
@@ -410,6 +415,16 @@ Ships **with the OpenMAIC brand still visible and in English.** Explicitly
 accepted.
 
 - fork `THU-MAIC/OpenMAIC` → `khunmax2/OpenMAIC`, pin a commit
+
+  *Amended 2026-09-11.* The fork lives at **`khunmax2/Ups_openMAIC`** now, and
+  it is deliberately *not* a GitHub fork. A repository GitHub classes as a fork
+  does not run Actions until someone enables them by hand, and upstream's
+  workflow triggers name upstream's branches — so the original fork's CI never
+  ran once, and every early change merged on local measurement alone. The move
+  cost nothing that matters: all 532 commits went across, `upstream` is still a
+  git remote, and the old repository is kept read-only for its pull request
+  pages, whose reasoning is also exported under
+  `docs/planning/openmaic-integration/fork-pull-requests/`.
 - basePath work (first attempt: 36 files, +434) so it serves under a path
 - Postgres as a compose service; `server-persistence` profile on
 - gatekeeper: inject a server-controlled uid header, strip any client copy
@@ -427,8 +442,10 @@ accepted.
 
 ### Phase 3 — Thai
 
-- `build_th_locale.py` generates `th-TH.json` from `th-TH.partial.json`
-  (1,862/1,862 keys, already written). **Edit the partial, never the output.**
+- `build_th_locale.py` generates `th-TH.json` from `th-TH.partial.json`.
+  **Not "already written" — measured 2026-09-10 against `29735f10`: 1,687 of
+  upstream's 1,801 keys are covered, 114 are missing, and 64 in the partial no
+  longer exist upstream.** See §5.1b. **Edit the partial, never the output.**
 - `?lang=` / `?theme=` so the studio follows DeepWitya's interface
 
 ### In parallel, not on the critical path
@@ -471,6 +488,42 @@ smaller than feared:
 - their tests establish a naming convention: authenticated owners carry a
   `user:` prefix (`user:mine`, `user:requestor`) against `anon:` for
   cookie-minted ones. **Send `user:<uid>`, not a bare uid.**
+
+### 5.1b The Thai coverage claim was stale, measured 2026-09-10
+
+This document said the translation source is complete at 1,862/1,862. That was
+true at the old pin `d4ef5faa` (2026-09-01) and is not true at `29735f10`:
+
+| | |
+|---|---|
+| `en-US.json` at `29735f10` | **1,801** keys — upstream removed keys as well as adding them |
+| `th-TH.partial.json` | 1,751 keys |
+| covered | **1,687 of 1,801** (93.7%) |
+| **missing** | **114** — e.g. `home.slogan`, `settings.lang_en`, `settings.providerNames.exa` |
+| **stale** | **64** in the partial with no upstream key left — e.g. `toolbar.toggleSidebar`, `toolbar.playbackSpeed` |
+
+Phase 3 is therefore not free: 114 keys to translate and 64 to drop. That is
+small work, but it is work, and it grows every week upstream moves
+(handoff §3.14 puts the drift at roughly 50–90 keys a week).
+
+`build_th_locale.py` already checks exactly this — coverage, interpolation
+parity, and keys that no longer exist upstream — so the numbers above are
+re-derivable rather than something to trust from this table.
+### 5.1a Those measurements re-checked against `29735f10`, 2026-09-10
+
+Verified independently before starting phase 1, against the checkout at
+`D:\Vscode\OpenMAIC` (`origin` = `THU-MAIC/OpenMAIC`, HEAD `29735f10`, clean):
+
+| claim | measured | |
+|---|---|---|
+| the third parameter survives at HEAD | `owner.ts:52-57`, and `if (authenticatedOwnerId) return authenticatedOwnerId;` | ✅ |
+| 33 call sites through the wrapper | 34 raw matches minus the definition = **33** | ✅ |
+| 3 direct routes + 1 server action | exactly those four files, by name | ✅ |
+| upstream's own test covers it | `tests/agent-runtime/owner.test.ts:73` | ✅ |
+| `user:` / `anon:` convention | both present (`user:mine`, `user:foreign`, `anon:alice`) | ✅ |
+| T3 still true | `SHARED_ASSET_PRINCIPAL = 'shared'` (`server-auth.ts:30`), docstring still says *no user isolation* | ✅ |
+
+**Six files, confirmed.** Nothing decayed between the archive and HEAD.
 
 ### 5.2 What is genuinely still open
 

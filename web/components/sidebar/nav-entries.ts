@@ -3,6 +3,7 @@ import {
   BookText,
   Bot,
   Brain,
+  GraduationCap,
   HeartHandshake,
   House,
   LayoutDashboard,
@@ -94,6 +95,25 @@ export const PRIMARY_NAV: NavEntry[] = [
     icon: Library,
     tooltipKey: "Book tooltip",
     requires: "llm",
+  },
+  {
+    // The course studio — an external application (THU-MAIC/OpenMAIC, MIT)
+    // framed at /course-studio, not code that runs in this bundle. It brings its
+    // own Tailwind v4, its own `/api/*` routes and its own database, none of
+    // which can share this app's, so it runs as a sibling service and this
+    // entry is the door to it.
+    //
+    // Ungated on purpose: `requires` describes a *DeepTutor* model grant, and
+    // OpenMAIC authenticates against its own providers. `surface` is left
+    // undeclared, which keeps it hidden from restricted learning accounts.
+    // Decided 2026-09-11: that is the intended state, not a placeholder, and
+    // the gatekeeper in front of the studio refuses any account with a
+    // learning policy (the same rule as `allowedSurfaces` here) with 403
+    // account_restricted, so the hidden entry is not the only lock.
+    href: "/course-studio",
+    label: "Course Studio",
+    icon: GraduationCap,
+    tooltipKey: "Course Studio tooltip",
   },
   // Courses nav entry temporarily hidden pending further product work.
   // The route and its data are untouched — only this entry point is gone.

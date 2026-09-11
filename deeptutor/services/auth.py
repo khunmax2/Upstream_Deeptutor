@@ -334,13 +334,35 @@ def decode_token(token: str) -> TokenPayload | None:
                 return None
         return TokenPayload(
             username=username,
-            role=payload.get("role", "user"),
+            role=_current_role(username, str(payload.get("role", "user"))),
             user_id=user_id,
             device_credential_id=device_credential_id,
             device_session_nonce=device_session_nonce,
         )
     except JWTError:
         return None
+
+
+def _current_role(username: str, token_role: str) -> str:
+    """
+    The role as the user store says it is now, not as the token said at login.
+
+    The token carries the role it was minted with, and TOKEN_EXPIRE_HOURS is a
+    day. Read from the token alone, a promotion waited for the next login and a
+    demotion left a former admin holding admin for up to 24 hours -- on every
+    surface that trusts ``TokenPayload.role``: ``require_admin``,
+    ``/api/auth/status`` (which the sidebar and the course-studio gatekeeper
+    read), and the learning-policy branch that exempts admins. The store is
+    one small JSON read that ``decode_token`` already makes when the token has
+    no uid. A user the store does not know keeps the token's role: the
+    single-user bootstrap account lives in auth.json and is folded in by
+    ``_load_users``, and tests mint tokens for users that were never stored.
+    """
+    record = _load_users().get(username)
+    if not record:
+        return token_role
+    stored = str(record.get("role") or "").strip()
+    return stored if stored in ("admin", "user") else token_role
 
 
 # ---------------------------------------------------------------------------

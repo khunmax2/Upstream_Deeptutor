@@ -161,6 +161,10 @@ const nextConfig = {
   // landing on the live surface instead of a bare 404.
   async redirects() {
     return [
+      // The course studio moved from /maic when the embedded product stopped
+      // carrying its upstream name. Anything already pointing at the old path —
+      // a bookmark, a link in a chat — still lands.
+      { source: "/maic", destination: "/course-studio", permanent: true },
       {
         source: "/mastery/:pathId/study",
         destination: "/mastery/:pathId/sessions",

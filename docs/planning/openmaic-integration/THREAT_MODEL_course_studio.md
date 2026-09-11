@@ -134,8 +134,30 @@ identity header that now nobody sets or strips.
 **Existing control.** Its default is off, and that is all.
 
 **Control.** Make the dangerous combination impossible to reach by accident:
-refuse to start when `ALLOW_ANONYMOUS=1` and `NODE_ENV=production`, and log the
-mode loudly at startup so it appears in the first line of any bug report.
+refuse to start when `ALLOW_ANONYMOUS=1` and the deployment does not look local,
+and log the mode loudly at startup so it appears in the first line of any bug
+report.
+
+**Corrected while implementing, 2026-09-10.** This originally said
+`NODE_ENV=production`, which was checked before being written and **would never
+have fired**: the compose file passes seven variables to the gatekeeper and
+`NODE_ENV` is not among them, and `node:22-alpine` does not set it either.
+
+The signal that does exist is the one the compose file already documents as the
+difference between the two worlds:
+
+```
+local     DEEPTUTOR_AUTH_URL=http://host.docker.internal:3782/api/auth/status
+deployed  DEEPTUTOR_AUTH_URL=https://203.185.144.41/deepwitya2/api/auth/status
+```
+
+Both are honoured — `NODE_ENV=production` because it is conventional and costs
+nothing, and a non-local auth target because it is the one that fires here.
+Either refuses to start.
+
+Demonstrated rather than argued: removing the guard fails three assertions, and
+keeping **only** the `NODE_ENV` half — the control as originally written — still
+fails one.
 
 ---
 
@@ -166,14 +188,54 @@ than rediscovered.
 
 ---
 
-### T6 — `dt_token` is delivered to five unrelated applications · **7.2** · Information disclosure
+### T6 — `dt_token` is delivered to six applications owned by another team · **8.1** · Information disclosure
 
-**How.** DeepWitya sets `dt_token` host-only with `path=/`. The deployment host
-serves `/sansarnnews`, `/research-helper`, `/dol`, `/deepwitya`,
-`/opdc-assistant` and `/deepwitya2`. A host-only cookie with `path=/` is sent to
-**every path on that host** — so each of those applications receives a valid
-DeepWitya session token on every request their users make, and any of them can
-replay it.
+**Measured 2026-09-10, and it did not collapse — it got worse.** This section was
+written as inferred; every claim below is now checked. Re-score from 7.2 to 8.1:
+Affected and Discoverability both rise once the neighbours are confirmed to
+belong to other people, and Exploitability rises on the `SameSite` finding.
+
+**How.** DeepWitya sets `dt_token` host-only with `path=/`, and the host has no
+hostname to separate anything by. Every path below is one origin.
+
+| checked | result |
+|---|---|
+| `nginx -T` server names | `203.185.144.41` and `_` (catch-all). **No domain name anywhere** |
+| TLS certificate | one SAN, `IP Address:203.185.144.41`, no `DNS:` entry |
+| the paths | **seven**, not six — `/sansarnnews`, `/sansarn-research-helper`, `/dol`, `/deepwitya`, `/opdc-assistant`, `/deepwitya2`, and the catch-all `/` which answers 200 |
+| cookie attributes, live | `Path=/; HttpOnly; Secure; SameSite=none` |
+| who owns the neighbours | **another team.** Confirmed by Attapon |
+
+A host-only cookie with `path=/` is sent to **every path on that host**, so each
+of those applications receives a valid DeepWitya session token on every request
+their users make, and any of them can replay it. Their access logs, error
+trackers and APM traces hold it too, and a compromise of any one of them yields
+live sessions for every DeepWitya user who has visited it.
+
+Two corrections to the original list: `/research-helper` only redirects — the app
+is at `/sansarn-research-helper` — and the catch-all at `/` was missed entirely.
+
+**`Secure` is set, so port 80 does not carry it in the clear.** That sub-concern
+is closed: port 80 is open (`/` answers 502, `/deepwitya2` redirects to HTTPS),
+but the cookie will not travel over it.
+
+**The `SameSite=none` finding, which is new.** `auth.py:31` reads
+
+```python
+_SAMESITE = "none" if _SECURE else "lax"
+```
+
+and the comment above it gives a **local-development** reason: the cookie has to
+survive a frontend on `127.0.0.1` talking to a backend on `localhost`. Because
+the value is derived from `cookie_secure`, production inherits `None` without
+anyone choosing it. That changes what T6 means:
+
+- as written: those applications receive the token when *their own users* browse
+  them;
+- as measured: **any website on the internet** can cause a browser to attach a
+  live DeepWitya session to a request against any path on that host — an `<img>`,
+  a form post, a credentialed `fetch`. `HttpOnly` stops JavaScript reading the
+  cookie; it does not stop the browser sending it.
 
 **This is not caused by the studio.** The gatekeeper's own comment identifies the
 mechanism and calls it *"a real leak (an app that should not hold that token
@@ -181,16 +243,23 @@ receives it on every request)"* — and then uses it, because it is what makes t
 gate cheap. The studio inherits an exposure that already reaches five other
 tenants.
 
-**Inferred, not measured.** I have not verified that all six paths share one
-hostname; the list comes from patch 20's commit message. **Check this before
-acting on it** — if they are separate hostnames, the finding collapses to
-nothing.
+**Decision — `SameSite=Lax` in production, taken 2026-09-10.** Of the three
+options, this is the one that goes into phase 1:
 
-**Control, if confirmed.** Scope the cookie to the paths that need it, or move
-DeepWitya to its own hostname. Note that narrowing `path=` would also remove the
-mechanism the gatekeeper relies on, so the two decisions are coupled: the
-gatekeeper would then need the token forwarded deliberately rather than
-accidentally.
+| | effect | cost |
+|---|---|---|
+| **chosen — `SameSite=Lax` in production** | removes "any website can trigger it"; the neighbours still receive it on their own users' requests | one line, but `_SAMESITE` is currently *derived* from `cookie_secure`, so the two must be separated. Must first confirm the same-origin embed does not need `None` |
+| narrow `path=` | removes the cross-application delivery itself | breaks the mechanism the gatekeeper depends on — it receives `dt_token` precisely *because* the cookie goes everywhere. The two are coupled and must move together |
+| a hostname of its own | removes the shared origin entirely | needs a domain; there is none today |
+
+`Lax` still sends the cookie on top-level navigation to that host, so the
+neighbours keep receiving it when a user clicks through. **Narrowing `path=` or
+moving to a hostname remains the real fix** and stays open with an owner.
+
+One thing to verify before changing the value: the embed is same-origin under the
+new design (`/course-studio` on the same host, per ADR-0005 as amended), so
+`SameSite=None` should not be needed for it. That is reasoning, not yet a measurement — check it against a running
+studio before shipping the change.
 
 ---
 
@@ -248,16 +317,18 @@ other people's data.
 
 ## 3. What phase 1 must carry
 
-| | mandatory |
-|---|---|
-| T1 | studio publishes no host port · deploy-time assertion · `STUDIO_REQUIRE_GATEWAY` fail-closed |
-| T2 | strip-before-set, tested in both directions |
-| T3 | replace `server-auth.ts`; acceptance test covers an **asset**, not only a document |
-| T4 | refuse `ALLOW_ANONYMOUS=1` in production |
-| T5 | cache `{ ok, uid }` under the token key |
+| | mandatory | landed |
+|---|---|---|
+| T1 | studio publishes no host port · deploy-time assertion · `STUDIO_REQUIRE_GATEWAY` fail-closed | controls 1 and 2 yes — `deploy/docker-compose.openmaic.yml` publishes nothing for the studio, and `check_openmaic_contract.py` fails CI on a `ports:` key, on `network_mode: host`, and on the studio joining the shared network. Control 3 is set in compose and inert until the fork honours it |
+| T2 | strip-before-set, tested in both directions | yes — `gatekeeper.mjs`, with the header stripped on both the HTTP and the websocket path |
+| T3 | replace `server-auth.ts`; acceptance test covers an **asset**, not only a document | no — fork work. Compose meanwhile refuses to carry `PERSISTENCE_ALLOW_INSECURE_DEV_AUTH`, and the image's `NODE_ENV=production` makes upstream reject its own development authenticator |
+| T4 | refuse `ALLOW_ANONYMOUS=1` in production | yes — non-zero exit at startup, and in compose the auth URL is a container name, so the guard fires there by construction |
+| T5 | cache `{ ok, uid }` under the token key | yes |
+| T6 | `SameSite=Lax` in production — the hostname claim is now measured, and confirmed | no — needs a running studio first, to confirm the same-origin embed does not need `None` |
 
-Deferrable with a written owner: T6 (verify the hostname claim first), T8 (pin
-the origin value), T9 (audit).
+Deferrable with a written owner: the rest of T6 (narrow `path=`, or a hostname of
+its own — both coupled to the gatekeeper's token delivery), T8 (pin the origin
+value), T9 (audit).
 
 ---
 
@@ -327,10 +398,86 @@ it is scoped and still wanted.
 - The PostgreSQL boundary (B5) has had only the ownership question asked of it —
   not connection secrets, not encryption at rest, not who can reach 5432. It
   will hold every user's course content, so it deserves its own pass.
-- **T6's hostname assumption is unverified** and is the one finding that could
-  be either serious or nothing. Check it first.
+- ~~**T6's hostname assumption is unverified.**~~ **Answered 2026-09-10.** One
+  origin, no domain, seven paths, neighbours owned by another team, and
+  `SameSite=None` on top. See T6.
 - No dependency/CVE audit of the studio's tree. Upstream's most recent commit at
   the time of writing was `fix(ssrf): keep cloud metadata endpoints blocked
   under ALLOW_LOCAL_NETWORKS` — evidence that this class of issue is live in
   that codebase, and that following their releases has a security value beyond
   features.
+
+---
+
+## Round 2 — reviewed against the built image, 2026-09-10
+
+The first pass modelled a design. This one read the running artefacts: the image
+that `docker build` actually produced, the compose file as `docker compose
+config` renders it, and the embed component as it ships. Four findings, and four
+things that were assumed and are now measured.
+
+### T10 — `dt_token` is `SameSite=None` in production (DREAD 7.6)
+
+`deeptutor/api/routers/auth.py:31` — `_SAMESITE = "none" if _SECURE else "lax"`.
+The comment above it justifies `None` by a **development** case: a frontend on
+`127.0.0.1` and a backend on `localhost` are different origins. The code applies
+`None` on the opposite branch — in production, behind nginx, where both are one
+origin and the case does not arise. Production therefore ships the weaker value
+for a reason that only holds where the stronger one is already used.
+
+`SameSite=None` attaches the session cookie to every cross-site request to this
+origin, which is the CSRF surface `Lax` exists to remove. The studio embed does
+not need it: the built image bakes `frame-ancestors 'self'` and the deployment
+is same-origin, so the frame carries the cookie under `Lax` unchanged.
+
+**Control:** `Lax` in production. This is phase-1 item 6, and the evidence it
+was waiting for now exists.
+
+### T11 — the same-origin embed removes every browser boundary (DREAD 5.4)
+
+Scored lower than it reads. Same origin means the studio can reach this app's
+`localStorage`, `sessionStorage`, IndexedDB and DOM, and can navigate the top
+window. What that is worth was measured rather than assumed: this app writes one
+localStorage key (`deeptutor-theme`), keeps no PocketBase auth store in the
+browser, and `dt_token` is HttpOnly — so the drawer the studio can open is
+nearly empty, and the one thing worth taking is not in it.
+
+**Control:** none needed today; the measurement is the control, and it has to be
+re-taken whenever this app starts storing something in the browser. A `sandbox`
+attribute would still block top-level navigation even alongside
+`allow-same-origin`, and is worth testing once the stack runs — the component's
+comment argues against `sandbox` without considering that flag.
+
+### T12 — this app sets no Content-Security-Policy at all (DREAD 5.0)
+
+Not specific to the studio, but it is the layer that would contain one. There is
+no `Content-Security-Policy` header anywhere in `web/` or the API — no
+`frame-src`, no `script-src`. The studio sets its own; the host sets none.
+
+### T13 — the gate had no healthcheck (DREAD 4.2) — **closed**
+
+The gatekeeper is the only service published to the host, so nginx forwarded to
+it whether or not it was alive, and a crashed gate was a 502 with nothing
+anywhere naming the container as the reason. It exposes
+`/__gatekeeper/health`; compose now probes it. Memory limits, log rotation and
+`no-new-privileges` were added to all three services in the same pass.
+
+### Measured, not assumed
+
+| claim | how it was checked |
+|---|---|
+| `frame-ancestors 'self'` is compiled at build, not read at runtime | `routes-manifest.json` inside the built image carries it |
+| `basePath` reaches the image | same manifest: `basePath = "/deepwitya/studio"` |
+| the studio does not run as root | `id` in the image: `uid=1001(nextjs)` |
+| there is no `postMessage` between the two apps | searched; ADR-0005's rejection of two-way binding is honoured in the code |
+| the embed URL cannot be turned into script execution | `normalizeEmbedUrl` rejects `//host`, and any protocol but http/https |
+
+### T2 — closed by measurement, 2026-09-10
+
+The client-supplied identity header (DREAD 8.8) was argued closed by reading
+`stripHeader` and by a stub test. It is now closed by running it: the real
+gatekeeper container in front of the real studio container, asked for one asset
+six ways. Another account's cookie carrying `x-deeptutor-owner: user:alice`
+answered **404**, and no cookie carrying the same header answered **401**. The
+identity the studio acts on is the one the gate verified, or the request does
+not arrive. Reproduction in `deploy/openmaic-gatekeeper/README.md`.

@@ -23,12 +23,28 @@ from pydantic import BaseModel, Field, field_validator
 
 from deeptutor.services.config import load_auth_settings
 
-# SameSite=None lets the cookie work when the browser accesses the frontend via
-# 127.0.0.1 and the backend via localhost (different origins on the same machine).
-# Browsers require Secure=True for SameSite=None, but that needs HTTPS — so in
-# local dev we fall back to SameSite=Lax and tell users to use localhost:// URLs.
-_SECURE = bool(load_auth_settings()["cookie_secure"])
-_SAMESITE = "none" if _SECURE else "lax"
+# SameSite comes from settings and defaults to Lax.
+#
+# It used to be derived: "none" whenever the cookie was Secure. The comment above
+# that line justified None by a *development* case — a frontend reached at
+# 127.0.0.1 while the backend answers at localhost, which are different origins —
+# but that case runs without HTTPS, so it took the other branch and got Lax
+# anyway. Production, behind one reverse proxy, is where None was actually
+# applied, and there the case does not arise: None attaches the session cookie
+# to every cross-site request to this origin, which is the CSRF surface Lax
+# exists to remove.
+#
+# The framed course studio does not need None either. It is served from this
+# origin, and the image it runs from bakes `frame-ancestors 'self'` — measured
+# inside the built image, not assumed.
+#
+# A genuinely cross-site frontend is still a real shape, so `cookie_samesite`
+# remains settable; the loader refuses "none" without Secure, because browsers
+# drop that cookie and a dropped session cookie looks like a login that does not
+# stick.
+_AUTH_SETTINGS = load_auth_settings()
+_SECURE = bool(_AUTH_SETTINGS["cookie_secure"])
+_SAMESITE = str(_AUTH_SETTINGS.get("cookie_samesite") or "lax")
 
 from deeptutor.multi_user.audit import log_admin_action, log_usage
 from deeptutor.multi_user.context import set_current_user, user_from_token_payload

@@ -1,10 +1,11 @@
 """Check the handful of assumptions this fork makes about OpenMAIC.
 
-The embed at `/maic` is not a code dependency — nothing here imports anything
-there. What it depends on is a small runtime contract: a URL that serves the app,
-an environment variable that widens its `frame-ancestors`, an access gate that
-stays off, and a container port. Five things, and every one of them is a
-behaviour of *their* code that a future release could change.
+The embed is not a code dependency — nothing here imports
+anything there. What it depends on is a small contract: a URL that serves the
+app, `frame-ancestors` that admits our origin, an access gate that stays off, a
+container port, one identity header both sides agree on, and a compose file that
+keeps the studio unreachable except through the gatekeeper. Every one of them is
+a behaviour of code a future release could change — theirs, or ours.
 
 The failure mode is what makes this worth automating. If they rename
 ALLOWED_FRAME_ANCESTORS or start sending `X-Frame-Options: DENY`, the iframe goes
@@ -17,9 +18,14 @@ Offline checks (no server needed) compare the checkout against
 which drifts by roughly 50-90 keys a week upstream and is what silently puts the
 Thai translation out of date.
 
+The identity-header and compose checks need neither a checkout nor a server, so
+they run every time — they are the halves that drift without anyone noticing.
+The compose half parses the overlay with PyYAML, because a grep cannot tell a
+`ports:` key from the comment explaining why there is none.
+
 Usage::
 
-    # offline only — version pin and key-count drift
+    # offline only — version pin, key-count drift, identity header, compose
     python deploy/openmaic-patches/check_openmaic_contract.py --openmaic ../OpenMAIC
 
     # plus the runtime contract, against a running OpenMAIC
@@ -76,18 +82,20 @@ def count_leaves(node: Any) -> int:
     return 1
 
 
-def subtree_import_commit(repo_root: Path) -> str | None:
-    """The upstream commit `integration/maic` was last imported from.
+def checkout_head(repo: Path) -> str | None:
+    """The commit the studio checkout is currently on.
 
-    `git subtree add|pull --squash` records it in the squash commit's subject, and
-    that is the only durable statement of where the vendored copy came from —
-    there is no second checkout with a HEAD to read any more.
+    Under ADR-0005 the studio is a sibling repository rather than a squashed
+    subtree, so this is simply its HEAD. The previous version of this function
+    read the subject of a `git subtree --squash` commit, which was the only
+    durable statement of provenance while the code was vendored — and which
+    stopped existing when the subtree came off `main` on 2026-09-09, leaving this
+    check failing for a reason that had nothing to do with the contract.
     """
-    import re as _re
     import subprocess as _sp
 
     result = _sp.run(
-        ["git", "-C", str(repo_root), "log", "--format=%H%x1f%s", "--all"],
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -95,37 +103,420 @@ def subtree_import_commit(repo_root: Path) -> str | None:
     )
     if result.returncode != 0:
         return None
-    pattern = _re.compile(r"^Squashed 'integration/maic/?' content from commit ([0-9a-f]+)")
-    for line in result.stdout.splitlines():
-        _, _, subject = line.partition("")
-        match = pattern.match(subject)
-        if match:
-            return match.group(1)
-    return None
+    head = result.stdout.strip()
+    return head or None
+
+
+GATEKEEPER = HERE.parent / "openmaic-gatekeeper" / "gatekeeper.mjs"
+
+
+def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) -> None:
+    """The one name the two systems must agree on.
+
+    The gatekeeper sets a header; the studio reads it and turns it into an
+    ``owner_id``. Nothing else couples them, and a rename on either side is the
+    quietest failure this design has: no error, no log line, the app keeps
+    working, and every reader silently stops seeing their own documents because
+    the studio falls back to minting an anonymous owner per browser.
+
+    So both sides are read from source and compared against the pin, rather than
+    either being trusted to still say what it said last week.
+    """
+    print("\n[contract] identity header")
+
+    contract = pin.get("contract") or {}
+    expected = contract.get("identity_header")
+    if not expected:
+        report.fail("identity pin", "openmaic-pin.json has no contract.identity_header")
+        return
+
+    if not GATEKEEPER.is_file():
+        report.fail("gatekeeper source", f"missing {GATEKEEPER}")
+    else:
+        source = GATEKEEPER.read_text(encoding="utf-8")
+        # The default in the `||` fallback is the value that ships. An env var can
+        # override it, but a deployment that overrides it has to override the
+        # studio too, and that is what this pin exists to force a decision about.
+        if f"'{expected}'" in source:
+            report.ok("gatekeeper sets", expected)
+        else:
+            report.fail(
+                "gatekeeper sets",
+                f"gatekeeper.mjs does not mention {expected!r} — renamed on this side?",
+            )
+
+        prefix = contract.get("identity_prefix")
+        if prefix and f"'{prefix}'" in source:
+            report.ok("identity prefix", prefix)
+        elif prefix:
+            report.fail("identity prefix", f"gatekeeper.mjs does not mention {prefix!r}")
+
+        # The role header rides beside the identity header and would drift the
+        # same silent way: the studio's admin-only surface would simply treat
+        # every admin as a user.
+        role_header = contract.get("role_header")
+        if role_header and f"'{role_header}'" in source:
+            report.ok("gatekeeper sets role", role_header)
+        elif role_header:
+            report.fail("gatekeeper sets role", f"gatekeeper.mjs does not mention {role_header!r}")
+        # The learner refusal is a decision, not an accident; it is pinned by the
+        # error code the gatekeeper answers with.
+        if "'account_restricted'" in source:
+            report.ok("gatekeeper refuses the learner preset", "account_restricted")
+        else:
+            report.fail(
+                "gatekeeper refuses the learner preset",
+                "gatekeeper.mjs no longer answers account_restricted -- decided 2026-09-11",
+            )
+
+    if not contract.get("studio_threaded"):
+        report.skip(
+            "studio reads",
+            "the fork does not thread authenticatedOwnerId yet — flip "
+            "contract.studio_threaded once it does, and this becomes a real check",
+        )
+        return
+
+    # No checkout is not drift. CI runs this half deliberately without one -- the
+    # gatekeeper side needs no studio source, which is the whole reason it can run
+    # there -- so a missing tree has to skip, the same way the checkout section
+    # above skips, rather than report the two sides as having come apart. Getting
+    # this wrong turned a green job red and said something untrue about the fork
+    # while doing it.
+    if not (repo / "lib").is_dir():
+        report.skip(
+            "studio reads",
+            f"no OpenMAIC source at {repo} — pass --openmaic <checkout> to verify "
+            "the studio half; contract.studio_threaded says it is there to be found",
+        )
+        return
+
+    # Once the fork is threaded, the header must appear in its source too.
+    hits = [
+        path
+        for path in (repo / "lib").rglob("*.ts")
+        if expected in path.read_text(encoding="utf-8", errors="replace")
+    ]
+    if hits:
+        report.ok("studio reads", f"{expected} in {hits[0].relative_to(repo)}")
+    else:
+        report.fail(
+            "studio reads",
+            f"contract.studio_threaded is true but no file under {repo / 'lib'} mentions "
+            f"{expected!r} — the two sides have drifted apart",
+        )
+
+    role_header = contract.get("role_header")
+    if role_header and not contract.get("role_header_studio_reads"):
+        report.skip(
+            "studio reads role",
+            "the fork does not read the role header yet — flip "
+            "contract.role_header_studio_reads once it does",
+        )
+    elif role_header:
+        role_hits = [
+            path
+            for path in (repo / "lib").rglob("*.ts")
+            if role_header in path.read_text(encoding="utf-8", errors="replace")
+        ]
+        if role_hits:
+            report.ok("studio reads role", f"{role_header} in {role_hits[0].relative_to(repo)}")
+        else:
+            report.fail(
+                "studio reads role",
+                f"contract.role_header_studio_reads is true but nothing under {repo / 'lib'} "
+                f"mentions {role_header!r}",
+            )
+
+
+COMPOSE = HERE.parent / "docker-compose.openmaic.yml"
+STUDIO_SERVICE = "openmaic"
+GATEKEEPER_SERVICE = "gatekeeper"
+DB_SERVICE = "openmaic-postgres"
+
+
+def _env_map(service: dict[str, Any]) -> dict[str, str]:
+    """Compose accepts `environment` as a list or a mapping. Read both."""
+    env = service.get("environment") or {}
+    if isinstance(env, dict):
+        return {str(k): "" if v is None else str(v) for k, v in env.items()}
+    out: dict[str, str] = {}
+    for item in env:
+        name, _, value = str(item).partition("=")
+        out[name] = value
+    return out
+
+
+def compose_checks(pin: dict[str, Any], report: Report) -> None:
+    """T1, control 2 — the deploy-time assertion.
+
+    Controls 1 and 3 protect a network property and a runtime behaviour. This one
+    protects the file, because the file is what a hurried edit touches: one
+    ``ports:`` line under the studio and the identity header stops meaning
+    anything, with no error anywhere to say so.
+
+    Read as YAML rather than grepped: a comment saying ``# ports:`` must not fail,
+    and a ``ports:`` nested under the wrong service must not pass.
+    """
+    print("\n[contract] compose")
+
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        # Deliberately not a SKIP. A security assertion that quietly stops running
+        # is worth less than no assertion, because the file still looks checked.
+        report.fail("PyYAML", "not installed — `pip install pyyaml` (it is a project dependency)")
+        return
+
+    if not COMPOSE.is_file():
+        report.fail("overlay", f"missing {COMPOSE}")
+        return
+
+    doc = yaml.safe_load(COMPOSE.read_text(encoding="utf-8")) or {}
+    services = doc.get("services") or {}
+
+    studio = services.get(STUDIO_SERVICE)
+    if not isinstance(studio, dict):
+        report.fail("studio service", f"no `{STUDIO_SERVICE}` service in {COMPOSE.name}")
+        return
+
+    # --- T1.1: the studio publishes nothing -------------------------------------
+    if "ports" in studio:
+        report.fail(
+            "studio publishes no port",
+            f"`{STUDIO_SERVICE}` has a `ports:` key — anyone on the host can then send "
+            "the identity header directly and become any user",
+        )
+    else:
+        report.ok("studio publishes no port")
+
+    if studio.get("network_mode") == "host":
+        report.fail("studio is not on the host network", "`network_mode: host` bypasses `ports:`")
+    else:
+        report.ok("studio is not on the host network")
+
+    studio_networks = set(studio.get("networks") or [])
+    if "deeptutor-network" in studio_networks:
+        report.fail(
+            "studio is off the shared network",
+            "the studio is reachable from every other container in the stack; the "
+            "coupling is a URL and a header, not a container-to-container call",
+        )
+    else:
+        report.ok("studio is off the shared network", ", ".join(sorted(studio_networks)))
+
+    # --- T1.3: fail closed inside the studio ------------------------------------
+    studio_env = _env_map(studio)
+    if studio_env.get("STUDIO_REQUIRE_GATEWAY") == "1":
+        report.ok("studio fails closed", "STUDIO_REQUIRE_GATEWAY=1")
+    else:
+        report.fail(
+            "studio fails closed",
+            "STUDIO_REQUIRE_GATEWAY is not 1 — a request that arrives without the "
+            "identity header would fall back to a fresh anonymous owner",
+        )
+
+    # --- the flags the studio cannot work without ------------------------------
+    # Each of these is silent when missing. The agent runtime one answers 404 on
+    # exactly two routes while every other route answers 200, and the studio
+    # reports it as persistence being unavailable — a sentence that names
+    # neither the flag nor the routes.
+    for variable, value, why in (
+        (
+            "OPENMAIC_AGENT_RUNTIME_ENABLED",
+            "true",
+            "/api/stages and /api/folders answer 404 and saved classrooms cannot load",
+        ),
+    ):
+        if studio_env.get(variable) == value:
+            report.ok(f"studio sets {variable}", value)
+        else:
+            report.fail(
+                f"studio sets {variable}",
+                f"expected {value!r}, got {studio_env.get(variable)!r} — {why}",
+            )
+
+    # --- T3: upstream's development authenticator stays refused -----------------
+    # Read from the parsed services, not from the text: the overlay explains in a
+    # comment why this variable is absent, and a checker that cannot tell a comment
+    # from a setting would fail on the explanation.
+    # Two variables, one authenticator, and they are read in this order:
+    # PERSISTENCE_DEV_TOKEN is what the route demands before it will serve at all
+    # (503 without it), and PERSISTENCE_ALLOW_INSECURE_DEV_AUTH is what lets that
+    # authenticator run under NODE_ENV=production (401 without it). Supplying the
+    # first is the plausible mistake — it is how a deployer makes a 503 go away —
+    # so it is checked in its own right, not only as the second one's companion.
+    for variable, why in (
+        (
+            "PERSISTENCE_DEV_TOKEN",
+            "its public half is compiled into the browser bundle, so identity would "
+            "come from a client-supplied x-learner-key",
+        ),
+        (
+            "PERSISTENCE_ALLOW_INSECURE_DEV_AUTH",
+            "it re-enables that authenticator under NODE_ENV=production",
+        ),
+    ):
+        setters = [
+            name
+            for name, service in services.items()
+            if isinstance(service, dict) and variable in _env_map(service)
+        ]
+        label = f"no {variable}"
+        if setters:
+            report.fail(label, f"{setters} set it — {why}")
+        else:
+            report.ok(label)
+
+    # --- T1.1's companion: the gate is the only published thing -----------------
+    gate = services.get(GATEKEEPER_SERVICE)
+    if not isinstance(gate, dict):
+        report.fail("gatekeeper service", f"no `{GATEKEEPER_SERVICE}` service in {COMPOSE.name}")
+    else:
+        published = [str(p) for p in (gate.get("ports") or [])]
+        stray = [p for p in published if not p.startswith("127.0.0.1:")]
+        if not published:
+            report.fail("gate is published to loopback", "the gatekeeper publishes nothing")
+        elif stray:
+            report.fail(
+                "gate is published to loopback",
+                f"{stray} binds every interface; nginx terminates TLS in front of it",
+            )
+        else:
+            report.ok("gate is published to loopback", published[0])
+
+    # --- the third side of the identity contract --------------------------------
+    # The pin and the gatekeeper source are compared above. Compose is where a
+    # rename would actually be applied, and it feeds both containers.
+    expected = (pin.get("contract") or {}).get("identity_header")
+    gate_env = _env_map(gate) if isinstance(gate, dict) else {}
+    defaults = {
+        name: env.get("STUDIO_IDENTITY_HEADER", "")
+        for name, env in (("studio", studio_env), ("gatekeeper", gate_env))
+    }
+    if expected and all(f":-{expected}}}" in value for value in defaults.values()):
+        report.ok("compose passes one header name", expected)
+    else:
+        report.fail(
+            "compose passes one header name",
+            f"expected both services to default STUDIO_IDENTITY_HEADER to {expected!r}, "
+            f"got {defaults}",
+        )
+    expected_role = (pin.get("contract") or {}).get("role_header")
+    role_defaults = {
+        name: env.get("STUDIO_ROLE_HEADER", "")
+        for name, env in (("studio", studio_env), ("gatekeeper", gate_env))
+    }
+    if expected_role and all(f":-{expected_role}}}" in value for value in role_defaults.values()):
+        report.ok("compose passes one role header name", expected_role)
+    elif expected_role:
+        report.fail(
+            "compose passes one role header name",
+            f"expected both services to default STUDIO_ROLE_HEADER to {expected_role!r}, "
+            f"got {role_defaults}",
+        )
+
+    # --- the two halves of the base path ---------------------------------------
+    # NEXT_PUBLIC_STUDIO_BASE_PATH is compiled into the image, so the path the
+    # studio serves under is a property of the IMAGE. The only thing compose
+    # decides is where the healthcheck probes. When the two drift the container
+    # never reports healthy and nothing says why — the healthcheck simply asks
+    # for a path the image does not serve.
+    expected_base = (pin.get("contract") or {}).get("base_path")
+    if expected_base:
+        probe = str(studio.get("healthcheck", {}).get("test", ""))
+        # The probe runs inside the image, and the only binary every studio
+        # image is certain to carry is node -- it is what serves the app. The
+        # first alpine-based image had wget, the bookworm-slim one does not,
+        # and a probe on a missing tool fails identically to a studio that is
+        # down: exit 127 every 30 s, never healthy, and the gatekeeper's
+        # depends_on keeps the whole entry closed.
+        test = studio.get("healthcheck", {}).get("test")
+        command = test[-1] if isinstance(test, list) and test else str(test or "")
+        if command.lstrip().startswith("node "):
+            report.ok(
+                "healthcheck probes with node", "the one binary the image is certain to carry"
+            )
+        else:
+            report.fail(
+                "healthcheck probes with node",
+                f"the probe must start with `node ` -- wget/curl are not in "
+                f"node:22-bookworm-slim; the probe reads {command!r}",
+            )
+        wanted = "STUDIO_BASE_PATH:-" + expected_base + "}"
+        if wanted in probe:
+            report.ok("healthcheck probes the built base path", expected_base)
+        else:
+            report.fail(
+                "healthcheck probes the built base path",
+                f"the image is pinned as built for {expected_base!r}, so the "
+                f"healthcheck must default STUDIO_BASE_PATH to it; the probe reads "
+                f"{probe!r}",
+            )
+
+    # --- the build script and the pin ------------------------------------------
+    # Both values below are compiled into the image, so nothing in the running
+    # system can be asked whether they were passed. What can be checked is that
+    # the one script that passes them still says what the pin says. A forgotten
+    # NEXT_PUBLIC_PERSISTENCE is the quiet one: the studio starts, serves pages,
+    # and keeps everything in the browser, so the isolation this deployment is
+    # built around is simply never exercised — with no error anywhere.
+    build = HERE.parent / "build-studio.sh"
+    if not build.is_file():
+        report.fail("build script", f"missing {build}")
+    else:
+        script = build.read_text(encoding="utf-8")
+        for key, want in (
+            ("BASE_PATH", (pin.get("contract") or {}).get("base_path")),
+            ("PERSISTENCE", (pin.get("contract") or {}).get("persistence")),
+        ):
+            if not want:
+                continue
+            line = f"{key}={want}"
+            if any(row.strip() == line for row in script.splitlines()):
+                report.ok(f"build passes {key}", want)
+            else:
+                report.fail(
+                    f"build passes {key}",
+                    f"build-studio.sh does not set {line!r} — the image would be built "
+                    f"with a value the pin does not record",
+                )
+
+    # --- the database is not a second door --------------------------------------
+    db = services.get(DB_SERVICE)
+    if not isinstance(db, dict):
+        report.fail("database service", f"no `{DB_SERVICE}` service in {COMPOSE.name}")
+    elif "ports" in db:
+        report.fail("database publishes no port", f"`{DB_SERVICE}` has a `ports:` key")
+    elif db.get("profiles"):
+        report.fail(
+            "database always starts",
+            f"`{DB_SERVICE}` is behind profile {db['profiles']} — per-account isolation "
+            "needs the database, so a stack started without it silently loses it",
+        )
+    else:
+        report.ok("database publishes no port")
+        report.ok("database always starts")
 
 
 def offline_checks(repo: Path, pin: dict[str, Any], report: Report) -> None:
     print("\n[contract] checkout")
 
-    # OpenMAIC is vendored at integration/maic, so there is no second checkout
-    # whose HEAD says where it came from. `git subtree` records that in the squash
-    # commit, and comparing it to the pin answers the question that matters:
-    # has somebody pulled a newer OpenMAIC without re-verifying against it?
-    imported = subtree_import_commit(repo.parent.parent)
+    # The studio is its own checkout now, so the question is simply whether it
+    # sits on the commit everything here was measured against.
+    head = checkout_head(repo)
     pinned = pin["commit"]
-    if imported is None:
-        report.fail(
-            "version pin",
-            "no subtree import commit found — is integration/maic still a git subtree?",
-        )
-    elif pinned.startswith(imported) or imported.startswith(pinned):
-        report.ok("version pin", f"subtree imported at the verified commit {pin['commit_short']}")
+    if head is None:
+        report.fail("version pin", f"{repo} is not a git checkout — cannot read HEAD")
+    elif pinned.startswith(head) or head.startswith(pinned):
+        report.ok("version pin", f"checkout is on the verified commit {pin['commit_short']}")
     else:
         # Not a failure of the code — moving forward is the point. It is a cue to
-        # re-measure before trusting the vendored copy again.
+        # re-measure before trusting the checkout again. Every rebase carries the
+        # DDL-drift risk, so this reports the distance and does not force the move.
         report.fail(
             "version pin",
-            f"subtree imported at {imported[:8]} != verified {pin['commit_short']} — "
+            f"checkout is on {head[:8]} != verified {pin['commit_short']} — "
             "re-run the checks, then bump the pin",
         )
 
@@ -218,13 +609,21 @@ def main() -> int:
         f"verified {pin['verified']}"
     )
 
-    # A vendored subtree has no `.git` of its own -- it is part of this repository --
-    # so the presence of package.json is what says "the source is here", and the
-    # checks read git from the enclosing repository instead.
+    # package.json is what says "the source is here". Under ADR-0005 the studio is
+    # a sibling checkout with its own .git, so the version pin reads that checkout's
+    # HEAD rather than a squash commit in this repository.
     if (args.openmaic / "package.json").is_file():
         offline_checks(args.openmaic, pin, report)
     else:
         print(f"\n[contract] checkout\n  SKIP  no OpenMAIC source at {args.openmaic}")
+
+    # The gatekeeper half of the identity contract needs no studio checkout, and it
+    # is the half that can drift without anyone noticing, so it runs either way.
+    identity_contract_checks(args.openmaic, pin, report)
+
+    # The compose overlay is ours and needs no checkout of anything, so it runs
+    # unconditionally — it is the file where a network control is lost by accident.
+    compose_checks(pin, report)
 
     if args.url:
         runtime_checks(args.url, args.origin, report)

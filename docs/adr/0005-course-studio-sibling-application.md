@@ -36,6 +36,21 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   (`DEEPTUTOR_OPENMAIC_URL`, with `?lang`, `?theme`, `?embed=1` on open) and one
   identity header. Providers, API keys, model configuration and storage stay
   independent on both sides.
+
+  *Amended 2026-09-11.* The identity header gained a sibling,
+  `x-deeptutor-role` (`admin` or `user`), carried the same way. Two decisions
+  were taken together once the studio had accounts to reason about: the
+  restricted learning account — `learning_policy` non-null, which is the
+  `learner` preset by default and any account an admin attached a policy to,
+  the same field DeepWitya's own surface guard and sidebar read — is refused
+  at the gate with `403 account_restricted`, closing the door the
+  already-hidden sidebar entry led to; and provider API keys move out of the browser's localStorage into the
+  studio's database per owner, with an admin-set default any account falls
+  back to and a per-user override — DeepWitya's own shape. The role header
+  exists for that second decision: the studio has exactly one admin-only
+  surface, and DeepWitya is the only thing that knows who is an admin.
+  "Independent on both sides" still holds for the *values*; what crossed the
+  boundary is one more verified claim about who is asking.
 - Per-user isolation threads DeepTutor's uid into `authenticatedOwnerId` as
   `user:<uid>`, matching the `user:` / `anon:` convention already in upstream's
   tests. PostgreSQL runs as a compose service; the studio owns its schema.
@@ -43,9 +58,34 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   any client-supplied copy. **Trusting the header is sound only while the studio
   container is unreachable except through the gatekeeper** — its README records
   that a direct `GET` with no cookie once answered `200`.
-- The route is `/studio` and the menu is "Course Studio". OpenMAIC's brand is
-  absent from the UI; its MIT notice travels as files (`NOTICE`, and `LICENSE`
-  copied into the image), which is what the licence asks for.
+- The route is **`/course-studio`** and the menu is "Course Studio". OpenMAIC's
+  brand is absent from the UI; its MIT notice travels as files (`NOTICE`, and
+  `LICENSE` copied into the image), which is what the licence asks for.
+
+  *Amended 2026-09-10.* This said `/studio`, on the stated ground that the first
+  attempt's `/maic` leaked the vendor into the address bar. Checked while
+  restoring the surface: the first attempt **had already fixed that** — the
+  archive serves `/course-studio`, labels the menu "Course Studio", and carries a
+  permanent redirect from `/maic`. The comparison in the handoff describes where
+  that attempt *started*, not where it ended. With the stated reason already
+  satisfied, renaming again would cost a second redirect hop and every reference
+  that names the route, and buy a shorter path. Attapon chose to keep
+  `/course-studio`.
+
+  *Amended again 2026-09-10.* That is DeepWitya's **own** route — the page
+  holding the iframe — and it is not the address the studio container answers
+  on. The two were never distinguished here because until the fork gained a
+  `basePath` there was only one of them. The studio serves under
+  **`/deepwitya/studio`**, recorded as `contract.base_path` in
+  `openmaic-pin.json` and asserted against the compose healthcheck.
+
+  It sits under DeepWitya's own base path deliberately. nginx matches the
+  longest prefix, so `location /deepwitya/studio/` wins over `location
+  /deepwitya/` and no rule belonging to another team is touched — the host
+  serves seven applications and opening a new location at the root would need
+  their agreement, the same way opening a port did. `/deepwitya/course-studio`
+  was the obvious name and is the one address that cannot be used: DeepWitya
+  already answers there.
 - Upstream's DDL constants are pinned in `check_openmaic_contract.py`, and
   `pg_dump` runs before every rebase.
 
