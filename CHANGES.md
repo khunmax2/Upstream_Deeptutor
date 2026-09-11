@@ -254,6 +254,31 @@ upstream.
 
 ---
 
+## The preview port was taken, and `nginx -t` cannot tell you that — 2026-09-11
+
+Go-live §4: the preview server on `127.0.0.1:8443` reported success —
+`nginx -t` passed, `systemctl reload nginx` returned 0 — and the browser
+through the SSH tunnel got an HTTP Basic prompt from `Server: kong/3.9.1`.
+Port 8443 on the host belongs to a Kong gateway of another application.
+`nginx -t` does not bind sockets, so a taken port passes the test; at reload
+nginx logs `bind() ... failed (98: Address already in use)` and keeps the
+old configuration. The stale file stays in `sites-enabled`, so every later
+reload — the cutover's included — would have failed the same way, silently.
+(The first attempt on the dev machine had also hit a local IDE on 8443,
+which is why the runbook now uses a different port on each side.)
+
+`apply-nginx-golive.sh --preview` takes the preview port as its second
+argument, refuses a port anything is listening on before writing a file,
+verifies after the reload that nginx actually listens on it, and `--cutover`
+refuses to run while a preview file exists whose port nginx is not listening
+on. `--remove-preview` reports the port it removed. §0 of the runbook
+measures the preview port next to 10330; §4 uses 9443 on the host and 18443
+on the dev machine and checks `Server: nginx` through the tunnel before the
+checklist starts. Parser and refusal tested against the real `ss -ltn`
+output shape.
+
+---
+
 ## The studio's three services hit the host's no-new-privileges quirk — 2026-09-11
 
 Go-live §3.4, first pass: six of eight containers up. `deeptutor-openmaic-postgres`

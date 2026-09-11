@@ -81,6 +81,10 @@ df -h / && docker system df
 - [ ] `docker compose version` ≥ 2.24
 - [ ] ดิสก์ว่าง ≥ 20 GB (build DeepWitya ใช้ ~5 GB, studio image ~1 GB, postgres เริ่มที่ไม่กี่ร้อย MB)
 - [ ] port `10330` ว่าง: `ss -ltnp | grep 10330` ต้องว่าง
+- [ ] port สำหรับ preview (§4) ว่าง **บน host**: `ss -ltnp | grep -E ':(8443|9443)\s'` — วัดได้ 2026-09-11:
+      **8443 บน host เป็นของ Kong 3.9.1 (gateway ของแอปอื่น)** → ใช้ `9443` ใน §4
+      `nginx -t` ไม่ bind จึงไม่เตือน; port ชนจะรู้ตอน reload ว่า bind ล้ม แล้ว nginx ใช้ config เดิมต่อเงียบ ๆ
+      script ตรวจให้แล้ว แต่วัดไว้ก่อนดีกว่า
 
 ---
 
@@ -233,17 +237,23 @@ base path ถูก bake ไว้ที่ `/deepwitya` ดังนั้น s
 แต่ `/deepwitya` บน :443 ยังเป็นของ v1 วิธีแก้: nginx server อีกตัวบน **loopback
 127.0.0.1:8443** ใช้ cert เดิม (ไม่ต้องเปิด firewall) แล้วเข้าผ่าน SSH tunnel
 
-บน host:
+บน host (พอร์ตที่สองคือพอร์ต preview บน host — ต้องว่าง ดู §0; script ปฏิเสธถ้าไม่ว่าง
+และยืนยันหลัง reload ว่า nginx ฟังจริง):
 ```bash
-sudo bash deploy/apply-nginx-golive.sh --preview 10320
+sudo bash deploy/apply-nginx-golive.sh --preview 10320 9443
 ```
 
-บนเครื่องคุณ:
+บนเครื่องคุณ (**ไม่ใช่ใน host**) — เปิด PowerShell ใหม่ ปล่อยค้างไว้ตลอดการทดสอบ
+(เลขซ้ายคือพอร์ตบนเครื่องคุณ เลือกที่ว่าง — 2026-09-11 เครื่อง dev มี IDE ใช้ 8443 อยู่ จึงใช้ 18443):
 ```bash
-ssh -L 8443:127.0.0.1:8443 <user>@203.185.144.41
+ssh -L 18443:127.0.0.1:9443 search@203.185.144.41
 ```
-แล้วเปิด **https://localhost:8443/deepwitya** (เบราว์เซอร์เตือน cert ไม่ตรงชื่อ — กดผ่าน,
+แล้วเปิด **https://localhost:18443/deepwitya** (เบราว์เซอร์เตือน cert ไม่ตรงชื่อ — กดผ่าน,
 cert ออกให้ IP ไม่ใช่ localhost; `cookie_secure` ยังใช้ได้เพราะเป็น https)
+
+ก่อนเริ่ม checklist ยืนยันว่าถึงตัวจริง: `curl -k -sI https://localhost:18443/deepwitya/api/auth/status`
+ต้องได้ `Server: nginx` และ body มี `"enabled":true` — ถ้าได้ `Server: kong` หรือกล่อง Basic auth
+ของเบราว์เซอร์ = ปลายท่อเป็นของแอปอื่น (พอร์ตชน) ไม่ใช่ stack เรา
 
 - [ ] login admin ได้ (cookie ติด, ไม่เด้งกลับ login)
 - [ ] แชท 1 รอบจบ, RAG ค้นเอกสารได้ (ถ้ามีเอกสารใน stack เดิม)
@@ -281,7 +291,8 @@ backup ทั้งสองไฟล์ → :443 เปลี่ยน port ใ
 - [ ] เบราว์เซอร์ปกติ: login → แชท → studio → เหมือน §4
 - [ ] ผู้ใช้ที่ login ค้างจาก v1 จะโดนเด้ง login ใหม่ (token คนละ `auth_secret`) — ปกติ บอกผู้ใช้ล่วงหน้า
 
-ถอด `/deepwitya2` (ตอนนี้ตอบ 404 อยู่แล้วเพราะ image bake เป็น `/deepwitya`) และ preview:
+ถอด `/deepwitya2` (ตอนนี้ตอบ 404 อยู่แล้วเพราะ image bake เป็น `/deepwitya`) และ preview
+(**ต้องถอด** — ไฟล์ preview ที่ค้างจะทำให้ reload ครั้งหน้าพยายาม bind พอร์ตนั้นอีก):
 
 ```bash
 sudo bash deploy/apply-nginx-deepwitya2.sh --revert
