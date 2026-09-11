@@ -254,6 +254,31 @@ upstream.
 
 ---
 
+## The studio's three services hit the host's no-new-privileges quirk — 2026-09-11
+
+Go-live §3.4, first pass: six of eight containers up. `deeptutor-openmaic-postgres`
+in a restart loop on exit 255 with `exec /usr/local/bin/docker-entrypoint.sh:
+operation not permitted`; the studio and the gatekeeper never started, held
+behind their `depends_on: service_healthy`. The host's Claude traced it, and
+correctly stopped rather than patching the host: kernel 6.8.0-63 + Docker 29 +
+AppArmor on this machine kill any container started with
+`no-new-privileges:true` at its very first exec — the quirk `deploy/REDEPLOY.md`
+§6 records for the sandbox runner. The production overlay unset the flag for
+the runner alone; the studio overlay sets it on its three services, and the
+two overlays had never run together before this step.
+
+`deploy/docker-compose.production.yml` now unsets it for `openmaic`,
+`gatekeeper` and `openmaic-postgres` too, in the same shape as the runner (the
+merged list reads `true` then `false`; the engine takes the last — probed:
+`NoNewPrivs: 0`). The block says plainly that this is this host only and that
+a host without the quirk must not copy it. Accepted as a deliberate relaxation:
+nothing the studio's isolation relies on — the gatekeeper's network path and
+the headers it injects — depends on the flag, and the alternative,
+`apparmor=unconfined`, drops a wider control. §3.4 of the runbook names the
+failure signature so the next run recognises it in one line.
+
+---
+
 ## What the host measured that the runbook had assumed — 2026-09-11
 
 §0 of `deploy/GO-LIVE.md` was run on the host and reported back. Every value
