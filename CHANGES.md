@@ -254,6 +254,36 @@ upstream.
 
 ---
 
+## An "OpenAI Compatible" image provider, and why the same click answered three things — 2026-09-11
+
+Fork PR #8 adds `custom-image` ("OpenAI Compatible" in the studio's image
+settings): the `/images/generations` protocol with none of api.openai.com's
+assumptions — no preloaded `gpt-image-*` catalogue, base URL required rather
+than defaulting to OpenAI, key optional and never sent as `Bearer undefined`.
+Its probe asks `/models` first and reports a server with neither `/models`
+route as reachable-and-unchecked instead of failed. Env names:
+`IMAGE_CUSTOM_BASE_URL` / `_API_KEY` / `_MODELS`, now in
+`deploy/openmaic.env.example`. Pin bumped to fork `a1b3994b` (1802 locale
+keys; contract check 19/19).
+
+Two things learned on the way:
+
+- **The studio's job runner reads only server-configured providers.**
+  `lib/server/agent-runtime/generate-image.ts` selects from
+  `getServerImageProviders()` — env and YAML — never the browser's Settings
+  page. In this deployment (runtime on) an image provider entered only in
+  Settings passes the test button and is invisible to course generation. The
+  env file is not a convenience here; it is the configuration.
+- **Docker Desktop's DNS forwarding drops answers for some public names.**
+  From inside the studio container a Tailscale Funnel host failed 8 of 12
+  lookups (the host: 12/12; api.openai.com: 12/12). The SSRF guard turns that
+  into `Unable to verify hostname safety` and the probe into `fetch failed`,
+  so the same click answered three different things in a row. Naming
+  Cloudflare as the forwarder in `deploy/docker-compose.uat.yml`: 24/24,
+  service names intact. UAT-only; the deploy host has its own resolver.
+
+---
+
 ## The studio's job runner had never started — 2026-09-11
 
 Pin bumped to fork `b7c54e1f` (PRs #6 and #7 on khunmax2/Ups_openMAIC).
