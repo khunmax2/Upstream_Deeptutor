@@ -304,6 +304,62 @@ column, and the studio publishing nothing to the host.
 
 ---
 
+## The fork moves, gets a CI, and four things land on it — 2026-09-11
+
+**The fork lives at `khunmax2/Ups_openMAIC` now, and is deliberately not a
+GitHub fork.** The original, `khunmax2/OpenMAIC`, never ran CI once: a
+repository GitHub classes as a fork does not run Actions until someone enables
+them by hand, and upstream's workflow triggers name upstream's branch names, so
+even after that nothing would have matched ours. Every early change there
+merged on local measurement alone — stated each time, but not the same thing.
+All 532 commits went across before anything was touched; the old repository is
+kept read-only for its pull request pages; and the reasoning from every one of
+those pages is exported under
+`docs/planning/openmaic-integration/fork-pull-requests/`, because a pull request
+body is where a change was argued and it should survive the page.
+
+**The first thing CI did was find two things local runs had not.** Upstream
+pins the number of supported locales in a test — adding Thai made it thirteen —
+and the E2E page object matched `img[alt="OpenMAIC"]`, which the de-branding
+had changed. Neither was in a suite the local runs covered. Both read the
+brand/locale configuration now instead of pinning a literal.
+
+**Four things landed on the fork, all lifted from the first attempt's patches
+in `docs/maic-fork-export/`** — which `CLAUDE.md` says to read first, and which
+was read only after re-deriving one of them the hard way:
+
+- Thai: `th-TH.json` complete at 1,801 keys, 1,687 of them Thai (93.7%), the
+  rest English rather than Chinese — because the studio falls back to `zh-CN`
+  for any missing key, which is why an untranslated build shows Chinese. 47 dead
+  keys were pruned from the partial after checking the *old* English against
+  the new: two keys shared a leaf name but had changed meaning, and carrying
+  them would have produced a confident mistranslation.
+- `?lang=`, `?theme=`, `?embed=1` — the host chooses, and the studio hides the
+  controls the host has taken over. The DeepWitya side had been sending these
+  to a fork that read none of them.
+- De-branding, far smaller than the first time: upstream has since taken the
+  brand-config idea itself, so 60 files of substitution became a set of
+  environment-driven defaults. `X-OpenMAIC-Element-Reference-Accepted` and the
+  `OpenMAIC Noto Sans *` font families are deliberately untouched — a wire
+  protocol name and a font identifier, not a brand.
+- A self-hosted TTS engine can declare its `voices`, and the server treats them
+  as authoritative the way it already does `models`. Image generation needed no
+  change: `openai-image` already carried an editable `baseUrl`, so an
+  OpenAI-compatible endpoint was a setting, not a feature.
+
+**Two mistakes worth recording.** Stacked pull requests were merged bottom-up,
+so two of them reported merged while their content sat on a side branch — three
+green merges and a `main` missing two. Stacked pull requests merge top-down, or
+each is retargeted as its base lands. And the agent-runtime contract assertion
+was described as landed while the file sat uncommitted on one machine; `git
+status` before claiming something is done.
+
+**The pin now names `98b8fe8f` on `khunmax2/Ups_openMAIC`**, and the contract
+check passes 19 of 19 against that checkout — including the locale-key count,
+still 1,801 with Thai added, because parity is the point.
+
+---
+
 ## The build gets a script, because a forgotten argument is silent — 2026-09-10
 
 Two of the studio image's build arguments decide behaviour, and a forgotten one
