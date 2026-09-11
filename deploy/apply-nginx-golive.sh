@@ -2,14 +2,24 @@
 # ============================================
 # Go-live nginx changes for /deepwitya on the host — run with sudo.
 #
-#   sudo bash deploy/apply-nginx-golive.sh --preview [new-frontend-port]
-#       A loopback-only HTTPS server on 127.0.0.1:8443 that serves the NEW
-#       stack under /deepwitya, reusing the host certificate. Nothing on :443
-#       changes. Reach it from your machine through an SSH tunnel:
-#           ssh -L 8443:127.0.0.1:8443 <user>@203.185.144.41
-#           https://localhost:8443/deepwitya
+#   sudo bash deploy/apply-nginx-golive.sh --preview [new-frontend-port] [preview-port]
+#       A loopback-only HTTPS server on 127.0.0.1:<preview-port> (default
+#       8443) that serves the NEW stack under /deepwitya, reusing the host
+#       certificate. Nothing on :443 changes. Reach it from your machine
+#       through an SSH tunnel (pick any free LOCAL port on the left):
+#           ssh -L 18443:127.0.0.1:<preview-port> <user>@203.185.144.41
+#           https://localhost:18443/deepwitya
 #       This is the only way to exercise a stack whose base path is compiled
 #       in: /deepwitya on :443 still belongs to the old stack until cutover.
+#       The port must be free on the host: `nginx -t` does not bind, so a
+#       taken port passes the test and then fails at reload -- nginx logs
+#       `bind() ... failed (98: Address already in use)`, keeps the OLD
+#       config, and every later reload (the cutover's included) fails the
+#       same way while the file stays in sites-enabled. So this mode refuses
+#       a taken port before writing anything, verifies the listener after
+#       the reload, and --cutover refuses to run while a preview file exists
+#       whose port nginx is not listening on. Measured 2026-09-11: 8443 on
+#       the host belongs to a Kong gateway of another application.
 #
 #   sudo bash deploy/apply-nginx-golive.sh --cutover 10310 10320
 #       On :443, `location /deepwitya` moves from the old frontend port to the
@@ -28,7 +38,7 @@
 #       The old stack must still be running — nothing here starts it.
 #
 #   sudo bash deploy/apply-nginx-golive.sh --remove-preview
-#       Drop the 8443 server after cutover.
+#       Drop the preview server after cutover.
 #
 # Every mode: backup both shared files (timestamped, next to the originals),
 # edit, `nginx -t`; on ANY failure restore the backups and exit WITHOUT
@@ -50,6 +60,7 @@ PREVIEW=/etc/nginx/sites-available/deepwitya-preview
 PREVIEW_LINK=/etc/nginx/sites-enabled/deepwitya-preview
 STATE=/etc/nginx/snippets/deepwitya-golive.state
 GATEKEEPER_PORT=10330
+PREVIEW_PORT="${PREVIEW_PORT:-8443}"
 STAMP=$(date +%Y%m%d-%H%M%S)
 CLEANUP_ON_FAIL=""
 
@@ -214,10 +225,44 @@ cert_lines() { # the certificate the :443 server already uses
   grep -E '^[[:space:]]*ssl_certificate(_key)?[[:space:]]' "$SSL" | head -2
 }
 
+listening() { # port -- is anything listening on 127.0.0.1:<port> or *:<port>
+  ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1$"
+}
+
+preview_file_port() { # the port the preview file declares, if the file exists
+  [ -f "$PREVIEW" ] && grep -oE 'listen 127\.0\.0\.1:[0-9]+' "$PREVIEW" | grep -oE '[0-9]+$' || true
+}
+
+# A preview file whose port nginx is not listening on means the last reload
+# failed at bind() and nginx is still on the config before it; the next
+# reload fails the same way. Refuse to build on that.
+refuse_stale_preview() {
+  local pp; pp=$(preview_file_port)
+  if [ -n "$pp" ] && ! listening "$pp"; then
+    echo "!! $PREVIEW ตั้ง listen $pp แต่ nginx ไม่ได้ฟังพอร์ตนั้น — reload ครั้งก่อน bind ไม่สำเร็จ" >&2
+    echo "   (ดู: tail -n 30 /var/log/nginx/error.log | grep bind)" >&2
+    echo "   รัน: sudo bash deploy/apply-nginx-golive.sh --remove-preview  ก่อน แล้วค่อยทำต่อ" >&2
+    exit 1
+  fi
+}
+
 case "${1:-}" in
   --preview)
     NEW_PORT="${2:-10320}"
-    echo "== preview: 127.0.0.1:8443 → /deepwitya:$NEW_PORT, /deepwitya/studio:$GATEKEEPER_PORT =="
+    PREVIEW_PORT="${3:-$PREVIEW_PORT}"
+    echo "== preview: 127.0.0.1:$PREVIEW_PORT → /deepwitya:$NEW_PORT, /deepwitya/studio:$GATEKEEPER_PORT =="
+    echo "== 0. ตรวจก่อนแตะ =="
+    refuse_stale_preview
+    if [ "$(preview_file_port)" = "$PREVIEW_PORT" ]; then
+      echo "  preview ของเราฟังที่ $PREVIEW_PORT อยู่แล้ว — เขียนทับด้วยค่าใหม่"
+    elif listening "$PREVIEW_PORT"; then
+      echo "!! พอร์ต $PREVIEW_PORT บน host มีคนฟังอยู่แล้ว:" >&2
+      ss -ltnp 2>/dev/null | grep -E "[:.]$PREVIEW_PORT[[:space:]]" | head -3 >&2
+      echo "   เลือกพอร์ตอื่น: sudo bash deploy/apply-nginx-golive.sh --preview $NEW_PORT <port>   (เช่น 9443)" >&2
+      exit 1
+    else
+      echo "  พอร์ต $PREVIEW_PORT ว่าง"
+    fi
     write_studio_snippet
     CERT=$(cert_lines)
     [ -n "$CERT" ] || { echo "หา ssl_certificate ใน $SSL ไม่เจอ" >&2; exit 1; }
@@ -226,7 +271,7 @@ case "${1:-}" in
       echo "# Owned by the DeepWitya checkout: deploy/apply-nginx-golive.sh --preview"
       echo "# Remove after cutover: deploy/apply-nginx-golive.sh --remove-preview"
       echo "server {"
-      echo "    listen 127.0.0.1:8443 ssl;"
+      echo "    listen 127.0.0.1:${PREVIEW_PORT} ssl;"
       echo "    server_name 203.185.144.41 localhost;"
       printf '%s\n' "$CERT" | sed 's/^[[:space:]]*/    /'
       echo "    client_max_body_size 200m;"
@@ -254,9 +299,16 @@ case "${1:-}" in
     echo "  wrote $PREVIEW (+ enabled)"
     CLEANUP_ON_FAIL="$PREVIEW $PREVIEW_LINK"
     test_and_reload
+    sleep 1
+    if ! listening "$PREVIEW_PORT"; then
+      echo "!! reload แล้วแต่ nginx ไม่ได้ฟังที่ 127.0.0.1:$PREVIEW_PORT — bind ล้ม (ดู tail -n 30 /var/log/nginx/error.log)" >&2
+      echo "   เอาไฟล์ที่ bind ไม่ได้ออกก่อน ไม่งั้น reload ครั้งถัดไปล้มเหมือนกัน: --remove-preview" >&2
+      exit 1
+    fi
+    echo "  nginx ฟังที่ 127.0.0.1:$PREVIEW_PORT แล้ว"
     echo
-    echo "เสร็จ — จากเครื่องคุณ:  ssh -L 8443:127.0.0.1:8443 <user>@203.185.144.41"
-    echo "แล้วเปิด https://localhost:8443/deepwitya (เบราว์เซอร์เตือน cert ไม่ตรงชื่อ — กดผ่านได้ cert เป็นของ IP)"
+    echo "เสร็จ — จากเครื่องคุณ:  ssh -L 18443:127.0.0.1:$PREVIEW_PORT <user>@203.185.144.41"
+    echo "แล้วเปิด https://localhost:18443/deepwitya (เบราว์เซอร์เตือน cert ไม่ตรงชื่อ — กดผ่านได้ cert เป็นของ IP)"
     ;;
 
   --cutover)
@@ -264,6 +316,7 @@ case "${1:-}" in
     TO="${3:?usage: --cutover <old-frontend-port> <new-frontend-port>}"
     echo "== cutover: :443 /deepwitya $FROM → $TO, + /deepwitya/studio → $GATEKEEPER_PORT; :80 /deepwitya → 301 https =="
     echo "== 0. ตรวจก่อนแตะ =="
+    refuse_stale_preview
     swap_port "$SSL" "$FROM"
     redirect_http --check
     echo "== 1. backup =="
@@ -296,8 +349,9 @@ case "${1:-}" in
     ;;
 
   --remove-preview)
+    pp=$(preview_file_port)
     rm -f "$PREVIEW_LINK" "$PREVIEW"
-    nginx -t && systemctl reload nginx && echo "เอา preview 8443 ออกแล้ว"
+    nginx -t && systemctl reload nginx && echo "เอา preview ${pp:-?} ออกแล้ว"
     ;;
 
   *)
