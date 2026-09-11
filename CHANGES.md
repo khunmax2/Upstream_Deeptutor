@@ -285,9 +285,17 @@ pulls a digest (ADR-0005) and the host never builds the studio. Manual
 dispatch only; publishing a pin is a decision. The job summary prints the
 digest to record in the pin.
 
-Decided in the runbook: DeepWitya's `data/` continues from the validated
-stack; the studio database starts fresh (UAT courses are test data, and moving
-them means rewriting media addresses); studio API keys are re-entered.
+Decided in the runbook, then simplified the same day once Attapon said the
+user data in both running stacks is test data: nothing is migrated. The only
+thing worth keeping is the deploy configuration in the validated stack's
+`data/user/settings/` (ports, auth on, the admin account, model credentials),
+and it stays where it is because the stack is rebuilt in place. Neither old
+stack is stopped by hand: `/deepwitya2` is recreated by the build, v1 keeps
+running as the five-second rollback until §8. The studio database starts
+fresh; studio API keys are re-entered. §9 is how to brief Claude on the day
+— a paste-ready prompt with the rules (measure first, no skipped checklist,
+sudo steps announced, cutover only on the word), and the two ways to run it
+(from the dev machine over key-auth ssh, or on the host).
 
 ---
 
