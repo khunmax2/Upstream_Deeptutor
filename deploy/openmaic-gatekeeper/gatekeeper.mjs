@@ -281,12 +281,18 @@ async function verify(token) {
     if (token === null) return { verdict: 'deny' };
 
     const authenticated = status?.authenticated === true;
-    // The `learner` preset is DeepWitya's restricted account: default-deny on
-    // every surface nobody has explicitly opened to it, and nobody has opened
-    // this one. The sidebar already hides the entry for it; refusing here
+    // A restricted learning account: default-deny on every surface nobody has
+    // explicitly opened to it, and nobody has opened this one. DeepWitya
+    // decides that by POLICY, not by preset -- `learning_policy` is non-null
+    // for the `learner` preset by default and for any account an admin
+    // attached a policy to (a `custom` account can carry one), and its own
+    // surface guard and sidebar read exactly that field. The first cut here
+    // read the preset instead, which admitted a policied `custom` account the
+    // sidebar was hiding the entry from. The sidebar hides; refusing here
     // closes the door the hidden entry led to, since a URL is not a menu.
     // Decided 2026-09-11.
-    const restricted = authenticated && status?.preset === 'learner';
+    const restricted =
+      authenticated && (status?.learning_policy != null || status?.preset === 'learner');
     const ok = authenticated && !restricted;
     // Read the uid and role from the same answer that granted the verdict.
     // Anything else — a second call, a different cache key, a value the

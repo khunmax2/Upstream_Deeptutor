@@ -24,6 +24,8 @@ const GATE_PORT = 4803;
 const OPEN_GATE_PORT = 4804;
 const ADMIN = 'admin-token-ok';
 const LEARNER = 'learner-token-ok';
+const CUSTOM_OPEN = 'custom-open-token-ok';
+const CUSTOM_POLICIED = 'custom-policied-token-ok';
 const GOOD = 'good-token';
 const TTL_MS = 200;
 
@@ -52,10 +54,16 @@ const AUTH_OFF = {
  * Three accounts, told apart by token: an ordinary user, an admin, and a
  * `learner` -- DeepWitya's restricted preset, which the gate must refuse.
  */
+// `learning_policy` is what DeepWitya's own surface guard and sidebar read:
+// non-null for the learner preset by default, and for any account an admin
+// attached a policy to. A `custom` account can go either way.
+const POLICY = { allowed_surfaces: ['chat', 'reading'] };
 const ACCOUNTS = {
-  [GOOD]: { user_id: 'u-1', username: 'tester', role: 'user', is_admin: false, preset: 'standard' },
-  [ADMIN]: { user_id: 'u-9', username: 'boss', role: 'admin', is_admin: true, preset: 'standard' },
-  [LEARNER]: { user_id: 'u-5', username: 'pupil', role: 'user', is_admin: false, preset: 'learner' },
+  [GOOD]: { user_id: 'u-1', username: 'tester', role: 'user', is_admin: false, preset: 'standard', learning_policy: null },
+  [ADMIN]: { user_id: 'u-9', username: 'boss', role: 'admin', is_admin: true, preset: 'standard', learning_policy: null },
+  [LEARNER]: { user_id: 'u-5', username: 'pupil', role: 'user', is_admin: false, preset: 'learner', learning_policy: POLICY },
+  [CUSTOM_OPEN]: { user_id: 'u-6', username: 'tutor', role: 'user', is_admin: false, preset: 'custom', learning_policy: null },
+  [CUSTOM_POLICIED]: { user_id: 'u-7', username: 'cadet', role: 'user', is_admin: false, preset: 'custom', learning_policy: POLICY },
 };
 const authOn = (cookieHeader) => {
   const token = Object.keys(ACCOUNTS).find((t) => cookieHeader.includes(`dt_token=${t}`));
@@ -69,7 +77,7 @@ const authOn = (cookieHeader) => {
     is_admin: account?.is_admin ?? false,
     avatar: '',
     preset: account?.preset ?? null,
-    learning_policy: null,
+    learning_policy: account?.learning_policy ?? null,
   };
 };
 
@@ -273,6 +281,15 @@ check('learner preset -> account_restricted', pupil.body?.error?.code, 'account_
 check('learner never reaches OpenMAIC', pupil.body?.reachedUpstream, undefined);
 const pupilAgain = await call(`dt_token=${LEARNER}`);
 check('a cached learner verdict is still 403', pupilAgain.status, 403);
+
+// The rule is the policy, not the preset: DeepWitya's own guard reads
+// `learning_policy`, and an admin can attach one to a `custom` account.
+const tutor = await call(`dt_token=${CUSTOM_OPEN}`);
+check('a custom account without a policy is admitted', tutor.status, 200);
+check('...and forwarded as user', tutor.body?.roleSeen, 'user');
+const cadet = await call(`dt_token=${CUSTOM_POLICIED}`);
+check('a custom account WITH a learning policy -> 403', cadet.status, 403);
+check('...account_restricted, same as a learner', cadet.body?.error?.code, 'account_restricted');
 
 console.log('\n  -- ALLOW_ANONYMOUS guard (T4) --');
 

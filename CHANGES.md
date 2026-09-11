@@ -272,6 +272,23 @@ For the studio this composes with the gatekeeper's 30 s verdict cache: a
 role or policy change reaches the gate within that window, and the
 studio's admin-only routes check the forwarded role on every request, so a
 stale "set as default" link in an already-open page simply fails.
+---
+
+## The gate's rule is the policy, not the preset — 2026-09-11
+
+Found by the question "what about a `custom` account with a learner
+policy?". DeepWitya restricts by **policy**: `learning_policy_for_user`
+returns a policy for the `learner` preset by default and for any account an
+admin attached one to, and its surface guard and sidebar read exactly that.
+The gatekeeper had read the preset, so a policied `custom` account was
+hidden in the menu and admitted at the gate. It now refuses when
+`learning_policy` is non-null (preset `learner` kept as belt-and-braces).
+Four checks added (custom without policy admitted; custom with policy 403).
+README, pin note, ADR amendment and the sidebar comment say the rule the
+same way.
+
+Also from the same UAT: `/course-studio` reached by URL as a restricted
+account framed the 403 as raw JSON; it now says why, in three languages.
 
 ---
 

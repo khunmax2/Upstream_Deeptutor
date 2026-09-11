@@ -44,7 +44,7 @@ The fourth is that DeepTutor has no authentication to check against — see belo
 |---|---|---|
 | no session cookie | 401 | `not_signed_in` |
 | cookie present, session rejected | 401 | `session_invalid` |
-| session valid, account is the `learner` preset | **403** | `account_restricted` |
+| session valid, account carries a learning policy (the `learner` preset by default; any account an admin attached one to) | **403** | `account_restricted` |
 | DeepTutor unreachable | **503** | `auth_unavailable` |
 | **DeepTutor auth switched off** | **503** | `auth_disabled_upstream` |
 | `DEEPTUTOR_AUTH_URL` unset | 500 | `gatekeeper_misconfigured` |
