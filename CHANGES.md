@@ -254,6 +254,24 @@ upstream.
 
 ---
 
+## The gate's rule is the policy, not the preset — 2026-09-11
+
+Found by the question "what about a `custom` account with a learner
+policy?". DeepWitya restricts by **policy**: `learning_policy_for_user`
+returns a policy for the `learner` preset by default and for any account an
+admin attached one to, and its surface guard and sidebar read exactly that.
+The gatekeeper had read the preset, so a policied `custom` account was
+hidden in the menu and admitted at the gate. It now refuses when
+`learning_policy` is non-null (preset `learner` kept as belt-and-braces).
+Four checks added (custom without policy admitted; custom with policy 403).
+README, pin note, ADR amendment and the sidebar comment say the rule the
+same way.
+
+Also from the same UAT: `/course-studio` reached by URL as a restricted
+account framed the 403 as raw JSON; it now says why, in three languages.
+
+---
+
 ## The second decision, built: keys leave the browser — 2026-09-11
 
 Pin → fork `b98098ec` (khunmax2/Ups_openMAIC #14). Provider API keys now live

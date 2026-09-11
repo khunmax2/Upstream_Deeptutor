@@ -40,10 +40,11 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   *Amended 2026-09-11.* The identity header gained a sibling,
   `x-deeptutor-role` (`admin` or `user`), carried the same way. Two decisions
   were taken together once the studio had accounts to reason about: the
-  `learner` preset — DeepWitya's restricted account, default-deny on every
-  surface nobody opened to it — is refused at the gate with `403
-  account_restricted`, closing the door the already-hidden sidebar entry led
-  to; and provider API keys move out of the browser's localStorage into the
+  restricted learning account — `learning_policy` non-null, which is the
+  `learner` preset by default and any account an admin attached a policy to,
+  the same field DeepWitya's own surface guard and sidebar read — is refused
+  at the gate with `403 account_restricted`, closing the door the
+  already-hidden sidebar entry led to; and provider API keys move out of the browser's localStorage into the
   studio's database per owner, with an admin-set default any account falls
   back to and a per-user override — DeepWitya's own shape. The role header
   exists for that second decision: the studio has exactly one admin-only
