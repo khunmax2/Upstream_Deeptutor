@@ -66,8 +66,18 @@ df -h / && docker system df
 ```
 
 - [ ] `/deepwitya` → `10310` (v1) — ถ้าเป็นเลขอื่น ใช้เลขนั้นแทนใน §5
+      วัดได้ 2026-09-11: `10310` **ทั้ง :443 และ :80** — :80 เป็น `proxy_pass` ไม่ใช่ redirect
+      cutover จึงเพิ่ม `return 301` ไป https ในบล็อก :80 (stack ใหม่ตั้ง cookie `Secure`,
+      login ผ่าน http ไม่ติด — REDEPLOY §6b) ดู §5
 - [ ] `/deepwitya2` → `10320` และ container `deeptutor2` รันอยู่ healthy
-- [ ] checkout สะอาด (ไม่มี `M` ค้าง) — ถ้ามี ให้ดูว่าเป็นอะไรก่อน `git stash`
+- [ ] checkout สะอาด: `git status --short` ว่าง — `M` ห้ามมี; `??` (untracked) ให้ย้ายออกไป
+      `../_deeptutor_backup/` ก่อน เพื่อให้ checkout ตรง tag เป๊ะ (วัดได้ 2026-09-11:
+      `deploy/uat_scene_content.py` จาก session ทดสอบก่อนหน้า — ไม่กระทบ build แต่ย้ายออก)
+- [ ] container studio **ชุดเก่า** บน host: `deeptutor-openmaic` (build เอง, ไม่มี healthcheck) และ
+      `deeptutor-openmaic-gatekeeper` (`127.0.0.1:10331`) มาจาก integration รอบก่อนใน compose
+      project เดียวกัน (`upstream_deeptutor_v2`) — **ปกติ** §3.4 จะ recreate สองตัวนี้ในที่จาก image
+      ตาม digest และสร้าง `deeptutor-openmaic-postgres` เพิ่ม ถ้า `up` ตอบ
+      `container name … already in use` แปลว่ามาจากคนละ project → หยุด รายงาน
 - [ ] `docker compose version` ≥ 2.24
 - [ ] ดิสก์ว่าง ≥ 20 GB (build DeepWitya ใช้ ~5 GB, studio image ~1 GB, postgres เริ่มที่ไม่กี่ร้อย MB)
 - [ ] port `10330` ว่าง: `ss -ltnp | grep 10330` ต้องว่าง
@@ -252,14 +262,17 @@ cert ออกให้ IP ไม่ใช่ localhost; `cookie_secure` ยั�
 sudo bash deploy/apply-nginx-golive.sh --cutover 10310 10320
 ```
 
-script: ตรวจว่า `location /deepwitya` ชี้ไป `10310` จริง (ไม่ตรง = หยุด ไม่แตะอะไร) →
-backup ทั้งสองไฟล์ → เปลี่ยน port ใน block `/deepwitya` **บรรทัดเดียว** → เพิ่ม
+script: ตรวจว่า `location /deepwitya` บน :443 ชี้ไป `10310` จริง (ไม่ตรง = หยุด ไม่แตะอะไร) →
+backup ทั้งสองไฟล์ → :443 เปลี่ยน port ใน block `/deepwitya` **บรรทัดเดียว** + เพิ่ม
 `include /etc/nginx/snippets/deepwitya-studio.conf` (location `/deepwitya/studio` → 10330)
+→ :80 เพิ่ม `return 301 https://…` เป็นบรรทัดแรกของ block `/deepwitya` (proxy_pass เดิม
+ทิ้งไว้ — `return` ทำงานใน rewrite phase ก่อน proxy เสมอ; block ที่ redirect อยู่แล้วไม่แตะ)
 → `nginx -t` (ไม่ผ่าน = คืน backup อัตโนมัติ ไม่ reload) → reload
 
 จากเครื่องคุณ (ไม่ผ่าน tunnel):
 
 - [ ] `curl -sIL https://203.185.144.41/deepwitya | grep -E "HTTP|location"` → 200 (หรือ 307 ไป `/deepwitya/login`)
+- [ ] `curl -sI http://203.185.144.41/deepwitya | grep -E "HTTP|location"` → `301` `location: https://…/deepwitya`
 - [ ] `curl -s https://203.185.144.41/deepwitya/studio/api/health` → `401` + ข้อความชี้ไป `/deepwitya/login`
 - [ ] เบราว์เซอร์ปกติ: login → แชท → studio → เหมือน §4
 - [ ] ผู้ใช้ที่ login ค้างจาก v1 จะโดนเด้ง login ใหม่ (token คนละ `auth_secret`) — ปกติ บอกผู้ใช้ล่วงหน้า
@@ -288,7 +301,8 @@ sudo bash deploy/apply-nginx-golive.sh --remove-preview
 ```bash
 sudo bash deploy/apply-nginx-golive.sh --revert
 ```
-`/deepwitya` กลับไป `10310` (v1 ยังรันอยู่ตลอด ไม่เคยถูกหยุด) และ include studio ถูกถอด
+`/deepwitya` กลับไป `10310` (v1 ยังรันอยู่ตลอด ไม่เคยถูกหยุด), include studio ถูกถอด,
+`return 301` บน :80 ถูกถอด — ไฟล์ทั้งสองกลับเหมือนก่อน cutover ทุก byte
 ผู้ใช้กลับไปเห็นระบบเดิมทันที ข้อมูลใน v1 ไม่เคยถูกแตะ
 
 ### 7.2 เฉพาะ studio พัง, DeepWitya ดี → หยุดแค่ studio

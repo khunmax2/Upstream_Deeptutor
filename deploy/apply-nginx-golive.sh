@@ -16,8 +16,12 @@
 #       new one, and `location /deepwitya/studio` (→ gatekeeper 10330) is
 #       included next to it. Longest prefix wins, so the studio location beats
 #       /deepwitya without the /deepwitya block knowing. The old port is
-#       recorded for --revert. The same port swap is applied on :80 if that
-#       file proxies /deepwitya (a redirect is left alone).
+#       recorded for --revert. On :80, `location /deepwitya` gets a
+#       `return 301` to HTTPS as its first line if it proxies today (a block
+#       that already redirects is left alone): the new stack sets a Secure
+#       session cookie, so a login over plain HTTP never sticks. `return`
+#       runs in nginx's rewrite phase, before proxy_pass, so the existing
+#       proxy_pass line stays where it is and --revert removes one line.
 #
 #   sudo bash deploy/apply-nginx-golive.sh --revert
 #       /deepwitya back to the recorded old port, studio include removed.
@@ -32,9 +36,10 @@
 # the test passes. Same pattern as apply-nginx-deepwitya2.sh.
 #
 # The shared files belong to other teams too (six other paths on this IP).
-# The only edits made to them: one `include` line, and one port number inside
-# the `location /deepwitya` block. Everything else lives in files this project
-# owns outright under /etc/nginx/snippets and sites-available.
+# The only edits made to them: on :443 one `include` line and one port number
+# inside the `location /deepwitya` block; on :80 one `return 301` line inside
+# that block. Everything else lives in files this project owns outright under
+# /etc/nginx/snippets and sites-available.
 # ============================================
 set -euo pipefail
 
@@ -160,6 +165,51 @@ print(f"  {'เอา include studio ออกจาก' if s2 != s else 'ไม
 PY
 }
 
+# :80 — make `location /deepwitya` redirect to HTTPS by adding one line at the
+# top of the block. Reports and exits 0 when the block already redirects or
+# does not exist. With "--check" it only reports what the block does today.
+redirect_http() { # [--check]
+  python3 - "$HTTP" "${1:-}" <<'PY'
+import re, sys
+path, mode = sys.argv[1], sys.argv[2]
+MARK = "# DeepWitya go-live — see deploy/apply-nginx-golive.sh"
+s = open(path, encoding="utf-8").read()
+m = re.search(r'^([ \t]*)location\s+/deepwitya\s*\{[ \t]*\n', s, re.M)
+if not m:
+    print(f"  {path}: ไม่มี location /deepwitya — ไม่แตะ")
+    sys.exit(0)
+end = re.compile(r'^' + re.escape(m.group(1)) + r'\}', re.M).search(s, m.end())
+assert end, f"{path}: หา closing brace ของ location /deepwitya ไม่เจอ"
+block = s[m.start():end.end()]
+if MARK in block:
+    print(f"  {path}: location /deepwitya redirect ไป https อยู่แล้ว (ของ go-live) — ข้าม")
+    sys.exit(0)
+if re.search(r'^\s*return\s+30[12]\s', block, re.M):
+    print(f"  {path}: location /deepwitya เป็น redirect อยู่แล้ว — ไม่แตะ")
+    sys.exit(0)
+hits = re.findall(r'proxy_pass\s+http://127\.0\.0\.1:(\d+);', block)
+what = f"proxy ไป {hits[0]}" if hits else "ไม่มี proxy_pass"
+if mode == "--check":
+    print(f"  {path}: location /deepwitya {what} บน :80 — cutover จะเพิ่ม return 301 ไป https")
+    sys.exit(0)
+indent = m.group(1) + "    "
+ins = f"{indent}{MARK}\n{indent}return 301 https://$host$request_uri;\n"
+open(path, "w", encoding="utf-8").write(s[:m.end()] + ins + s[m.end():])
+print(f"  {path}: location /deepwitya ({what}) + return 301 https (+2 บรรทัด)")
+PY
+}
+
+unredirect_http() {
+  python3 - "$HTTP" <<'PY'
+import re, sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+s2 = re.sub(r'^[ \t]*# DeepWitya go-live — see deploy/apply-nginx-golive\.sh\n[ \t]*return 301 https://\$host\$request_uri;\n', '', s, count=1, flags=re.M)
+open(path, "w", encoding="utf-8").write(s2)
+print(f"  {'เอา return 301 ของ go-live ออกจาก' if s2 != s else 'ไม่มี return 301 ของ go-live ใน'} {path}")
+PY
+}
+
 cert_lines() { # the certificate the :443 server already uses
   grep -E '^[[:space:]]*ssl_certificate(_key)?[[:space:]]' "$SSL" | head -2
 }
@@ -212,22 +262,22 @@ case "${1:-}" in
   --cutover)
     FROM="${2:?usage: --cutover <old-frontend-port> <new-frontend-port>}"
     TO="${3:?usage: --cutover <old-frontend-port> <new-frontend-port>}"
-    echo "== cutover: /deepwitya $FROM → $TO, + /deepwitya/studio → $GATEKEEPER_PORT =="
+    echo "== cutover: :443 /deepwitya $FROM → $TO, + /deepwitya/studio → $GATEKEEPER_PORT; :80 /deepwitya → 301 https =="
     echo "== 0. ตรวจก่อนแตะ =="
     swap_port "$SSL" "$FROM"
-    swap_port "$HTTP" "$FROM"
+    redirect_http --check
     echo "== 1. backup =="
     backup "$SSL"; backup "$HTTP"
     echo "== 2. snippet =="
     write_studio_snippet
     echo "== 3. แก้ shared files =="
     swap_port "$SSL" "$FROM" "$TO"
-    swap_port "$HTTP" "$FROM" "$TO"
     include_studio
+    redirect_http
     printf 'FROM=%s\nTO=%s\nSTAMP=%s\n' "$FROM" "$TO" "$STAMP" > "$STATE"
     test_and_reload
     echo
-    echo "เสร็จ — https://203.185.144.41/deepwitya ชี้ไป $TO แล้ว, /deepwitya/studio ชี้ไป gatekeeper"
+    echo "เสร็จ — https://203.185.144.41/deepwitya ชี้ไป $TO แล้ว, /deepwitya/studio ชี้ไป gatekeeper, http://…/deepwitya → 301 https"
     echo "ถอย: sudo bash deploy/apply-nginx-golive.sh --revert"
     ;;
 
@@ -235,11 +285,11 @@ case "${1:-}" in
     [ -f "$STATE" ] || { echo "ไม่มี $STATE — ยังไม่เคย cutover หรือ revert ไปแล้ว" >&2; exit 1; }
     # shellcheck disable=SC1090
     . "$STATE"
-    echo "== revert: /deepwitya $TO → $FROM, เอา studio include ออก =="
+    echo "== revert: :443 /deepwitya $TO → $FROM, เอา studio include ออก; :80 เอา return 301 ออก =="
     backup "$SSL"; backup "$HTTP"
     swap_port "$SSL" "$TO" "$FROM"
-    swap_port "$HTTP" "$TO" "$FROM"
     remove_include_studio
+    unredirect_http
     test_and_reload
     rm -f "$STATE"
     echo "revert เรียบร้อย — /deepwitya กลับไปที่ $FROM (stack เก่าต้องยังรันอยู่)"
