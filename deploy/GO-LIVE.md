@@ -1,5 +1,11 @@
 # GO-LIVE — DeepWitya + Course Studio ขึ้น `/deepwitya` บน 203.185.144.41
 
+> **ทำแล้ว — cutover 2026-09-12 00:10 (เวลา host)** จาก tag `golive-2026-09-11` = `main` `b119ee12c`,
+> studio image `ghcr.io/khunmax2/deepwitya-studio@sha256:4f54b507…4dee6d` (fork `d5585dd3`)
+> ยืนยันจากภายนอก: `/deepwitya` = stack ใหม่, `/deepwitya/studio` → gatekeeper 401, `http://` → 301
+> ค้าง: §8 (ลบ v1 หลัง 7 วัน → **2026-09-19**), image provider ใน studio Settings ชี้ endpoint ที่ host เข้าไม่ถึง
+> เอกสารนี้เก็บไว้เป็น runbook สำหรับรอบหน้า — สิ่งที่พบระหว่างทางถูกใส่กลับเข้าไปแล้ว (ดู "บทเรียน" ท้ายไฟล์)
+
 runbook สำหรับวัน go-live เขียนคู่กับ `deploy/REDEPLOY.md` (ซึ่งเล่าวิธีตั้ง
 stack `/deepwitya2` ที่ validate มาแล้ว) และ `docs/adr/0005-course-studio-sibling-application.md`
 (ทำไม studio ถึงเป็น sibling app ที่ pull image ตาม digest)
@@ -46,8 +52,10 @@ multi-user, บัญชี admin, credential ของ model) และมั�
 ไม่ใช่ปรับ host
 
 ```bash
-# stack ที่รันอยู่ + port ที่ publish
+# stack ที่รันอยู่ + port ที่ publish — กรองด้วย label ของ compose project เสมอ ไม่ใช่ prefix ชื่อ
+# (v1 ก็ชื่อขึ้นต้น deeptutor เหมือนกัน; ชื่อ project = ชื่อโฟลเดอร์ checkout)
 docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}'
+docker ps --filter label=com.docker.compose.project=upstream_deeptutor_v2 --format '{{.Names}}\t{{.Status}}'
 
 # nginx: /deepwitya ชี้ไปไหน (คาดว่า 10310) และ /deepwitya2 (คาดว่า 10320)
 sudo nginx -T 2>/dev/null | grep -nE 'location /deepwitya|proxy_pass http://127.0.0.1:10[0-9]+' 
@@ -181,9 +189,11 @@ chmod 600 deploy/production.env
 
 - [ ] `OPENMAIC_IMAGE` ลงท้าย `@sha256:` + digest **ตรงกับ pin** ไม่ใช่ tag
 
-### 3.3 กับดัก permission (REDEPLOY §6 — ต้องทำก่อน build ทุกครั้ง)
+### 3.3 กับดัก permission (REDEPLOY §6 — ต้องทำก่อน build ทุกครั้ง **และซ้ำหลัง container restart ทุกครั้ง**)
 
-directory mode ถูก reset เป็น 700 ทุกครั้งที่ container start:
+directory mode ถูก reset เป็น 700 ทุกครั้งที่ container start — รวมถึง restart ที่เกิดจาก §3.4 รอบที่ล้ม
+อาการ: `docker compose … config` ตอบ `permission denied` ที่ `docker.env` → กลับมาทำข้อนี้ใหม่ (ไม่ใช้ sudo)
+บรรทัด `chmod 666 docker.env` ในทางปฏิบัติเป็น no-op (container เขียนไฟล์นี้เป็น 666 อยู่แล้ว) เก็บไว้เผื่อ:
 
 ```bash
 docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings
@@ -263,7 +273,10 @@ cert ออกให้ IP ไม่ใช่ localhost; `cookie_secure` ยั�
 - [ ] สร้างคอร์สภาษาไทยสั้น ๆ 1 คอร์ส (3 ฉาก มี simulation 1) → ปุ่มใน simulation เป็นไทย
 - [ ] login เป็นบัญชี preset `learner` → เมนู studio ไม่โชว์ และเข้า
       `https://localhost:8443/deepwitya/course-studio` ตรง ๆ ได้หน้า "ไม่ใช่ส่วนหนึ่งของบัญชีนี้"
-- [ ] `docker logs deeptutor-openmaic-gatekeeper --since 10m | grep -c ' 403 '` เท่ากับจำนวนครั้งที่ learner ลอง ไม่มากกว่า
+- [ ] status code ของ path เรา — **gatekeeper ไม่ log รายคำขอ** (มีแค่ banner ตอน boot) ต้องอ่านจาก
+      nginx access log ซึ่งเป็น `640 www-data:adm` → คนรัน sudo เอง:
+      `sudo awk '$7 ~ /deepwitya/ {print $9}' /var/log/nginx/access.log | sort | uniq -c`
+      403 ต้องเท่ากับจำนวนครั้งที่ learner ลอง, ไม่มี 502
 - [ ] `docker ps` ทุกตัวยัง healthy และ `docker inspect deeptutor2 --format '{{.RestartCount}}'` = 0
 
 ถ้าข้อใดไม่ผ่าน: **ยังไม่ได้แตะ production เลย** แก้แล้ว `up -d --build` ซ้ำ §3.4 ได้ตามสบาย
@@ -303,7 +316,8 @@ sudo bash deploy/apply-nginx-golive.sh --remove-preview
 
 ## 6. เฝ้า
 
-- 30 นาทีแรก: `docker ps` ทุก 10 นาที, `RestartCount` = 0, `docker logs -f deeptutor-openmaic-gatekeeper` ดูว่า 200/302/403 สมเหตุสมผล ไม่มี 502
+- 30 นาทีแรก: `docker ps` (กรอง label) ทุก 10 นาที, `RestartCount` = 0 ทั้ง 8, `docker logs --since 10m deeptutor-openmaic | grep -ciE "error|unhandled"`;
+  status code จาก nginx access log (sudo — ดู §4) ไม่มี 502
 - 24 ชั่วโมง: `docker logs deeptutor-openmaic --since 24h | grep -iE "error|unhandled" | head`
 - 7 วัน: ยังไม่ลบ stack v1 (§8)
 
@@ -373,7 +387,12 @@ studio มาเป็น image ตาม digest ใน pin แล้ว ไม�
 | แบบ | วิธี | ข้อควรรู้ |
 |---|---|---|
 | ก. รัน Claude Code บนเครื่องคุณใน `D:/Vscode/Upstream_Deeptutor` ให้มันคุย host ผ่าน `ssh` | ต้องมี key auth ไป host แล้ว (`ssh <user>@203.185.144.41 true` ต้องผ่านโดยไม่ถามรหัส) — Claude กรอกรหัสผ่าน/passphrase ให้ไม่ได้ | `sudo` บน host ต้องไม่ถามรหัส (`NOPASSWD`) สำหรับ `nginx -t`, `systemctl reload nginx` หรือคุณรันขั้น `sudo` เอง |
-| ข. ติดตั้ง Claude Code บน host แล้วรันใน `/home/search/Thoughtmind/Upstream_Deeptutor_v2` | เห็นทุกอย่างตรง ๆ ไม่ต้องผ่าน ssh | ต้อง `git fetch` ให้ checkout มี `deploy/GO-LIVE.md` ก่อน (มันอยู่บน tag go-live) |
+| ข. ติดตั้ง Claude Code บน host แล้วรันใน `/home/search/Thoughtmind/Upstream_Deeptutor_v2` **(ใช้จริง 2026-09-11)** | เห็นทุกอย่างตรง ๆ ไม่ต้องผ่าน ssh; วัดค่า/วินิจฉัยได้ดีมาก | **sudo ใช้ไม่ได้** (`sudo -n true` → password required, ไม่มี TTY) — ทุกขั้น sudo คนพิมพ์เองในหน้าต่าง host แล้ววาง output ให้ Claude; ต้อง `git fetch` ให้ checkout มี `deploy/GO-LIVE.md` ก่อน |
+
+รูปแบบที่ใช้จริง 2026-09-11: Claude บน host (ข.) วัด/ตรวจ/รายงาน → คนวาง output ให้ Claude อีกตัวบนเครื่อง dev ที่ถือ repo →
+ตัวนั้นแก้ runbook/script เป็น PR → merge → ย้าย tag → host `git fetch origin --force --tags && git checkout golive-…` →
+ทำต่อ tag ย้ายทั้งหมด 4 ครั้งในคืนเดียว (#71 digest, #72 :80 redirect, #73 no-new-privileges, #74 preview port) — ปกติ
+ไม่ใช่ความผิดพลาด: กติกา "แก้ runbook ไม่แก้ host" ทำงานได้จริงเพราะ tag ย้ายได้
 
 **prompt ที่ paste ได้เลย** (แบบ ก. ให้เติมบรรทัดแรก; แบบ ข. ตัดออก):
 
@@ -384,7 +403,7 @@ host คือ 203.185.144.41 เข้าด้วย ssh <user>@203.185.144.41
 กติกา:
 1. §0 ต้องรายงานค่าที่วัดได้จริงทุกข้อก่อนทำอย่างอื่น ถ้าค่าใดไม่ตรงตารางใน runbook ให้หยุดแล้วเสนอแก้ runbook ไม่ใช่แก้ host
 2. ห้ามข้าม checklist ข้อใด ถ้าข้อไหนไม่ผ่านให้หยุดและบอก ห้ามแก้แล้วไปต่อเอง
-3. ก่อนรันขั้นที่ใช้ sudo หรือแตะ nginx (§4, §5) ให้บอกคำสั่งที่จะรันแล้วรอฉันตอบ
+3. ขั้นที่ใช้ sudo (§4, §5, §7, การอ่าน access log) เธอรันไม่ได้ — session ไม่มี TTY กรอกรหัสไม่ได้ ให้พิมพ์คำสั่งมาให้ฉันรันเองในหน้าต่าง host แล้วรอฉันวาง output กลับ
 4. §5 (cutover) ทำเมื่อฉันสั่ง "cutover" เท่านั้น
 5. ถ้าอะไรพังหลัง §5 ให้ทำ §7.1 ทันทีแล้วค่อยมาวิเคราะห์
 6. ข้อมูลผู้ใช้ในทั้งสอง stack เป็นของทดสอบ ไม่ต้องยก ไม่ต้องถาม (§1.3)
@@ -402,3 +421,20 @@ host คือ 203.185.144.41 เข้าด้วย ssh <user>@203.185.144.41
 - ลบบัญชี DeepWitya แล้วข้อมูลใน studio ของ owner นั้นยังอยู่ — script reconcile อยู่ใน backlog
 - key ใน `studio_credential` ไม่ได้เข้ารหัสที่ disk (postgres volume บน host เดียวกัน สิทธิ์ root) — backlog
 - prompt ฝั่ง TS (`lib/chat/pi/prompts.ts`, PBL instructor) ยังมีตัวอย่างจีน — ไม่กระทบ course ปกติ
+
+---
+
+## บทเรียนจากรอบ 2026-09-11 (ใส่กลับเข้า runbook ข้างบนแล้ว — นี่คือสรุป)
+
+| เจอ | อาการ | แก้ที่ |
+|---|---|---|
+| `:80 /deepwitya` เป็น `proxy_pass` ไม่ใช่ redirect | ถ้า swap port ตาม cutover เดิม login ผ่าน http จะวนเพราะ cookie `Secure` | script: :80 เพิ่ม `return 301` แทน swap (#72) |
+| `no-new-privileges:true` บน studio 3 ตัว | postgres `Restarting (255)` `exec docker-entrypoint.sh: operation not permitted`; studio/gatekeeper ไม่เคย start | overlay production ปลดให้ 3 ตัวเหมือน sandbox-runner (#73) — host นี้เท่านั้น |
+| host 8443 = supabase-kong (`0.0.0.0:8443` ครอบ loopback) | preview `nginx -t` ผ่าน, reload "สำเร็จ" แต่ bind ล้มเงียบ; เบราว์เซอร์ได้ Basic auth ของ Kong; ไฟล์ค้างทำให้ reload ครั้งถัดไป (cutover) จะล้มด้วย และ `systemctl restart nginx` จะล่มทั้งเครื่อง | script: พอร์ต preview เป็นพารามิเตอร์ + ตรวจว่างก่อน + ยืนยัน listener หลัง reload + cutover ปฏิเสธ preview ค้าง (#74); §0 วัดพอร์ต preview |
+| เครื่อง dev 8443 = Antigravity IDE | tunnel bind ไม่ได้ เบราว์เซอร์ไปโดน IDE | tunnel ใช้ 18443 ฝั่ง dev |
+| ssh tunnel เก่ายังค้าง | 18443 ยังชี้ 8443 หลังแก้ฝั่ง host แล้ว | ปิด process ssh เก่าก่อนเปิดใหม่ — ตรวจด้วย `netstat -ano` หา 18443 แล้ว `Get-CimInstance Win32_Process` ดู command line ของ pid นั้น |
+| gatekeeper ไม่ log รายคำขอ | นับ status code จาก `docker logs` ไม่ได้ | ใช้ nginx access log (sudo) |
+| §3.3 ต้องรันซ้ำ | container restart จาก §3.4 ที่ล้ม reset dir เป็น 700 → `compose config` อ่าน `docker.env` ไม่ได้ | §3.3 ระบุ "ซ้ำหลัง restart" |
+| Claude บน host ไม่มี sudo | ทุกขั้น nginx/sudo คนต้องพิมพ์เอง | §9 |
+| image provider `custom-image` ต่อไม่ติดจาก host | ImageGeneration `fetch failed` ใน 200 ms; TTS custom ใช้ได้ | ไม่ใช่ของ go-live — แก้ URL ใน studio Settings |
+

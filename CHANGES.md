@@ -254,6 +254,46 @@ upstream.
 
 ---
 
+## Go-live: DeepWitya and the Course Studio are on `/deepwitya` — 2026-09-12
+
+Cutover at 00:10 host time, from tag `golive-2026-09-11` = `main` `b119ee12c`,
+studio image `ghcr.io/khunmax2/deepwitya-studio@sha256:4f54b507…4dee6d` (fork
+`d5585dd3`). One command, `apply-nginx-golive.sh --cutover 10310 10320`, and
+about five seconds: on :443 `location /deepwitya` moved from v1 to the new
+frontend and gained the studio include; on :80 it gained a `return 301`.
+Verified from outside the host: `/deepwitya/api/auth/status` answers from the
+new code (the body carries `learning_policy`), `/deepwitya/studio` is refused
+by the gatekeeper with `not_signed_in` and a login path, plain HTTP redirects,
+assets resolve under the base path, and the neighbouring applications answer
+as before. `/deepwitya2` and the preview server were then removed. v1 keeps
+running on 10310 as the five-second rollback until 2026-09-19 (§8).
+
+The evening before, the runbook was run as written and corrected four times
+where the host disagreed with it — each time as a PR, a merge and a moved
+tag, never as an edit on the host: the image digest (#71), the :80 redirect
+(#72), `no-new-privileges` on the studio's three services (#73), the preview
+port (#74). Claude Code on the host measured and diagnosed; it cannot use
+`sudo` (no TTY), so every nginx step was typed by Attapon. The preview was
+exercised through an SSH tunnel with the full browser checklist — admin
+login, chat, no missing assets, the studio framed, a server-side key kept
+across a reload, a Thai course with a Thai-labelled simulation, a learner
+refused — before anything on :443 changed. All eight containers were healthy
+with zero restarts through the test window and the first half hour after.
+
+`deploy/GO-LIVE.md` now opens with what was done and carries the findings
+back into the steps: filter `docker ps` by compose project label; §3.3 is
+repeated after any container restart; the gatekeeper writes no per-request
+log, so status codes come from the nginx access log under `sudo`; §9 says
+which steps a human must type. A lessons table at the end lists each thing
+the host disagreed with and where the fix went.
+
+Left open, outside the cutover: the studio's `custom-image` provider points
+at an endpoint the host cannot reach (image generation fails in 200 ms;
+TTS on the same kind of provider works) — a URL to correct in the studio's
+Settings. The gatekeeper could log one line per request.
+
+---
+
 ## The preview port was taken, and `nginx -t` cannot tell you that — 2026-09-11
 
 Go-live §4: the preview server on `127.0.0.1:8443` reported success —
