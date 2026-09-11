@@ -254,6 +254,27 @@ upstream.
 
 ---
 
+## A demotion no longer waits for the token to expire — 2026-09-11
+
+Asked: what happens to an account promoted to admin, and demoted again?
+Measured: nothing, until the next login. `decode_token` returned the role
+the JWT was minted with, and `TOKEN_EXPIRE_HOURS` is a day — so a promotion
+waited for a re-login and a former admin held admin for up to 24 hours on
+every surface that trusts `TokenPayload.role`: `require_admin`,
+`/api/auth/status` (which the sidebar and the course-studio gatekeeper
+read, and which decides the studio's shared-default surface), and the
+learning-policy admin exemption. `decode_token` now answers the user
+store's current role; a user the store does not know keeps the token's
+(the bootstrap account, and tests that mint tokens for unstored users).
+Three tests in `tests/multi_user/test_role_from_store.py`.
+
+For the studio this composes with the gatekeeper's 30 s verdict cache: a
+role or policy change reaches the gate within that window, and the
+studio's admin-only routes check the forwarded role on every request, so a
+stale "set as default" link in an already-open page simply fails.
+
+---
+
 ## The second decision, built: keys leave the browser — 2026-09-11
 
 Pin → fork `b98098ec` (khunmax2/Ups_openMAIC #14). Provider API keys now live
