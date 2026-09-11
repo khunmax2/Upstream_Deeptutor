@@ -254,6 +254,27 @@ upstream.
 
 ---
 
+## The studio's healthcheck asked for a tool the image no longer has — 2026-09-11
+
+Found by restarting Docker Desktop after a full disk: every service came
+back except the studio's health, stuck on `wget: not found`. The compose
+probe used `wget`, which `node:22-alpine` ships and `node:22-bookworm-slim`
+— the base since the glibc change — does not. The studio answered `200` on
+`/api/health` the whole time; only the probe was broken, exit 127 every
+30 s, never healthy. On UAT that was invisible because the containers
+already existed. On a fresh `compose up` the gatekeeper's `depends_on:
+openmaic: service_healthy` would have waited forever, and the studio would
+have been unreachable with nothing in any log saying why — a go-live
+blocker found two days before go-live.
+
+The probe is now `node -e "fetch(...)"` (`deploy/docker-compose.openmaic.yml`):
+node is the one binary every studio image is certain to carry, since it is
+what serves the app. `check_openmaic_contract.py` gains a rule that the
+probe starts with `node ` so the next base-image change cannot reintroduce
+this. Applied on UAT: healthy in 10 s.
+
+---
+
 ## The shared-key chip marks every provider that has one — 2026-09-11
 
 Pin → fork `05c86fd2` (khunmax2/Ups_openMAIC #18). Asked: does the chip

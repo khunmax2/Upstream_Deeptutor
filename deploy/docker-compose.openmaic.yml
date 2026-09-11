@@ -159,11 +159,19 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+    # The probe runs inside the studio image, so it may use only what every
+    # studio image is certain to carry. `node` is certain -- it is what serves
+    # the app. `wget` is not: node:22-alpine ships it (busybox) and
+    # node:22-bookworm-slim, the base since the glibc change, does not. A probe
+    # on a missing tool exits 127 on every try, the container never turns
+    # healthy, and the gatekeeper's depends_on below then never lets it start
+    # on a fresh `compose up` -- while the studio itself answers fine.
+    # check_openmaic_contract.py refuses a probe that is not `node`.
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O - http://127.0.0.1:3000${STUDIO_BASE_PATH:-/deepwitya/studio}/api/health > /dev/null",
+          "node -e \"fetch('http://127.0.0.1:3000${STUDIO_BASE_PATH:-/deepwitya/studio}/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))\"",
         ]
       interval: 30s
       timeout: 10s

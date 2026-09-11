@@ -425,6 +425,24 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
     expected_base = (pin.get("contract") or {}).get("base_path")
     if expected_base:
         probe = str(studio.get("healthcheck", {}).get("test", ""))
+        # The probe runs inside the image, and the only binary every studio
+        # image is certain to carry is node -- it is what serves the app. The
+        # first alpine-based image had wget, the bookworm-slim one does not,
+        # and a probe on a missing tool fails identically to a studio that is
+        # down: exit 127 every 30 s, never healthy, and the gatekeeper's
+        # depends_on keeps the whole entry closed.
+        test = studio.get("healthcheck", {}).get("test")
+        command = test[-1] if isinstance(test, list) and test else str(test or "")
+        if command.lstrip().startswith("node "):
+            report.ok(
+                "healthcheck probes with node", "the one binary the image is certain to carry"
+            )
+        else:
+            report.fail(
+                "healthcheck probes with node",
+                f"the probe must start with `node ` -- wget/curl are not in "
+                f"node:22-bookworm-slim; the probe reads {command!r}",
+            )
         wanted = "STUDIO_BASE_PATH:-" + expected_base + "}"
         if wanted in probe:
             report.ok("healthcheck probes the built base path", expected_base)
