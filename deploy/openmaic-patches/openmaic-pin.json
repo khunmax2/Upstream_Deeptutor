@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main descends from upstream 29735f10 with 49 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings) as of 2026-09-11"
+    "note": "fork/main descends from upstream 29735f10 with 53 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read) as of 2026-09-11"
   },
   "image": {
     "ref": null,
@@ -35,13 +35,13 @@
     "note": "phase 1 has not built one yet. A deploy must refuse a null digest rather than resolve a tag."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "d53cab62e82fa406b4bcf1fdbacbc59ee0b32024",
-  "commit_short": "d53cab62",
+  "commit": "b98098ecc9f5578f89ff020da43829215c1dc499",
+  "commit_short": "b98098ec",
   "commit_date": "2026-09-11",
-  "commit_subject": "Merge pull request #13 from khunmax2/feat/api-key-masking",
+  "commit_subject": "Merge pull request #14 from khunmax2/feat/server-side-credentials",
   "verified": "2026-09-11",
   "verified_against": {
-    "locale_keys_en_us": 1807,
+    "locale_keys_en_us": 1810,
     "locale_files": 12,
     "th_partial_keys": 1751,
     "th_keys_matching_upstream": 1687,
@@ -69,7 +69,7 @@
     "identity_prefix": "user:",
     "studio_threaded": true,
     "role_header": "x-deeptutor-role",
-    "role_header_studio_reads": false,
+    "role_header_studio_reads": true,
     "role_header_note": "The second half of the contract, decided 2026-09-11: DeepWitya is the only thing that knows who is an admin, and the studio's one admin-only surface (shared default credentials) needs to know. Carried like the owner: stripped from the client, set from the verified /api/auth/status, values exactly `admin` or `user`. The gatekeeper also refuses the `learner` preset outright (403 account_restricted) -- the sidebar already hid the entry from that preset, and a URL is not a menu. Flip role_header_studio_reads once the fork reads the header; until then the studio-side check SKIPs.",
     "studio_threaded_note": "The fork threads authenticatedOwnerId as of 91b7423f, so the studio half of the identity assertion is a real check rather than a SKIP: something under lib/ must mention the header name, or the two sides have drifted apart.",
     "base_path": "/deepwitya/studio",
