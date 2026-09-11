@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Loader2, PlugZap } from "lucide-react";
+import { ExternalLink, GraduationCap, Loader2, PlugZap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { withBasePath } from "@/lib/basePath";
 import { useAppShell } from "@/context/AppShellContext";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 import type { Theme } from "@/lib/theme";
 import type { AppLanguage } from "@/context/app-shell-storage";
 
@@ -87,6 +88,35 @@ export default function MaicWorkspace({ url, sameOrigin }: MaicWorkspaceProps) {
   const { t } = useTranslation();
   const { theme, language, languageReady } = useAppShell();
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const auth = useAuthStatus();
+
+  // A restricted learning account: the sidebar already hides this entry
+  // (nav-entries.ts leaves its surface undeclared) and the gatekeeper in
+  // front of the studio refuses the account with 403 account_restricted.
+  // This page can still be reached by URL, and without this branch it frames
+  // that refusal as raw JSON. Same test the sidebar uses: a non-null
+  // allowedSurfaces is a policy, and this surface is not on any policy.
+  if (!auth.loading && auth.allowedSurfaces !== null) {
+    return (
+      <div className="flex h-full items-center justify-center overflow-y-auto p-6">
+        <div className="max-w-lg space-y-3 text-center">
+          <GraduationCap
+            size={32}
+            strokeWidth={1.5}
+            className="mx-auto text-[var(--muted-foreground)]"
+          />
+          <h1 className="text-lg font-medium text-[var(--foreground)]">
+            {t("The course studio is not part of this account")}
+          </h1>
+          <p className="text-sm leading-relaxed text-[var(--muted-foreground)]">
+            {t(
+              "This is a learning account. Ask an administrator if you need to build courses.",
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!url) {
     return (
