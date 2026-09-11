@@ -254,6 +254,17 @@ upstream.
 
 ---
 
+## The shared-key chip marks every provider that has one — 2026-09-11
+
+Pin → fork `05c86fd2` (khunmax2/Ups_openMAIC #18). Asked: does the chip
+show once I share a key? Not for the admin who shared it — the chip read
+the effective source, and their own key wins. It now reads the shared rows
+directly: every provider with a shared key carries the chip, so an admin
+sees at a glance what they have shared and everyone else still sees why a
+provider already works.
+
+---
+
 ## What removing a shared key leaves behind — 2026-09-11
 
 Pin → fork `8bbfe7b7` (khunmax2/Ups_openMAIC #17). An admin shared their
