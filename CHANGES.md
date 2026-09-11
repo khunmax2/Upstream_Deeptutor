@@ -263,7 +263,8 @@ than defaulting to OpenAI, key optional and never sent as `Bearer undefined`.
 Its probe asks `/models` first and reports a server with neither `/models`
 route as reachable-and-unchecked instead of failed. Env names:
 `IMAGE_CUSTOM_BASE_URL` / `_API_KEY` / `_MODELS`, now in
-`deploy/openmaic.env.example`.
+`deploy/openmaic.env.example`. Pin bumped to fork `a1b3994b` (1802 locale
+keys; contract check 19/19).
 
 Two things learned on the way:
 
