@@ -254,6 +254,22 @@ upstream.
 
 ---
 
+## "Default" was the wrong word; it is sharing, and it lives in a menu — 2026-09-11
+
+Pin → fork `197bc6df` (khunmax2/Ups_openMAIC #16). Asked: does setting a
+second default replace the first? No — the server keeps a shared key per
+provider, any number of them, and each account chooses among the providers
+it can use. The behaviour was right and the word "default" was wrong, so
+every label now says *share*: "แชร์ key นี้ให้ทุกบัญชี", "แชร์อยู่",
+"ยกเลิกการแชร์", chip "key ส่วนกลาง", and the non-admin note says how to
+override with a key of their own. The admin's three actions on their own
+key (share, stop sharing, remove) sit in one menu at the end of the key row
+— admin only, on the trigger the shared state is readable without opening
+it — instead of the second-row button that had been missed. Locale keys
+1811 → 1816; contract check green.
+
+---
+
 ## An admin default is usable at once, and says so — 2026-09-11
 
 Pin → fork `fd14be8f` (khunmax2/Ups_openMAIC #15). Asked: once an admin
