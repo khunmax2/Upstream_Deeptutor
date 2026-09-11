@@ -27,6 +27,17 @@ stack ใหม่คือ stack `/deepwitya2` ที่ **rebuild ในที
 ราคาที่ต้องรู้: **ตั้งแต่ขั้น §3.4 (rebuild) `/deepwitya2` จะใช้ไม่ได้** เพราะ image
 ถูก bake ใหม่เป็น `/deepwitya` — ไม่กระทบ `/deepwitya` ตัวจริง (v1) ที่ยังให้บริการอยู่
 
+**ต้องสั่งหยุด stack เก่าก่อนไหม — ไม่ต้อง ทั้งสองตัว:**
+
+| stack | ต้องทำอะไร | ทำไม |
+|---|---|---|
+| `/deepwitya2` (`deeptutor2`, …) | **ไม่ต้องหยุด** — §3.4 `up -d --build` recreate container ชุดเดิมให้เอง | มันคือ stack ใหม่นั่นแหละ แค่ build ใหม่ในที่ |
+| `/deepwitya` v1 (port 10310) | **ไม่ต้องหยุด** — ปล่อยรันไว้ | คือทางถอย §7.1 (สลับ nginx กลับใน 5 วินาที) ลบทีหลังใน §8 เมื่อพอใจแล้ว — หรือเร็วกว่านั้นถ้าไม่อยากเก็บ แต่ต้องรู้ว่าลบแล้วทางถอยแบบทันทีหายไปด้วย |
+
+ข้อมูลผู้ใช้ในทั้งสอง stack เป็นของทดสอบ **ไม่ยกอะไรทั้งนั้น** สิ่งเดียวที่มีค่าคือ config
+การ deploy ซึ่งอยู่ใน `data/user/settings/` ของ `/deepwitya2` (port, `auth.json` ที่เปิด
+multi-user, บัญชี admin, credential ของ model) และมันอยู่ที่เดิมอยู่แล้วเพราะ rebuild ในที่
+
 ---
 
 ## 0. วัดก่อน อย่าเดา (บน host)
@@ -97,18 +108,17 @@ gh run watch --repo khunmax2/Upstream_Deeptutor   # ~10 นาที; job summar
 - [ ] ทดสอบ pull จากเครื่อง dev: `docker pull ghcr.io/khunmax2/deepwitya-studio@sha256:<digest>`
       แล้ว `docker run --rm --entrypoint sh <ref> -c 'grep -rl /deepwitya/studio/_next .next/server/app | wc -l'` ต้อง > 0
 
-### 1.3 ตัดสินใจเรื่องข้อมูล
+### 1.3 ข้อมูล — ตัดสินใจแล้ว (2026-09-11): ไม่ยกข้อมูลผู้ใช้ใด ๆ
 
-| ข้อมูล | ตัดสินใจ | เหตุผล |
+ทั้ง v1 และ `/deepwitya2` เป็นระบบทดสอบ ข้อมูลผู้ใช้ในนั้นไม่มีค่า สิ่งที่มีค่าคือ **config การ deploy** เท่านั้น
+
+| ข้อมูล | ตัดสินใจ | หมายเหตุ |
 |---|---|---|
-| `data/` ของ DeepWitya (user, settings, sessions) | **ใช้ของ stack `/deepwitya2` ต่อ** | validate มาแล้ว, schema ของ `feat/course-studio` เป็น additive (เพิ่ม `auth_secret` ใน `users.json`) |
-| ฐานข้อมูล studio (คอร์สที่สร้างตอน UAT) | **เริ่มใหม่** (แนะนำ) | ของ UAT เป็นของทดลอง; ยกมาต้อง `pg_dump` + `UPDATE` ที่อยู่ media ทุกแถวเพราะ origin ต่างกัน — ทำได้แต่ไม่คุ้ม |
-| API key ใน studio (`studio_credential`) | **กรอกใหม่ใน Settings ของ studio** | key อยู่ฝั่ง server ต่อ owner; admin แชร์ให้ทุกบัญชีได้จากเมนูบน key |
-| `data/ollama` (bge-m3 1.1 GB) | อยู่ที่เดิม | volume เดิมของ stack `/deepwitya2` |
-
-ถ้าจะยกคอร์ส UAT จริง ๆ: `docker exec deeptutor-openmaic-postgres pg_dump -U openmaic openmaic > studio-uat.sql`
-บนเครื่อง dev → restore บน host **ก่อน** studio ตัวใหม่ start ครั้งแรก → แล้วค่อยแก้ที่อยู่ media
-(บันทึกไว้เป็น option ไม่ใช่แผน)
+| `data/user/settings/` ของ `/deepwitya2` (port, `auth.json`, บัญชี admin, credential ของ model) | **ใช้ต่อ** — อยู่ที่เดิมเพราะ rebuild ในที่ | นี่คือ "ข้อมูล deploy" ที่ต้องเก็บ; §2 backup ไว้เผื่อ |
+| session / เอกสาร / ผู้ใช้ทดสอบใน `/deepwitya2` | ปล่อยไว้ ไม่แตะ ไม่ยก | ติดมากับ `data/` เดิม ไม่เป็นไร ลบทีหลังได้ |
+| ทุกอย่างใน v1 (`/deepwitya` เดิม) | **ทิ้ง** ตอน §8 | ไม่มีอะไรต้องยก |
+| ฐานข้อมูล studio | **สร้างใหม่** | คอร์ส UAT บนเครื่อง dev เป็นของทดลอง; key ใน studio กรอกใหม่ใน Settings (admin แชร์ให้ทุกบัญชีได้จากเมนูบน key) |
+| `data/ollama` (bge-m3 1.1 GB) | อยู่ที่เดิม | ไม่ต้อง pull ใหม่ |
 
 ---
 
@@ -324,7 +334,40 @@ docker compose ... up -d
 
 ---
 
-## 9. สิ่งที่รู้ว่ายังไม่ได้ทำ (ไม่ใช่ blocker — ตัดสินใจไว้แล้ว)
+## 9. วิธีสั่ง Claude วัน go-live
+
+ระบบเป็นสอง repo (DeepWitya นี้ + fork OpenMAIC) แต่วัน go-live **ใช้ repo นี้ repo เดียว**:
+studio มาเป็น image ตาม digest ใน pin แล้ว ไม่ต้องแตะ fork
+
+**ที่ไหน:** host ไม่มี Claude — เลือกอย่างใดอย่างหนึ่ง
+
+| แบบ | วิธี | ข้อควรรู้ |
+|---|---|---|
+| ก. รัน Claude Code บนเครื่องคุณใน `D:/Vscode/Upstream_Deeptutor` ให้มันคุย host ผ่าน `ssh` | ต้องมี key auth ไป host แล้ว (`ssh <user>@203.185.144.41 true` ต้องผ่านโดยไม่ถามรหัส) — Claude กรอกรหัสผ่าน/passphrase ให้ไม่ได้ | `sudo` บน host ต้องไม่ถามรหัส (`NOPASSWD`) สำหรับ `nginx -t`, `systemctl reload nginx` หรือคุณรันขั้น `sudo` เอง |
+| ข. ติดตั้ง Claude Code บน host แล้วรันใน `/home/search/Thoughtmind/Upstream_Deeptutor_v2` | เห็นทุกอย่างตรง ๆ ไม่ต้องผ่าน ssh | ต้อง `git fetch` ให้ checkout มี `deploy/GO-LIVE.md` ก่อน (มันอยู่บน tag go-live) |
+
+**prompt ที่ paste ได้เลย** (แบบ ก. ให้เติมบรรทัดแรก; แบบ ข. ตัดออก):
+
+```
+host คือ 203.185.144.41 เข้าด้วย ssh <user>@203.185.144.41 (key auth ตั้งไว้แล้ว) repo บน host อยู่ที่ /home/search/Thoughtmind/Upstream_Deeptutor_v2
+
+วันนี้ go-live ตาม deploy/GO-LIVE.md อ่านทั้งไฟล์ก่อน แล้วทำตามลำดับ §0 → §2 → §3 → §4 → §5 → §6 ทีละหัวข้อ
+กติกา:
+1. §0 ต้องรายงานค่าที่วัดได้จริงทุกข้อก่อนทำอย่างอื่น ถ้าค่าใดไม่ตรงตารางใน runbook ให้หยุดแล้วเสนอแก้ runbook ไม่ใช่แก้ host
+2. ห้ามข้าม checklist ข้อใด ถ้าข้อไหนไม่ผ่านให้หยุดและบอก ห้ามแก้แล้วไปต่อเอง
+3. ก่อนรันขั้นที่ใช้ sudo หรือแตะ nginx (§4, §5) ให้บอกคำสั่งที่จะรันแล้วรอฉันตอบ
+4. §5 (cutover) ทำเมื่อฉันสั่ง "cutover" เท่านั้น
+5. ถ้าอะไรพังหลัง §5 ให้ทำ §7.1 ทันทีแล้วค่อยมาวิเคราะห์
+6. ข้อมูลผู้ใช้ในทั้งสอง stack เป็นของทดสอบ ไม่ต้องยก ไม่ต้องถาม (§1.3)
+สถานะที่ทำไว้แล้ว: main มี tag golive-<วันที่>, studio image publish แล้ว digest อยู่ใน deploy/openmaic-patches/openmaic-pin.json
+```
+
+**ก่อนถึงวันนั้น สิ่งที่ต้องเป็นจริง (ไม่งั้น Claude จะติดตั้งแต่ §1):**
+- [ ] PR `feat/course-studio → main` merge แล้ว + tag `golive-<วันที่>` push แล้ว
+- [ ] workflow `studio-image.yml` รันบน `main` แล้ว, package ตั้ง Public, digest บันทึกใน pin และ merge แล้ว
+- [ ] ssh key ไป host ใช้ได้ (แบบ ก.) หรือ Claude Code อยู่บน host (แบบ ข.)
+
+## 10. สิ่งที่รู้ว่ายังไม่ได้ทำ (ไม่ใช่ blocker — ตัดสินใจไว้แล้ว)
 
 - CSP ของ studio ไม่มี `frame-ancestors` ที่กว้างกว่า `'self'` — ถูกต้องสำหรับ origin เดียว (T12 ใน threat model เป็นเรื่อง header อื่น ยังค้าง)
 - ลบบัญชี DeepWitya แล้วข้อมูลใน studio ของ owner นั้นยังอยู่ — script reconcile อยู่ใน backlog
