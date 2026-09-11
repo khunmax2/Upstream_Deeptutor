@@ -37,6 +37,21 @@ services:
       # which would leave this origin while reading like a local route.
       - DEEPTUTOR_OPENMAIC_URL=/deepwitya/studio
 
+  openmaic:
+    # Docker Desktop forwards the embedded resolver (127.0.0.11) to the host's
+    # DNS, and for some public names that path drops answers: measured for a
+    # Tailscale Funnel host (*.ts.net) at 8 failures in 12 lookups from inside
+    # this container, while the Windows host resolved it 12/12 and every
+    # api.openai.com / github.com lookup passed. The studio's SSRF guard turns
+    # a failed lookup into "Unable to verify hostname safety" (403) and the
+    # provider probe into "fetch failed" -- the same click answering three
+    # different things. Naming the forwarders directly: 24/24. Service names
+    # still resolve; the embedded resolver keeps those and only forwards the
+    # rest. The deploy host runs its own resolver and does not need this.
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+
   gatekeeper:
     environment:
       # LOGIN_URL, not DEEPTUTOR_LOGIN_URL. The studio overlay writes
