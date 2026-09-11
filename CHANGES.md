@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## Four things one classroom session showed — 2026-09-11
+
+Pin → fork `da4b4cff` (khunmax2/Ups_openMAIC #10, #11, #12). A person played
+a generated course end to end and sent four screenshots; none of the four
+was a rate limit (zero 429 lines in three hours of studio log), and each had
+a measured cause.
+
+- **Broken avatars, broken provider logos (#10).** The first base-path pass
+  wrapped literal `src="/…"` and guarded that shape; `<AvatarImage
+  src={avatar}>` and `<img src={provider.icon}>` carry the path as a
+  variable and asked the origin root — nginx 404 ×24 for one logo, ×2 per
+  avatar per page view. Patch 22 from the first integration lifted, plus
+  what it did not cover: `AvatarImage` prefixes internally, four video srcs,
+  and a guard for `src={x}` on media tags that found two more on its first
+  run.
+- **"ทำใหม่" on the quiz stage (#11).** 403 ×40 on
+  `/runtime/stages/…/learners/anon:<uuid>/sessions`. The browser mints a
+  device learner key; behind the gateway the server derives it from the
+  verified identity and forbids any other in the path. The quiz runtime could
+  neither load nor save. `GET /api/persistence/whoami` answers the key; the
+  browser asks first and mints only when the server has no identity.
+- **Images stopping after the fourth picture, and the probe's "Unable to
+  verify hostname safety" (#12).** `/api/generate/image` 403 ×14 once the
+  Funnel name's AAAA record went away. Its AAAA query answers NXDOMAIN while
+  A answers records; musl's `getaddrinfo` treats that as the name not
+  existing, glibc/Windows/macOS tolerate it. Same resolver, same name:
+  `node:22-bookworm-slim` 6/6, `node:22-alpine` 0/6. The studio image is
+  Debian now, with a build-time glibc assertion; 210 → 244 MB.
+- Garbled Thai inside generated pictures: the image model. Not ours.
+
+Verified on the rebuilt container: glibc, lookup 12/12, `whoami` 200 with
+the identity and 401 without, avatars 200 under the base path, generation
+reaching the operator's server. Contract check 19/19.
+
+---
+
 ## The test button asked the wrong provider's question — 2026-09-11
 
 Pin → fork `3d6c9d0d` (khunmax2/Ups_openMAIC #9). With the right key, the
