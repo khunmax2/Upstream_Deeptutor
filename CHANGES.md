@@ -254,6 +254,19 @@ upstream.
 
 ---
 
+## `--revert` refuses to point the site at nothing — 2026-09-12
+
+Decided the same night: v1 stays on 10310 as the rollback until 2026-09-19,
+then goes (§8). After that, `apply-nginx-golive.sh --revert` would still
+happily move `location /deepwitya` back to 10310 — a port nothing listens
+on — and turn a working site into 502 in the name of a rollback. It now
+checks the recorded old port first and refuses when nothing listens there,
+naming §7.3 as the remaining path; `--revert --force` overrides for the
+case where something is about to listen. §8 says so and points at the
+state file to remove.
+
+---
+
 ## Go-live: DeepWitya and the Course Studio are on `/deepwitya` — 2026-09-12
 
 Cutover at 00:10 host time, from tag `golive-2026-09-11` = `main` `b119ee12c`,

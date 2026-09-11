@@ -33,9 +33,13 @@
 #       runs in nginx's rewrite phase, before proxy_pass, so the existing
 #       proxy_pass line stays where it is and --revert removes one line.
 #
-#   sudo bash deploy/apply-nginx-golive.sh --revert
+#   sudo bash deploy/apply-nginx-golive.sh --revert [--force]
 #       /deepwitya back to the recorded old port, studio include removed.
-#       The old stack must still be running — nothing here starts it.
+#       The old stack must still be running — nothing here starts it, and
+#       it refuses to point /deepwitya at a port nothing listens on (the
+#       state after the old stack is removed in GO-LIVE.md §8): that would
+#       turn a working site into 502 in the name of a rollback. --force
+#       overrides when you know something will listen there in a moment.
 #
 #   sudo bash deploy/apply-nginx-golive.sh --remove-preview
 #       Drop the preview server after cutover.
@@ -339,6 +343,16 @@ case "${1:-}" in
     # shellcheck disable=SC1090
     . "$STATE"
     echo "== revert: :443 /deepwitya $TO → $FROM, เอา studio include ออก; :80 เอา return 301 ออก =="
+    echo "== 0. ตรวจก่อนแตะ =="
+    if listening "$FROM"; then
+      echo "  พอร์ต $FROM (stack เก่า) มีคนฟังอยู่ — ถอยได้"
+    elif [ "${2:-}" = "--force" ]; then
+      echo "  !! พอร์ต $FROM ไม่มีใครฟัง แต่สั่ง --force — /deepwitya จะเป็น 502 จนกว่าจะมีอะไรฟังที่ $FROM"
+    else
+      echo "!! พอร์ต $FROM (stack เก่า) ไม่มีใครฟัง — stack เก่าถูกถอนแล้ว (§8)? revert จะทำให้ /deepwitya เป็น 502" >&2
+      echo "   ทางถอยที่เหลือคือ GO-LIVE.md §7.3 (ตั้ง stack เดิมกลับมาก่อน แล้วค่อย revert) หรือ --revert --force ถ้าตั้งใจ" >&2
+      exit 1
+    fi
     backup "$SSL"; backup "$HTTP"
     swap_port "$SSL" "$TO" "$FROM"
     remove_include_studio
