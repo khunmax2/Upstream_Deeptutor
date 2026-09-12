@@ -64,6 +64,15 @@ class ReadingViewport(BaseModel):
 
     locator: int | None = Field(default=None, ge=0)
     selection: str | None = None
+    # Fork. Where playback is for timed media (video, audio): the reader has
+    # sent this since the immersive-reading workspace shipped, and the reading
+    # capability has read it since then ("Current media time: …"). The model
+    # was written later with only the two fields above and `extra="forbid"`,
+    # so every turn on a video answered `protocol_error: invalid_command` at
+    # the socket -- and the UI, which does not act on that event, showed
+    # "reasoning…" forever. Found 2026-09-12 on the first YouTube material
+    # after go-live; upstream main still has the shape without it.
+    time_seconds: float | None = Field(default=None, ge=0)
 
 
 class TimedMediaViewport(BaseModel):

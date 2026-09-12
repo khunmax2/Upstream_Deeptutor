@@ -233,3 +233,66 @@ def test_explicit_reading_references_are_persisted_for_retry() -> None:
     assert snapshot["readingReferences"] == [
         {"material_id": "abcdef0123456789", "revision": 1, "locators": [1, 2]}
     ]
+
+
+# ---------------------------------------------------------------------------
+# timed media: the playback position rides the viewport (fork, 2026-09-12)
+# ---------------------------------------------------------------------------
+
+
+def test_viewport_carries_the_playback_position_for_timed_media() -> None:
+    """A video or audio material reports where playback is; the capability turns
+    it into "Current media time: mm:ss". It was dropped here and refused at the
+    socket, so every turn on a YouTube material hung -- see the wire test below."""
+    assert _reading_viewport({"locator": 36, "time_seconds": 121.5}) == {
+        "locator": 36,
+        "time_seconds": 121.5,
+    }
+    assert _reading_viewport({"time_seconds": 0}) == {"time_seconds": 0.0}
+
+
+@pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), "12", True, None])
+def test_a_position_that_is_not_a_position_is_omitted(value: object) -> None:
+    assert _reading_viewport({"locator": 3, "time_seconds": value}) == {"locator": 3}
+
+
+def test_the_wire_accepts_a_reading_viewport_with_time_seconds() -> None:
+    """The exact command the reader sends for a video, validated by the same
+    adapter the WebSocket router uses. Before the fix this raised -- the model
+    forbade extras and named only locator and selection -- and the router
+    answered `protocol_error: invalid_command`, which the UI does not act on."""
+    from deeptutor.api.routers.unified_ws import _CLIENT_COMMAND_ADAPTER
+
+    command = _CLIENT_COMMAND_ADAPTER.validate_python(
+        {
+            "type": "start_turn",
+            "protocol_version": "2.0",
+            "content": "What changed in this model?",
+            "capability": None,
+            "reading_material_id": "00533139eb8c63ed",
+            "reading_material_revision": 1,
+            "reading_viewport": {"locator": 36, "time_seconds": 121.5},
+        }
+    )
+    dumped = command.model_dump(mode="python")
+    assert dumped["reading_viewport"] == {
+        "locator": 36,
+        "selection": None,
+        "time_seconds": 121.5,
+    }
+
+
+def test_the_wire_still_refuses_a_negative_position() -> None:
+    from pydantic import ValidationError
+
+    from deeptutor.api.routers.unified_ws import _CLIENT_COMMAND_ADAPTER
+
+    with pytest.raises(ValidationError):
+        _CLIENT_COMMAND_ADAPTER.validate_python(
+            {
+                "type": "start_turn",
+                "protocol_version": "2.0",
+                "content": "x",
+                "reading_viewport": {"time_seconds": -1},
+            }
+        )
