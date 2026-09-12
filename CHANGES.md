@@ -254,6 +254,32 @@ upstream.
 
 ---
 
+## Third deploy round, and a runbook that keeps the downtime step short — 2026-09-13
+
+Tag `deploy-2026-09-13` = `main` `a7092d322` went up by `GO-LIVE.md` §11:
+`deeptutor2` rebuilt (#82 transcript in the spoken language, #84 About),
+studio recreated on `f2d9257a…` (audit F1, a course is private unless
+published), a studio backup taken before the swap, 8/8 healthy with zero
+restarts. The chmod-after-every-recreate rule from the last round caught
+`settings/` back at 700 and kept the studio step from failing.
+
+Two things the round showed, folded into §11 and §9. The studio's image pull
+sat on one 66 MB layer for about ten minutes — the registry was fine, the
+connection dockerd held was not — and because the pull ran inside the `up -d`
+that recreates the container, the command outlived the host tool's timeout
+and was moved to the background halfway through the only step with
+downtime; a retry or a kill there would have raced it. The pull is now its
+own step before the gate, after the studio backup, and the gate step checks
+that no other compose of this stack is running. And the per-round prompts,
+each copied by hand from §11, had drifted from the runbook; §11 now ends
+with a template that carries only the round's values (tag, what changed,
+digest) and the rules — a gate opens only on the person's own message, a
+command pushed to the background is followed, never re-run or killed, and a
+result is judged by the image id, not by "healthy". The tag is pushed before
+the prompt is sent.
+
+---
+
 ## Pin → fork `b1c73fd2`: a custom provider's endpoint travels with its key — 2026-09-13
 
 Found by the user on the studio's settings page: a custom TTS provider added
