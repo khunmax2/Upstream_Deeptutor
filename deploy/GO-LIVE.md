@@ -376,6 +376,11 @@ docker compose ... up -d
       ทางถอยที่เหลือคือ §7.3; ลบไฟล์ state ทิ้งได้: `sudo rm /etc/nginx/snippets/deepwitya-golive.state`
 - [ ] ลบ `location /deepwitya2` ที่ :80 ถ้ายังเหลือ (`apply-nginx-deepwitya2.sh --revert` ทำให้แล้ว)
 - [ ] `CHANGES.md` บันทึกวันที่ go-live + commit + digest
+- [ ] backup studio ทุกวัน (ยังไม่มีตอน go-live — audit F8): `bash deploy/backup-studio.sh` (ไม่ต้อง sudo)
+      ได้ `openmaic-<stamp>.dump` (pg_dump ทั้ง DB รวม credential/asset bytes) + `openmaic-data-<stamp>.tar.gz`
+      (volume `/app/data`: material bytes, usage) ตรวจ dump ว่า restore ได้: `bash deploy/backup-studio.sh --verify <file>`
+      ติด cron: `crontab -e` → `30 3 * * * cd /home/search/Thoughtmind/Upstream_Deeptutor_v2 && bash deploy/backup-studio.sh >> ../_deeptutor_backup/studio/backup.log 2>&1`
+      (เก็บ 30 วัน; ซ้อม restore ตามหัวไฟล์ script อย่างน้อยครั้งหนึ่ง)
 
 ---
 

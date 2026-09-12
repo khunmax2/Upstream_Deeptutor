@@ -86,8 +86,13 @@ upstream `29735f10`, 33 of 37 call sites reach it through one wrapper.
   their agreement, the same way opening a port did. `/deepwitya/course-studio`
   was the obvious name and is the one address that cannot be used: DeepWitya
   already answers there.
-- Upstream's DDL constants are pinned in `check_openmaic_contract.py`, and
-  `pg_dump` runs before every rebase.
+- `pg_dump` runs before every rebase, and `deploy/backup-studio.sh` takes the
+  database and the data volume daily (2026-09-12). The checker pins the fork
+  commit and the locale key count; it does **not** pin upstream's DDL — the
+  2026-09-11 audit read the sentence that stood here as a claim the code did
+  not make. Schema drift across a rebase is caught by upstream's own
+  `pg-schema-contract` test and by restoring the pre-rebase dump, not by the
+  checker.
 
 ## Consequences
 

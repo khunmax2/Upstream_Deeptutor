@@ -482,6 +482,50 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
                     f"with a value the pin does not record",
                 )
 
+    # --- the image a deploy would pull is the pinned one ----------------------------
+    # Compose refuses an EMPTY OPENMAIC_IMAGE (`:?`), and that is all it can do:
+    # `nginx:latest` satisfies it. The pin records a digest so that what runs is
+    # what was verified; nothing enforced that the value an operator typed into
+    # deploy/production.env is that digest (2026-09-11 audit, F6). This reads the
+    # file when it exists -- on a dev checkout it usually does not, and that is
+    # a SKIP, not a pass -- and demands `<pinned repository>@<pinned digest>`:
+    # not a tag, not another digest, not another repository.
+    image = pin.get("image") or {}
+    pinned_ref, pinned_digest = image.get("ref"), image.get("digest")
+    env_file = HERE.parent / "production.env"
+    if not env_file.is_file():
+        report.skip(
+            "production.env pulls the pinned digest", f"no {env_file.name} on this checkout"
+        )
+    elif not (image.get("built") and pinned_ref and pinned_digest):
+        report.fail(
+            "production.env pulls the pinned digest",
+            "the pin has no built image (image.ref / image.digest / built) — a deploy must "
+            "not proceed on a null digest",
+        )
+    else:
+        value = ""
+        for row in env_file.read_text(encoding="utf-8").splitlines():
+            row = row.strip()
+            if row.startswith("OPENMAIC_IMAGE="):
+                value = row[len("OPENMAIC_IMAGE=") :].strip().strip("'\"")
+        repository = str(pinned_ref).rsplit("@", 1)[0].rsplit(":", 1)[0]
+        wanted = f"{repository}@{pinned_digest}"
+        if value == wanted:
+            report.ok("production.env pulls the pinned digest", pinned_digest[:19] + "…")
+        elif not value:
+            report.fail("production.env pulls the pinned digest", "OPENMAIC_IMAGE is not set")
+        elif "@sha256:" not in value:
+            report.fail(
+                "production.env pulls the pinned digest",
+                f"OPENMAIC_IMAGE={value!r} is a tag, not a digest — a tag can move",
+            )
+        else:
+            report.fail(
+                "production.env pulls the pinned digest",
+                f"OPENMAIC_IMAGE={value!r} is not the pinned {wanted!r}",
+            )
+
     # --- the database is not a second door --------------------------------------
     db = services.get(DB_SERVICE)
     if not isinstance(db, dict):
