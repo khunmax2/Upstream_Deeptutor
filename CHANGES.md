@@ -254,6 +254,33 @@ upstream.
 
 ---
 
+## Pin → fork `b1c73fd2`: a custom provider's endpoint travels with its key — 2026-09-13
+
+Found by the user on the studio's settings page: a custom TTS provider added
+with its URL, then given only a key, answered the test with OpenAI's
+"Incorrect API key provided"; typing the URL again made it work. Our own
+audit fix F2 (fork #20) was the rule in play — a stored key is used only with
+the URL stored beside it, never one a request sends — and it met two gaps.
+The URL typed when a custom provider is added lives in the browser as
+`customDefaultBaseUrl` while the Base URL field stays empty, and the
+credential sync sent only that field, so the key was stored alone. With no
+stored URL the server fell back to the OpenAI adapter's default and sent the
+custom provider's key to api.openai.com.
+
+Fixed without loosening F2, and with one leak fewer (fork PR #23): the browser
+now sends the URL it would itself use — the field, else the provider's own —
+with every key it stores, and fills in, once, the URL of an own custom-provider
+row stored before that (never an admin's shared row); a custom TTS provider
+with no URL refuses before any request leaves, as custom ASR already did.
+Four new cases red on the old source, green now; F2's binding tests
+unchanged. Until this image is on the host, the workaround is to type the URL
+into the Base URL field and save it with the key.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:b1c73fd2`, digest
+`sha256:1862c324…d4485` (run 34697061048).
+
+---
+
 ## Settings ▸ About stops offering upstream's releases as this installation's — 2026-09-13
 
 The About page read upstream's release feed and presented it as this
