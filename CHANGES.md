@@ -280,6 +280,31 @@ the prompt is sent.
 
 ---
 
+## Deep Research no longer dies after the outline on a quick report — 2026-09-13
+
+Found in UAT: mode "report", depth "quick", outline confirmed, and the run
+ended before any research with `RuntimeError: Queue has reached maximum
+capacity (2), cannot add new topic.` Every quick run of "report" or
+"learning path" did this. The code is upstream's, unchanged in HKUDS/DeepTutor
+`main` today.
+
+Two faults, each proven by its own red test before its fix
+(`tests/agents/research/test_confirmed_outline_capacity.py`):
+
+- **The outline was sized from the wrong key.** An "auto" decompose (report,
+  learning path) puts its size in `auto_max_subtopics` and leaves
+  `initial_subtopics` None; the pipeline read only the latter, so every auto
+  run asked the model for the default five — quick five instead of two, deep
+  five instead of six. The pipeline now reads the key the mode carries
+  (`deeptutor/agents/research/pipeline.py`).
+- **The depth's queue cap was applied to the confirmed outline**, which is the
+  person's decision and which the outline card lets them extend. The queue is
+  now sized to hold the whole confirmed outline; the cap still limits what the
+  agent appends mid-research, where a full queue already turns an append away
+  without failing.
+
+---
+
 ## Pin → fork `b1c73fd2`: a custom provider's endpoint travels with its key — 2026-09-13
 
 Found by the user on the studio's settings page: a custom TTS provider added
