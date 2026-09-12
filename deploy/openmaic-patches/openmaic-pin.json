@@ -29,11 +29,11 @@
     "note": "fork/main descends from upstream 29735f10 with 71 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404) as of 2026-09-12"
   },
   "image": {
-    "ref": "ghcr.io/khunmax2/deepwitya-studio:d5585dd3",
-    "digest": "sha256:4f54b507257fdd8453495ac2bd7206ed8a1e59f79b473c67489b05765f4dee6d",
+    "ref": "ghcr.io/khunmax2/deepwitya-studio:94cc6af1",
+    "digest": "sha256:4b8f8f6b4c5cb91c618499a4244a7063e41f117419fd91ad3de1f3f3d4f53066",
     "built": true,
-    "built_from": "d5585dd3b296d0883dd085002f5d589677cfb17f",
-    "built_by": "studio-image.yml run 34601734152 on main 931431e97, 2026-09-11",
+    "built_from": "94cc6af152fb2438d740f8de03dc616d2dc08df3",
+    "built_by": "studio-image.yml run 34668822040 on chore/pin-fork-94cc6af1, 2026-09-12",
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
