@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main descends from upstream 29735f10 with 67 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included) as of 2026-09-11"
+    "note": "fork/main descends from upstream 29735f10 with 71 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404) as of 2026-09-12"
   },
   "image": {
     "ref": "ghcr.io/khunmax2/deepwitya-studio:d5585dd3",
@@ -37,11 +37,11 @@
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "d5585dd3b296d0883dd085002f5d589677cfb17f",
-  "commit_short": "d5585dd3",
-  "commit_date": "2026-09-11",
-  "commit_subject": "Merge pull request #19 from khunmax2/fix/prompts-no-cjk-in-worked-examples",
-  "verified": "2026-09-11",
+  "commit": "94cc6af152fb2438d740f8de03dc616d2dc08df3",
+  "commit_short": "94cc6af1",
+  "commit_date": "2026-09-12",
+  "commit_subject": "Merge pull request #21 from khunmax2/fix/audit-f4-f5-gateway-identity-and-denial",
+  "verified": "2026-09-12",
   "verified_against": {
     "locale_keys_en_us": 1819,
     "locale_files": 12,
