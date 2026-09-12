@@ -30,6 +30,11 @@ from deeptutor.reading.catalog_store import ReadingCatalogStore
 from deeptutor.reading.extract import split_markdown_by_headings
 from deeptutor.reading.models import OutlineEntry, ReadingError, UnitReference
 from deeptutor.reading.store import ReadingStore, content_hash
+from deeptutor.reading.transcript_language import (
+    CaptionTrack,
+    choose_track,
+    interface_language_code,
+)
 from deeptutor.services.web_source.markdown import strip_leading_snapshot_provenance
 from deeptutor.services.web_source.snapshot_assets import (
     ImageFetcher,
@@ -809,6 +814,25 @@ async def _load_youtube_captions(
             return []
         api = YouTubeTranscriptApi()
         try:
+            # Fork. Read the clip in the language it was spoken in (see
+            # deeptutor/reading/transcript_language.py for the rule and why),
+            # not in a fixed list. ``languages`` is kept as the last resort for
+            # a backend without ``list``.
+            if hasattr(api, "list"):
+                chosen = choose_track(
+                    [
+                        CaptionTrack(
+                            language_code=str(getattr(t, "language_code", "") or ""),
+                            generated=bool(getattr(t, "is_generated", False)),
+                            source=t,
+                        )
+                        for t in api.list(video_id)
+                    ],
+                    interface_language=interface_language_code(),
+                )
+                if chosen is None:
+                    return []
+                return list(chosen.source.fetch())
             if hasattr(api, "fetch"):
                 return list(api.fetch(video_id, languages=list(languages)))
             return list(YouTubeTranscriptApi.get_transcript(video_id, languages=list(languages)))

@@ -254,6 +254,36 @@ upstream.
 
 ---
 
+## A clip is read in the language it was spoken in — 2026-09-12
+
+The watching workspace showed a Thai learner Chinese captions on an English
+Apple keynote, while the reading workspace showed the same clip in English.
+Not a choice: both carried upstream's hard-coded preference
+(`zh-CN, zh-Hans, zh, en` — the language of upstream's own users) in two
+separate copies, and the keynote's seventeen uploaded tracks happened to
+include `zh-Hans` but not `zh-CN`, so the two copies took different exits.
+Measured on the real track list, not inferred.
+
+Decided: the transcript is evidence — the tutor cites its timestamps and
+quotes it — so it is read in the language the clip was spoken in, which
+YouTube's auto-generated track names outright. Then English, then the
+interface language (a human-uploaded Thai track, which Apple provides),
+then any upload; uploaded before generated; never an auto-translation;
+nothing hard-coded to Chinese. The learner still reads Thai: the tutor
+answers in the interface language. `DEEPTUTOR_TRANSCRIPT_LANGUAGES`
+(comma list; `original`, `interface`, or a code) reorders this without a
+rebuild — `interface,original,en` puts Apple's Thai upload first.
+
+One selector, `deeptutor/reading/transcript_language.py`, and both
+workspaces call it: the reading ingestion's YouTube loader, the watching
+service's `youtube_transcript_api` path and its Invidious caption-list
+path. An explicit language on the watching request still wins. Fourteen
+tests against the keynote's real seventeen-track shape; the real loader
+on the real clip returns the English upload (226 segments) where it used
+to depend on which copy of the list ran.
+
+---
+
 ## Second deploy round on the host, and what it taught §11 — 2026-09-12
 
 Tag `deploy-2026-09-12b` = `main` `d9f69da28`: the reading-on-video fix
