@@ -20,10 +20,15 @@
  * be weakened to match.
  *
  * Consumed by `components/sidebar/SidebarShell.tsx` (both the collapsed and the
- * expanded footer) and `features/settings/sections/AboutSettingsSection.tsx`.
+ * expanded footer) and `features/settings/sections/AboutSettingsSection.tsx` —
+ * its "Project" section and, since 2026-09-13, upstream's update UI: the release
+ * it offers, its notes, the channel row, "Check now" and "Update", none of which
+ * describes a DeepWitya build.
  * It lives here, in a new file, so those two upstream files each carry a guard
  * and an import rather than a copy of this reasoning.
  */
+
+import type { ComponentType } from "react";
 
 /** Upstream's marketing site — the sidebar footer's book icon. */
 export const UPSTREAM_DOCS_URL = "https://deeptutor.info/";
@@ -41,3 +46,18 @@ export const UPSTREAM_REPO_URL = "https://github.com/HKUDS/DeepTutor";
 export const UPSTREAM_LINKS_ENABLED = ["1", "true"].includes(
   (process.env.NEXT_PUBLIC_UPSTREAM_LINKS ?? "").toLowerCase(),
 );
+
+function UpstreamHidden(): null {
+  return null;
+}
+
+/**
+ * `component` itself when the switch above is on, otherwise a component that
+ * renders nothing. For guarding a whole upstream block: the upstream file then
+ * changes by one tag name (`<SettingSection>` → `<UpdatesSection>`) instead of
+ * re-indenting the block under a conditional, and a re-indented block is what
+ * an upstream sync conflicts on.
+ */
+export function upstreamOnly<P>(component: ComponentType<P>): ComponentType<P> {
+  return UPSTREAM_LINKS_ENABLED ? component : UpstreamHidden;
+}

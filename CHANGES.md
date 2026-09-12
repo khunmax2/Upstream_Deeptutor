@@ -254,6 +254,37 @@ upstream.
 
 ---
 
+## Settings ▸ About stops offering upstream's releases as this installation's — 2026-09-13
+
+The About page read upstream's release feed and presented it as this
+installation's: "Latest stable release" was whatever HKUDS/DeepTutor last
+published, "Release notes" opened HKUDS's GitHub, "Check now" asked GitHub
+again, and on a Docker install the "Managed by your installation" block
+printed `docker pull ghcr.io/hkuds/deeptutor:latest` — a command that, run on
+the host, would replace DeepWitya with upstream. None of it describes a
+DeepWitya build. Decided 2026-09-12: hide it the way the sidebar's GitHub link
+was hidden, and keep only what is true of this installation — the running
+version, the current version, and how it is installed. A DeepWitya changelog
+of its own was considered and declined: another fork-owned surface is another
+thing every upstream sync has to carry.
+
+Guarded, not deleted, behind the existing `NEXT_PUBLIC_UPSTREAM_LINKS` switch
+(`web/lib/upstream-links.ts`); setting it brings every piece back. New in that
+file, `upstreamOnly(Component)` returns the component when the switch is on
+and one that renders nothing when it is off, so the upstream file changes by
+tag name (`<UpdatesSection>`, `<UpstreamSettingRow>`) instead of re-indenting
+a hundred-line block under a conditional — the re-indent is what an upstream
+sync would conflict on. In `web/features/settings/sections/AboutSettingsSection.tsx`:
+the "Updates" section, the "Release channel" row, the "Release notes" link,
+"Check now" and "Update", the header's description (it promised the release
+channel and the update path), and the error banner for a failed check of the
+feed. The backend's version check is untouched — it still runs, cached for 24
+hours, when the page loads. `web/tests/about-upstream-updates.test.ts` pins the
+guard. Attribution is unaffected: it lives in `NOTICE`, `LICENSE` and this
+file, not in the UI.
+
+---
+
 ## Pin → fork `047b7d20`: a course is private unless its owner published it (audit F1) — 2026-09-12
 
 The last of the audit's high findings, and the one that changes what

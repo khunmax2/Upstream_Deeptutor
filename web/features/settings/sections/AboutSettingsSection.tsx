@@ -39,6 +39,7 @@ import {
   UPSTREAM_DOCS_SITE_URL,
   UPSTREAM_LINKS_ENABLED,
   UPSTREAM_REPO_URL,
+  upstreamOnly,
 } from "@/lib/upstream-links";
 
 const POLL_INTERVAL_MS = 800;
@@ -50,6 +51,14 @@ const INSTALLATION_LABELS: Record<InstallMode, string> = {
   docker: "Docker container",
   unknown: "Unknown installation",
 };
+
+// Fork: upstream's release feed — the HKUDS release it offers as "latest", its
+// notes, the channel it tracks, the `docker pull` of upstream's image — says
+// nothing true about a DeepWitya build, so it is hidden with the upstream
+// links (NEXT_PUBLIC_UPSTREAM_LINKS brings every piece back). Guarded by tag
+// name rather than deleted, so an upstream sync has little to conflict with.
+const UpdatesSection = upstreamOnly(SettingSection);
+const UpstreamSettingRow = upstreamOnly(SettingRow);
 
 function jobTone(status: UpdateJobStatus) {
   if (status === "failed") return "text-red-600 dark:text-red-400";
@@ -73,7 +82,9 @@ export default function AboutSettingsPage() {
       const next = await fetchAppUpdateStatus();
       setStatus(next);
       setJob(next.job);
-      setError(next.check_error || "");
+      // Fork: a failed check of upstream's release feed is not news on a page
+      // that no longer shows that feed.
+      setError(UPSTREAM_LINKS_ENABLED ? next.check_error || "" : "");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -222,9 +233,13 @@ export default function AboutSettingsPage() {
     <div data-tour="tour-about" className="pb-8">
       <SettingsPageHeader
         title={t("About")}
-        description={t(
-          "DeepTutor version, release channel, and the safest update path for this installation.",
-        )}
+        description={
+          UPSTREAM_LINKS_ENABLED
+            ? t(
+                "DeepTutor version, release channel, and the safest update path for this installation.",
+              )
+            : undefined
+        }
       />
 
       <section className="relative mb-10 overflow-hidden border-y border-[var(--border)]/60 py-7">
@@ -243,7 +258,7 @@ export default function AboutSettingsPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {status?.release?.url && (
+            {UPSTREAM_LINKS_ENABLED && status?.release?.url && (
               <a
                 href={status.release.url}
                 target="_blank"
@@ -254,7 +269,7 @@ export default function AboutSettingsPage() {
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </a>
             )}
-            {status?.is_admin && (
+            {UPSTREAM_LINKS_ENABLED && status?.is_admin && (
               <Button
                 type="button"
                 size="sm"
@@ -267,7 +282,7 @@ export default function AboutSettingsPage() {
                 {t("Check now")}
               </Button>
             )}
-            {canUpdate && (
+            {UPSTREAM_LINKS_ENABLED && canUpdate && (
               <Button
                 type="button"
                 size="sm"
@@ -304,7 +319,7 @@ export default function AboutSettingsPage() {
             </span>
           }
         />
-        <SettingRow
+        <UpstreamSettingRow
           title={t("Release channel")}
           description={t(
             "Only stable, published DeepTutor releases are considered.",
@@ -317,7 +332,7 @@ export default function AboutSettingsPage() {
         />
       </SettingSection>
 
-      <SettingSection
+      <UpdatesSection
         title={t("Updates")}
         description={t(
           "Version checks are cached for 24 hours. DeepTutor never installs an update without confirmation.",
@@ -418,7 +433,7 @@ export default function AboutSettingsPage() {
             )}
           </div>
         )}
-      </SettingSection>
+      </UpdatesSection>
 
       {/* Upstream's own repo and docs. Hidden unless NEXT_PUBLIC_UPSTREAM_LINKS
           is set — this fork ships as DeepWitya, and the whole section pointed
