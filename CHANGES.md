@@ -254,6 +254,46 @@ upstream.
 
 ---
 
+## A question on a video hung forever: the reader sent a field the wire refused, and the UI never heard the refusal — 2026-09-12
+
+The first YouTube material opened after go-live: the assistant showed
+"reasoning…" and never moved. Reload, a new question, the same on the dev
+machine. Both Claude sessions proved the backend innocent the same way — the
+same turn on the same material, sent over the WebSocket by hand, answered in
+14 s with tool calls and Thai citations, and again through nginx and Next in
+18 s. The browser's own frames then showed it: `start_turn` went out and the
+router answered at once, `protocol_error: invalid_command — Command does not
+match the turn protocol.` The server's validator names the field:
+`reading_viewport.time_seconds: Extra inputs are not permitted`.
+
+Three layers, one of them written for it. The reader has sent the playback
+position since the immersive-reading workspace shipped (upstream, 08-28), and
+the reading capability has read it since then ("Current media time: mm:ss").
+The wire model `ReadingViewport` was written three days later with only
+`locator` and `selection` and `extra="forbid"`; the runtime's viewport
+normaliser dropped it too. So a PDF worked and every video or audio material
+was refused at the socket — and the UI, which converts only stream events
+and lets `protocol_error` fall on the floor, kept the "reasoning…"
+placeholder it had already shown. Upstream `main` has the same shape today.
+
+- `deeptutor/core/turn_request.py`: `ReadingViewport.time_seconds`, a
+  non-negative float, optional.
+- `deeptutor/services/session/_turn_runtime_shared.py`: `_reading_viewport`
+  passes a finite, non-negative position through; anything else is omitted
+  like an absent locator.
+- `web/features/chat/transport/UnifiedTurnClient.ts`: a `protocol_error` is
+  rendered as the terminal `error` event the adapter already ends a turn on —
+  the message appears in the transcript and the turn is marked failed,
+  whatever the next protocol mismatch turns out to be.
+- Tests: the exact browser command validated by the router's own adapter
+  (red before), the normaliser's pass-through and its rejections, and the
+  bridge's rendering of a refusal (`web/tests/turn-refusal-event.test.ts`).
+  Reproduced before the fix with the browser's payload through the proxy path
+  (`protocol_error` in 2.2 s, then silence) and verified after it on a rebuilt
+  image.
+
+---
+
 ## Pin → fork `94cc6af1`: the audit's F2, F4 and F5 — 2026-09-12
 
 Three findings of the 2026-09-11 integration audit, fixed in the fork

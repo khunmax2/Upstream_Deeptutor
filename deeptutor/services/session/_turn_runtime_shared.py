@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 import logging
+import math
 import re
 from typing import TYPE_CHECKING, Any, Literal
 import unicodedata
@@ -608,6 +609,14 @@ def _reading_viewport(value: Any) -> dict[str, Any]:
     selection = str(value.get("selection") or "").strip()
     if selection:
         viewport["selection"] = selection[:READING_SELECTION_MAX_CHARS]
+    # Fork. Playback position for timed media, which the capability turns
+    # into "Current media time: mm:ss" so the tutor can cite where the reader
+    # is. Only a finite, non-negative number is a position; anything else is
+    # omitted, the same way an absent locator is.
+    time_seconds = value.get("time_seconds")
+    if isinstance(time_seconds, (int, float)) and not isinstance(time_seconds, bool):
+        if math.isfinite(time_seconds) and time_seconds >= 0:
+            viewport["time_seconds"] = float(time_seconds)
     return viewport
 
 
