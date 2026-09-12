@@ -254,6 +254,32 @@ upstream.
 
 ---
 
+## Two deploy gates from the audit: the digest is enforced, and the studio has a backup — 2026-09-12
+
+F6 and F8 of the 2026-09-11 integration audit, the DeepWitya-side ones.
+
+**F6.** Compose refuses an empty `OPENMAIC_IMAGE` and nothing more —
+`nginx:latest` satisfied it, as the audit showed. `check_openmaic_contract.py`
+now reads `deploy/production.env` when it exists and demands exactly
+`<pinned repository>@<pinned digest>`: a tag fails ("a tag can move"), another
+digest fails, an unset value fails, and a checkout without the file is a SKIP,
+not a pass. Exercised in all four states.
+
+**F8.** No routine backed up the studio. `deploy/backup-studio.sh` takes
+`pg_dump -Fc` of the `openmaic` database (documents, `stage_meta`,
+`studio_credential`, and — with no S3 bucket configured — the asset bytes in
+`asset_blobs`) and a tar of the `/app/data` volume (uploaded material bytes,
+usage), reads the volume's real name off the running container rather than
+guessing the compose project, refuses to count a dump `pg_restore` cannot
+list, prunes after 30 days, and carries the restore order in its header.
+Rehearsed here against the UAT stack: 21 tables in the dump, and a restore
+into a throwaway PostgreSQL 16 brought back every credential, document and
+stage row. The runbook's §8 gains the cron line. The ADR sentence that said
+the checker pins upstream's DDL is corrected — it never did; that job belongs
+to upstream's schema-contract test and to the pre-rebase dump.
+
+---
+
 ## Tesseract is back in the image — a fix the `main` rewrite had dropped — 2026-09-12
 
 The first scanned PDF uploaded to production answered "No OCR engine is
