@@ -254,6 +254,38 @@ upstream.
 
 ---
 
+## Pin → fork `047b7d20`: a course is private unless its owner published it (audit F1) — 2026-09-12
+
+The last of the audit's high findings, and the one that changes what
+sharing means. Upstream's document store let anyone who knew a stage id read
+the course — writes, deletes and listings were owner-only, reads were not —
+and the audit showed a second account reading the first one's course on the
+pinned image. Decided, with Attapon, after weighing three options: **a
+course is private unless its owner published it.** Publishing, which
+upstream already has, is the one intended way to share; it opens reads to
+every signed-in account and nothing else; unpublish closes them again. A
+foreign read of an unpublished course answers the same 404 as a missing one.
+
+Fork PR #22: one gate in the owner-bound document store (both `/api/stages`
+and `/api/persistence` pass through it), and the same rule on the two
+viewer-facing routes that bypass it (`status`, `stage-meta`). Asset bytes
+were already owner-scoped. Upstream's own fidelity test, which asserted the
+old behaviour, is flipped. Proven on a locally built image behind the
+gatekeeper contract: before, the second account read every path of a
+private course (200); after, 404 on every path while private, 200 once
+published, 404 again on unpublish, writes 403 throughout.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:047b7d20`, digest
+`sha256:f2d9257a…7ec8b`, pulled back and checked for the gate. Done now, on
+purpose, while production holds only test courses: every existing course
+becomes private the moment this ships, and nobody has anything to lose yet.
+Known caveat carried into the backlog: a published course's generated
+images stay owner-scoped in the asset store, so a colleague may see the
+text without the pictures — an upstream limitation this change does not
+touch.
+
+---
+
 ## A clip is read in the language it was spoken in — 2026-09-12
 
 The watching workspace showed a Thai learner Chinese captions on an English
