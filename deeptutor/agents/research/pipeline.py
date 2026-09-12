@@ -385,9 +385,22 @@ class ResearchPipeline:
             if isinstance(planning.get("rephrase"), dict)
             else True
         )
+        # Fork. An "auto" decompose (report, learning_path) carries its size in
+        # ``auto_max_subtopics`` and leaves ``initial_subtopics`` None; reading
+        # only the latter sent every auto run to the default of 5 -- quick
+        # asked for 5 into a queue of 2, deep for 5 instead of 6.
+        decompose_cfg = (
+            planning.get("decompose") if isinstance(planning.get("decompose"), dict) else {}
+        )
+        subtopics_key = (
+            "auto_max_subtopics"
+            if decompose_cfg.get("mode") == "auto"
+            and decompose_cfg.get("initial_subtopics") is None
+            else "initial_subtopics"
+        )
         self.initial_subtopics = _read_int(
-            planning.get("decompose"),
-            key="initial_subtopics",
+            decompose_cfg,
+            key=subtopics_key,
             default=DEFAULT_INITIAL_SUBTOPICS,
         )
 
@@ -571,9 +584,17 @@ class ResearchPipeline:
 
         # ----- Phase 3 (research blocks) -----
         refined_topic = topic.strip()
+        # Fork. The confirmed outline is the person's decision -- the outline
+        # card lets them add subtopics -- so the queue is sized to hold all of
+        # it instead of raising on the first one past the depth's cap. The cap
+        # still bounds what the agent appends mid-research: ``is_full`` turns
+        # an append away gracefully once the queue holds the outline.
+        queue_cap = self.queue_max_length
+        if queue_cap and len(confirmed_outline) > queue_cap:
+            queue_cap = len(confirmed_outline)
         queue = DynamicTopicQueue(
             f"research_{context.session_id or 'adhoc'}",
-            max_length=self.queue_max_length,
+            max_length=queue_cap,
         )
         research_cache = (
             Path(context.runtime.workspace.output_dir) / "research"

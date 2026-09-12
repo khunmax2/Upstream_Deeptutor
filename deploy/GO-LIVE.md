@@ -401,6 +401,8 @@ studio มาเป็น image ตาม digest ใน pin แล้ว ไม�
 ทำต่อ tag ย้ายทั้งหมด 4 ครั้งในคืนเดียว (#71 digest, #72 :80 redirect, #73 no-new-privileges, #74 preview port) — ปกติ
 ไม่ใช่ความผิดพลาด: กติกา "แก้ runbook ไม่แก้ host" ทำงานได้จริงเพราะ tag ย้ายได้
 
+**หลัง go-live (อัปเดตรายรอบ) ใช้ template ท้าย §11 แทน prompt ข้างล่าง** — prompt ข้างล่างเป็นของวัน go-live
+
 **prompt ที่ paste ได้เลย** (แบบ ก. ให้เติมบรรทัดแรก; แบบ ข. ตัดออก):
 
 ```
@@ -444,6 +446,11 @@ container ที่ start ใหม่ reset `data/user/settings` กลับ�
 (`stat … permission denied`, exit 1 โดยไม่แตะอะไร) — อาการหลอกคือ container เก่ายังตอบ healthy อยู่
 จึงดูเหมือนผ่าน ต้องเช็ค image id ว่าเปลี่ยนจริง
 
+**pull ของ studio เป็นขั้นแยกก่อนจุดรอ (2026-09-12):** รอบ `deploy-2026-09-13` layer 66 MB ค้าง ~10 นาที
+(ghcr ปกติ — curl ดึง blob เดียวกันได้ 5.3 MB/s — ช้าเฉพาะ connection ที่ dockerd เปิดค้างไว้) ตอนนั้น pull อยู่ใน
+`up -d` ขั้นที่ทำให้ดับ คำสั่งเกิน timeout 300 วิ ของ tool บน host แล้วถูกย้ายไปเบื้องหลังกลางขั้น — ถ้ามีการรันซ้ำหรือ
+kill ตอนมัน recreate studio จะค้างในสภาพดับ แยก `docker pull` ออกมาก่อน ขั้นที่ดับจึงเหลือแค่ recreate
+
 **ก่อน recreate ดูว่ามีคนใช้อยู่ไหม** (บทเรียนรอบ Tesseract: recreate ตัดคำถามที่กำลังรอคำตอบ
 กลางทาง แล้ว UI ค้าง "กำลังให้เหตุผล" โดยไม่มี error):
 ```bash
@@ -472,11 +479,15 @@ docker tag "$(docker inspect deeptutor2 --format '{{.Image}}')" upstream_deeptut
 COMPOSE="docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml -f deploy/docker-compose.production.yml --env-file data/user/settings/docker.env --env-file deploy/production.env"
 $COMPOSE up -d --build --no-deps deeptutor 2>&1 | tee ../_deeptutor_backup/deploy-$(date +%Y%m%d-%H%M).log
 
-# ---- ถ้ารอบนี้มี studio image ใหม่ด้วย (pin เปลี่ยน) ----
-docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings          # ซ้ำ! deeptutor2 เพิ่ง start ใหม่
+# ---- ถ้ารอบนี้มี studio image ใหม่ (pin เปลี่ยน) — รอบที่มีแต่ studio เริ่มตรงนี้ ไม่ต้อง build ----
+docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings          # ซ้ำ! (deeptutor2 start ใหม่เมื่อไร settings/ กลับเป็น 700)
+bash deploy/backup-studio.sh                                  # จุดถอยของข้อมูลก่อนเปลี่ยน image → ต้อง "verify N tables" + done
+docker pull ghcr.io/khunmax2/deepwitya-studio@sha256:<digest จาก pin>   # ขั้นแยก ไม่มีอะไรดับ — ช้า/ค้างก็ไม่กระทบใคร
 sed -i 's|^OPENMAIC_IMAGE=.*|OPENMAIC_IMAGE=ghcr.io/khunmax2/deepwitya-studio@sha256:<digest จาก pin>|' deploy/production.env
 python3 deploy/openmaic-patches/check_openmaic_contract.py    # ต้อง PASS "production.env pulls the pinned digest"
-$COMPOSE up -d --no-deps openmaic                             # pull ตาม digest → Recreated → healthy ~15 วิ; gatekeeper ไม่ต้อง restart ถ้ายังตอบ 401
+# ---- จุดรอ "studio" (คนสั่ง) — ขั้นเดียวที่ studio ดับ ----
+pgrep -af 'compose -f docker-compose.yml' | grep -v pgrep     # ต้องว่าง: ห้ามมี compose ของ stack นี้ค้างอยู่ (ตัว `compose down` ใน …/tunnel ไม่เกี่ยว)
+$COMPOSE up -d --no-deps openmaic                             # image อยู่ในเครื่องแล้ว → Recreated → healthy ~15 วิ; gatekeeper ไม่ต้อง restart ถ้ายังตอบ 401
 docker inspect deeptutor-openmaic --format '{{.Config.Image}}'  # ต้องเป็น digest ใหม่ ไม่ใช่แค่ "healthy"
 ```
 
@@ -492,9 +503,31 @@ docker inspect deeptutor-openmaic --format '{{.Config.Image}}'  # ต้อง�
 ถอย: image ก่อนหน้ายังอยู่ใน daemon — `docker tag <old image id> upstream_deeptutor_v2-deeptutor:latest && ... up -d --no-build --no-deps deeptutor`
 (หา id เก่าจาก `docker images upstream_deeptutor_v2-deeptutor`) หรือ checkout tag ก่อนหน้าแล้ว build ใหม่
 
+
+### prompt ต่อรอบ (template) — ใส่แค่ค่าเฉพาะรอบ คำสั่งจริงมาจาก §11 ของ tag นั้น
+
+prompt ที่ copy คำสั่งยาวจาก §11 มาเองค่อย ๆ เพี้ยนจาก runbook (รอบ Tesseract "จด image" แต่ไม่ `docker tag`;
+prompt แรกบอก host ว่าไม่ pin ภาษา OCR ขณะที่ PR ที่ merge pin ไว้) — template นี้จึงไม่มีคำสั่ง มีแต่ค่าและกติกา:
+
+```
+รอบ deploy tag <TAG> = main <SHORT SHA> มี: <สรุปสั้น ๆ ว่าแก้อะไร / PR อะไร>
+ครึ่ง DeepWitya (rebuild deeptutor2): <มี / ไม่มี>
+ครึ่ง studio: <digest sha256:… ตาม pin / ไม่มี>
+ทำตาม deploy/GO-LIVE.md §11 ของ tag นี้ทีละขั้น รายงานผลทุกขั้น
+กติกา:
+1. จุดรอมีสองจุด: "build" (ก่อน recreate deeptutor2) และ "studio" (ก่อน recreate openmaic) เปิดได้ด้วยข้อความของฉันในแชทนี้เท่านั้น
+   ถึงจุดรอแล้วให้รายงานและจบรอบการตอบ ห้ามทำต่อในรอบเดียวกัน ห้ามตีความข้อความอื่นว่าอนุญาต
+   (ถ้าข้อความนี้เขียนว่า "build ได้เลย" / "studio ได้เลย" คือเปิดจุดนั้นล่วงหน้า)
+2. คำสั่งที่เกิน timeout แล้วถูกย้ายไปเบื้องหลัง: ติดตามจาก log และ pgrep จนจบ ห้ามรันซ้ำ ห้าม kill — ถ้าคิดว่าต้องหยุด ให้ถามฉัน
+3. ก่อนทุกคำสั่ง compose: ไม่มี compose ของ stack นี้ค้าง และ chmod 775 ซ้ำถ้า deeptutor2 เพิ่ง start
+4. ตรวจผลด้วย image id / Config.Image ที่เปลี่ยนจริง ไม่ใช่แค่ healthy
+5. ห้าม sudo ห้ามแก้ไฟล์ใน checkout ห้าม docker system prune ถ้า runbook กับ host ไม่ตรง หยุดแล้วรายงาน (แก้ runbook ไม่ใช่แก้ host)
+```
+
+tag ต้อง push **ก่อน** ส่ง prompt (2026-09-12 host หยุดที่ขั้น 1 เพราะ tag ยังไม่อยู่บน origin — ถูกต้องที่หยุด)
 ---
 
-## บทเรียนจากรอบ 2026-09-11 (ใส่กลับเข้า runbook ข้างบนแล้ว — นี่คือสรุป)
+## บทเรียนจากรอบ 2026-09-11 และหลังจากนั้น (ใส่กลับเข้า runbook ข้างบนแล้ว — นี่คือสรุป)
 
 | เจอ | อาการ | แก้ที่ |
 |---|---|---|
@@ -510,4 +543,7 @@ docker inspect deeptutor-openmaic --format '{{.Config.Image}}'  # ต้อง�
 | §3.3 ต้องรันซ้ำ | container restart จาก §3.4 ที่ล้ม reset dir เป็น 700 → `compose config` อ่าน `docker.env` ไม่ได้ | §3.3 ระบุ "ซ้ำหลัง restart" |
 | Claude บน host ไม่มี sudo | ทุกขั้น nginx/sudo คนต้องพิมพ์เอง | §9 |
 | image provider `custom-image` ต่อไม่ติดจาก host | ImageGeneration `fetch failed` ใน 200 ms; TTS custom ใช้ได้ | ไม่ใช่ของ go-live — แก้ URL ใน studio Settings |
-
+| pull ของ studio ค้าง 1 layer ~10 นาที (2026-09-12) | ขั้น studio เกิน timeout ของ tool บน host ถูกย้ายไปเบื้องหลังกลางขั้นที่ทำให้ดับ — รันซ้ำ = compose สองตัวชนกัน | §11: `docker pull` เป็นขั้นแยกก่อนจุดรอ + เช็ค compose ค้าง + กติกาใน template |
+| จุดรอ "studio" | รายงาน host เขียนว่ารอ "studio" แล้วรันขั้น recreate ต่อทันทีในรอบเดียวกัน | template §11: จุดรอเปิดด้วยข้อความของคนเท่านั้น ถึงแล้วต้องจบรอบการตอบ |
+| prompt ที่ copy คำสั่งมาเอง | ค่อย ๆ เพี้ยนจาก runbook ที่ merge แล้ว | template §11: prompt มีแค่ค่าเฉพาะรอบ |
+| tag ยังไม่ push ตอนส่ง prompt | host หยุดที่ขั้น 1 (`pathspec … did not match`) | push tag ก่อนส่ง prompt |
