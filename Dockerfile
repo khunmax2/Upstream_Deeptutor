@@ -149,7 +149,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-tha \
     && rm -rf /var/lib/apt/lists/*
+
+# OCR for documents that carry no text layer at all — a scanned PDF or a
+# picture-only deck, which deeptutor/reading/ocr.py would otherwise have to
+# reject outright. It reaches Tesseract through PyMuPDF's binding, so no extra
+# Python dependency is involved, but three things must all be true:
+#
+#   1. the `tesseract` binary            -> tesseract-ocr
+#   2. the traineddata for each language -> tesseract-ocr-{eng,tha}
+#   3. TESSDATA_PREFIX pointing at them  -> the ENV below
+#
+# (3) is the one that looks optional and is not: ocr.py calls
+# `pymupdf.get_tessdata()`, which reads this variable and raises
+# "No tessdata specified and Tesseract is not installed" without it — the same
+# message you get when nothing is installed at all, so a missing variable reads
+# like a missing package.
+#
+# `tha` is not optional either: ocr.py maps the interface language to a
+# traineddata name and always appends English, so a Thai deployment asks for
+# "tha+eng" and fails if either half is absent.
+#
+# Path verified against this base image (debian trixie, tesseract 5.5.0); it is
+# version-numbered, so re-check it whenever the base image's tesseract major
+# version moves.
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # Copy Node.js from node-runtime stage (platform-matched binary)
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node

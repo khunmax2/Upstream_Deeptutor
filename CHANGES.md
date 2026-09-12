@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## Tesseract is back in the image — a fix the `main` rewrite had dropped — 2026-09-12
+
+The first scanned PDF uploaded to production answered "No OCR engine is
+available". The fix for exactly that had shipped on 2026-09-07 (`1c4791ab0`,
+PR #23: `tesseract-ocr` + `eng` + `tha` + `TESSDATA_PREFIX` in the Dockerfile,
+`deploy/ocr_check.py`), and the 2026-09-09 rewrite of `main` dropped it —
+`docs/maic-fork-export/README.md` lists it among the seven out-of-subtree
+commits to re-apply, and it never was. Checked the other six: each has its
+effect on `main` by other means (the nginx subpath and 200 MB ceiling live in
+the go-live scripts, the login redirect uses `withBasePath`, key rotation was
+superseded by server-side credentials, two were docs or the old subtree).
+Tesseract was the one real loss. Both Claude sessions — the one on the host,
+reading the running container, and the one holding the repository — reached
+that independently.
+
+Cherry-picked whole, including the CHANGES paragraphs the rewrite lost with
+it, and `ocr_check.py` given the ruff fix the archive made a commit later.
+The tessdata path is re-verified against today's base (trixie, tesseract
+5.5.0). Proven in a real production build here: `ocr_check.py` passes, and
+a text-layer-free Thai page rendered with a Windows Thai font comes back as
+Thai through `recover_with_ocr` — "หนังสือส่งมอบงาน … 26004947 ลงวันที่ 11
+… กันยายน 2569", Tesseract-grade, searchable.
+
+One thing the original commit pinned only for the localhost stack:
+`DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng`, now in the production overlay too.
+The app derives the language from the system-wide `interface.json` (`th` on
+the host today, and the host's Claude argued the pin was redundant), but that
+file is one UI toggle away from `en`, and the same page OCR'd as English came
+back as `VIUNADANNOUIIE LAWN 26004947` — Latin noise, not an error. This
+deployment reads Thai; the guard costs one line. `deploy/GO-LIVE.md` §11 is
+the post-go-live image update procedure this is the first use of: a
+`deploy-YYYY-MM-DD` tag per round, `up -d --build --no-deps deeptutor`,
+`ocr_check.py` inside the container, then a real scanned upload.
+
+---
+
 ## `--revert` refuses to point the site at nothing — 2026-09-12
 
 Decided the same night: v1 stays on 10310 as the rollback until 2026-09-19,
@@ -1629,6 +1665,52 @@ reaches it. Two sides that pull in opposite directions:
   `router.replace()`, and the router adds basePath itself — `/deepwitya2` as
   `next` would resolve to `/deepwitya2/deepwitya2` after signing in. The
   middleware already emits a stripped `next`, so both paths now agree.
+
+**Upload ceiling (`deploy/nginx-deepwitya2.locations.conf`)** — immersive
+reading rejected anything over ~1 MB with a bare `Request failed: 413`. The app
+allows 200 MB (`MAX_MATERIAL_BYTES`), but the location block never set
+`client_max_body_size`, so nginx's 1 MB default cut the request off before the
+app ever saw it — which is also why the app's own "exceeds the 200 MB limit"
+message could never appear. Raised to `200m` to match the app.
+
+Measured rather than assumed: 500 KB reached the app (401), 2 MB came back as
+`server: nginx` / `text/html` 413. `/api/reading/materials` is *not* excluded
+from the Next middleware matcher the way the knowledge-base upload routes are,
+so the middleware was the other suspect — but posting straight to the frontend
+port streamed 58 MB through it untouched, leaving nginx as the only ceiling.
+
+**OCR for scanned documents (`Dockerfile`, `deploy/docker-compose.localhost.yml`)**
+— `deeptutor/reading/ocr.py` arrived with the 2026-09-07 update and reaches
+Tesseract through PyMuPDF, which costs no extra Python dependency but needs
+three things present, not one:
+
+1. `tesseract-ocr` — the binary;
+2. `tesseract-ocr-eng` + `tesseract-ocr-tha` — ocr.py maps the interface
+   language to a traineddata name and *always* appends English, so a Thai
+   deployment asks for `tha+eng` and fails if either half is missing;
+3. `TESSDATA_PREFIX` — `pymupdf.get_tessdata()` reads it and otherwise raises
+   *"No tessdata specified and Tesseract is not installed"*, which is also the
+   message for nothing being installed at all. A missing variable therefore
+   reads as a missing package.
+
+The path (`/usr/share/tesseract-ocr/5/tessdata`) is version-numbered and was
+confirmed against this base image (debian trixie, tesseract 5.5.0) rather than
+assumed; re-check it whenever the base image's tesseract major version moves.
+
+`DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng` is pinned in the host override because
+this deployment's `main.yaml` still says `language: en` — without it a Thai scan
+would be read as English and come back as noise. Drop it if the interface
+language is switched to Thai, which derives the same spec.
+
+Checked with `deploy/ocr_check.py`, which builds a genuinely text-layer-free PDF
+(render to raster, rebuild from the raster) and pushes it through the real
+extractor. English round-trips exactly; `tha` and `tha+eng` load in Tesseract
+without error, though neither this image nor the host ships a Thai font, so Thai
+*glyph* accuracy is unproven here — only that the language data loads.
+
+**MinerU and Docling are not configured** (`engine = text_only`, no tokens, both
+with OCR off), so there was no lighter path: ocr.py's preferred heavyweight
+providers would have declined and fallen through to Tesseract anyway.
 
 **Verified on the live deployment** — HTTPS page + assets + `_next` chunks, the
 HTTP→HTTPS redirect for this path only, multi-user auth (protected routes 307 to

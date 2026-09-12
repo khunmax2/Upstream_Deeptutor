@@ -426,6 +426,42 @@ host คือ 203.185.144.41 เข้าด้วย ssh <user>@203.185.144.41
 
 ---
 
+## 11. อัปเดต DeepWitya หลัง go-live (image เปลี่ยน — Dockerfile/โค้ดแอป)
+
+ใช้เมื่อ `main` มีอะไรที่ต้อง **build image ใหม่** (ครั้งแรก: 2026-09-12 แปะ Tesseract กลับ)
+ต่างจาก go-live ตรงที่ไม่แตะ nginx เลย และ studio ไม่กระทบ — แค่ `deeptutor2` ถูก recreate (ดับ ~1–2 นาที)
+
+**tag:** ทุกรอบ deploy ได้ tag ของตัวเอง `deploy-YYYY-MM-DD` ชี้ `main` ที่ผ่าน CI — `golive-2026-09-11`
+ไม่ย้ายอีก มันคือบันทึกว่าอะไรขึ้นวันแรก
+
+```bash
+# เครื่อง dev (หลัง PR merge, CI เขียว)
+git tag -a deploy-2026-09-12 -m "…" origin/main && git push origin deploy-2026-09-12
+```
+
+บน host (คนพิมพ์เอง — ไม่มี sudo ในนี้เลย):
+```bash
+cd /home/search/Thoughtmind/Upstream_Deeptutor_v2
+git fetch origin --tags && git checkout deploy-2026-09-12 && git log --oneline -1 && git status --short   # ต้องว่าง
+# §3.3 ซ้ำ (dir mode ถูก reset เป็น 700 ทุกครั้งที่ container start)
+docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings
+# build + recreate เฉพาะ deeptutor (ไม่แตะ studio/gatekeeper/postgres)
+docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml -f deploy/docker-compose.production.yml   --env-file data/user/settings/docker.env --env-file deploy/production.env   up -d --build --no-deps deeptutor 2>&1 | tee ../_deeptutor_backup/deploy-$(date +%Y%m%d-%H%M).log
+```
+
+- [ ] `docker ps --filter label=com.docker.compose.project=upstream_deeptutor_v2` → 8 healthy, `deeptutor2` เป็น image ใหม่
+- [ ] `curl -s https://203.185.144.41/deepwitya/api/auth/status` → `"enabled":true`
+- [ ] สิ่งที่รอบนั้นแก้ ทดสอบตรง ๆ (รอบ Tesseract: `docker cp deploy/ocr_check.py deeptutor2:/tmp/ && docker exec -w /app -e PYTHONPATH=/app deeptutor2 python3 /tmp/ocr_check.py`
+      แล้วอัปโหลด PDF สแกนไทยจริงในหน้าเว็บ — ต้องไม่ขึ้น "No OCR engine")
+- [ ] OCR ภาษา: `docker exec deeptutor2 printenv DEEPTUTOR_READING_OCR_LANGUAGE` → `tha+eng` (pin ใน overlay production)
+      ถ้าไม่ตั้ง `ocr.py` derive จาก `interface.json` ระดับระบบ (PR #14) ซึ่งเป็น `th` วันนี้ — แต่ค่านั้นเปลี่ยนได้จาก UI
+      และ `en` ทำให้สแกนไทยกลายเป็นขยะเงียบ ๆ (วัดแล้ว 2026-09-12) จึง pin ไว้
+
+ถอย: image ก่อนหน้ายังอยู่ใน daemon — `docker tag <old image id> upstream_deeptutor_v2-deeptutor:latest && ... up -d --no-build --no-deps deeptutor`
+(หา id เก่าจาก `docker images upstream_deeptutor_v2-deeptutor`) หรือ checkout tag ก่อนหน้าแล้ว build ใหม่
+
+---
+
 ## บทเรียนจากรอบ 2026-09-11 (ใส่กลับเข้า runbook ข้างบนแล้ว — นี่คือสรุป)
 
 | เจอ | อาการ | แก้ที่ |
