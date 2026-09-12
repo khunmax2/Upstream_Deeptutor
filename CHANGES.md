@@ -254,6 +254,29 @@ upstream.
 
 ---
 
+## Second deploy round on the host, and what it taught §11 — 2026-09-12
+
+Tag `deploy-2026-09-12b` = `main` `d9f69da28`: the reading-on-video fix
+(#80), the studio pin `94cc6af1` with its digest (#79, the audit's F2/F4/F5)
+and the digest gate + `backup-studio.sh` (#78), deployed together by
+`GO-LIVE.md` §11 — `deeptutor2` rebuilt, `deeptutor-openmaic` recreated on
+`sha256:4b8f8f6b…`, contract check PASS on the env file, first studio backup
+taken (21 tables), 8/8 healthy with zero restarts.
+
+The host's Claude caught a gap in §11 on the way: the build step recreates
+`deeptutor2`, which resets `data/user/settings` to 700 again, so the *next*
+compose command — the studio recreate — failed to read `docker.env` and did
+nothing, while the old studio container still answered healthy and 401 and
+made the step look like it had passed. Re-applying the already-approved
+chmod and re-running was the right call, and it was reported rather than
+hidden. §11 now says the chmod repeats after every recreate, verifies that
+the image id actually changed, tags the previous image before building,
+and carries the studio half of a round in the same block; it also gains the
+active-users check the Tesseract round had shown was missing. The lessons
+table gets the three rows.
+
+---
+
 ## A question on a video hung forever: the reader sent a field the wire refused, and the UI never heard the refusal — 2026-09-12
 
 The first YouTube material opened after go-live: the assistant showed

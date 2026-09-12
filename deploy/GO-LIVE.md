@@ -433,8 +433,24 @@ host คือ 203.185.144.41 เข้าด้วย ssh <user>@203.185.144.41
 
 ## 11. อัปเดต DeepWitya หลัง go-live (image เปลี่ยน — Dockerfile/โค้ดแอป)
 
-ใช้เมื่อ `main` มีอะไรที่ต้อง **build image ใหม่** (ครั้งแรก: 2026-09-12 แปะ Tesseract กลับ)
-ต่างจาก go-live ตรงที่ไม่แตะ nginx เลย และ studio ไม่กระทบ — แค่ `deeptutor2` ถูก recreate (ดับ ~1–2 นาที)
+ใช้เมื่อ `main` มีอะไรที่ต้อง **build image ใหม่** (ครั้งแรก: 2026-09-12 แปะ Tesseract กลับ;
+รอบ 2 วันเดียวกัน: fix การอ่านบนวิดีโอ + studio image ใหม่ในรอบเดียว)
+ต่างจาก go-live ตรงที่ไม่แตะ nginx เลย — `deeptutor2` ถูก recreate (ดับ ~1–2 นาที) และถ้ารอบนั้นมี
+studio image ใหม่ด้วย `deeptutor-openmaic` ถูก recreate แยกอีกครั้ง (~1 นาที, DeepWitya ไม่กระทบ)
+
+**กฎที่รอบ 2 สอน (2026-09-12): `chmod` ของ §3.3 ต้องทำซ้ำหลัง _ทุก_ recreate ไม่ใช่แค่ก่อน build**
+container ที่ start ใหม่ reset `data/user/settings` กลับเป็น 700 ทันที ดังนั้นหลัง build/recreate
+`deeptutor2` แล้วจะสั่ง compose อะไรต่อ (เช่น recreate studio) มัน**อ่าน `docker.env` ไม่ได้**
+(`stat … permission denied`, exit 1 โดยไม่แตะอะไร) — อาการหลอกคือ container เก่ายังตอบ healthy อยู่
+จึงดูเหมือนผ่าน ต้องเช็ค image id ว่าเปลี่ยนจริง
+
+**ก่อน recreate ดูว่ามีคนใช้อยู่ไหม** (บทเรียนรอบ Tesseract: recreate ตัดคำถามที่กำลังรอคำตอบ
+กลางทาง แล้ว UI ค้าง "กำลังให้เหตุผล" โดยไม่มี error):
+```bash
+docker exec deeptutor2 sh -c 'cat /proc/net/tcp' | awk 'NR>1 && $4=="01"' | wc -l   # connection ที่ established (2 คู่ภายในเป็นปกติ)
+find data/users -name chat_history.db -mmin -10 | wc -l                              # session ที่มี turn ใน 10 นาที
+```
+ถ้ามีคนใช้ ให้คนตัดสินว่าจะรอ
 
 **tag:** ทุกรอบ deploy ได้ tag ของตัวเอง `deploy-YYYY-MM-DD` ชี้ `main` ที่ผ่าน CI — `golive-2026-09-11`
 ไม่ย้ายอีก มันคือบันทึกว่าอะไรขึ้นวันแรก
@@ -450,11 +466,22 @@ cd /home/search/Thoughtmind/Upstream_Deeptutor_v2
 git fetch origin --tags && git checkout deploy-2026-09-12 && git log --oneline -1 && git status --short   # ต้องว่าง
 # §3.3 ซ้ำ (dir mode ถูก reset เป็น 700 ทุกครั้งที่ container start)
 docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings
+# image เดิมเก็บไว้เป็นทางถอย (ไม่ต้อง build ตอนถอย)
+docker tag "$(docker inspect deeptutor2 --format '{{.Image}}')" upstream_deeptutor_v2-deeptutor:pre-deploy-$(date +%Y%m%d)
 # build + recreate เฉพาะ deeptutor (ไม่แตะ studio/gatekeeper/postgres)
-docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml -f deploy/docker-compose.production.yml   --env-file data/user/settings/docker.env --env-file deploy/production.env   up -d --build --no-deps deeptutor 2>&1 | tee ../_deeptutor_backup/deploy-$(date +%Y%m%d-%H%M).log
+COMPOSE="docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml -f deploy/docker-compose.production.yml --env-file data/user/settings/docker.env --env-file deploy/production.env"
+$COMPOSE up -d --build --no-deps deeptutor 2>&1 | tee ../_deeptutor_backup/deploy-$(date +%Y%m%d-%H%M).log
+
+# ---- ถ้ารอบนี้มี studio image ใหม่ด้วย (pin เปลี่ยน) ----
+docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings          # ซ้ำ! deeptutor2 เพิ่ง start ใหม่
+sed -i 's|^OPENMAIC_IMAGE=.*|OPENMAIC_IMAGE=ghcr.io/khunmax2/deepwitya-studio@sha256:<digest จาก pin>|' deploy/production.env
+python3 deploy/openmaic-patches/check_openmaic_contract.py    # ต้อง PASS "production.env pulls the pinned digest"
+$COMPOSE up -d --no-deps openmaic                             # pull ตาม digest → Recreated → healthy ~15 วิ; gatekeeper ไม่ต้อง restart ถ้ายังตอบ 401
+docker inspect deeptutor-openmaic --format '{{.Config.Image}}'  # ต้องเป็น digest ใหม่ ไม่ใช่แค่ "healthy"
 ```
 
-- [ ] `docker ps --filter label=com.docker.compose.project=upstream_deeptutor_v2` → 8 healthy, `deeptutor2` เป็น image ใหม่
+- [ ] `docker ps --filter label=com.docker.compose.project=upstream_deeptutor_v2` → 8 healthy, RestartCount 0,
+      **image id เปลี่ยนจริง** (`docker inspect deeptutor2 --format '{{.Image}}'` ≠ ตัวที่ tag pre-deploy ไว้)
 - [ ] `curl -s https://203.185.144.41/deepwitya/api/auth/status` → `"enabled":true`
 - [ ] สิ่งที่รอบนั้นแก้ ทดสอบตรง ๆ (รอบ Tesseract: `docker cp deploy/ocr_check.py deeptutor2:/tmp/ && docker exec -w /app -e PYTHONPATH=/app deeptutor2 python3 /tmp/ocr_check.py`
       แล้วอัปโหลด PDF สแกนไทยจริงในหน้าเว็บ — ต้องไม่ขึ้น "No OCR engine")
@@ -477,6 +504,9 @@ docker compose -f docker-compose.yml -f deploy/docker-compose.openmaic.yml -f de
 | เครื่อง dev 8443 = Antigravity IDE | tunnel bind ไม่ได้ เบราว์เซอร์ไปโดน IDE | tunnel ใช้ 18443 ฝั่ง dev |
 | ssh tunnel เก่ายังค้าง | 18443 ยังชี้ 8443 หลังแก้ฝั่ง host แล้ว | ปิด process ssh เก่าก่อนเปิดใหม่ — ตรวจด้วย `netstat -ano` หา 18443 แล้ว `Get-CimInstance Win32_Process` ดู command line ของ pid นั้น |
 | gatekeeper ไม่ log รายคำขอ | นับ status code จาก `docker logs` ไม่ได้ | ใช้ nginx access log (sudo) |
+| recreate ตัดคำถามที่รออยู่ | UI ค้าง "กำลังให้เหตุผล" ไม่มี error | §11: เช็คคนใช้ก่อน recreate ให้คนตัดสิน |
+| chmod หลุดหลัง recreate | compose ถัดไป `permission denied` ที่ `docker.env` แต่ container เก่ายัง healthy → ดูเหมือนผ่าน | §11: chmod ซ้ำหลังทุก recreate + ตรวจ image id เปลี่ยนจริง |
+| turn บนวิดีโอค้างทุกครั้ง | `reading_viewport.time_seconds` ถูก wire model ปฏิเสธ (upstream bug) และ UI ไม่โชว์ `protocol_error` | PR #80: model รับ field, UI แสดง error แทนค้าง — ไม่ใช่เรื่อง deploy |
 | §3.3 ต้องรันซ้ำ | container restart จาก §3.4 ที่ล้ม reset dir เป็น 700 → `compose config` อ่าน `docker.env` ไม่ได้ | §3.3 ระบุ "ซ้ำหลัง restart" |
 | Claude บน host ไม่มี sudo | ทุกขั้น nginx/sudo คนต้องพิมพ์เอง | §9 |
 | image provider `custom-image` ต่อไม่ติดจาก host | ImageGeneration `fetch failed` ใน 200 ms; TTS custom ใช้ได้ | ไม่ใช่ของ go-live — แก้ URL ใน studio Settings |
