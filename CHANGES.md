@@ -254,6 +254,33 @@ upstream.
 
 ---
 
+## Pin → fork `94cc6af1`: the audit's F2, F4 and F5 — 2026-09-12
+
+Three findings of the 2026-09-11 integration audit, fixed in the fork
+(khunmax2/Ups_openMAIC #20, #21) and now the pinned studio.
+
+- **F2 (high).** A stored key never travels to a caller-supplied endpoint. The
+  key and the base URL were resolved by two independent functions, so when the
+  admin's shared row had a key but no URL, any signed-in caller could pair that
+  key with an endpoint of their own and receive `Authorization: Bearer <key>`
+  there. Production had exactly that shape and was mitigated the same night by
+  storing the URL; the code now makes the URL follow the key's source (stored
+  key ⇒ stored URL, empty ⇒ the provider's built-in default), across all five
+  provider sections. Ten of twenty-one new tests fail on the previous code.
+- **F4 (medium).** Where the gateway is required, an anonymous cookie is not an
+  identity. Four readers — not the one the audit hit — resolved
+  `verified ?? anonymous` before asking whether a gateway was required, the
+  WebSocket upgrade path among them; one helper now carries the right order.
+  Not reachable through the front door; a second layer that did not fail
+  closed.
+- **F5 (low).** A refused foreign delete is the same 404 the read gives, not a
+  500. Nothing was ever deleted; the status was wrong.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:94cc6af1`, digest
+`sha256:4b8f8f6b…f53066`, built by the workflow from this branch and pulled
+back here to confirm it carries both fixes and the base path. Previous image
+(`d5585dd3`, `sha256:4f54b507…`) stays in the registry for rollback. F3 was
+decided as a feature, not a defect; F1 is next.
 ## Two deploy gates from the audit: the digest is enforced, and the studio has a backup — 2026-09-12
 
 F6 and F8 of the 2026-09-11 integration audit, the DeepWitya-side ones.
