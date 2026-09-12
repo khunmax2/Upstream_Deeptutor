@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## Tesseract is back in the image — a fix the `main` rewrite had dropped — 2026-09-12
+
+The first scanned PDF uploaded to production answered "No OCR engine is
+available". The fix for exactly that had shipped on 2026-09-07 (`1c4791ab0`,
+PR #23: `tesseract-ocr` + `eng` + `tha` + `TESSDATA_PREFIX` in the Dockerfile,
+`deploy/ocr_check.py`), and the 2026-09-09 rewrite of `main` dropped it —
+`docs/maic-fork-export/README.md` lists it among the seven out-of-subtree
+commits to re-apply, and it never was. Checked the other six: each has its
+effect on `main` by other means (the nginx subpath and 200 MB ceiling live in
+the go-live scripts, the login redirect uses `withBasePath`, key rotation was
+superseded by server-side credentials, two were docs or the old subtree).
+Tesseract was the one real loss. Both Claude sessions — the one on the host,
+reading the running container, and the one holding the repository — reached
+that independently.
+
+Cherry-picked whole, including the CHANGES paragraphs the rewrite lost with
+it, and `ocr_check.py` given the ruff fix the archive made a commit later.
+The tessdata path is re-verified against today's base (trixie, tesseract
+5.5.0). Proven in a real production build here: `ocr_check.py` passes, and
+a text-layer-free Thai page rendered with a Windows Thai font comes back as
+Thai through `recover_with_ocr` — "หนังสือส่งมอบงาน … 26004947 ลงวันที่ 11
+… กันยายน 2569", Tesseract-grade, searchable.
+
+One thing the original commit pinned only for the localhost stack:
+`DEEPTUTOR_READING_OCR_LANGUAGE=tha+eng`, now in the production overlay too.
+The app derives the language from the system-wide `interface.json` (`th` on
+the host today, and the host's Claude argued the pin was redundant), but that
+file is one UI toggle away from `en`, and the same page OCR'd as English came
+back as `VIUNADANNOUIIE LAWN 26004947` — Latin noise, not an error. This
+deployment reads Thai; the guard costs one line. `deploy/GO-LIVE.md` §11 is
+the post-go-live image update procedure this is the first use of: a
+`deploy-YYYY-MM-DD` tag per round, `up -d --build --no-deps deeptutor`,
+`ocr_check.py` inside the container, then a real scanned upload.
+
+---
+
 ## `--revert` refuses to point the site at nothing — 2026-09-12
 
 Decided the same night: v1 stays on 10310 as the rollback until 2026-09-19,

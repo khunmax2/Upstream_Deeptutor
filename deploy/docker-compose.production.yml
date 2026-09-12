@@ -41,6 +41,14 @@ services:
       # Same-origin path to the studio, through the gatekeeper. Read on every
       # request, so it needs no rebuild; a restart is enough.
       DEEPTUTOR_OPENMAIC_URL: /deepwitya/studio
+      # Tesseract language for scanned documents (deeptutor/reading/ocr.py).
+      # Without this the app derives it from the system-wide interface
+      # language in data/user/settings/interface.json -- `th` today, which
+      # yields the same tha+eng. But that file is one UI toggle away from
+      # `en`, and a Thai scan OCR'd as English comes back as Latin noise
+      # ("VIUNADANNOUIIE"), not an error: measured 2026-09-12 in a container
+      # with no interface.json. This deployment reads Thai; pin it.
+      DEEPTUTOR_READING_OCR_LANGUAGE: "tha+eng"
   redis:
     container_name: deeptutor2-redis
   pocketbase:
