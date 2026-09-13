@@ -1,5 +1,3 @@
-import type { Catalog } from "@/features/settings/store/SettingsStore";
-
 /**
  * Fork. Put an embedding probe's detected dimension into the settings draft.
  *
@@ -9,14 +7,29 @@ import type { Catalog } from "@/features/settings/store/SettingsStore";
  * its key came back masked (``***``) — which the next run then sent as the key.
  * The test now saves nothing but the dimension of an already-saved model, and
  * the page merges only that dimension into the one model it tested.
+ *
+ * The shape is declared here rather than imported from the settings store,
+ * which imports this module (dependency-cruiser forbids the cycle).
  */
-export function withTestedEmbeddingDimension(
-  draft: Catalog,
+type DimensionModel = {
+  id: string;
+  dimension?: string;
+  supported_dimensions?: string;
+};
+
+type DimensionCatalog = {
+  services: {
+    embedding?: { profiles: Array<{ id: string; models: DimensionModel[] }> };
+  };
+};
+
+export function withTestedEmbeddingDimension<T extends DimensionCatalog>(
+  draft: T,
   profileId: string | null,
   modelId: string | null,
   dimension: number,
   supportedDimensions?: string,
-): Catalog {
+): T {
   const service = draft.services.embedding;
   if (!service || !profileId || !modelId || !(dimension > 0)) return draft;
   let changed = false;
@@ -47,7 +60,7 @@ export function withTestedEmbeddingDimension(
   return {
     ...draft,
     services: { ...draft.services, embedding: { ...service, profiles } },
-  };
+  } as T;
 }
 
 /** The server's ``detail`` for a refused settings request, else its status. */
