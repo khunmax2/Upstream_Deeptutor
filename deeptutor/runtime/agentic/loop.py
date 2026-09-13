@@ -355,6 +355,14 @@ async def run_agentic_loop(
                 feedback = await on_intermediate(step.label, step.text)
                 if feedback:
                     messages.append({"role": "user", "content": feedback})
+            # Fork. The next request must not end with the assistant's own
+            # message. OpenAI and Gemini's own endpoint accept that, but
+            # Gemini behind OpenRouter refuses it (400 "Requests ending with a
+            # model turn are not supported"); production hit it on
+            # deep_question's THINK round, 2026-09-13. With no host feedback,
+            # hand the turn back with a bare continuation.
+            if messages and messages[-1].get("role") == "assistant":
+                messages.append({"role": "user", "content": "Continue."})
             continue
 
         # Defensive fallback for any future label value not covered above.
