@@ -254,6 +254,17 @@ upstream.
 
 ---
 
+## The per-round prompt checks out the tag before it reads the runbook — 2026-09-13
+
+The template added to `GO-LIVE.md` §11 carried no commands, so that every
+step would come from §11 of the tag — but the host can only read §11 of a tag
+it has already checked out; opened first, the runbook is the previous tag's.
+The user caught it before the prompt was sent. The template now opens with
+step 0, the one command it carries itself: fetch, check out the tag, confirm
+the commit and a clean tree, then read §11 from that checkout.
+
+---
+
 ## Third deploy round, and a runbook that keeps the downtime step short — 2026-09-13
 
 Tag `deploy-2026-09-13` = `main` `a7092d322` went up by `GO-LIVE.md` §11:
