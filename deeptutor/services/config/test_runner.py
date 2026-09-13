@@ -118,6 +118,8 @@ class ConfigTestRunner:
 
             if service == "llm":
                 asyncio.run(self._test_llm(run, catalog))
+            elif service == "task":
+                asyncio.run(self._test_task(run, catalog))
             elif service == "embedding":
                 asyncio.run(self._test_embedding(run, model or {}, catalog))
             elif service == "search":
@@ -207,14 +209,41 @@ class ConfigTestRunner:
             "model_known": model_known,
         }
 
-    async def _test_llm(self, run: TestRun, catalog: dict[str, Any]) -> None:
+    async def _test_task(self, run: TestRun, catalog: dict[str, Any]) -> None:
+        # Fork: the task service (v1.6.4) is shaped like llm and its settings
+        # page has the same Diagnostics panel, but the runner never learned it
+        # ("Unsupported service: task"). Probe it through the LLM path; an empty
+        # one inherits the LLM at runtime, so probe what it inherits.
+        from deeptutor.services.model_selection.tasks import (
+            TASK_SERVICE,
+            task_service_configured,
+        )
+
+        if task_service_configured(catalog):
+            await self._test_llm(run, catalog, service_name=TASK_SERVICE)
+            return
+        run.emit(
+            "info",
+            "No task model is set, so titles and starters use the LLM. Testing the LLM instead.",
+        )
+        await self._test_llm(run, catalog)
+
+    async def _test_llm(
+        self, run: TestRun, catalog: dict[str, Any], *, service_name: str = "llm"
+    ) -> None:
         from deeptutor.services.llm import clear_llm_config_cache, get_token_limit_kwargs
         from deeptutor.services.llm import complete as llm_complete
         from deeptutor.services.llm.config import LLMConfig
 
         clear_llm_config_cache()
-        run.emit("info", "Loading LLM config from the active catalog selection.")
-        resolved = resolve_llm_runtime_config(catalog=catalog)
+        run.emit("info", f"Loading {service_name} config from the active catalog selection.")
+        # The LLM path calls exactly as upstream does, so upstream's stubs of
+        # this function (``lambda catalog: ...``) keep working.
+        resolved = (
+            resolve_llm_runtime_config(catalog=catalog)
+            if service_name == "llm"
+            else resolve_llm_runtime_config(catalog=catalog, service_name=service_name)
+        )
         llm_config = LLMConfig(
             model=resolved.model,
             api_key=resolved.api_key,
