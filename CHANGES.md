@@ -254,6 +254,26 @@ upstream.
 
 ---
 
+## A GeoGebra applet survives a dropped first connection — 2026-09-13
+
+Visualize's GeoGebra mode answered "Failed to load GeoGebra: GeoGebra script
+failed to load" in UAT. `deployggb.js` is fetched from geogebra.org's CDN, and
+from this network the first connection is sometimes reset: driven in a real
+Chrome from both page origins, 2 of 12 fresh loads failed with
+`net::ERR_CONNECTION_RESET`, and each loaded on an immediate second try — so
+neither the origin, a CSP (there is none) nor the sandbox was the cause. The
+component's loader gave up on the first error and left the card on it.
+
+`web/lib/load-script-with-retry.ts` (new) loads a script up to three times,
+pausing 0.4 s and 1.2 s, removes a tag it saw fail before the next try, times
+out a try that never answers instead of hanging, and waits on a tag it did not
+create rather than duplicating it. `web/components/Geogebra.tsx` makes one call
+to it; the single in-flight loader and the error text are unchanged.
+`web/tests/load-script-with-retry.test.ts` covers the retry, the give-up, the
+timeout, the already-loaded and the foreign-tag cases.
+
+---
+
 ## The image carries Manim, so the math animator runs — 2026-09-13
 
 The math animator answered every request with "math_animator requires
