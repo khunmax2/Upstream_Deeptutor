@@ -269,8 +269,8 @@ model's output — two of them to the visualizer's own prompt, which named
 `deeptutor/tools/vision/ggb_repairs.py` (new) rewrites each measured failure
 into the form measured to work: `SetLabelVisible`→`ShowLabel`,
 `SetPosition`→`SetCoords`, `InfinitePlane`→`Plane`, a `SetSlider` line dropped,
-0–255 colours to hex, `Point(i, j)` over numbers or loop variables to `(i, j)`
-(`Point(<object>, <parameter>)` is left alone), `Sequence(e, j = 1, n)` to
+0–255 colours to hex, `Point(i, j)` over numbers or loop variables and
+`Point[(i, j)]` to `(i, j)` (`Point(<object>, <parameter>)` is left alone), `Sequence(e, j = 1, n)` to
 `Sequence(e, j, 1, n)`, and LaTeX text to the only form that renders — the
 fourth `Text` argument true, no `$`, single backslashes; a LaTeX string
 assignment becomes `FormulaText`. `ggb_validator.validate_command` calls it (one
@@ -278,7 +278,9 @@ line), so both the visualizer and the vision solver get it; its `SetColor` help
 text is corrected. The prompts in `deeptutor/visualizers/builtin.py` and
 `deeptutor/agents/vision_solver/prompts/geogebra.md` now say the same things.
 Replayed after the repairs, the seven 2D payloads raise no dialog and the
-formulas render, Thai included.
+formulas render, Thai included. A fresh run in the rebuilt container under the
+new prompt wrote the LaTeX form right the first time; its one new mistake,
+`Point[(i, j)]`, is covered by the Point rule and the payload replays clean.
 
 `web/components/Geogebra.tsx` turns GeoGebra's modal dialogs off (one bad line
 cascaded into five) and lists refused commands under the applet instead.

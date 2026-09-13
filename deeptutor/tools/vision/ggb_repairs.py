@@ -15,7 +15,8 @@ one ``evalCommand`` per line, the way ``web/components/Geogebra.tsx`` does):
   A coordinate is written ``(i, j)``. ``Point(<object>, <parameter>)`` is a
   different, valid command and is left alone: only a first argument that is a
   number, or an expression over the enclosing ``Sequence``'s loop variables,
-  is rewritten.
+  is rewritten. ``Point[(i, j)]`` (a coordinate wrapped in Point) -> "Illegal
+  argument: Point (i, j)"; the coordinate alone is what was meant.
 * ``Sequence[expr, j = 1, i]`` -> "Undefined variable j". The signature is
   ``Sequence(<expression>, <variable>, <from>, <to>[, <step>])``.
 * ``SetColor[A, 214, 39, 40]`` -> no error, but the object turns white: the
@@ -213,10 +214,21 @@ def _is_number(expression: str, loop_variables: set[str]) -> bool:
     return bool(_NUMERIC_REST.match(re.sub(_IDENT, "", expression)))
 
 
+def _is_coordinate(expression: str) -> bool:
+    """A literal ``(x, y)`` or ``(x, y, z)``: parentheses spanning the whole text."""
+    expression = expression.strip()
+    if not expression.startswith("(") or _matching(expression, 0) != len(expression) - 1:
+        return False
+    return len(split_args(expression[1:-1])) in (2, 3)
+
+
 def _points(command: str, warnings: list[str]) -> str:
     loop_variables = _loop_variables(command)
 
     def fix(args: list[str], open_char: str) -> str | None:
+        if len(args) == 1 and _is_coordinate(args[0]):
+            warnings.append(f"Point[{args[0]}] rewritten as the coordinate {args[0]}")
+            return args[0]
         if len(args) != 2 or not _is_number(args[0], loop_variables):
             return None
         warnings.append(f"Point({', '.join(args)}) rewritten as a coordinate ({', '.join(args)})")

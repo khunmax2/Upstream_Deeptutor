@@ -37,6 +37,15 @@ from deeptutor.tools.vision.ggb_validator import validate_ggbscript
             "T2 = Sequence(Sequence[(j, n + 1 - i), i, 1, j], j, 1, n)",
         ),
         ("P = Point(2, 3)", "P = (2, 3)"),
+        # A coordinate wrapped in Point: "Illegal argument: Point (i, j)".
+        (
+            "Sequence(Sequence(Point[(i,j)],i,1,j),j,1,n)",
+            "Sequence(Sequence((i,j),i,1,j),j,1,n)",
+        ),
+        (
+            "Sequence(Sequence(Point[(i,j+n+1)],i,1,n-j+1),j,1,n)",
+            "Sequence(Sequence((i,j+n+1),i,1,n-j+1),j,1,n)",
+        ),
         # Sequence variable written as j = 1: "Undefined variable j".
         (
             "Sequence[Sequence[(i, j), j = 1, i], i = 1, n]",
@@ -84,6 +93,8 @@ def test_an_unknown_setslider_is_dropped() -> None:
         "P = Point(c, 0.5)",
         "Q = Point(f)",
         "R = Point(A, v)",
+        "S = Point({(1, 2), (3, 4)})",
+        "U = Point((1, 2) + (3, 4))",
         # Already-correct colour forms.
         'SetColor[A, "#1F77B4"]',
         "SetColor[A, 0.839, 0.153, 0.157]",
