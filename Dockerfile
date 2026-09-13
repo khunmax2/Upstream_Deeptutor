@@ -155,6 +155,8 @@ WORKDIR /app
 # Note: libcairo2 / libpango* are the runtime half of Manim (math animator), which
 #       is built in python-base; named here so they do not depend on another
 #       package happening to pull them in (fork, 2026-09-13).
+# Note: fonts-thai-tlwg because the image had no Thai font at all, and Manim's
+#       Text (Pango) then draws Thai labels as boxes, with no error (fork).
 # Note: git is required to install CLI apps — most of the CLI-Anything catalog
 #       installs with `pip install git+…`, which shells out to git. It is needed
 #       in *this* image and not in the runner: installing is a privileged
@@ -173,6 +175,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
+    fonts-thai-tlwg \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-tha \

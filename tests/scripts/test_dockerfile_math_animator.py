@@ -41,7 +41,8 @@ def test_python_base_builds_manim_with_the_headers_pycairo_needs() -> None:
 
 def test_production_carries_manims_runtime_libraries() -> None:
     production = _stages()["production"]
-    for package in ("libcairo2", "libpango-1.0-0", "libpangocairo-1.0-0"):
+    # fonts-thai-tlwg: without a Thai font Pango draws Thai labels as boxes.
+    for package in ("libcairo2", "libpango-1.0-0", "libpangocairo-1.0-0", "fonts-thai-tlwg"):
         assert re.search(rf"^\s+{re.escape(package)} \\$", production, flags=re.MULTILINE), package
 
 

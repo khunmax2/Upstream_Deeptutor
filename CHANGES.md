@@ -278,6 +278,12 @@ in about two seconds as the app's own user.
 `tests/scripts/test_dockerfile_math_animator.py` goes red if an upstream sync
 drops either half.
 
+A second gap surfaced while verifying: the image had no Thai font at all (eight
+fonts, none covering Thai), and Manim draws text through Pango, so a Thai label
+rendered as a row of boxes — no error, no warning. `fonts-thai-tlwg` (+6 MB) is
+now in the production stage; the same label, "กราฟ y = x²", renders correctly
+(compared side by side, 2026-09-13).
+
 ---
 
 ## The per-round prompt checks out the tag before it reads the runbook — 2026-09-13
