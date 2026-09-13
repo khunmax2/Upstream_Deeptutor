@@ -111,9 +111,8 @@ RUN pip install --upgrade pip && \
 # the feature stays "requires optional dependencies". It is built here, where
 # the toolchain already is, and only site-packages travels on; the runtime
 # libraries (cairo, pango) are in the production stage below. Its own layer, so
-# the requirements layer above keeps its cache. No LaTeX: the animator's prompts
-# steer the model to Text over MathTex, and a MathTex that slips through fails
-# with a clear "latex not found" (retry_manager) instead of a hang.
+# the requirements layer above keeps its cache. LaTeX, which MathTex needs at
+# render time, is a runtime dependency and lives in the production stage.
 # Measured 2026-09-13 on the built image: manim 0.21.0, 2.45 -> 2.91 GB, and a
 # y = x^2 scene renders in ~2 s as the app's own user.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -179,6 +178,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-tha \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fork. LaTeX for Manim's MathTex/Tex (math animator, visualize). The prompts ask
+# the model to prefer Text, but that is advice, not a guarantee: without LaTeX a
+# MathTex that slips through fails the whole request (retry_manager treats a
+# missing latex as non-retriable). Measured 2026-09-13: this set renders
+# fractions, integrals and matrices beside a Thai Text title; the smaller
+# latex-base/-recommended set fails on Manim's default template. +568 MB, its own
+# layer so the system-packages layer above keeps its cache. pdflatex cannot set
+# Thai, so Thai stays in Text (fonts-thai-tlwg above).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-science \
+    cm-super \
+    dvisvgm \
     && rm -rf /var/lib/apt/lists/*
 
 # OCR for documents that carry no text layer at all — a scanned PDF or a

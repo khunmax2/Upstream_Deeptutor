@@ -269,9 +269,14 @@ already is — one new layer adding the cairo and pango headers and installing
 `requirements/math-animator.txt`, after the requirements layer so that layer
 keeps its cache — and the production stage names the runtime libraries
 (`libcairo2`, `libpango-1.0-0`, `libpangocairo-1.0-0`) instead of relying on
-another package to pull them in. No LaTeX (+461 MB measured): the animator's
-prompts already steer the model to `Text` over `MathTex`, and a `MathTex` that
-slips through fails with the clear "latex not found" its retry manager knows.
+another package to pull them in. LaTeX is installed too, as its own
+layer in the production stage (texlive-latex-base, -recommended, -extra,
+texlive-fonts-recommended, texlive-science, cm-super, dvisvgm; +568 MB). It was
+first left out to save space and added the same day once the host's space was
+confirmed plentiful: the prompts' "prefer Text over MathTex" is advice to the
+model, not a guarantee, and without LaTeX a MathTex that slips through fails the
+whole request. A smaller set (+178 MB) was measured and fails on Manim's default
+template. Thai still goes through `Text`; pdflatex cannot set Thai in a formula.
 Measured on the built image: manim 0.21.0, 2.45 → 2.91 GB (+0.46 GB; the
 323 MB first measured was site-packages alone), and a y = x² scene renders
 in about two seconds as the app's own user.

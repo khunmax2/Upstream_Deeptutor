@@ -46,6 +46,22 @@ def test_production_carries_manims_runtime_libraries() -> None:
         assert re.search(rf"^\s+{re.escape(package)} \\$", production, flags=re.MULTILINE), package
 
 
+def test_production_carries_latex_for_mathtex() -> None:
+    # Without LaTeX a MathTex the model writes despite the prompt fails the
+    # whole request; the smaller latex-base/-recommended set fails on Manim's
+    # default template, so the -extra/-science/cm-super set is the floor.
+    production = _stages()["production"]
+    for package in (
+        "texlive-latex-base",
+        "texlive-latex-extra",
+        "texlive-fonts-recommended",
+        "texlive-science",
+        "cm-super",
+        "dvisvgm",
+    ):
+        assert re.search(rf"^\s+{re.escape(package)} \\$", production, flags=re.MULTILINE), package
+
+
 def test_production_takes_site_packages_from_python_base() -> None:
     production = _stages()["production"]
     assert "COPY --from=python-base /usr/local/lib/python3.11/site-packages" in production
