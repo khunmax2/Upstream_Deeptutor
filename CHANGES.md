@@ -254,6 +254,36 @@ upstream.
 
 ---
 
+## Speech-to-text sends browser recordings as WAV — 2026-09-14
+
+With a workplace Whisper-compatible server (`ptm-asr-1` behind LiteLLM) as the
+active STT provider, Settings' Run test passed but the chat composer's
+microphone never produced text. The backend log had the reason: HTTP 422
+"Failed to decode audio: Error opening '/tmp/….webm': Format not recognised".
+The browser records WebM/Opus (Safari: MP4); OpenAI and Groq decode it, but a
+server that reads audio through libsndfile cannot, and the diagnostics probe
+never showed it because its clip is already WAV. Reproduced in the container:
+Thai speech from the configured TTS, encoded like Chrome's MediaRecorder, got
+the same 422; the same speech as 16 kHz mono WAV came back as the sentence.
+
+`deeptutor/services/voice/audio_normalize.py` (new) turns a browser recording
+container (WebM, Ogg, MP4 — by media type, extension or magic bytes) into
+16 kHz mono WAV with PyAV, which the image already carries with Manim; WAV
+passes through, other formats pass through, and a clip that will not decode or
+a missing PyAV sends the original unchanged. `deeptutor/services/voice/__init__.py`
+applies it in `transcribe_audio` and `transcribe_audio_cues` (one line each),
+and `deeptutor/services/voice_realtime/stt_guard.py` in `transcribe_utterance`,
+whose multipart branch posts directly and would otherwise bypass it (a voice-call
+client that sends a binary WebM utterance; the web widget recognises speech in
+the browser and sends text). Other paths were checked and are unaffected:
+partner channels use their own Groq transcriber, reading ingestion sends MP3
+chunks (left alone), and DashScope now receives canonical WAV and skips its own
+`ffmpeg` step — which the image does not have.
+`tests/services/voice/test_stt_browser_audio_to_wav.py` builds a real WebM/Opus
+clip; the two "the provider receives WAV" cases were red before the hook.
+
+---
+
 ## Settings navigation keeps the address under /deepwitya — 2026-09-14
 
 On the host, clicking any item in the settings menu turned

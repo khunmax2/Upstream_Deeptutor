@@ -27,6 +27,7 @@ import math
 import httpx
 
 from deeptutor.services.voice import transcribe_audio
+from deeptutor.services.voice.audio_normalize import browser_audio_to_wav
 from deeptutor.services.voice.base import (
     VoiceProviderError,
     VoiceProviderHTTPError,
@@ -78,6 +79,9 @@ async def transcribe_utterance(
     config = resolve_stt_runtime_config()
     if language:
         config.language = language
+    # The multipart branch below posts directly, bypassing the facade, so a
+    # binary-frame WebM utterance needs the same WAV conversion here.
+    audio, filename, content_type = browser_audio_to_wav(audio, filename, content_type)
     if config.adapter == "openai_compat" and config.request_style == STT_MULTIPART:
         return await _transcribe_verbose(
             audio, config, filename=filename, content_type=content_type
