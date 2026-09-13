@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { loadScriptWithRetry } from "@/lib/load-script-with-retry";
+
 interface GeogebraProps {
   script?: string;
   payload?: GeogebraPayload;
@@ -48,31 +50,13 @@ function loadGgbScript(): Promise<void> {
   if (window.GGBApplet) return Promise.resolve();
   if (ggbLoader) return ggbLoader;
 
-  ggbLoader = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${GGB_SCRIPT_SRC}"]`,
-    );
-    if (existing) {
-      if (window.GGBApplet) {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => {
-        ggbLoader = null;
-        reject(new Error("GeoGebra script failed to load"));
-      });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = GGB_SCRIPT_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => {
-      ggbLoader = null;
-      reject(new Error("GeoGebra script failed to load"));
-    };
-    document.head.appendChild(script);
+  // Fork: retried. geogebra.org's CDN resets a first connection often enough
+  // to strand the applet on an error (see lib/load-script-with-retry.ts).
+  ggbLoader = loadScriptWithRetry(GGB_SCRIPT_SRC, {
+    isReady: () => Boolean(window.GGBApplet),
+  }).catch(() => {
+    ggbLoader = null;
+    throw new Error("GeoGebra script failed to load");
   });
 
   return ggbLoader;
