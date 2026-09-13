@@ -271,7 +271,14 @@ container (WebM, Ogg, MP4 — by media type, extension or magic bytes) into
 16 kHz mono WAV with PyAV, which the image already carries with Manim; WAV
 passes through, other formats pass through, and a clip that will not decode or
 a missing PyAV sends the original unchanged. `deeptutor/services/voice/__init__.py`
-applies it in `transcribe_audio` and `transcribe_audio_cues` (one line each).
+applies it in `transcribe_audio` and `transcribe_audio_cues` (one line each),
+and `deeptutor/services/voice_realtime/stt_guard.py` in `transcribe_utterance`,
+whose multipart branch posts directly and would otherwise bypass it (a voice-call
+client that sends a binary WebM utterance; the web widget recognises speech in
+the browser and sends text). Other paths were checked and are unaffected:
+partner channels use their own Groq transcriber, reading ingestion sends MP3
+chunks (left alone), and DashScope now receives canonical WAV and skips its own
+`ffmpeg` step — which the image does not have.
 `tests/services/voice/test_stt_browser_audio_to_wav.py` builds a real WebM/Opus
 clip; the two "the provider receives WAV" cases were red before the hook.
 

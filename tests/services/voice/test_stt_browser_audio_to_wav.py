@@ -154,6 +154,34 @@ async def test_the_provider_receives_wav_for_a_browser_recording(adapter) -> Non
 
 
 @pytest.mark.asyncio
+async def test_a_voice_call_utterance_reaches_the_provider_as_wav(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The voice-call guard posts multipart itself, so it converts too."""
+    from deeptutor.services.voice_realtime import stt_guard
+
+    seen: list[tuple[bytes, str, str]] = []
+
+    async def fake_verbose(audio, config, *, filename, content_type):  # noqa: ANN001
+        seen.append((audio, filename, content_type))
+        return "ok", None
+
+    monkeypatch.setattr(
+        "deeptutor.services.config.provider_runtime.resolve_stt_runtime_config",
+        lambda catalog=None: SimpleNamespace(
+            language=None, adapter="openai_compat", request_style="multipart"
+        ),
+    )
+    monkeypatch.setattr(stt_guard, "_transcribe_verbose", fake_verbose)
+
+    await stt_guard.transcribe_utterance(_webm_opus(0.5))
+
+    audio, filename, content_type = seen[-1]
+    assert audio[:4] == b"RIFF"
+    assert (filename, content_type) == ("audio.wav", "audio/wav")
+
+
+@pytest.mark.asyncio
 async def test_timed_transcription_receives_wav_too(adapter) -> None:
     from deeptutor.services.voice import transcribe_audio_cues
 
