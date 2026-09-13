@@ -254,6 +254,43 @@ upstream.
 
 ---
 
+## GeoGebra runs the commands the model writes, and a refusal no longer blocks the canvas — 2026-09-13
+
+Visualize's GeoGebra mode showed error dialogs in UAT — "Unknown command
+SetLabelVisible", "Illegal argument: Number i", "Undefined variable j" — and a
+sum formula as raw `$$\sum…$$`. Upstream has the same reports open and its fix
+(#1346, v1.6.7) only rejects some Text forms. Each of the eight payloads the
+model wrote was replayed through the real applet in headless Chrome, one
+`evalCommand` per line as the component does, and every failure traced to the
+model's output — two of them to the visualizer's own prompt, which named
+`SetLabelVisible` (no such command) and told the model to write
+`SetColor[A,31,119,180]`, which GeoGebra reads on a 0–1 scale and draws white.
+
+`deeptutor/tools/vision/ggb_repairs.py` (new) rewrites each measured failure
+into the form measured to work: `SetLabelVisible`→`ShowLabel`,
+`SetPosition`→`SetCoords`, `InfinitePlane`→`Plane`, a `SetSlider` line dropped,
+0–255 colours to hex, `Point(i, j)` over numbers or loop variables to `(i, j)`
+(`Point(<object>, <parameter>)` is left alone), `Sequence(e, j = 1, n)` to
+`Sequence(e, j, 1, n)`, and LaTeX text to the only form that renders — the
+fourth `Text` argument true, no `$`, single backslashes; a LaTeX string
+assignment becomes `FormulaText`. `ggb_validator.validate_command` calls it (one
+line), so both the visualizer and the vision solver get it; its `SetColor` help
+text is corrected. The prompts in `deeptutor/visualizers/builtin.py` and
+`deeptutor/agents/vision_solver/prompts/geogebra.md` now say the same things.
+Replayed after the repairs, the seven 2D payloads raise no dialog and the
+formulas render, Thai included.
+
+`web/components/Geogebra.tsx` turns GeoGebra's modal dialogs off (one bad line
+cascaded into five) and lists refused commands under the applet instead.
+`evalCommand` returns false for a scripting command that worked, so
+`web/lib/ggb-commands.ts` (new) counts a false only from a construction command,
+or a throw. New key "GeoGebra rejected {{count}} command(s)" in en/th/zh — the
+text upstream #1346 uses. Tests: `tests/visualizers/test_ggb_repairs.py` (the
+model's own failing commands, plus forms that must pass untouched) and
+`web/tests/ggb-commands.test.ts`.
+
+---
+
 ## A thinking round no longer ends the request on the model's turn — 2026-09-13
 
 Production, "create a quiz" after a chat answer: `BadRequestError 400 … Requests

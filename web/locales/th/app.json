@@ -2164,6 +2164,7 @@
   "Skills Auto": "ทักษะอัตโนมัติ",
   "Failed to load GeoGebra": "โหลด GeoGebra ไม่สำเร็จ",
   "Loading GeoGebra...": "กำลังโหลด GeoGebra...",
+  "GeoGebra rejected {{count}} command(s)": "GeoGebra ไม่รับคำสั่ง {{count}} คำสั่ง",
   "HTML visualization": "การแสดงภาพ HTML",
   "SVG visualization": "การแสดงภาพ SVG",
   "Assigned by admin": "กำหนดโดยผู้ดูแลระบบ",

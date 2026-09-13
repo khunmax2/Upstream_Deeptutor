@@ -41,9 +41,9 @@
 **圆锥曲线**：`Circle[M, r]`、`Circle[M, A]`、`Circle[A, B, C]`，方程 `c: x^2 + y^2 = 9`；`Ellipse[F1, F2, a]`（方程用整数系数 `9x^2 + 16y^2 = 144`，避免分数）；`Hyperbola[F1, F2, a]`；`Parabola[F, line]`。
 **多边形 / 角**：`Polygon[A, B, C]`、`Polygon[A, B, n]`（正n边形）；`Angle[A, B, C]`。
 **变换**：`Translate / Rotate / Reflect / Dilate`。
-**样式**：`SetColor[obj, "Blue"]` 或 `SetColor[obj, r, g, b]`；`SetLineThickness[obj, 1-13]`；`SetLineStyle[obj, 0实线/1虚线/2点线]`；`SetPointSize[obj, 1-9]`；`SetVisible[obj, false]`（隐藏辅助对象）；`SetLabelVisible`、`SetCaption`。
+**样式**：`SetColor[obj, "Blue"]` 或 `SetColor[obj, "#1F77B4"]`（三个数值分量按 0-1 读取，0-255 会变成白色）；`SetLineThickness[obj, 1-13]`；`SetLineStyle[obj, 0实线/1虚线/2点线]`；`SetPointSize[obj, 1-9]`；`SetVisible[obj, false]`（隐藏辅助对象）；`ShowLabel[obj, false]`（没有 `SetLabelVisible`）、`SetCaption`。
 **画布**：`ShowGrid[true/false]`、`ShowAxes[true/false]`（**不要**用 `SetCoordSystem`，坐标系自动适配）。
-**文字**：`Text["内容", (2,3)]`，LaTeX `Text["$\\frac{1}{2}$", (0,0)]`。
+**文字**：`Text["内容", (2,3)]`，LaTeX `Text["\frac{1}{2}", (0,0), false, true]`（第四个参数为 true，不加 `$`，反斜杠只写一个）。
 
 ### 高频错误（必须避免）
 - 用圆括号当参数：❌ `Circle(A, 3)` / `Line(A, B)` → ✅ 一律方括号 `Circle[A, 3]`、`Line[A, B]`。

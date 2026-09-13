@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { wasRejected } from "@/lib/ggb-commands";
 import { loadScriptWithRetry } from "@/lib/load-script-with-retry";
 
 interface GeogebraProps {
@@ -89,6 +90,7 @@ const Geogebra: React.FC<GeogebraProps> = ({
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rejected, setRejected] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +99,7 @@ const Geogebra: React.FC<GeogebraProps> = ({
     const containerAtMount = containerRef.current;
     setLoading(true);
     setError(null);
+    setRejected([]);
 
     async function mount() {
       try {
@@ -131,6 +134,7 @@ const Geogebra: React.FC<GeogebraProps> = ({
             // command separately so one bad line doesn't abort the rest.
             appletOnLoad: (api: {
               evalCommand: (cmd: string) => boolean;
+              setErrorDialogsActive?: (active: boolean) => void;
               setCoordSystem?: (
                 xMin: number,
                 xMax: number,
@@ -139,6 +143,10 @@ const Geogebra: React.FC<GeogebraProps> = ({
               ) => void;
             }) => {
               if (cancelled) return;
+              // Fork: one modal dialog per refused command blocked the canvas
+              // (a single bad line cascades into several); the refusals are
+              // listed under the applet instead.
+              api.setErrorDialogsActive?.(false);
               const view = payload?.view;
               if (view && api.setCoordSystem) {
                 api.setCoordSystem(
@@ -148,13 +156,22 @@ const Geogebra: React.FC<GeogebraProps> = ({
                   view.y_max,
                 );
               }
+              const failed: string[] = [];
               for (const cmd of commands) {
+                let returned: unknown;
+                let threw = false;
                 try {
-                  api.evalCommand(cmd);
+                  returned = api.evalCommand(cmd);
                 } catch (err) {
+                  threw = true;
                   console.warn("[ggb] evalCommand failed", { cmd, err });
                 }
+                if (wasRejected(cmd, { returned, threw })) failed.push(cmd);
               }
+              if (failed.length) {
+                console.warn("[ggb] GeoGebra rejected commands", failed);
+              }
+              setRejected(failed);
               setLoading(false);
             },
           },
@@ -203,6 +220,22 @@ const Geogebra: React.FC<GeogebraProps> = ({
           <div ref={containerRef} className="ggb-applet-container" />
         </div>
       )}
+      {!error && rejected.length > 0 ? (
+        <details className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+          <summary className="cursor-pointer">
+            {t("GeoGebra rejected {{count}} command(s)", {
+              count: rejected.length,
+            })}
+          </summary>
+          <ul className="mt-1 space-y-0.5 font-mono">
+            {rejected.map((cmd, index) => (
+              <li key={`${index}-${cmd}`} className="break-all">
+                {cmd}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 };
