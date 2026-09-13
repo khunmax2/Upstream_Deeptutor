@@ -1822,6 +1822,7 @@
   "Delete this turn?": "删除此轮对话？",
   "Failed to load GeoGebra": "加载 GeoGebra 失败",
   "Loading GeoGebra...": "正在加载 GeoGebra...",
+  "GeoGebra rejected {{count}} command(s)": "GeoGebra 拒绝了 {{count}} 条命令",
   "HTML visualization": "HTML 可视化",
   "SVG visualization": "SVG 可视化",
   "Assigned by admin": "由管理员分配",

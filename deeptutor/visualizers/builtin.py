@@ -321,10 +321,18 @@ when three-dimensional manipulation is essential. Each command is one English
 GeoGebra command with explicit labels. Build dependent objects from independent
 draggable points so the construction remains mathematically meaningful when
 manipulated. Include the requested givens, constraints, key derived objects,
-measurements and concise captions. SetColor uses integer RGB components such as
-SetColor[A,31,119,180], never CSS or hex colors. Use SetLineThickness,
-SetPointSize, SetLabelVisible and SetLabelMode sparingly to make the teaching
-focus obvious. Choose view bounds
+measurements and concise captions. Colors use a hex string such as
+SetColor[A,"#1F77B4"]; three numeric components are read on a 0-1 scale, so
+0-255 values turn the object white. Use SetLineThickness, SetPointSize,
+ShowLabel and SetLabelMode sparingly to make the teaching focus obvious
+(GeoGebra has no SetLabelVisible, SetPosition or SetSlider: move an object with
+SetCoords and make a slider with Slider(min, max, step)). A point from numbers is
+written (x, y), never Point(x, y). A list is Sequence(expression, variable,
+from, to), with the variable as its own argument, never "variable = from".
+Formulas render only as Text("latex", point, false, true), without $ delimiters
+and with one backslash per LaTeX command in the command itself (written \\\\sum
+inside the JSON string), such as Text("\\sum_{k=1}^{n} k", (0, 5), false, true).
+Choose view bounds
 that contain the whole construction with margin. Never fake a diagram with
 unrelated fixed coordinates when a dependent construction is possible.
 """,

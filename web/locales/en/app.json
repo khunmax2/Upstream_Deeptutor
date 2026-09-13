@@ -1822,6 +1822,7 @@
   "Delete this turn?": "Delete this turn?",
   "Failed to load GeoGebra": "Failed to load GeoGebra",
   "Loading GeoGebra...": "Loading GeoGebra...",
+  "GeoGebra rejected {{count}} command(s)": "GeoGebra rejected {{count}} command(s)",
   "HTML visualization": "HTML visualization",
   "SVG visualization": "SVG visualization",
   "Assigned by admin": "Assigned by admin",

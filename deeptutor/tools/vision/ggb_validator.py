@@ -7,6 +7,8 @@ that LLMs might make when generating GeoGebra scripts.
 from dataclasses import dataclass, field
 import re
 
+from deeptutor.tools.vision.ggb_repairs import repair_command
+
 
 @dataclass
 class ValidationResult:
@@ -197,6 +199,11 @@ def validate_command(command: str) -> ValidationResult:
     result.fixed = fixed
     result.warnings.extend(warnings)
 
+    # Fork: repairs measured against the real applet (ggb_repairs.py).
+    fixed, warnings = repair_command(result.fixed)
+    result.fixed = fixed
+    result.warnings.extend(warnings)
+
     # Fix brackets
     fixed, warnings = fix_brackets(result.fixed)
     result.fixed = fixed
@@ -275,7 +282,7 @@ def get_command_help(command_name: str) -> str | None:
         "Midpoint": "Midpoint[A, B] or Midpoint[segment]",
         "Intersect": "Intersect[obj1, obj2] (all intersections) or Intersect[obj1, obj2, n] (nth intersection)",
         "Polygon": "Polygon[A, B, C, ...] or Polygon[A, B, n] (regular n-gon)",
-        "SetColor": 'SetColor[obj, r, g, b] (RGB 0-255) or SetColor[obj, "Red"]',
+        "SetColor": 'SetColor[obj, "#RRGGBB"] or SetColor[obj, r, g, b] (0-1) or SetColor[obj, "Red"]',
         "SetCoordSystem": "SetCoordSystem[xMin, xMax, yMin, yMax]",
         "If": "If[condition, then_value, else_value]",
         "Derivative": "Derivative[f] or Derivative[f, n] (nth derivative)",
