@@ -307,6 +307,23 @@ model's own failing commands, plus forms that must pass untouched) and
 
 ---
 
+## Fourth deploy round: five UAT fixes in one tag — 2026-09-13
+
+Tag `deploy-2026-09-13c` = `main` `fda48c0a7` went up by `GO-LIVE.md` §11 in 12
+steps, each reported by the host: `deeptutor2` rebuilt with the Deep Research
+outline fix (#87), Manim + LaTeX + a Thai font + a backend HOME for the math
+animator (#89) and the GeoGebra load retry (#90); the studio recreated on
+`sha256:1862c324…` (custom TTS URL travels with its key, #85). 8/8 healthy, zero
+restarts; the studio image was pulled before the gate in under a minute, so
+the studio was down only for the recreate. `settings/` was back at 700 after
+the build again and the chmod step before the gate caught it. The nightly
+studio backup cron ran by itself for the first time that morning. Tag
+`deploy-2026-09-13b` was pushed and superseded without being deployed. The
+day's fixes, evidence and backlog are in
+`docs/reports/REPORT_uat_fixes_2026-09-13.md`.
+
+---
+
 ## A thinking round no longer ends the request on the model's turn — 2026-09-13
 
 Production, "create a quiz" after a chat answer: `BadRequestError 400 … Requests
