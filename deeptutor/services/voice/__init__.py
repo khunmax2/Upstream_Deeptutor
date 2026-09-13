@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from deeptutor.services.voice.adapters import get_stt_adapter, get_tts_adapter
+from deeptutor.services.voice.audio_normalize import browser_audio_to_wav
 from deeptutor.services.voice.base import (
     TranscriptCue,
     VoiceProviderError,
@@ -65,6 +66,8 @@ async def transcribe_audio(
     if language:
         config.language = language
     adapter = get_stt_adapter(config.adapter)
+    # Fork: browser WebM/Opus -> WAV, which every provider decodes (audio_normalize.py).
+    audio, filename, content_type = browser_audio_to_wav(audio, filename, content_type)
     return await adapter.transcribe(audio, config, filename=filename, content_type=content_type)
 
 
@@ -87,6 +90,7 @@ async def transcribe_audio_cues(
     if language:
         config.language = language
     adapter = get_stt_adapter(config.adapter)
+    audio, filename, content_type = browser_audio_to_wav(audio, filename, content_type)
     return await adapter.transcribe_cues(
         audio, config, filename=filename, content_type=content_type
     )
