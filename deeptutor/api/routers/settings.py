@@ -43,6 +43,7 @@ from deeptutor.services.config.runtime_settings import (
     CHAT_ATTACHMENT_MAX_TOTAL_MB_RANGE,
     compute_ws_max_size,
 )
+from deeptutor.services.config.secret_guard import unrestored_secret_labels
 from deeptutor.services.config.settings_draft import (
     get_settings_draft_service,
     is_empty_draft,
@@ -430,6 +431,23 @@ def _require_settings_admin() -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Model configuration is managed by an administrator.",
+        )
+
+
+def _refuse_unrestored_secrets(catalog: dict[str, Any]) -> None:
+    """Fork: never save the settings mask (``***``) as a credential.
+
+    A masked key survives restoration only for a profile this account has not
+    saved; storing it would make ``***`` the key. See ``secret_guard.py``.
+    """
+    labels = unrestored_secret_labels(catalog)
+    if labels:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Not saved: the API key for {', '.join(labels)} is not stored in this "
+                "account yet — enter it again, then save."
+            ),
         )
 
 
@@ -1459,6 +1477,7 @@ async def update_catalog(payload: CatalogPayload):
     service = get_model_catalog_service()
     current = service.load()
     restored = restore_catalog_secrets(payload.catalog, current)
+    _refuse_unrestored_secrets(restored)
     proposed = reconcile_codex_catalog_update(current, restored)
     catalog = service.save(proposed)
     _invalidate_runtime_caches()
@@ -1480,6 +1499,7 @@ async def apply_catalog_service(payload: CatalogServicePayload):
     proposed = deepcopy(current)
     proposed.setdefault("services", {})[payload.service] = deepcopy(payload.config)
     restored = restore_catalog_secrets(proposed, current)
+    _refuse_unrestored_secrets(restored)
     reconciled = reconcile_codex_catalog_update(current, restored)
     runtime = service.apply(reconciled)
     catalog = service.load()
@@ -1572,6 +1592,7 @@ async def apply_catalog(payload: CatalogPayload | None = None):
             if isinstance(draft_catalog, dict)
             else current
         )
+    _refuse_unrestored_secrets(proposed)
     catalog = reconcile_codex_catalog_update(current, proposed)
     applied = service.apply(catalog)
     draft_service.clear()
@@ -1846,6 +1867,7 @@ async def complete_tour(payload: TourCompletePayload | None = None):
         if payload and payload.catalog
         else current
     )
+    _refuse_unrestored_secrets(catalog)
     applied = service.apply(catalog)
     _invalidate_runtime_caches()
     now = int(time.time())
