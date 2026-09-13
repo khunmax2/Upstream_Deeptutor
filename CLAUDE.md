@@ -107,7 +107,7 @@ alone.
 
 ## What a fresh clone will not guess
 
-Four things about this repository's current shape that the code does not
+Five things about this repository's current shape that the code does not
 explain.
 
 **`main`'s history was rewritten on 2026-09-09.** The OpenMAIC integration was
@@ -146,6 +146,28 @@ templates seed in.
 `lightrag-hku` from `1.5.7rc2` to `1.5.7`, and the RAG tests assert the version
 exactly — five of them fail until the venv matches. `uv pip install
 "lightrag-hku==1.5.7"` (this venv has no `pip`; it was made with `uv`).
+
+**Admins do not share one workspace here — upstream's do. This is a fork
+decision that may be reversed.** Upstream sends every admin to the single
+deployment tree `data/` (`scope_for_user(is_admin=True)` → `admin_scope()`, id
+`local-admin`): admins are co-operators of one shared workspace — chats,
+notebooks, model catalog, personas, skills, knowledge bases — and only ordinary
+users are isolated. This fork (`deeptutor/multi_user/primary_admin.py`, commit
+`e4225b1c2`, 2026-09-04) gives `data/` to the *primary* admin only; an admin
+promoted later keeps a private workspace. Upstream code still assumes
+`is_admin` means "owns `data/`", so every such assumption misbehaves for promoted
+admins until it is patched — found so far: the Settings Run test saving into
+the primary admin's catalog (#97), and system personas withheld from promoted
+admins (fixed with `reads_deployment_presets()`). Still open by choice:
+deployment skills (promoted admins see only their own), per-admin model
+catalogs and keys, and knowledge bases built with different embedding models
+across admins or after a demotion. The user chose on 2026-09-14 to keep this
+path for now and to decide it again after a design pass (keep the split, go
+back to upstream's shared admin workspace, or share deployment assets while
+keeping chats private). Until then: on every upstream sync, and before touching
+roles, grants, personas, skills, embedding or knowledge-base code, look for new
+`is_admin`-means-`data/` assumptions and flag them rather than deciding the
+design alone.
 
 ## Fork policy for AI agents
 

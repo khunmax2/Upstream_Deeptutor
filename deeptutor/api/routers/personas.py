@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from deeptutor.multi_user.context import get_current_user
 from deeptutor.multi_user.paths import get_admin_path_service
+from deeptutor.multi_user.primary_admin import reads_deployment_presets
 from deeptutor.services.i18n import t
 from deeptutor.services.persona import (
     InvalidPersonaNameError,
@@ -54,7 +55,9 @@ async def list_personas() -> dict[str, list[dict[str, object]]]:
     service = get_persona_service()
     own = [info.to_dict() for info in service.list_personas()]
     user = get_current_user()
-    if user.is_admin:
+    # Fork: only the account that owns the deployment tree owns these presets;
+    # an admin promoted later reads them like anyone else (primary_admin.py).
+    if not reads_deployment_presets(user):
         return {"personas": own}
     own_names = {item["name"] for item in own}
     merged = list(own)
@@ -78,7 +81,7 @@ async def get_persona(name: str) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc))
 
     user = get_current_user()
-    if not user.is_admin:
+    if reads_deployment_presets(user):
         try:
             detail = _admin_persona_service().get_detail(name).to_dict()
             detail.update({"source": "admin", "read_only": True})
