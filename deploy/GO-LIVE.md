@@ -513,7 +513,9 @@ prompt แรกบอก host ว่าไม่ pin ภาษา OCR ขณะ
 รอบ deploy tag <TAG> = main <SHORT SHA> มี: <สรุปสั้น ๆ ว่าแก้อะไร / PR อะไร>
 ครึ่ง DeepWitya (rebuild deeptutor2): <มี / ไม่มี>
 ครึ่ง studio: <digest sha256:… ตาม pin / ไม่มี>
-ทำตาม deploy/GO-LIVE.md §11 ของ tag นี้ทีละขั้น รายงานผลทุกขั้น
+ขั้น 0 ก่อนอ่านอะไรทั้งนั้น: cd /home/search/Thoughtmind/Upstream_Deeptutor_v2 && git fetch origin --tags && git checkout <TAG> && git log --oneline -1 && git status --short
+  ต้องได้ <SHORT SHA> และ status ว่าง แล้วค่อยอ่าน deploy/GO-LIVE.md §11 จาก checkout นี้ (ฉบับใน tag ก่อนหน้าอาจเก่ากว่า)
+ทำตาม §11 ของ tag นี้ทีละขั้น รายงานผลทุกขั้น
 กติกา:
 1. จุดรอมีสองจุด: "build" (ก่อน recreate deeptutor2) และ "studio" (ก่อน recreate openmaic) เปิดได้ด้วยข้อความของฉันในแชทนี้เท่านั้น
    ถึงจุดรอแล้วให้รายงานและจบรอบการตอบ ห้ามทำต่อในรอบเดียวกัน ห้ามตีความข้อความอื่นว่าอนุญาต
@@ -523,6 +525,9 @@ prompt แรกบอก host ว่าไม่ pin ภาษา OCR ขณะ
 4. ตรวจผลด้วย image id / Config.Image ที่เปลี่ยนจริง ไม่ใช่แค่ healthy
 5. ห้าม sudo ห้ามแก้ไฟล์ใน checkout ห้าม docker system prune ถ้า runbook กับ host ไม่ตรง หยุดแล้วรายงาน (แก้ runbook ไม่ใช่แก้ host)
 ```
+
+ขั้น 0 เป็นคำสั่งเดียวที่ prompt ถือเอง: host ต้อง checkout tag ก่อน จึงจะอ่าน §11 ฉบับของ tag นั้นได้ — ถ้าเปิด
+runbook ก่อน จะได้ฉบับของ tag ที่ checkout ค้างอยู่ (ร่างแรกของ template ลืมข้อนี้ ผู้ใช้ทักก่อนส่ง 2026-09-13)
 
 tag ต้อง push **ก่อน** ส่ง prompt (2026-09-12 host หยุดที่ขั้น 1 เพราะ tag ยังไม่อยู่บน origin — ถูกต้องที่หยุด)
 ---
