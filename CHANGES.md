@@ -254,6 +254,20 @@ upstream.
 
 ---
 
+## The Task models page's "Run test" tests the task model — 2026-09-13
+
+Settings → Task models → Diagnostics → Run test ended "[failed] Unsupported
+service: task" before sending anything. v1.6.4 made the task model a catalog
+service shaped like the LLM and gave its page the same Diagnostics panel, but
+`deeptutor/services/config/test_runner.py` never learned the service; upstream
+main still has the gap and no issue reports it. The runner now probes a
+configured task model through the LLM path, resolved from the `task` service;
+an empty one says it inherits and probes the LLM it falls back to, which is what
+titles and starters then run on. `tests/services/config/test_test_runner_task.py`
+covers both (red before, with the exact message).
+
+---
+
 ## GeoGebra runs the commands the model writes, and a refusal no longer blocks the canvas — 2026-09-13
 
 Visualize's GeoGebra mode showed error dialogs in UAT — "Unknown command
