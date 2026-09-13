@@ -254,6 +254,39 @@ upstream.
 
 ---
 
+## Settings' Run test acts as the admin who pressed it, and never saves a masked key — 2026-09-14
+
+An admin promoted after the first one got "Missing Authentication header" from
+Settings → Embedding → Run test. Three faults stacked. `ConfigTestRunner`
+ran each test in a new thread, which starts with an empty context: the run lost
+track of who asked, and when an embedding probe succeeded and saved the
+detected dimension, the catalog service fell back to the default tree — the
+primary admin's `data/user/settings/model_catalog.json` — and saved the
+tester's whole catalog there (the host's two catalogs carried the same
+modification minute; a developer probe of this path overwrote a local catalog
+the same way). The page then replaced its saved state *and* its draft with that
+catalog, so a profile that had only been typed in looked saved, with its key
+masked as `***`. The next run restored the mask against the tester's own
+catalog, which had no such profile, and sent `Bearer ***` — measured: OpenRouter
+answers exactly that with "Missing Authentication header".
+
+`deeptutor/services/config/test_runner.py`: the thread runs in the caller's
+context; a profile whose key is still the mask fails at once with "enter it
+again" and sends nothing; the dimension is written only into the caller's own
+saved model, and only when that model is saved as tested (same endpoint and
+model) — otherwise a `dimension` event leaves it in the page's draft until
+Apply. `deeptutor/services/config/secret_guard.py` (new) finds leftover masks;
+`deeptutor/api/routers/settings.py` refuses to save one in `PUT /catalog`,
+`/apply`, `/apply/service` and `/tour/complete` (400, same message).
+`web/features/settings/store/SettingsStore.tsx` keeps the draft and merges only
+the tested model's dimension (`web/lib/settings-draft-helpers.ts`, new), and
+shows the server's reason when a save is refused. So Save, Apply and Test work
+in any order. Tests: `tests/multi_user/test_settings_test_runs_as_caller.py`
+(one primary and two promoted admins through the real routes; five red before)
+and `web/tests/settings-draft-helpers.test.ts`.
+
+---
+
 ## Speech-to-text sends browser recordings as WAV — 2026-09-14
 
 With a workplace Whisper-compatible server (`ptm-asr-1` behind LiteLLM) as the

@@ -27,6 +27,10 @@ import { useAppShell } from "@/context/AppShellContext";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { invalidateLLMOptionsCache } from "@/lib/llm-options";
 import { setModelReasoningEffort } from "@/lib/reasoning-effort";
+import {
+  settingsErrorDetail,
+  withTestedEmbeddingDimension,
+} from "@/lib/settings-draft-helpers";
 import { applyExtensionPayload } from "@/lib/settings-extensions";
 import { setTheme as applyThemePreference } from "@/lib/theme";
 import { browserStorage } from "@/shared/storage";
@@ -1021,22 +1025,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     await persistUiSettingsPatch({ theme: next });
   }, []);
 
-  const updateLanguage = useCallback(
-    async (next: UiSettings["language"]) => {
-      setLanguage(next);
-      writeStoredLanguage(next);
-      // `PUT /ui` merges, so an account that never chose a model output
-      // language still has no stored `response_language` — and the server
-      // derives it from `language` on the next read. Mirror that here, or the
-      // page shows a value the browser will not send.
-      if (!hasStoredResponseLanguage()) {
-        setResponseLanguage(next);
-        writeStoredResponseLanguage(next);
-      }
-      await persistUiSettingsPatch({ language: next });
-    },
-    [],
-  );
+  const updateLanguage = useCallback(async (next: UiSettings["language"]) => {
+    setLanguage(next);
+    writeStoredLanguage(next);
+    // `PUT /ui` merges, so an account that never chose a model output
+    // language still has no stored `response_language` — and the server
+    // derives it from `language` on the next read. Mirror that here, or the
+    // page shows a value the browser will not send.
+    if (!hasStoredResponseLanguage()) {
+      setResponseLanguage(next);
+      writeStoredResponseLanguage(next);
+    }
+    await persistUiSettingsPatch({ language: next });
+  }, []);
 
   const updateResponseLanguage = useCallback(
     async (next: UiSettings["response_language"]) => {
@@ -1618,7 +1619,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftEnvelope()),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) throw new Error(await settingsErrorDetail(response));
       const payload = (await response.json()) as { draft: StoredDraft | null };
       setStoredDraft(payload.draft ?? null);
       setSavedSignature(signature);
@@ -1647,7 +1648,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             config: draft.services[service],
           }),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error(await settingsErrorDetail(response));
         const payload = (await response.json()) as {
           catalog: Catalog;
           draft: StoredDraft | null;
@@ -1718,6 +1719,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
+        // Fork: a refused apply (e.g. a key that is still `***`) answers 400
+        // with a reason; reading it as a catalog would blank the page.
+        if (!response.ok) throw new Error(await settingsErrorDetail(response));
         const payload = await response.json();
         setCatalog(payload.catalog);
         setDraft(cloneCatalog(payload.catalog));
@@ -1837,6 +1841,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             model_known?: boolean;
             active_dim?: number;
             active_dim_source?: string;
+            dimension?: number;
+            supported_dimensions_csv?: string;
+            persisted?: boolean;
             context_window?: number;
             source?: string;
             detail?: string;
@@ -1870,9 +1877,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               active_dim_source: entry.active_dim_source,
             });
           }
+          // Fork: the run now saves only the tested model's dimension, into
+          // this account's own catalog. Take that as the saved state, and put
+          // only the dimension into the draft — replacing the draft used to
+          // drop unsaved edits and turn typed-in keys into `***`.
           if (entry.catalog) {
             setCatalog(entry.catalog);
-            setDraft(cloneCatalog(entry.catalog));
+          }
+          if (
+            service === "embedding" &&
+            typeof entry.dimension === "number" &&
+            entry.dimension > 0
+          ) {
+            const dimension = entry.dimension;
+            const supported = entry.supported_dimensions_csv;
+            setDraft((current) =>
+              withTestedEmbeddingDimension(
+                current,
+                runProfileId,
+                runModelId,
+                dimension,
+                supported,
+              ),
+            );
           }
           if (entry.type === "completed" || entry.type === "failed") {
             source.close();

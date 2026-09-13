@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from dataclasses import dataclass, field
 import json
 import threading
@@ -18,6 +19,7 @@ from .provider_runtime import (
     resolve_search_runtime_config,
     supported_search_providers_hint,
 )
+from .secret_guard import has_unrestored_secret
 
 
 def _redact(value: str) -> str:
@@ -85,7 +87,14 @@ class ConfigTestRunner:
         with self._lock:
             self._runs[run.id] = run
         resolved = catalog or get_model_catalog_service().load()
-        thread = threading.Thread(target=self._run_sync, args=(run, resolved), daemon=True)
+        # Fork: a new thread starts with an empty context, so without this the
+        # run lost track of who asked — every catalog lookup inside it fell
+        # back to the primary admin's tree, and a promoted admin's successful
+        # embedding test saved their catalog over the primary admin's.
+        context = contextvars.copy_context()
+        thread = threading.Thread(
+            target=context.run, args=(self._run_sync, run, resolved), daemon=True
+        )
         thread.start()
         return run
 
@@ -116,6 +125,13 @@ class ConfigTestRunner:
                     model=model,
                 )
 
+            if profile and has_unrestored_secret(profile):
+                # Fork: the page's `***` for a profile this account has not
+                # saved. Sending it produced "Missing Authentication header".
+                raise ValueError(
+                    f"The API key for “{profile.get('name') or profile.get('id')}” is not "
+                    "saved in this account — enter it again, then run the test."
+                )
             if service == "llm":
                 asyncio.run(self._test_llm(run, catalog))
             elif service == "task":
@@ -146,23 +162,32 @@ class ConfigTestRunner:
         catalog: dict[str, Any],
         model: dict[str, Any],
         actual_dimension: int,
-    ) -> dict[str, Any]:
-        """Write the probe-detected dim onto the active embedding model entry.
+    ) -> dict[str, Any] | None:
+        """Write the probe-detected dim onto the caller's saved model — only.
 
-        Called after every successful "Test connection" — the probe is the
-        single source of truth, so any prior catalog dim is overwritten.
-        Refreshes the embedding client singleton so subsequent embed calls
-        use the new dim.
+        Fork. This used to save the whole catalog under test, i.e. the page's
+        unsaved draft, as if Run test were Apply. It now writes just the
+        dimension (and the ``supported_dimensions`` cache) into the caller's
+        own saved catalog, and only when the tested model is saved there as
+        tested; otherwise it returns ``None`` and the page keeps the dimension
+        in its draft until the user applies. Refreshes the embedding client
+        singleton so subsequent embed calls use the new dim.
         """
         from deeptutor.services.embedding.client import reset_embedding_client
 
-        service = get_model_catalog_service()
         if model is None:
             return catalog
         model["dimension"] = str(actual_dimension)
-        saved = service.save(catalog)
+        service = get_model_catalog_service()
+        saved = service.load()
+        saved_model = _saved_embedding_twin(saved, catalog, model)
+        if saved_model is None:
+            return None
+        saved_model["dimension"] = str(actual_dimension)
+        saved_model["supported_dimensions"] = str(model.get("supported_dimensions") or "")
+        result = service.save(saved)
         reset_embedding_client()
-        return redact_catalog_secrets(saved)
+        return redact_catalog_secrets(result)
 
     @staticmethod
     def _capabilities_from_adapter(adapter: Any, model_name: str) -> dict[str, Any]:
@@ -442,11 +467,25 @@ class ConfigTestRunner:
         # detected dim is authoritative. ``_persist_embedding_dimension`` also
         # writes the refreshed ``supported_dimensions`` CSV in the same save.
         saved_catalog = self._persist_embedding_dimension(catalog, model, detected_dim)
-        run.emit(
-            "catalog",
-            "Saved detected embedding dimension to model_catalog.json.",
-            catalog=saved_catalog,
-        )
+        dimension_detail = {
+            "dimension": detected_dim,
+            "supported_dimensions_csv": new_supported_csv,
+        }
+        if saved_catalog is None:
+            run.emit(
+                "dimension",
+                f"Detected {detected_dim}d is filled in on the page; it is saved when you apply.",
+                persisted=False,
+                **dimension_detail,
+            )
+        else:
+            run.emit(
+                "catalog",
+                "Saved detected embedding dimension to model_catalog.json.",
+                catalog=saved_catalog,
+                persisted=True,
+                **dimension_detail,
+            )
 
     def _test_search(self, run: TestRun, catalog: dict[str, Any]) -> None:
         from deeptutor.services.search import web_search
@@ -599,6 +638,39 @@ class ConfigTestRunner:
             "Video task accepted — connection is valid.",
             task_id=task_id,
         )
+
+
+def _saved_embedding_twin(
+    saved: dict[str, Any], tested: dict[str, Any], model: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The saved copy of the tested embedding model, if it is saved as tested.
+
+    Fork. Same profile and model ids, same endpoint (binding, URL, API
+    version) and the same model name — a dimension measured on an edited,
+    unapplied endpoint must not land on the one that is actually saved.
+    """
+
+    def find(items: Any, item_id: Any) -> dict[str, Any] | None:
+        return next(
+            (item for item in items or [] if isinstance(item, dict) and item.get("id") == item_id),
+            None,
+        )
+
+    service = (tested.get("services") or {}).get("embedding") or {}
+    profile_id = service.get("active_profile_id")
+    tested_profile = find(service.get("profiles"), profile_id)
+    saved_profile = find(
+        ((saved.get("services") or {}).get("embedding") or {}).get("profiles"), profile_id
+    )
+    if tested_profile is None or saved_profile is None:
+        return None
+    for key in ("binding", "base_url", "api_version"):
+        if str(tested_profile.get(key) or "") != str(saved_profile.get(key) or ""):
+            return None
+    saved_model = find(saved_profile.get("models"), model.get("id"))
+    if saved_model is None or str(saved_model.get("model") or "") != str(model.get("model") or ""):
+        return None
+    return saved_model
 
 
 def get_config_test_runner() -> ConfigTestRunner:
