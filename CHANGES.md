@@ -254,6 +254,26 @@ upstream.
 
 ---
 
+## Settings navigation keeps the address under /deepwitya — 2026-09-14
+
+On the host, clicking any item in the settings menu turned
+`https://…/deepwitya/settings#overview` into `https://…/settings#knowledge` —
+the base path gone, so a reload or a copied link landed outside the app.
+Scrolling kept it right. `web/components/settings/SettingsNav.tsx` writes the
+fragment with `window.history.replaceState(null, "", href)` where `href` is the
+app-relative `/settings#<key>`; the native API writes it verbatim, and only
+Next's router and `<Link>` add the base path (scrolling builds from
+`window.location.pathname`, which carries it). Two more writes had the same
+shape: the version badge (`web/components/sidebar/VersionBadge.tsx`,
+`/settings#about`) and the reading workspace naming a new conversation
+(`web/components/reading/workspace/useReadingWorkspace.ts`,
+`/reading/<id>/sessions/<id>`). All three now go through `withBasePath()`.
+`web/tests/base-path-guard.test.ts` gains the two `history.replaceState` /
+`pushState` shapes — a root-absolute URL and a bare variable — and was red on
+exactly these three before the fix.
+
+---
+
 ## The Task models page's "Run test" tests the task model — 2026-09-13
 
 Settings → Task models → Diagnostics → Run test ended "[failed] Unsupported
