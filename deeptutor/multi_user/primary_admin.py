@@ -133,6 +133,19 @@ def is_primary_admin(user_id: str) -> bool:
     return candidate == primary_admin_id()
 
 
+def reads_deployment_presets(user: Any) -> bool:
+    """Whether *user* reads the deployment's shared presets instead of owning them.
+
+    Upstream asks ``not user.is_admin`` here, because there every admin *is* the
+    deployment tree. With this module only the primary admin is; every other
+    account — ordinary users and admins promoted later alike — works in its own
+    workspace and gets the deployment's presets (personas) read-only. Anything
+    such an account writes still lands in its own workspace.
+    """
+    scope = getattr(user, "scope", None)
+    return getattr(scope, "kind", "") != "admin"
+
+
 def reset_primary_admin_cache() -> None:
     """Drop the in-process cache. For tests and for re-rooted runtimes."""
     with _lock:
@@ -143,5 +156,6 @@ __all__ = [
     "SENTINEL_ADMIN_IDS",
     "is_primary_admin",
     "primary_admin_id",
+    "reads_deployment_presets",
     "reset_primary_admin_cache",
 ]

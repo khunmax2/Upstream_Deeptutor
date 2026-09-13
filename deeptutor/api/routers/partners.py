@@ -521,6 +521,7 @@ def _resolve_soul_content(soul: SoulSpec | None) -> tuple[str, dict[str, str]]:
 
 def _load_persona_markdown(name: str) -> str:
     from deeptutor.multi_user.paths import get_admin_path_service
+    from deeptutor.multi_user.primary_admin import reads_deployment_presets
     from deeptutor.services.persona import PersonaService, get_persona_service
 
     try:
@@ -529,7 +530,7 @@ def _load_persona_markdown(name: str) -> str:
     except Exception:
         pass
     try:
-        if not get_current_user().is_admin:
+        if reads_deployment_presets(get_current_user()):
             admin_service = PersonaService(
                 root=get_admin_path_service().get_workspace_dir() / "personas"
             )
@@ -586,6 +587,7 @@ async def delete_soul(soul_id: str):
 async def soul_sources():
     """Everything the create-wizard's soul step can start from."""
     from deeptutor.multi_user.paths import get_admin_path_service
+    from deeptutor.multi_user.primary_admin import reads_deployment_presets
     from deeptutor.services.persona import PersonaService, get_persona_service
 
     def _persona_entry(service: PersonaService, info: Any) -> dict[str, str]:
@@ -607,7 +609,7 @@ async def soul_sources():
     except Exception:
         logger.warning("Failed to list user personas", exc_info=True)
     try:
-        if not get_current_user().is_admin:
+        if reads_deployment_presets(get_current_user()):
             admin_service = PersonaService(
                 root=get_admin_path_service().get_workspace_dir() / "personas"
             )

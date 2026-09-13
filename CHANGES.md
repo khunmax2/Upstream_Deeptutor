@@ -254,6 +254,31 @@ upstream.
 
 ---
 
+## An admin promoted after the first one sees the system personas — 2026-09-14
+
+On the host a promoted admin's Learning Library read "Personas 0", while the same
+account had seen the system personas as an ordinary user. Upstream gives every
+admin the one deployment tree (`data/`), so its code merges the deployment's
+personas only `if not user.is_admin` — an admin *owns* them there. This fork
+gives `data/` to the primary admin alone and every later admin a private
+workspace (`primary_admin.py`, 2026-09-04), where no presets are seeded; the gate
+then withheld them from exactly those admins.
+
+`deeptutor/multi_user/primary_admin.py` gains `reads_deployment_presets(user)` —
+true for every account whose workspace is not the deployment tree — and the five
+places that asked `is_admin` now ask it: the persona list and detail
+(`deeptutor/api/routers/personas.py`), the partner wizard's persona sources and
+creating a partner from a persona (`deeptutor/api/routers/partners.py`), and the
+chat turn's persona fallback (`deeptutor/services/session/turns/executor.py`).
+Presets stay read-only; a persona the account creates or edits still lands in its
+own workspace and shadows the preset of the same name. The web page already
+renders read-only entries. `CLAUDE.md` now records that the per-admin workspace
+split is this fork's and may be reversed after a design pass.
+`tests/multi_user/test_personas_for_promoted_admins.py` (primary admin, promoted
+admin, ordinary user; red before for the promoted admin).
+
+---
+
 ## Settings' Run test acts as the admin who pressed it, and never saves a masked key — 2026-09-14
 
 An admin promoted after the first one got "Missing Authentication header" from

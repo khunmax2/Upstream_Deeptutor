@@ -404,6 +404,7 @@ class TurnExecutor:
             # privileged workflow, so no grant gate applies).
             from deeptutor.multi_user.context import get_current_user
             from deeptutor.multi_user.paths import get_admin_path_service
+            from deeptutor.multi_user.primary_admin import reads_deployment_presets
             from deeptutor.multi_user.skill_access import assigned_skill_ids
             from deeptutor.services.persona import PersonaService, get_persona_service
             from deeptutor.services.skill.service import SkillService, render_skills_manifest
@@ -421,7 +422,8 @@ class TurnExecutor:
             persona_context = ""
             if requested_persona:
                 persona_context = get_persona_service().load_for_context(requested_persona)
-                if not persona_context and not current_user.is_admin:
+                # Fork: promoted admins read the presets too (primary_admin.py).
+                if not persona_context and reads_deployment_presets(current_user):
                     persona_context = PersonaService(
                         root=get_admin_path_service().get_workspace_dir() / "personas"
                     ).load_for_context(requested_persona)
