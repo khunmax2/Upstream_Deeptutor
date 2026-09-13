@@ -70,3 +70,15 @@ def test_production_takes_site_packages_from_python_base() -> None:
 def test_the_math_animator_requirements_name_manim() -> None:
     text = (_REPO / "requirements" / "math-animator.txt").read_text(encoding="utf-8")
     assert re.search(r"^manim\b", text, flags=re.MULTILINE)
+
+
+def test_the_app_user_has_a_writable_home() -> None:
+    # supervisord's user= keeps root's HOME=/root, so the backend ran with a
+    # HOME it cannot read: Manim died at import on /root/.config/manim/manim.cfg
+    # (PermissionError, UAT 2026-09-13). The home exists and both backend
+    # programs are handed it.
+    stages = _stages()
+    assert "install -d -o deeptutor -g deeptutor /home/deeptutor" in stages["production"]
+    for name in ("production", "development"):
+        backend = stages[name].split("[program:backend]", 1)[1].split("[program:", 1)[0]
+        assert 'HOME="/home/deeptutor"' in backend, name

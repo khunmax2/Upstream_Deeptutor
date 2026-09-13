@@ -277,6 +277,13 @@ RUN groupadd --system --gid 1000 deeptutor \
     && useradd --system --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin deeptutor \
     && chown -R deeptutor:deeptutor /app/data /app/web/.next
 
+# Fork. The app user needs a home it can write. The account is created with
+# --no-create-home and supervisord's user= does not reset HOME, so the backend
+# ran with root's HOME=/root: Manim then died at import reading
+# /root/.config/manim/manim.cfg (PermissionError, UAT 2026-09-13) and fontconfig
+# had no writable cache. Created here and handed to the backend programs as HOME.
+RUN install -d -o deeptutor -g deeptutor /home/deeptutor
+
 # supervisord config is split into two files so the production and development
 # images share one daemon-level [supervisord] section instead of duplicating it:
 #   - /etc/supervisor/supervisord.conf      — daemon-level settings (shared)
@@ -320,7 +327,7 @@ stdout_logfile=/dev/fd/1
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/fd/2
 stderr_logfile_maxbytes=0
-environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1"
+environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1",HOME="/home/deeptutor"
 
 [program:frontend]
 command=/bin/bash /app/start-frontend.sh
@@ -606,7 +613,7 @@ stdout_logfile=/dev/fd/1
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/fd/2
 stderr_logfile_maxbytes=0
-environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1"
+environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1",HOME="/home/deeptutor"
 
 [program:frontend]
 command=/bin/bash -c "cd /app/web && node scripts/dev.mjs -H 0.0.0.0 -p ${FRONTEND_PORT:-3782}"

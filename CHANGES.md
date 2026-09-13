@@ -278,6 +278,16 @@ confirmed plentiful: the prompts' "prefer Text over MathTex" is advice to the
 model, not a guarantee, and without LaTeX a MathTex that slips through fails the
 whole request. A smaller set (+178 MB) was measured and fails on Manim's default
 template. Thai still goes through `Text`; pdflatex cannot set Thai in a formula.
+
+A third gap, and an upstream one, surfaced on the first real request: the
+backend runs as `deeptutor` under supervisord, whose `user=` does not reset
+HOME, and the account is created with `--no-create-home` — so the backend ran
+with root's `HOME=/root`. Manim reads `~/.config/manim/manim.cfg` at import and
+died with `PermissionError: '/root/.config/manim/manim.cfg'`; the same HOME is
+why fontconfig reported no writable cache. The image now creates
+`/home/deeptutor` for the app user and both backend programs get
+`HOME="/home/deeptutor"`. Upstream's Dockerfile has the identical lines; it just
+never ships Manim, so nothing there trips on it.
 Measured on the built image: manim 0.21.0, 2.45 → 2.91 GB (+0.46 GB; the
 323 MB first measured was site-packages alone), and a y = x² scene renders
 in about two seconds as the app's own user.
