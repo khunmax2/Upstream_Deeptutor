@@ -104,6 +104,23 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+# Fork. Manim for the math animator and the visualize capability's video path
+# (`deeptutor[math-animator]`). Upstream leaves it to the runtime
+# DEEPTUTOR_EXTRAS hook, which cannot work in the production image: pycairo has
+# no Linux wheel and that image carries no compiler, so the install fails and
+# the feature stays "requires optional dependencies". It is built here, where
+# the toolchain already is, and only site-packages travels on; the runtime
+# libraries (cairo, pango) are in the production stage below. Its own layer, so
+# the requirements layer above keeps its cache. No LaTeX: the animator's prompts
+# steer the model to Text over MathTex, and a MathTex that slips through fails
+# with a clear "latex not found" (retry_manager) instead of a hang.
+# Measured 2026-09-13: manim 0.21.0, +~323 MB, y = x^2 renders in ~2 s.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2-dev \
+    libpango1.0-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install -r requirements/math-animator.txt
+
 # ============================================
 # Stage 3: Production Image
 # ============================================
@@ -134,6 +151,9 @@ WORKDIR /app
 
 # Install system dependencies
 # Note: libgl1 and libglib2.0-0 are required for OpenCV (used by mineru)
+# Note: libcairo2 / libpango* are the runtime half of Manim (math animator), which
+#       is built in python-base; named here so they do not depend on another
+#       package happening to pull them in (fork, 2026-09-13).
 # Note: git is required to install CLI apps — most of the CLI-Anything catalog
 #       installs with `pip install git+…`, which shells out to git. It is needed
 #       in *this* image and not in the runner: installing is a privileged
@@ -149,6 +169,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-tha \

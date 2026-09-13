@@ -254,6 +254,30 @@ upstream.
 
 ---
 
+## The image carries Manim, so the math animator runs — 2026-09-13
+
+The math animator answered every request with "math_animator requires
+optional dependencies" (UAT 2026-09-12; already noted in the 2026-09-04 UAT
+report), and so did the visualize capability's video path. Manim is an
+optional extra upstream leaves to the runtime `DEEPTUTOR_EXTRAS` hook, and
+that hook cannot work here: measured in a throwaway container of the
+production image, `pip install manim` fails on pycairo, which has no Linux
+wheel, because the production image carries no compiler.
+
+The `Dockerfile` now builds it in the `python-base` stage, where the toolchain
+already is — one new layer adding the cairo and pango headers and installing
+`requirements/math-animator.txt`, after the requirements layer so that layer
+keeps its cache — and the production stage names the runtime libraries
+(`libcairo2`, `libpango-1.0-0`, `libpangocairo-1.0-0`) instead of relying on
+another package to pull them in. No LaTeX (+461 MB measured): the animator's
+prompts already steer the model to `Text` over `MathTex`, and a `MathTex` that
+slips through fails with the clear "latex not found" its retry manager knows.
+Measured: manim 0.21.0, +~323 MB, a y = x² scene renders in about two seconds.
+`tests/scripts/test_dockerfile_math_animator.py` goes red if an upstream sync
+drops either half.
+
+---
+
 ## The per-round prompt checks out the tag before it reads the runbook — 2026-09-13
 
 The template added to `GO-LIVE.md` §11 carried no commands, so that every
