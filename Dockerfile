@@ -185,7 +185,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # MathTex that slips through fails the whole request (retry_manager treats a
 # missing latex as non-retriable). Measured 2026-09-13: this set renders
 # fractions, integrals and matrices beside a Thai Text title; the smaller
-# latex-base/-recommended set fails on Manim's default template. +568 MB, its own
+# latex-base/-recommended set fails on Manim's default template. Image 2.92 ->
+# 3.85 GB (the 568 MB first measured was /usr alone). Its own
 # layer so the system-packages layer above keeps its cache. pdflatex cannot set
 # Thai, so Thai stays in Text (fonts-thai-tlwg above).
 RUN apt-get update && apt-get install -y --no-install-recommends \

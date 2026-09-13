@@ -271,7 +271,8 @@ keeps its cache — and the production stage names the runtime libraries
 (`libcairo2`, `libpango-1.0-0`, `libpangocairo-1.0-0`) instead of relying on
 another package to pull them in. LaTeX is installed too, as its own
 layer in the production stage (texlive-latex-base, -recommended, -extra,
-texlive-fonts-recommended, texlive-science, cm-super, dvisvgm; +568 MB). It was
+texlive-fonts-recommended, texlive-science, cm-super, dvisvgm; the image goes
+2.92 → 3.85 GB, where /usr alone had measured +568 MB). It was
 first left out to save space and added the same day once the host's space was
 confirmed plentiful: the prompts' "prefer Text over MathTex" is advice to the
 model, not a guarantee, and without LaTeX a MathTex that slips through fails the
