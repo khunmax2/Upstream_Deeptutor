@@ -272,7 +272,9 @@ keeps its cache — and the production stage names the runtime libraries
 another package to pull them in. No LaTeX (+461 MB measured): the animator's
 prompts already steer the model to `Text` over `MathTex`, and a `MathTex` that
 slips through fails with the clear "latex not found" its retry manager knows.
-Measured: manim 0.21.0, +~323 MB, a y = x² scene renders in about two seconds.
+Measured on the built image: manim 0.21.0, 2.45 → 2.91 GB (+0.46 GB; the
+323 MB first measured was site-packages alone), and a y = x² scene renders
+in about two seconds as the app's own user.
 `tests/scripts/test_dockerfile_math_animator.py` goes red if an upstream sync
 drops either half.
 

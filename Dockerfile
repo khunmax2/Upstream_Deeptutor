@@ -114,7 +114,8 @@ RUN pip install --upgrade pip && \
 # the requirements layer above keeps its cache. No LaTeX: the animator's prompts
 # steer the model to Text over MathTex, and a MathTex that slips through fails
 # with a clear "latex not found" (retry_manager) instead of a hang.
-# Measured 2026-09-13: manim 0.21.0, +~323 MB, y = x^2 renders in ~2 s.
+# Measured 2026-09-13 on the built image: manim 0.21.0, 2.45 -> 2.91 GB, and a
+# y = x^2 scene renders in ~2 s as the app's own user.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2-dev \
     libpango1.0-dev \
