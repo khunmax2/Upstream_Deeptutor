@@ -11,6 +11,7 @@ import {
   type AppUpdateStatus,
 } from "@/lib/app-update";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { withBasePath } from "@/lib/basePath";
 import { normalizeVersionTag } from "@/lib/version";
 import {
   requestSettingsSection,
@@ -89,7 +90,7 @@ export function VersionBadge({ collapsed = false }: VersionBadgeProps) {
       onClick={(event) => {
         if (pathname !== "/settings") return;
         event.preventDefault();
-        window.history.replaceState(null, "", "/settings#about");
+        window.history.replaceState(null, "", withBasePath("/settings#about"));
         scrollToSettingsSection("about", "auto");
         requestSettingsSection("about");
       }}

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { useReading } from "@/context/ReadingContext";
 import { useChatStateAdapter } from "@/features/chat/ChatStateAdapter";
+import { withBasePath } from "@/lib/basePath";
 import { courseSessionConfiguration } from "@/lib/course-session-scope";
 import {
   addBookmark,
@@ -426,12 +427,7 @@ export function useReadingWorkspace(
     if (!workspace) return;
     newSession({ ...sessionConfiguration, capability: null });
     router.push(`/reading/${workspace.workspace_id}`);
-  }, [
-    newSession,
-    router,
-    sessionConfiguration,
-    workspace,
-  ]);
+  }, [newSession, router, sessionConfiguration, workspace]);
 
   // When the first turn assigns a session id, put it in the URL and let the
   // conversation menu see the row the backend just attached. Without it a
@@ -457,7 +453,9 @@ export function useReadingWorkspace(
     window.history.replaceState(
       null,
       "",
-      `/reading/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(state.sessionId)}`,
+      withBasePath(
+        `/reading/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(state.sessionId)}`,
+      ),
     );
     void listReadingConversations(workspaceId)
       .then(setConversations)

@@ -45,6 +45,19 @@ const SHAPES: Array<[string, RegExp]> = [
     /location\.(?:assign|replace)\(\s*[`'"]\/(?!\/)/g,
   ],
   ["window.open('/…')", /window\.open\(\s*[`'"]\/(?!\/)/g],
+  // Fork, 2026-09-14: history.replaceState writes the address bar verbatim, so
+  // "/settings#knowledge" dropped /deepwitya the moment a settings menu item
+  // was clicked (scrolling kept it — that path builds from
+  // window.location.pathname). A root-absolute URL is one shape; a bare
+  // variable is the other, because that is how the settings nav passed it.
+  [
+    "history.replaceState/pushState(…, '/…')",
+    /history\.(?:replace|push)State\(\s*[^,()]*,\s*[^,()]*,\s*[`'"]\/(?!\/)/g,
+  ],
+  [
+    "history.replaceState/pushState(…, variable)",
+    /history\.(?:replace|push)State\(\s*[^,()]*,\s*[^,()]*,\s*[A-Za-z_$][\w$]*\s*\)/g,
+  ],
 ];
 
 function sources(dir: string): string[] {
@@ -103,7 +116,32 @@ test("the patterns match what they claim to", () => {
   assert.equal(hits('<img src="/logo.png" />'), 1);
   assert.equal(hits("window.location.href = '/login'"), 1);
   assert.equal(hits("await fetch('/api/x')"), 1);
+  assert.equal(
+    hits('window.history.replaceState(null, "", "/settings#about")'),
+    1,
+  );
+  assert.equal(
+    hits(
+      'window.history.replaceState(\n  null,\n  "",\n  `/reading/${id}`,\n)',
+    ),
+    1,
+  );
+  assert.equal(hits('window.history.replaceState(null, "", href)'), 1);
   // the correct forms
+  assert.equal(
+    hits(
+      'window.history.replaceState(null, "", `${window.location.pathname}#${key}`)',
+    ),
+    0,
+  );
+  assert.equal(
+    hits('window.history.replaceState(null, "", window.location.pathname)'),
+    0,
+  );
+  assert.equal(
+    hits('window.history.replaceState(null, "", withBasePath(href))'),
+    0,
+  );
   assert.equal(hits("<Link href={`/co-writer/${id}`}>"), 0);
   assert.equal(hits("await apiFetch('/api/x')"), 0);
   assert.equal(hits('<a href="https://example.com">'), 0);

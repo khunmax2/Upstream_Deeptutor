@@ -23,6 +23,7 @@ import {
   type SettingsLeaf,
 } from "@/features/settings/navigation/settings-nav";
 import { useSettingsAccess } from "@/features/settings/navigation/SettingsAccessProvider";
+import { withBasePath } from "@/lib/basePath";
 import type { SettingsAccess } from "@/features/settings/navigation/settings-access";
 import {
   requestSettingsSection,
@@ -54,7 +55,9 @@ function goToLeaf(
     router.push(href);
     return false;
   }
-  window.history.replaceState(null, "", href);
+  // Fork: `href` is app-relative ("/settings#knowledge"); the native API writes
+  // it verbatim, so without the base path the address bar left /deepwitya.
+  window.history.replaceState(null, "", withBasePath(href));
   // This document can be tens of thousands of pixels tall. Jumping directly
   // avoids tracking every intermediate section and overwriting the target hash.
   scrollToSettingsSection(key, "auto");
