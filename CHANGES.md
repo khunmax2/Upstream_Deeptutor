@@ -254,6 +254,54 @@ upstream.
 
 ---
 
+## The image carries Manim, so the math animator runs — 2026-09-13
+
+The math animator answered every request with "math_animator requires
+optional dependencies" (UAT 2026-09-12; already noted in the 2026-09-04 UAT
+report), and so did the visualize capability's video path. Manim is an
+optional extra upstream leaves to the runtime `DEEPTUTOR_EXTRAS` hook, and
+that hook cannot work here: measured in a throwaway container of the
+production image, `pip install manim` fails on pycairo, which has no Linux
+wheel, because the production image carries no compiler.
+
+The `Dockerfile` now builds it in the `python-base` stage, where the toolchain
+already is — one new layer adding the cairo and pango headers and installing
+`requirements/math-animator.txt`, after the requirements layer so that layer
+keeps its cache — and the production stage names the runtime libraries
+(`libcairo2`, `libpango-1.0-0`, `libpangocairo-1.0-0`) instead of relying on
+another package to pull them in. LaTeX is installed too, as its own
+layer in the production stage (texlive-latex-base, -recommended, -extra,
+texlive-fonts-recommended, texlive-science, cm-super, dvisvgm; the image goes
+2.92 → 3.85 GB, where /usr alone had measured +568 MB). It was
+first left out to save space and added the same day once the host's space was
+confirmed plentiful: the prompts' "prefer Text over MathTex" is advice to the
+model, not a guarantee, and without LaTeX a MathTex that slips through fails the
+whole request. A smaller set (+178 MB) was measured and fails on Manim's default
+template. Thai still goes through `Text`; pdflatex cannot set Thai in a formula.
+
+A third gap, and an upstream one, surfaced on the first real request: the
+backend runs as `deeptutor` under supervisord, whose `user=` does not reset
+HOME, and the account is created with `--no-create-home` — so the backend ran
+with root's `HOME=/root`. Manim reads `~/.config/manim/manim.cfg` at import and
+died with `PermissionError: '/root/.config/manim/manim.cfg'`; the same HOME is
+why fontconfig reported no writable cache. The image now creates
+`/home/deeptutor` for the app user and both backend programs get
+`HOME="/home/deeptutor"`. Upstream's Dockerfile has the identical lines; it just
+never ships Manim, so nothing there trips on it.
+Measured on the built image: manim 0.21.0, 2.45 → 2.91 GB (+0.46 GB; the
+323 MB first measured was site-packages alone), and a y = x² scene renders
+in about two seconds as the app's own user.
+`tests/scripts/test_dockerfile_math_animator.py` goes red if an upstream sync
+drops either half.
+
+A second gap surfaced while verifying: the image had no Thai font at all (eight
+fonts, none covering Thai), and Manim draws text through Pango, so a Thai label
+rendered as a row of boxes — no error, no warning. `fonts-thai-tlwg` (+6 MB) is
+now in the production stage; the same label, "กราฟ y = x²", renders correctly
+(compared side by side, 2026-09-13).
+
+---
+
 ## The per-round prompt checks out the tag before it reads the runbook — 2026-09-13
 
 The template added to `GO-LIVE.md` §11 carried no commands, so that every

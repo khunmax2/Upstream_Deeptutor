@@ -104,6 +104,23 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+# Fork. Manim for the math animator and the visualize capability's video path
+# (`deeptutor[math-animator]`). Upstream leaves it to the runtime
+# DEEPTUTOR_EXTRAS hook, which cannot work in the production image: pycairo has
+# no Linux wheel and that image carries no compiler, so the install fails and
+# the feature stays "requires optional dependencies". It is built here, where
+# the toolchain already is, and only site-packages travels on; the runtime
+# libraries (cairo, pango) are in the production stage below. Its own layer, so
+# the requirements layer above keeps its cache. LaTeX, which MathTex needs at
+# render time, is a runtime dependency and lives in the production stage.
+# Measured 2026-09-13 on the built image: manim 0.21.0, 2.45 -> 2.91 GB, and a
+# y = x^2 scene renders in ~2 s as the app's own user.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2-dev \
+    libpango1.0-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install -r requirements/math-animator.txt
+
 # ============================================
 # Stage 3: Production Image
 # ============================================
@@ -134,6 +151,11 @@ WORKDIR /app
 
 # Install system dependencies
 # Note: libgl1 and libglib2.0-0 are required for OpenCV (used by mineru)
+# Note: libcairo2 / libpango* are the runtime half of Manim (math animator), which
+#       is built in python-base; named here so they do not depend on another
+#       package happening to pull them in (fork, 2026-09-13).
+# Note: fonts-thai-tlwg because the image had no Thai font at all, and Manim's
+#       Text (Pango) then draws Thai labels as boxes, with no error (fork).
 # Note: git is required to install CLI apps — most of the CLI-Anything catalog
 #       installs with `pip install git+…`, which shells out to git. It is needed
 #       in *this* image and not in the runner: installing is a privileged
@@ -149,9 +171,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    fonts-thai-tlwg \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-tha \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fork. LaTeX for Manim's MathTex/Tex (math animator, visualize). The prompts ask
+# the model to prefer Text, but that is advice, not a guarantee: without LaTeX a
+# MathTex that slips through fails the whole request (retry_manager treats a
+# missing latex as non-retriable). Measured 2026-09-13: this set renders
+# fractions, integrals and matrices beside a Thai Text title; the smaller
+# latex-base/-recommended set fails on Manim's default template. Image 2.92 ->
+# 3.85 GB (the 568 MB first measured was /usr alone). Its own
+# layer so the system-packages layer above keeps its cache. pdflatex cannot set
+# Thai, so Thai stays in Text (fonts-thai-tlwg above).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-science \
+    cm-super \
+    dvisvgm \
     && rm -rf /var/lib/apt/lists/*
 
 # OCR for documents that carry no text layer at all — a scanned PDF or a
@@ -232,6 +277,13 @@ RUN groupadd --system --gid 1000 deeptutor \
     && useradd --system --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin deeptutor \
     && chown -R deeptutor:deeptutor /app/data /app/web/.next
 
+# Fork. The app user needs a home it can write. The account is created with
+# --no-create-home and supervisord's user= does not reset HOME, so the backend
+# ran with root's HOME=/root: Manim then died at import reading
+# /root/.config/manim/manim.cfg (PermissionError, UAT 2026-09-13) and fontconfig
+# had no writable cache. Created here and handed to the backend programs as HOME.
+RUN install -d -o deeptutor -g deeptutor /home/deeptutor
+
 # supervisord config is split into two files so the production and development
 # images share one daemon-level [supervisord] section instead of duplicating it:
 #   - /etc/supervisor/supervisord.conf      — daemon-level settings (shared)
@@ -275,7 +327,7 @@ stdout_logfile=/dev/fd/1
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/fd/2
 stderr_logfile_maxbytes=0
-environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1"
+environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1",HOME="/home/deeptutor"
 
 [program:frontend]
 command=/bin/bash /app/start-frontend.sh
@@ -561,7 +613,7 @@ stdout_logfile=/dev/fd/1
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/fd/2
 stderr_logfile_maxbytes=0
-environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1"
+environment=PYTHONPATH="/app",PYTHONUNBUFFERED="1",HOME="/home/deeptutor"
 
 [program:frontend]
 command=/bin/bash -c "cd /app/web && node scripts/dev.mjs -H 0.0.0.0 -p ${FRONTEND_PORT:-3782}"
