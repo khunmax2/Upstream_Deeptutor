@@ -254,6 +254,30 @@ upstream.
 
 ---
 
+## A thinking round no longer ends the request on the model's turn — 2026-09-13
+
+Production, "create a quiz" after a chat answer: `BadRequestError 400 … Requests
+ending with a model turn are not supported` from Google AI Studio through
+OpenRouter, twice, three seconds in. Not reproducible locally: the local
+profile talks to Gemini's own OpenAI-compatible endpoint, which accepts such a
+request — and a probe of every request the quiz sends locally showed none
+ending with the assistant.
+
+The shared agentic loop (`deeptutor/runtime/agentic/loop.py`) appends an
+intermediate label's prose (`THINK`) as an assistant message and adds a user
+message only when the host returns feedback from `on_intermediate`. The quiz's
+host has no such hook and research's returns nothing for `THINK`, so the round
+after a `THINK` went out ending with the assistant — which OpenRouter's Gemini
+refuses. Upstream's own test locked that shape in ("no user feedback is
+injected"). The loop now hands the turn back with a bare "Continue." whenever
+the last message would otherwise be the assistant's; host feedback, when there
+is any, still comes first. `tests/core/test_agentic_loop_intermediate.py`: a new
+case asserting no request ends with the assistant (red before, for both a
+hook-less and a silent host), and the two upstream cases updated to the
+continuation.
+
+---
+
 ## A GeoGebra applet survives a dropped first connection — 2026-09-13
 
 Visualize's GeoGebra mode answered "Failed to load GeoGebra: GeoGebra script

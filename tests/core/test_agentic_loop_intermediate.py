@@ -143,8 +143,10 @@ def _script_for_two_iterations(
 async def test_loop_without_on_intermediate_hook_preserves_legacy_behavior() -> None:
     """A host that does NOT implement ``on_intermediate`` (e.g. chat,
     solve) must still drive the loop end-to-end. The intermediate
-    label's text becomes an assistant message; no user feedback is
-    injected."""
+    label's text becomes an assistant message; no host feedback is
+    injected, only the loop's own continuation turn (fork: a request may
+    not end with the assistant's message -- see
+    test_no_request_ends_with_a_model_turn)."""
     client = _ScriptedClient(_script_for_two_iterations("THINK", "reasoning step"))
     host = _BaseHost()
     bus = StreamBus()
@@ -181,9 +183,9 @@ async def test_loop_without_on_intermediate_hook_preserves_legacy_behavior() -> 
     assistant_msgs = [m for m in iter2_msgs if m.get("role") == "assistant"]
     user_msgs = [m for m in iter2_msgs if m.get("role") == "user"]
     assert any("reasoning step" in (m.get("content") or "") for m in assistant_msgs)
-    # Only the original user prompt — no feedback injected.
-    assert len(user_msgs) == 1
-    assert user_msgs[0]["content"] == "hi"
+    # The original prompt, then the loop's continuation -- no host feedback.
+    assert [m["content"] for m in user_msgs] == ["hi", "Continue."]
+    assert iter2_msgs[-1]["role"] == "user"
 
 
 @pytest.mark.asyncio
@@ -435,8 +437,10 @@ async def test_before_iteration_hook_runs_each_iteration() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_on_intermediate_returning_none_injects_nothing() -> None:
-    """If ``on_intermediate`` returns ``None`` (or empty), the loop must
-    not inject any user message — same as the no-hook behavior."""
+    """If ``on_intermediate`` returns ``None`` (or empty), the loop injects
+    no host feedback -- only its own continuation turn, the same as the
+    no-hook behavior (fork: a request may not end with the assistant's
+    message)."""
 
     class _SilentHost(_BaseHost):
         async def on_intermediate(self, label: str, text: str) -> str | None:
@@ -473,5 +477,70 @@ async def test_loop_on_intermediate_returning_none_injects_nothing() -> None:
 
     iter2_msgs = client.calls[1]
     user_msgs = [m for m in iter2_msgs if m.get("role") == "user"]
-    assert len(user_msgs) == 1
-    assert user_msgs[0]["content"] == "hi"
+    assert [m["content"] for m in user_msgs] == ["hi", "Continue."]
+    assert iter2_msgs[-1]["role"] == "user"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("host_kind", ["no_hook", "silent_hook"])
+async def test_no_request_ends_with_a_model_turn(host_kind: str) -> None:
+    """Fork. A request whose last message is the assistant's is refused by
+    Gemini behind OpenRouter — 400 "Requests ending with a model turn are not
+    supported" — which production hit when deep_question's explore loop
+    answered ``THINK`` first (2026-09-13). OpenAI and Gemini's own endpoint
+    accept such a request, so this went unseen. After an intermediate round
+    that the host gives no feedback on, the next request must still end with
+    a user turn; the intermediate prose stays in the history as before."""
+
+    class _SilentHost(_BaseHost):
+        async def on_intermediate(self, label: str, text: str) -> str | None:
+            return None
+
+    client = _ScriptedClient(
+        [
+            [_llm_chunk("``THINK``\nfirst thought")],
+            [_llm_chunk("``THINK``\nsecond thought")],
+            [_llm_chunk("``FINISH``\ndone")],
+        ]
+    )
+    host = _BaseHost() if host_kind == "no_hook" else _SilentHost()
+    bus = StreamBus()
+
+    async def _consume() -> None:
+        async for _ in bus.subscribe():
+            pass
+
+    consumer = asyncio.create_task(_consume())
+    await asyncio.sleep(0)
+    try:
+        outcome = await run_agentic_loop(
+            initial_messages=[{"role": "user", "content": "hi"}],
+            protocol=_PROTOCOL,
+            client=client,
+            model="x",
+            completion_kwargs={},
+            binding="openai",
+            tool_schemas=None,
+            stream=bus,
+            source="test",
+            stage="test",
+            max_iterations=5,
+            host=host,
+        )
+    finally:
+        await bus.close()
+        await consumer
+
+    assert outcome.completed is True
+    assert outcome.final_text.strip() == "done"
+    assert len(client.calls) == 3
+    for index, request in enumerate(client.calls, start=1):
+        assert request[-1].get("role") != "assistant", (
+            f"request {index} ends with a model turn: {request[-1]}"
+        )
+    # Both thoughts are still carried forward as assistant context.
+    last_assistant = [
+        m.get("content") or "" for m in client.calls[2] if m.get("role") == "assistant"
+    ]
+    assert any("first thought" in t for t in last_assistant)
+    assert any("second thought" in t for t in last_assistant)
