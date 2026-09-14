@@ -157,9 +157,12 @@ users are isolated. This fork (`deeptutor/multi_user/primary_admin.py`, commit
 promoted later keeps a private workspace. Upstream code still assumes
 `is_admin` means "owns `data/`", so every such assumption misbehaves for promoted
 admins until it is patched — found so far: the Settings Run test saving into
-the primary admin's catalog (#97), and system personas withheld from promoted
-admins (fixed with `reads_deployment_presets()`). Still open by choice:
-deployment skills (promoted admins see only their own), per-admin model
+the primary admin's catalog (#97), system personas withheld from promoted
+admins (fixed with `reads_deployment_presets()`), and a promoted admin's own
+knowledge bases resolved in the primary admin's tree — "not found" for every KB
+it created (fixed with `owns_deployment_workspace()`). Still open by choice:
+deployment skills and the primary admin's knowledge bases (promoted admins reach
+only their own), per-admin model
 catalogs and keys, and knowledge bases built with different embedding models
 across admins or after a demotion. The user chose on 2026-09-14 to keep this
 path for now and to decide it again after a design pass (keep the split, go

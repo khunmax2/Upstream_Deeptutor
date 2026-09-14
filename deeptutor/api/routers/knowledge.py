@@ -59,6 +59,7 @@ from deeptutor.multi_user.knowledge_access import (
 from deeptutor.multi_user.knowledge_access import (
     list_visible_knowledge_bases as list_visible_kb_access,
 )
+from deeptutor.multi_user.primary_admin import owns_deployment_workspace
 from deeptutor.services.config import PROJECT_ROOT, load_config_with_main
 from deeptutor.services.file_io import atomic_write_json
 from deeptutor.services.rag.factory import (
@@ -2398,7 +2399,8 @@ async def list_knowledge_bases():
         default_name = manager.get_default(available_names=kb_names)
         access_items = list_visible_kb_access()
         access_by_id = {str(item.get("id") or ""): item for item in access_items}
-        own_prefix = "admin:kb:" if get_current_user().is_admin else "user:kb:"
+        # Fork: the prefix names the tree the KB lives in (primary_admin.py).
+        own_prefix = "admin:kb:" if owns_deployment_workspace(get_current_user()) else "user:kb:"
 
         logger.debug(f"Found {len(kb_names)} knowledge bases: {kb_names}")
 
@@ -2423,7 +2425,7 @@ async def list_knowledge_bases():
                         path=info.get("path"),
                         status=info.get("status"),
                         progress=info.get("progress"),
-                        source="admin" if get_current_user().is_admin else "user",
+                        source="admin" if owns_deployment_workspace(get_current_user()) else "user",
                         assigned=False,
                         read_only=False,
                         provenance_label=access_by_id.get(f"{own_prefix}{info['name']}", {}).get(
@@ -2459,7 +2461,9 @@ async def list_knowledge_bases():
                                 path=str(kb_dir),
                                 status="error",
                                 progress=fallback_progress,
-                                source="admin" if get_current_user().is_admin else "user",
+                                source="admin"
+                                if owns_deployment_workspace(get_current_user())
+                                else "user",
                             )
                         )
                 except Exception as fallback_err:

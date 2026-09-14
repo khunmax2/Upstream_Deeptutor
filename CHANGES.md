@@ -254,6 +254,31 @@ upstream.
 
 ---
 
+## A promoted admin can open the knowledge bases it creates — 2026-09-14
+
+On the host and locally, an admin promoted after the first one created a
+knowledge base, watched it index, and then got "Knowledge base 'MyLaws' not
+found" from its file list and every other per-KB action. Upstream gives every
+admin the one deployment tree, so `deeptutor/multi_user/knowledge_access.py`
+resolves any admin's KB against `data/knowledge_bases`. This fork gives that tree
+to the primary admin alone (`primary_admin.py`): a promoted admin's KBs are
+created in and listed from its own workspace, then resolved — for files, upload,
+reindex, delete and RAG in chat — in the primary admin's tree, where they do not
+exist. The list also tagged them `admin:kb:` / "Admin workspace".
+
+`primary_admin.py` gains `owns_deployment_workspace(user)` (and
+`reads_deployment_presets` is now its negation). `resolve_kb` uses the deployment
+tree only for that account; a promoted admin resolves its own KBs like any
+account with its own workspace, and an `admin:kb:` id saved from before still
+means its own KB. `list_visible_knowledge_bases` and the list route in
+`deeptutor/api/routers/knowledge.py` name the tree, not the role: `user:kb:`,
+"Created by you". Reaching the primary admin's KBs stays closed to promoted
+admins for now (recorded in `CLAUDE.md` with the other open multi-admin
+questions). `tests/multi_user/test_knowledge_bases_for_promoted_admins.py`
+(primary admin, promoted admin, ordinary user; four red before).
+
+---
+
 ## An answer to a question card no longer hangs on "Sending your answers…" — 2026-09-14
 
 In "Ask Questions" mode, answering the card sometimes left it on "Sending your
