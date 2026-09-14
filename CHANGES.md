@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## Pin → fork `099b09cf`: custom ASR is sent WAV, and a shared custom provider travels with its definition — 2026-09-14
+
+Two studio problems found by the user on 2026-09-14, fixed in the fork and
+built into one image.
+
+**Custom speech recognition refused every real recording** (fork PR #24). A
+custom ASR ("MyASR") pointed at the workplace LiteLLM gateway serving
+`ptm-asr-1` passed its Run test and answered every microphone recording with
+`422 … Failed to decode audio: … .webm: Format not recognised` — the same wall
+DeepWitya hit in #96: the browser records WebM, the gateway decodes with
+libsndfile, which has no WebM. The studio image has no ffmpeg, so the
+conversion happens in the browser through upstream's own
+`normalizeASRUploadAudio` (already used for FunASR and Lemonade), which now
+covers `custom-asr-*`; the server names the upload after its bytes
+(`audio.wav`) instead of always `audio.webm`. Hosted providers are unchanged.
+
+**A shared custom provider was invisible to every other account** (fork PR
+#25). An admin shared a custom TTS and a promoted admin never saw it: a custom
+provider (TTS, ASR, LLM) is an entry in the browser that added it and nowhere
+else, and the shared row carried only a key and a URL. The same gap left a
+shared "OpenAI Compatible" image key without a model name ("requires a model
+to be configured"). A shared row now carries a `profile` — the provider's
+definition, never a key — in a new `profile` column of `studio_credential`
+(`ADD COLUMN IF NOT EXISTS`, run on the studio's first credential query); other
+browsers build the provider from it, fill an empty model list from it, and drop
+it when the share goes. An older share gets its profile the next time the admin
+who shared it opens Studio Settings. Also fixed: applying the server's answer
+could be written back as a URL-only own row that shadowed the shared key.
+
+Twelve new fork test cases, each red before its change. Image
+`ghcr.io/khunmax2/deepwitya-studio:099b09cf`, digest `sha256:eca9d2b3…185c03d` (run
+34806559184). Rolling back is the previous digest `sha256:1862c324…d4485`; the
+old image ignores the new column.
+
+---
+
 ## A promoted admin can open the knowledge bases it creates — 2026-09-14
 
 On the host and locally, an admin promoted after the first one created a
