@@ -254,6 +254,44 @@ upstream.
 
 ---
 
+## Pin → fork `dc6f05f6`: studio settings changes save again — 2026-09-15
+
+Found by the user minutes after `deploy-2026-09-15b`: every change to Studio
+settings or the profile raised "your changes were not saved"
+(`persistUnavailable`), followed by "changes made while storage was unavailable
+could not be saved" (`persistChangesLost`). The settings on screen were right,
+but nothing changed since the deploy was stored on the server, or in the
+browser.
+
+**Cause.** zustand's `persist` hands its storage the whole state, including the
+store's action functions and any `undefined` fields. Upstream's browser store
+kept `JSON.stringify(value)` and dropped those without a word. The server
+client, `HttpKVStore`, which #30 wired in for the `account` scope, runs
+`assertJsonValue` and refuses them. Every write therefore failed in the
+browser before a request left. Reads kept working, because the copy adopted on
+first load was already plain JSON.
+
+**Fix** (fork PR #35). `SeededAccountKV` now sends the JSON form of each value,
+on every write and on adoption: exactly what the browser store used to keep.
+Keys are still masked after that step.
+
+**Why the tests missed it.** The #30 and #33 tests fed the KV store plain
+objects. The new `tests/store/account-kv-persisted-store.test.ts` drives a real
+persisted zustand store, with an action and an `undefined` field, through
+`kv-persist` → `SeededAccountKV` → upstream's real `HttpKVStore` → the
+account-KV handler. It was red with the exact host symptom before the change.
+
+Also checked: the default settings blob is about 42 KB. The studio's KV route
+caps a value at 4 MiB, and nginx allows 200 MB for the studio path, so writes
+that reach the server are not blocked by size.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:dc6f05f6`, digest
+`sha256:cf1a5809…3a9022` (run 34901906896). Rolling back is the 15b digest
+`sha256:0e25f9d4…8e3113`, which still has this bug, or the pre-15b
+`sha256:eca9d2b3…185c03d`. Neither needs a database restore.
+
+---
+
 ## Pin → fork `370b1665`: the studio stops living in one browser — 2026-09-15
 
 After `deploy-2026-09-14g` the user found that the studio still kept too much in
