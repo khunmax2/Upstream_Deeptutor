@@ -20,6 +20,7 @@ from .context import get_current_user
 from .grants import load_grant
 from .models import KnowledgeResource
 from .paths import get_admin_path_service, get_current_path_service
+from .primary_admin import owns_deployment_workspace
 
 ADMIN_PREFIX = "admin:kb:"
 USER_PREFIX = "user:kb:"
@@ -75,7 +76,11 @@ def resolve_kb(kb_ref: str, *, require_write: bool = False) -> KnowledgeResource
     user = get_current_user()
     requested_source, name = _strip_resource_prefix(kb_ref)
 
-    if user.is_admin:
+    # Fork: only the account that owns the deployment tree resolves against it.
+    # An admin promoted later keeps its KBs in its own workspace
+    # (primary_admin.py); resolving them here gave "not found" for every KB it
+    # had just created.
+    if owns_deployment_workspace(user):
         manager = admin_kb_manager()
         resolved = _resolve_default_or_name(manager, name)
         return KnowledgeResource(
@@ -89,6 +94,11 @@ def resolve_kb(kb_ref: str, *, require_write: bool = False) -> KnowledgeResource
 
     user_manager = current_kb_manager()
     assigned_names = _assigned_admin_names()
+
+    if requested_source == "admin" and user.is_admin:
+        # A promoted admin's own KBs used to be listed as ``admin:kb:<name>``;
+        # an id saved from then still means its own KB, never the primary's.
+        requested_source = None
 
     if requested_source == "admin":
         if name not in assigned_names:
@@ -176,16 +186,18 @@ def manager_for_resource(resource: KnowledgeResource) -> KnowledgeBaseManager:
 def list_visible_knowledge_bases() -> list[dict[str, Any]]:
     user = get_current_user()
     manager = current_kb_manager()
+    # Fork: the prefix names the tree the KB lives in, not the caller's role.
+    owns_tree = owns_deployment_workspace(user)
     items: list[dict[str, Any]] = []
     for name in manager.list_knowledge_bases():
         items.append(
             {
-                "id": f"admin:kb:{name}" if user.is_admin else f"user:kb:{name}",
+                "id": f"admin:kb:{name}" if owns_tree else f"user:kb:{name}",
                 "name": name,
-                "source": "admin" if user.is_admin else "user",
+                "source": "admin" if owns_tree else "user",
                 "assigned": False,
                 "read_only": False,
-                "provenance_label": "Created by you" if not user.is_admin else "Admin workspace",
+                "provenance_label": "Admin workspace" if owns_tree else "Created by you",
             }
         )
 

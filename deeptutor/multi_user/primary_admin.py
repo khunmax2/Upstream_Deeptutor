@@ -133,6 +133,18 @@ def is_primary_admin(user_id: str) -> bool:
     return candidate == primary_admin_id()
 
 
+def owns_deployment_workspace(user: Any) -> bool:
+    """Whether *user*'s workspace is the deployment tree (``data/``).
+
+    Upstream asks ``user.is_admin`` wherever it means this, because there every
+    admin *is* the deployment tree. With this module only the primary admin (and
+    the local/env sentinels) is; an admin promoted later has a workspace of its
+    own, and anything it owns — knowledge bases included — lives there.
+    """
+    scope = getattr(user, "scope", None)
+    return getattr(scope, "kind", "") == "admin"
+
+
 def reads_deployment_presets(user: Any) -> bool:
     """Whether *user* reads the deployment's shared presets instead of owning them.
 
@@ -142,8 +154,7 @@ def reads_deployment_presets(user: Any) -> bool:
     workspace and gets the deployment's presets (personas) read-only. Anything
     such an account writes still lands in its own workspace.
     """
-    scope = getattr(user, "scope", None)
-    return getattr(scope, "kind", "") != "admin"
+    return not owns_deployment_workspace(user)
 
 
 def reset_primary_admin_cache() -> None:
@@ -155,6 +166,7 @@ def reset_primary_admin_cache() -> None:
 __all__ = [
     "SENTINEL_ADMIN_IDS",
     "is_primary_admin",
+    "owns_deployment_workspace",
     "primary_admin_id",
     "reads_deployment_presets",
     "reset_primary_admin_cache",
