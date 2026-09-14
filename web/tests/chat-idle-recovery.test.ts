@@ -92,6 +92,25 @@ test("only running is ever second-guessed", () => {
   }
 });
 
+/* Fork. A turn parked on an ask_user question is quiet by design: the learner
+   may think for minutes before answering. The server reports it as
+   `waiting_input`, which the loader used to take for "not running", so opening
+   (or re-opening) that conversation never subscribed to the turn. The answer
+   was accepted and the turn went on, but its events reached no one: the card
+   sat on "Sending your answers…" until a refresh. A parked turn is live however
+   long it has been quiet. */
+test("a turn parked on a question is live however long it has been quiet", () => {
+  const now = NOW;
+  assert.equal(
+    resolveLoadedRunStatus("waiting_input", now - 5_000, now, 180_000),
+    "running",
+  );
+  assert.equal(
+    resolveLoadedRunStatus("waiting_input", now - 30 * MINUTE, now, 180_000),
+    "running",
+  );
+});
+
 test("a missing timestamp leaves the server's word alone", () => {
   const now = NOW;
   assert.equal(resolveLoadedRunStatus("running", 0, now, 180_000), "running");

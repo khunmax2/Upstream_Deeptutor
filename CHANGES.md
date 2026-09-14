@@ -254,6 +254,28 @@ upstream.
 
 ---
 
+## An answer to a question card no longer hangs on "Sending your answers…" — 2026-09-14
+
+In "Ask Questions" mode, answering the card sometimes left it on "Sending your
+answers…" for good, most often after leaving the conversation and coming back
+while the question was open. A turn that asks the user parks on the server as
+`waiting_input`, and the session reports that status. The web loader subscribed
+to a conversation's turn only when the status read `running`, so opening a
+conversation whose question was waiting never subscribed: the answer was
+accepted (the turn is alive), the turn carried on, and its events — including the
+`ask_user_resolved` the card waits for — reached no one until a refresh.
+
+`web/lib/chat-idle-recovery.ts`: `resolveLoadedRunStatus` treats `waiting_input`
+as live (`running`) however long the turn has been quiet — a learner may think
+for minutes, so the idle-staleness rule for `running` must not apply — which
+keeps the loader's existing subscribe path. A turn whose process died while
+waiting still ends once its row is marked failed (the subscription then carries
+the synthesized DONE). `web/tests/chat-idle-recovery.test.ts` gains the case (red
+before). The red "This question is no longer active" after a server restart is
+unchanged: that turn really is gone, and the card says so.
+
+---
+
 ## An admin promoted after the first one sees the system personas — 2026-09-14
 
 On the host a promoted admin's Learning Library read "Personas 0", while the same

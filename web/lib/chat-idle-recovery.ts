@@ -60,13 +60,21 @@ export function decideIdleTurnRecovery(
  * notion of "too quiet". Past that window, the status is stale bookkeeping
  * rather than a live turn, and the honest local answer is `idle`: we do not
  * know whether it finished or failed, only that it is not happening now.
+ *
+ * Fork: `waiting_input` — a turn parked on an ask_user question — is live
+ * however long it has been quiet, because the learner may think for minutes.
+ * Returned as `running` so the loader subscribes to it; taking it for "not
+ * running" left an accepted answer's events with no listener, and the card on
+ * "Sending your answers…" until a refresh. A parked turn whose process died
+ * still ends once its row is marked failed (the subscription carries the DONE).
  */
 export function resolveLoadedRunStatus<T extends string>(
   status: T,
   lastActivityAt: number,
   now: number,
   idleTimeoutMs: number,
-): T | "idle" {
+): T | "idle" | "running" {
+  if (status === "waiting_input") return "running";
   if (status !== "running") return status;
   // No usable timestamp: trust the server rather than guessing.
   if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) return status;
