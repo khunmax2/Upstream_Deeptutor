@@ -254,14 +254,17 @@ upstream.
 
 ---
 
-## Pin → fork `1e88d4ce`: the studio stops living in one browser — 2026-09-14
+## Pin → fork `370b1665`: the studio stops living in one browser — 2026-09-15
 
 After `deploy-2026-09-14g` the user found that the studio still kept too much in
 the browser that created it. In another browser, the LLM settings reset,
 narration and slide images disappeared from courses, and the voice fell back to
 `default` (a 400 from the shared custom TTS). A read-only audit confirmed five
-gaps. All five are fixed in the fork and built into one image, deployed once at
-the user's request.
+gaps (fork PRs #26–#31). Before the host round, the user asked for a second
+review of everything done, which found three more (fork PRs #32–#34). All of
+it is built into one image, deployed once at the user's request. The tag
+`deploy-2026-09-15` (main `320839860`, fork `1e88d4ce`) was prepared before the
+second review and superseded without being run.
 
 **Only the course's owner resumes its generation** (fork PR #26). Opening a
 course with a missing slide resumed generation in whatever browser opened it,
@@ -306,15 +309,56 @@ masked in that blob; keys stay in `studio_credential`.
 so it runs at 2. The home pill shows the model's name, not only the provider
 icon.
 
-Fifteen new fork test files and five extended, each red before its change. Two
-upstream tests were adjusted, not weakened: the PG-mode folder test now expects
-the settings read the stores make at load, and the managed-provider E2E spec
-looks for its model inside the settings dialog, because the pill now shows the
-same name. Image `ghcr.io/khunmax2/deepwitya-studio:1e88d4ce`, digest
-`sha256:f61682c8…ca3c42` (run 34832002312). Rolling back is the previous digest
-`sha256:eca9d2b3…185c03d`. The old image ignores the new table and the media
-files, and every browser still holds its local settings copy, so a rollback
-needs no database restore.
+**Opening a course in another browser no longer regenerates its images** (fork
+PR #32). The classroom resumes media generation for every image the browser
+has no record of, and a browser's records are its own IndexedDB. Once images
+lived on the server, the owner opening a course in a new browser regenerated
+them all, spending the image model and replacing the pictures. Images the
+course already has a served copy of are now skipped. An older course whose
+creating browser is gone still gets new images from its prompts. Its narration
+is re-voiced by the owner from the edit timeline ("Voice all" per scene), which
+now stores the clip on the server.
+
+**Account settings, hardened** (fork PR #33). Four findings from the review:
+
+- **Shared browsers.** Accounts that shared one browser used to share one
+  settings copy. That copy now goes only to the first account that opens the
+  studio there; any other account starts from defaults.
+- **Keys during adoption.** The adopted copy went up exactly as the browser
+  held it, bypassing the key masking. Every value sent is now masked.
+- **Writes.** The chat panel wrote the whole settings blob on every pointer
+  move while being dragged, one server request per stale snapshot. A queued
+  write that a newer one supersedes is now skipped.
+- **Stale tabs.** A tab left open wrote its old copy over settings saved
+  elsewhere. Settings and profile are now re-read when the tab comes back.
+  What remains is last-write-wins between two tabs changing settings at the
+  same moment.
+
+**Thumbnails, exports and the edit timeline reach the served copies** (fork PR
+#34). These readers looked only in the browser's IndexedDB, so in any other
+browser they came up empty:
+
+- the home thumbnail
+- the classroom ZIP, PPTX and video exports
+- the edit timeline's "voiced" status and preview
+
+They now fetch the course's served copy when the browser has none. Fetching a
+clip is opt-in, so playback and status checks never download narration.
+
+Known and left for later, at the user's direction: disk use only grows. A
+deleted course's files stay on the `/app/data` volume, a replaced image or clip
+leaves its old file behind, and `deploy/backup-studio.sh` keeps 30 nightly full
+archives of that volume.
+
+Eighteen new fork test files and six extended, each red before its change. Two
+upstream tests were adjusted, not weakened. The PG-mode folder test now expects
+the settings read the stores make at load. The managed-provider E2E spec looks
+for its model inside the settings dialog, because the pill now shows the same
+name. Image `ghcr.io/khunmax2/deepwitya-studio:370b1665`, digest
+`sha256:0e25f9d4…8e3113` (run 34897202966). Rolling back is the previous deployed
+digest `sha256:eca9d2b3…185c03d`. The old image ignores the new table and the
+media files, and every browser still holds its local settings copy, so a
+rollback needs no database restore.
 
 ---
 
