@@ -29,11 +29,11 @@
     "note": "fork/main descends from upstream 29735f10 with 93 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404, a course is private unless its owner published it, a custom provider's endpoint travels with its key and a custom TTS without one refuses, a custom speech-recognition server is sent WAV, a shared custom provider travels with its definition, only a course's owner resumes its generation, a course's generated media lives on the server and older courses move theirs on the owner's visit, a custom TTS provider is only sent a voice it lists, settings and the profile follow the account, images are generated a few at a time and the model pill names the model) as of 2026-09-14"
   },
   "image": {
-    "ref": "ghcr.io/khunmax2/deepwitya-studio:099b09cf",
-    "digest": "sha256:eca9d2b3481889b4ff53f4f6a08c83ef382be41e6b50dfd7d78b79242185c03d",
+    "ref": "ghcr.io/khunmax2/deepwitya-studio:1e88d4ce",
+    "digest": "sha256:f61682c8ec94b2a798472ea6d6045f938acae873e03a73cbbc82b81c97ca3c42",
     "built": true,
-    "built_from": "099b09cff7e4a342d0b5a1d116e2d5384dee21ce",
-    "built_by": "studio-image.yml run 34806559184 on chore/pin-fork-099b09cf, 2026-09-14",
+    "built_from": "1e88d4ceda2529bad3b99606edbc72a864048621",
+    "built_by": "studio-image.yml run 34832002312 on chore/pin-fork-1e88d4ce, 2026-09-14",
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
