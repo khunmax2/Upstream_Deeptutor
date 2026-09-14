@@ -254,6 +254,70 @@ upstream.
 
 ---
 
+## Pin → fork `1e88d4ce`: the studio stops living in one browser — 2026-09-14
+
+After `deploy-2026-09-14g` the user found that the studio still kept too much in
+the browser that created it. In another browser, the LLM settings reset,
+narration and slide images disappeared from courses, and the voice fell back to
+`default` (a 400 from the shared custom TTS). A read-only audit confirmed five
+gaps. All five are fixed in the fork and built into one image, deployed once at
+the user's request.
+
+**Only the course's owner resumes its generation** (fork PR #26). Opening a
+course with a missing slide resumed generation in whatever browser opened it,
+with that viewer's models and keys. That included a learner on a published
+course. The resume is now gated on the stage-meta sidecar (owner only; a
+visitor or an unreachable sidecar never resumes), and the owner's completion is
+mirrored to `stage_meta.generation_complete`, which nothing had ever set.
+
+**A course's generated media lives on the server** (fork PRs #27, #28).
+Browser-side generation kept slide images and narration in IndexedDB only. They
+now go through a new owner-only `POST /api/stages/[id]/media` into upstream's
+own `persistClassroomMediaBytes` byte path. The files land on the `/app/data`
+volume, and the document stores `/api/classroom-media/...` references, so any
+browser, and a learner on a published course, sees and hears them. Upstream
+1.0.0 retired the asset-registry approach (#1242), so this follows its byte
+model instead. The media URLs are content hashes with no per-reader check,
+which is upstream's posture and is stated in the fork's `FORK.md`. Older
+courses move their media to the server the first time the owner opens them in
+the browser that made them.
+
+**A custom TTS provider is only sent a voice it lists** (fork PR #29). The store
+kept `ttsVoice` at `default` when a shared custom provider was selected before
+its voice list arrived. It now keeps the selection inside the provider's voices
+after every write, and narration requests apply the same rule. A custom
+provider's failure now reads "Custom TTS API error: <the server's reason>"
+instead of "OpenAI TTS API error: Bad Request".
+
+**Settings and the profile follow the account** (fork PR #30). The studio's
+provider settings and profile are upstream's `account` KV scope. Upstream ships
+only the client for that scope, so they had stayed in localStorage. The fork now
+serves upstream's KV contract at `/api/persistence/kv/...`, one row per (owner,
+key) in a new `studio_account_kv` table (`CREATE TABLE IF NOT EXISTS`, on first
+use; its statements were checked against PostgreSQL 16 in a temporary table).
+The first load in each browser adopts that browser's existing copy when the
+server has none, so nobody's settings reset at the switch. API keys are always
+masked in that blob; keys stay in `studio_credential`.
+
+**Images arrive a few at a time, and the model pill names the model** (fork PR
+#31). The media orchestrator requested images one after another. It now keeps
+`MEDIA_GENERATION_CONCURRENCY` in flight: a studio env, default 2, clamped to
+1..6, where `1` restores upstream's serial order. The deployment sets nothing,
+so it runs at 2. The home pill shows the model's name, not only the provider
+icon.
+
+Fifteen new fork test files and five extended, each red before its change. Two
+upstream tests were adjusted, not weakened: the PG-mode folder test now expects
+the settings read the stores make at load, and the managed-provider E2E spec
+looks for its model inside the settings dialog, because the pill now shows the
+same name. Image `ghcr.io/khunmax2/deepwitya-studio:1e88d4ce`, digest
+`sha256:f61682c8…ca3c42` (run 34832002312). Rolling back is the previous digest
+`sha256:eca9d2b3…185c03d`. The old image ignores the new table and the media
+files, and every browser still holds its local settings copy, so a rollback
+needs no database restore.
+
+---
+
 ## Pin → fork `099b09cf`: custom ASR is sent WAV, and a shared custom provider travels with its definition — 2026-09-14
 
 Two studio problems found by the user on 2026-09-14, fixed in the fork and
