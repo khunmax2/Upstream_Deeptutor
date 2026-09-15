@@ -254,6 +254,58 @@ upstream.
 
 ---
 
+## Fix: DeepWitya uploads over 1 MB fail in production — the go-live cutover dropped the upload ceiling — 2026-09-15
+
+The user reported that a knowledge base on the host would neither take a PDF
+nor be created with it ("Failed to upload files", "Failed to create knowledge
+base"), while a text-only file worked. The fault looked like "PDFs with images
+fail". It was the file's size. The PDF is 1,052,664 bytes, 4 KB over the
+1 MiB nginx applies when nothing sets `client_max_body_size`, and nginx
+answered 413 itself before DeepWitya ever saw the request.
+
+The host measured it:
+
+- 500 KB reached the app, which answered 404 with JSON.
+- 2 MB came back from nginx as `Request Entity Too Large` with a 413.
+- `location /deepwitya` in the shared `sites-available/sansarnnews-ssl` had no
+  ceiling, and neither did its server block or `nginx.conf`.
+
+The same symptom was fixed once before, on 2026-09-07, but for `/deepwitya2`:
+see "Upload ceiling" further down. That snippet left with `/deepwitya2`. The
+go-live preview set `200m` server-wide, so the §4 tests never saw the problem.
+But `apply-nginx-golive.sh --cutover` only swapped the port inside the
+existing `/deepwitya` block, and GO-LIVE.md never mentioned the ceiling. Since
+go-live, every DeepWitya upload over 1 MB in production (knowledge-base files,
+reading materials) has failed. The studio was not affected: its own location
+sets `200m`.
+
+- `deploy/nginx_upload_ceiling.py` (new) makes the edit. It adds one line
+  inside `location /deepwitya` under a marker comment, raises a ceiling that
+  was set by hand rather than adding a second one, and refuses anything
+  ambiguous (no block, two blocks, no closing brace). `--remove` takes out
+  exactly what it added.
+- `deploy/apply-nginx-golive.sh`:
+  - `--cutover` now adds the ceiling and `--revert` removes it.
+  - A new `--upload-ceiling` mode fixes a host that was cut over before this.
+    It backs up the file, runs `nginx -t`, restores on failure, and reloads.
+  - `--upload-ceiling --check` only reports and runs without sudo.
+  - The usage text now covers every mode.
+- `deploy/GO-LIVE.md`: §5 names the ceiling, the post-cutover checklist
+  requires that a 2 MB POST is not a 413, and the lessons table has a row for
+  this failure.
+- `tests/scripts/test_nginx_upload_ceiling.py` runs against the host's server
+  shape as reported. It covers the edit, idempotence, a ceiling set by hand, a
+  remove that restores the original, the studio and `/deepwitya2` blocks being
+  left alone, and the refusals. It also checks that `--cutover`, `--revert`
+  and `--upload-ceiling` still make the edit.
+
+The running host needs one step, typed by the user because Claude on the host
+has no sudo: `sudo bash deploy/apply-nginx-golive.sh --upload-ceiling` from a
+checkout that has this change. It is an nginx reload only; no container
+restarts.
+
+---
+
 ## Pin → fork `3daa7d00`: who shared a studio key is recorded, and replacing or stopping a share asks first — 2026-09-15
 
 The host check after `deploy-2026-09-15c` found a shared Google key written at

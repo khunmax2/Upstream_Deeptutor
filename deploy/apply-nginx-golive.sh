@@ -32,6 +32,18 @@
 #       session cookie, so a login over plain HTTP never sticks. `return`
 #       runs in nginx's rewrite phase, before proxy_pass, so the existing
 #       proxy_pass line stays where it is and --revert removes one line.
+#       The :443 block also gets DeepWitya's upload ceiling (below).
+#
+#   sudo bash deploy/apply-nginx-golive.sh --upload-ceiling
+#       `location /deepwitya` on :443 gets `client_max_body_size 200m` -- one
+#       line under a marker comment -- matching what the app accepts. Without
+#       it nginx's 1 MB default answers 413 to every larger DeepWitya upload
+#       (knowledge-base files, reading materials) before the app sees it. The
+#       2026-09-11 cutover only swapped the port, so the ceiling the preview
+#       had never reached production (found 2026-09-15); --cutover now adds
+#       it, and this mode adds it to a host cut over before that. The edit is
+#       deploy/nginx_upload_ceiling.py. `--upload-ceiling --check` only
+#       reports and runs without sudo.
 #
 #   sudo bash deploy/apply-nginx-golive.sh --revert [--force]
 #       /deepwitya back to the recorded old port, studio include removed.
@@ -50,9 +62,10 @@
 # the test passes. Same pattern as apply-nginx-deepwitya2.sh.
 #
 # The shared files belong to other teams too (six other paths on this IP).
-# The only edits made to them: on :443 one `include` line and one port number
-# inside the `location /deepwitya` block; on :80 one `return 301` line inside
-# that block. Everything else lives in files this project owns outright under
+# The only edits made to them: on :443 one `include` line, one port number and
+# the upload ceiling (a marker comment and one line) inside the
+# `location /deepwitya` block; on :80 one `return 301` line inside that block.
+# Everything else lives in files this project owns outright under
 # /etc/nginx/snippets and sites-available.
 # ============================================
 set -euo pipefail
@@ -67,6 +80,14 @@ GATEKEEPER_PORT=10330
 PREVIEW_PORT="${PREVIEW_PORT:-8443}"
 STAMP=$(date +%Y%m%d-%H%M%S)
 CLEANUP_ON_FAIL=""
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CEILING=200m   # DeepWitya's upload ceiling -- the app's own limit is 200 MB
+
+# The one read-only mode: it runs without sudo, so the host's Claude can report.
+if [ "${1:-}" = "--upload-ceiling" ] && [ "${2:-}" = "--check" ]; then
+  python3 "$HERE/nginx_upload_ceiling.py" "$SSL" --check
+  exit $?
+fi
 
 [ "$(id -u)" -eq 0 ] || { echo "ต้องรันด้วย sudo" >&2; exit 1; }
 
@@ -225,6 +246,16 @@ print(f"  {'เอา return 301 ของ go-live ออกจาก' if s2 != 
 PY
 }
 
+# DeepWitya's upload ceiling inside `location /deepwitya` on :443. The edit
+# and its tests live in deploy/nginx_upload_ceiling.py.
+upload_ceiling() { # --check | --apply | --remove
+  if [ "$1" = "--apply" ]; then
+    python3 "$HERE/nginx_upload_ceiling.py" "$SSL" --apply "$CEILING"
+  else
+    python3 "$HERE/nginx_upload_ceiling.py" "$SSL" "$1"
+  fi
+}
+
 cert_lines() { # the certificate the :443 server already uses
   grep -E '^[[:space:]]*ssl_certificate(_key)?[[:space:]]' "$SSL" | head -2
 }
@@ -323,6 +354,7 @@ case "${1:-}" in
     refuse_stale_preview
     swap_port "$SSL" "$FROM"
     redirect_http --check
+    upload_ceiling --check
     echo "== 1. backup =="
     backup "$SSL"; backup "$HTTP"
     echo "== 2. snippet =="
@@ -330,11 +362,12 @@ case "${1:-}" in
     echo "== 3. แก้ shared files =="
     swap_port "$SSL" "$FROM" "$TO"
     include_studio
+    upload_ceiling --apply || restore
     redirect_http
     printf 'FROM=%s\nTO=%s\nSTAMP=%s\n' "$FROM" "$TO" "$STAMP" > "$STATE"
     test_and_reload
     echo
-    echo "เสร็จ — https://203.185.144.41/deepwitya ชี้ไป $TO แล้ว, /deepwitya/studio ชี้ไป gatekeeper, http://…/deepwitya → 301 https"
+    echo "เสร็จ — https://203.185.144.41/deepwitya ชี้ไป $TO แล้ว (อัปโหลดได้ถึง $CEILING), /deepwitya/studio ชี้ไป gatekeeper, http://…/deepwitya → 301 https"
     echo "ถอย: sudo bash deploy/apply-nginx-golive.sh --revert"
     ;;
 
@@ -356,6 +389,7 @@ case "${1:-}" in
     backup "$SSL"; backup "$HTTP"
     swap_port "$SSL" "$TO" "$FROM"
     remove_include_studio
+    upload_ceiling --remove
     unredirect_http
     test_and_reload
     rm -f "$STATE"
@@ -368,8 +402,23 @@ case "${1:-}" in
     nginx -t && systemctl reload nginx && echo "เอา preview ${pp:-?} ออกแล้ว"
     ;;
 
+  --upload-ceiling)
+    echo "== upload ceiling: :443 location /deepwitya → client_max_body_size $CEILING (แอปรับได้ 200 MB) =="
+    echo "== 0. ตรวจก่อนแตะ =="
+    upload_ceiling --check
+    echo "== 1. backup =="
+    backup "$SSL"
+    echo "== 2. แก้ block /deepwitya =="
+    upload_ceiling --apply || restore
+    test_and_reload
+    upload_ceiling --check
+    echo
+    echo "เสร็จ — อัปโหลดเข้า /deepwitya ได้ถึง $CEILING (ทดสอบ: POST 2 MB ต้องไม่ใช่ 413)"
+    echo "ถอย: sudo cp -a $SSL.bak-$STAMP $SSL && sudo nginx -t && sudo systemctl reload nginx"
+    ;;
+
   *)
-    sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,/^# Every mode:/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac
