@@ -133,6 +133,17 @@ def is_primary_admin(user_id: str) -> bool:
     return candidate == primary_admin_id()
 
 
+def is_primary_admin_account(user_id: str) -> bool:
+    """Whether *user_id* names the account no other admin may demote or delete.
+
+    The primary admin is the deployment's superadmin (decided 2026-09-15); the
+    env-configured bootstrap admin counts too. Unlike :func:`is_primary_admin`,
+    an empty id answers False: a route that finds no account must say "not
+    found", not "protected".
+    """
+    return bool(user_id) and is_primary_admin(user_id)
+
+
 def owns_deployment_workspace(user: Any) -> bool:
     """Whether *user*'s workspace is the deployment tree (``data/``).
 
@@ -166,6 +177,7 @@ def reset_primary_admin_cache() -> None:
 __all__ = [
     "SENTINEL_ADMIN_IDS",
     "is_primary_admin",
+    "is_primary_admin_account",
     "owns_deployment_workspace",
     "primary_admin_id",
     "reads_deployment_presets",

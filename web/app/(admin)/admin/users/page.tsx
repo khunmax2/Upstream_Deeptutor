@@ -353,6 +353,9 @@ export default function AdminUsersPage() {
                 {filteredUsers.map((user) => {
                   const isSelf = user.username === currentUser;
                   const isAdmin = user.role === "admin";
+                  // Fork: the primary admin is the deployment's superadmin; the
+                  // server refuses to demote or delete it, so the page never offers.
+                  const isPrimary = Boolean(user.is_primary);
                   const canManageAssignments = !isAdmin && Boolean(user.id);
                   return (
                     <Fragment key={user.username}>
@@ -390,6 +393,11 @@ export default function AdminUsersPage() {
                             )}
                             {isAdmin ? t("Admin") : t("User")}
                           </span>
+                          {isPrimary && (
+                            <span className="mt-1 block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                              {t("Primary admin")}
+                            </span>
+                          )}
                           {!isAdmin && user.preset && (
                             <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
                               {t("Preset: {{preset}}", {
@@ -431,13 +439,15 @@ export default function AdminUsersPage() {
                                   user,
                                 })
                               }
-                              disabled={isSelf}
+                              disabled={isSelf || isPrimary}
                               title={
                                 isSelf
                                   ? t("Cannot change your own role")
-                                  : user.role === "admin"
-                                    ? t("Demote to user")
-                                    : t("Promote to admin")
+                                  : isPrimary
+                                    ? t("The primary admin's role cannot be changed")
+                                    : user.role === "admin"
+                                      ? t("Demote to user")
+                                      : t("Promote to admin")
                               }
                               className="rounded-lg p-1.5 text-[var(--muted-foreground)]
                                        hover:bg-[var(--background)] hover:text-[var(--foreground)]
@@ -453,13 +463,15 @@ export default function AdminUsersPage() {
                               onClick={() =>
                                 setConfirmTarget({ kind: "delete", user })
                               }
-                              disabled={isSelf}
+                              disabled={isSelf || isPrimary}
                               title={
                                 isSelf
                                   ? t("Cannot delete your own account")
-                                  : t("Delete {{username}}", {
-                                      username: user.username,
-                                    })
+                                  : isPrimary
+                                    ? t("The primary admin cannot be deleted")
+                                    : t("Delete {{username}}", {
+                                        username: user.username,
+                                      })
                               }
                               className="rounded-lg p-1.5 text-[var(--muted-foreground)]
                                        hover:bg-red-500/10 hover:text-red-500

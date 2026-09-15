@@ -214,6 +214,8 @@ class UserInfo(BaseModel):
     disabled: bool = False
     avatar: str = ""
     preset: AccountPreset = "standard"
+    # Fork: the primary administrator, whom no other admin may demote or delete.
+    is_primary: bool = False
 
 
 class LearnerProfileRequest(BaseModel):
@@ -1040,7 +1042,12 @@ async def revoke_device(
 @router.get("/users", response_model=list[UserInfo])
 async def get_users(_: TokenPayload = Depends(require_admin)) -> list[UserInfo]:
     """List all registered users. Requires admin role."""
-    return [UserInfo(**u) for u in list_users()]
+    from deeptutor.multi_user.primary_admin import is_primary_admin_account
+
+    return [
+        UserInfo(**u, is_primary=is_primary_admin_account(str(u.get("id") or "")))
+        for u in list_users()
+    ]
 
 
 def _require_local_learner(current: TokenPayload) -> tuple[str, dict]:
@@ -1236,12 +1243,39 @@ async def admin_create_user(
     }
 
 
+def _refuse_primary_admin(info: dict | None, current: TokenPayload | None, action: str) -> None:
+    """Fork: no admin may demote or delete the primary administrator.
+
+    The primary admin owns the deployment and is its superadmin (decided
+    2026-09-15). Refusing the demotion also keeps the learner routes -- a
+    password reset among them -- closed to it, since those refuse admin targets.
+    """
+    from deeptutor.multi_user.primary_admin import is_primary_admin_account
+
+    if not info or not is_primary_admin_account(str(info.get("id") or "")):
+        return
+    logger.warning(
+        "Admin '%s' tried to %s the primary administrator '%s'; refused",
+        current.username if current else "local",
+        action,
+        info.get("username", ""),
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "The primary administrator cannot be deleted"
+            if action == "delete"
+            else "The primary administrator's role cannot be changed"
+        ),
+    )
+
+
 @router.delete("/users/{username}", status_code=status.HTTP_200_OK)
 async def remove_user(
     username: str,
     current: TokenPayload = Depends(require_admin),
 ) -> dict:
-    """Delete a user. Admins cannot delete their own account."""
+    """Delete a user. Admins cannot delete their own account, nor the primary admin."""
     if current and username == current.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1250,6 +1284,7 @@ async def remove_user(
 
     # Capture the id before the record disappears so the avatar file can go too.
     info = get_user_info(username)
+    _refuse_primary_admin(info, current, "delete")
 
     removed = delete_user(username)
     if not removed:
@@ -1271,12 +1306,13 @@ async def update_user_role(
     body: SetRoleRequest,
     current: TokenPayload = Depends(require_admin),
 ) -> dict:
-    """Change a user's role. Admins cannot change their own role."""
+    """Change a user's role. Admins cannot change their own role, nor the primary admin's."""
     if current and username == current.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot change your own role",
         )
+    _refuse_primary_admin(get_user_info(username), current, "change the role of")
 
     updated = set_role(username, body.role)
     if not updated:

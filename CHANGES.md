@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## Fix: a promoted admin can no longer demote or delete the first admin — 2026-09-15
+
+Reported by the user before the `deploy-2026-09-15f` round: an account
+promoted to admin in DeepWitya could demote the first admin in Settings ▸
+Users, and delete it. The first admin owns the deployment workspace
+(`primary_admin.py`), and the user wants it treated as the deployment's
+superadmin.
+
+- `PUT /api/auth/users/{username}/role` and `DELETE /api/auth/users/{username}`
+  refused only an admin acting on its own account. Both now answer 403 when
+  the target is the primary admin, and log the attempt
+  (`deeptutor/api/routers/auth.py`; `is_primary_admin_account` in
+  `deeptutor/multi_user/primary_admin.py`). The env-configured bootstrap admin
+  counts as primary too.
+- The demotion also opened a takeover. The learner routes (password reset,
+  restrictions, materials, grants) refuse admin targets only, so once the
+  first admin had been demoted to `user`, a promoted admin could reset its
+  password. A refused demotion keeps those routes closed to it, and a test
+  walks the whole chain.
+- `GET /api/auth/users` marks the primary admin (`is_primary`). The users page
+  shows "Primary admin" on that row and disables its role and delete buttons
+  (`web/app/(admin)/admin/users/page.tsx`, `web/lib/admin-api.ts`, three
+  strings in the en, th and zh locales).
+- Every admin still manages every other account, other admins included.
+  Whether only the primary admin should manage admins is an open question.
+
+Tests: `tests/multi_user/test_primary_admin_protected.py` (4 of 6 red before
+the fix: demote 200, delete 200, password reset after the demotion 200, no
+`is_primary`) and `web/tests/admin-primary-admin.test.ts` (3 of 3 red before).
+
+The committed API schema (`web/contracts/schema/openapi.json`) already
+differed from the code before this change, and no CI job checks it, so it is
+not regenerated here.
+
+---
+
 ## Pin → fork `3a187aea`: a studio tab keeps to its account, deleted built-in models stay deleted, and an admin sets the organisation's model list — 2026-09-15
 
 Reported by the user after `deploy-2026-09-15e`: a model they had added to
