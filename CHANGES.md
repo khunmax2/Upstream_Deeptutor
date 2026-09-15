@@ -254,6 +254,65 @@ upstream.
 
 ---
 
+## Pin → fork `3a187aea`: a studio tab keeps to its account, deleted built-in models stay deleted, and an admin sets the organisation's model list — 2026-09-15
+
+Reported by the user after `deploy-2026-09-15e`: a model they had added to
+OpenRouter in Studio Settings (`gemini-3.5-flash-lite`) kept vanishing from
+the picker, and the two built-in DeepSeek models they had deleted kept coming
+back. They also asked whether the model list should live in configuration
+rather than in each account's settings. All three causes were reproduced in a
+local browser before any change.
+
+**Fork PR #37.**
+
+- A tab kept writing as the account it had loaded (audit F01). Settings are
+  one blob per account. After another tab signed in as someone else, the
+  shared cookie sent this tab's next write to that account. Every account-KV
+  answer now carries a one-way tag of its account (`x-studio-kv-owner`). The
+  page sends the tag back with each write, the server refuses a mismatch (409
+  `OWNER_CHANGED`), and the page reloads once as the account now signed in.
+- Upstream rebuilt each built-in provider's model list from its registry on
+  every rehydrate, and settings are re-read on every tab return, so deleted
+  built-ins came back and were saved again. The store now records the
+  built-ins an account removed (`hiddenBuiltInModels`) and the rebuild leaves
+  them out.
+- Every account-KV write and delete is logged as `[AccountKV]` with the
+  owner, the key and the size. For settings it also logs the selected
+  provider/model and how many models that provider lists. The value itself is
+  never logged.
+
+**Fork PR #38.**
+
+- An admin publishes a built-in provider's model list for the whole
+  organisation from Studio Settings: which registry models to hide and which
+  models to add. The admin can also set a default model. Both are stored in a
+  new table, `studio_org_setting`. They are written only by admins, through
+  `PUT`/`DELETE /api/studio/org/...`, and each change is logged as
+  `[OrgCatalog]` with who made it.
+- Every account receives the catalog with its credentials and applies it on
+  each load. Organisation models carry a badge, and only an admin can take
+  one out. The organisation's default holds until the account picks its own
+  model, and only where the account can use that provider (its own key or a
+  shared one).
+- The catalog is saved with each account's settings, and any tab of the
+  account may save them, so each answer carries `servedAt` and a tab keeps the
+  copy read later. The first version let the saved copy win. The local
+  browser test caught a fresh tab losing a just-added model as soon as an
+  older tab saved.
+- When the organisation lists a model an account had added itself, the
+  organisation's entry records that (`ownCopy`), so the model stays in the
+  account's list when the organisation drops it. The first version lost it,
+  which is the same "my model vanished" symptom the report began with. The
+  local browser test caught it.
+- 19 new `settings.org*` keys appear in all 13 locale files, so
+  `verified_against.locale_keys_en_us` goes from 1830 to 1849.
+
+The table is created on first use, so the round needs no migration step, and
+an older image ignores it. Nothing changes for anyone until an admin
+publishes: with no catalog, every account keeps its own list as before.
+
+---
+
 ## Fix: DeepWitya uploads over 1 MB fail in production — the go-live cutover dropped the upload ceiling — 2026-09-15
 
 The user reported that a knowledge base on the host would neither take a PDF
