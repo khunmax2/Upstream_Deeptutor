@@ -254,6 +254,49 @@ upstream.
 
 ---
 
+## Pin → fork `3daa7d00`: who shared a studio key is recorded, and replacing or stopping a share asks first — 2026-09-15
+
+The host check after `deploy-2026-09-15c` found a shared Google key written at
+05:50, while only a promoted admin was active. Nothing in the database or the
+logs said who had written it. The shared image key had disappeared the day
+before in the same silent way.
+
+The studio lets every DeepWitya admin share a provider's key with every
+account, replace the key another admin shared, or stop a share. The
+gatekeeper sends role `admin` for promoted admins too, and each provider has a
+single shared row. The user chose to keep those rules (option A) and add a
+record and a confirmation step.
+
+**Fork PR #36.**
+
+- `studio_credential.updated_by` records the owner id behind every write. The
+  column is added with `ADD COLUMN IF NOT EXISTS` on the first credential
+  request. Rows written before it read as "shared before sharers were
+  recorded".
+- The credential list tells an admin, and only an admin, who shared each
+  default and when. The key row shows that line and asks for confirmation in
+  two cases:
+  - Sharing over a different shared key. Every account without its own key
+    moves to the new one, costs and quota included.
+  - Stopping a share. Those accounts lose the provider at once.
+- Every change to a shared row is logged as `[Credentials]` with who made it
+  and whose share it touched. The log holds owner ids, never a key.
+- Eleven new `settings.*` keys appear in all 13 locale files, so
+  `verified_against.locale_keys_en_us` in the pin goes from 1819 to 1830.
+
+The sharer shows as an account id (`u_…`), not a name, because the studio
+receives no display name from the gatekeeper. Showing names would need a new
+header on both sides.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:3daa7d00`, digest
+`sha256:869d43c8…5f2c59` (run 34925716832). Strings found only in the new
+image: `Stopped sharing` and `replaced the key shared by` in the server
+bundle, `apiKeyReplaceTitle` and `sharedByYou` in the client chunks. Rolling
+back is the 15c digest `sha256:cf1a5809…3a9022`, and it needs no database
+restore: an older image ignores the extra column.
+
+---
+
 ## Pin → fork `dc6f05f6`: studio settings changes save again — 2026-09-15
 
 Found by the user minutes after `deploy-2026-09-15b`: every change to Studio
