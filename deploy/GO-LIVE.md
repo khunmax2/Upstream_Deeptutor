@@ -292,15 +292,21 @@ sudo bash deploy/apply-nginx-golive.sh --cutover 10310 10320
 script: ตรวจว่า `location /deepwitya` บน :443 ชี้ไป `10310` จริง (ไม่ตรง = หยุด ไม่แตะอะไร) →
 backup ทั้งสองไฟล์ → :443 เปลี่ยน port ใน block `/deepwitya` **บรรทัดเดียว** + เพิ่ม
 `include /etc/nginx/snippets/deepwitya-studio.conf` (location `/deepwitya/studio` → 10330)
+→ :443 block `/deepwitya` ได้ `client_max_body_size 200m` (เพดานอัปโหลดเท่าที่แอปรับ —
+ไม่มีบรรทัดนี้ nginx ใช้ default 1 MB และตอบ 413 เองกับทุกไฟล์ที่ใหญ่กว่า)
 → :80 เพิ่ม `return 301 https://…` เป็นบรรทัดแรกของ block `/deepwitya` (proxy_pass เดิม
 ทิ้งไว้ — `return` ทำงานใน rewrite phase ก่อน proxy เสมอ; block ที่ redirect อยู่แล้วไม่แตะ)
 → `nginx -t` (ไม่ผ่าน = คืน backup อัตโนมัติ ไม่ reload) → reload
+
+host ที่ cutover ไปก่อนมีขั้นนี้ (2026-09-11): `sudo bash deploy/apply-nginx-golive.sh --upload-ceiling`
+(เช็คแบบไม่ต้อง sudo: `bash deploy/apply-nginx-golive.sh --upload-ceiling --check`)
 
 จากเครื่องคุณ (ไม่ผ่าน tunnel):
 
 - [ ] `curl -sIL https://203.185.144.41/deepwitya | grep -E "HTTP|location"` → 200 (หรือ 307 ไป `/deepwitya/login`)
 - [ ] `curl -sI http://203.185.144.41/deepwitya | grep -E "HTTP|location"` → `301` `location: https://…/deepwitya`
 - [ ] `curl -s https://203.185.144.41/deepwitya/studio/api/health` → `401` + ข้อความชี้ไป `/deepwitya/login`
+- [ ] `head -c 2000000 /dev/zero | curl -s -X POST --data-binary @- -w '\nHTTP %{http_code}\n' https://203.185.144.41/deepwitya/api/v1/knowledge/probe/upload | grep -aoE 'Request Entity Too Large|HTTP [0-9]+'` → ต้อง**ไม่ใช่** 413 (แอปตอบเอง เช่น 401/404)
 - [ ] เบราว์เซอร์ปกติ: login → แชท → studio → เหมือน §4
 - [ ] ผู้ใช้ที่ login ค้างจาก v1 จะโดนเด้ง login ใหม่ (token คนละ `auth_secret`) — ปกติ บอกผู้ใช้ล่วงหน้า
 
@@ -552,3 +558,4 @@ tag ต้อง push **ก่อน** ส่ง prompt (2026-09-12 host หย�
 | จุดรอ "studio" | รายงาน host เขียนว่ารอ "studio" แล้วรันขั้น recreate ต่อทันทีในรอบเดียวกัน | template §11: จุดรอเปิดด้วยข้อความของคนเท่านั้น ถึงแล้วต้องจบรอบการตอบ |
 | prompt ที่ copy คำสั่งมาเอง | ค่อย ๆ เพี้ยนจาก runbook ที่ merge แล้ว | template §11: prompt มีแค่ค่าเฉพาะรอบ |
 | tag ยังไม่ push ตอนส่ง prompt | host หยุดที่ขั้น 1 (`pathspec … did not match`) | push tag ก่อนส่ง prompt |
+| เพดานอัปโหลดของ `/deepwitya` หายตอน cutover (พบ 2026-09-15) | อัปโหลดเกิน 1 MB เข้า DeepWitya ("Failed to upload files" ในคลังความรู้, สร้าง KB ไม่ได้) — nginx ตอบ 413 เองก่อนถึงแอป; ไฟล์เล็กผ่าน เลยดูเหมือน "PDF มีรูปพัง". `200m` เคยมีแค่ใน snippet ของ `/deepwitya2` กับ preview, cutover แค่เปลี่ยน port | script: `--cutover` ใส่ `client_max_body_size 200m` ใน block `/deepwitya` + โหมด `--upload-ceiling` สำหรับ host ที่ cutover ไปแล้ว; §5 checklist POST 2 MB ต้องไม่ใช่ 413 |
