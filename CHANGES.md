@@ -311,6 +311,16 @@ The table is created on first use, so the round needs no migration step, and
 an older image ignores it. Nothing changes for anyone until an admin
 publishes: with no catalog, every account keeps its own list as before.
 
+Image `ghcr.io/khunmax2/deepwitya-studio:3a187aea`, digest
+`sha256:7a388c94…e528d1` (run 34952906845). Strings found only in the new
+image: `OWNER_CHANGED`, `Set the organisation` and `studio_org_setting` in the
+server bundle, and `hiddenBuiltInModels`, `orgModelsPublish`, `ownCopy` and
+`servedAt` in the client chunks. Rolling back means returning to the 15d
+digest `sha256:869d43c8…5f2c59`. No database restore is needed, because an
+older image never reads `studio_org_setting` and ignores the new fields in
+saved settings. Built-in models an account deleted do come back after a
+rollback.
+
 ---
 
 ## Fix: DeepWitya uploads over 1 MB fail in production — the go-live cutover dropped the upload ceiling — 2026-09-15
