@@ -288,6 +288,13 @@ The sharer shows as an account id (`u_…`), not a name, because the studio
 receives no display name from the gatekeeper. Showing names would need a new
 header on both sides.
 
+Image `ghcr.io/khunmax2/deepwitya-studio:3daa7d00`, digest
+`sha256:869d43c8…5f2c59` (run 34925716832). Strings found only in the new
+image: `Stopped sharing` and `replaced the key shared by` in the server
+bundle, `apiKeyReplaceTitle` and `sharedByYou` in the client chunks. Rolling
+back is the 15c digest `sha256:cf1a5809…3a9022`, and it needs no database
+restore: an older image ignores the extra column.
+
 ---
 
 ## Pin → fork `dc6f05f6`: studio settings changes save again — 2026-09-15

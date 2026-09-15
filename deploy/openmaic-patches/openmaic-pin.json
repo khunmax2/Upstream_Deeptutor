@@ -29,11 +29,11 @@
     "note": "fork/main descends from upstream 29735f10 with 103 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404, a course is private unless its owner published it, a custom provider's endpoint travels with its key and a custom TTS without one refuses, a custom speech-recognition server is sent WAV, a shared custom provider travels with its definition, only a course's owner resumes its generation, a course's generated media lives on the server and older courses move theirs on the owner's visit, a custom TTS provider is only sent a voice it lists, settings and the profile follow the account, images are generated a few at a time and the model pill names the model, opening a course in another browser no longer regenerates its server-stored images, account settings hardened (first account per browser, keys never sent, one write per burst, re-read on tab return), thumbnails, exports and the edit timeline reach a course's served copies, account values go up as JSON so settings changes save, who shared a key is recorded and replacing or stopping a share asks first) as of 2026-09-15"
   },
   "image": {
-    "ref": "ghcr.io/khunmax2/deepwitya-studio:dc6f05f6",
-    "digest": "sha256:cf1a58093f4cb93c4d107c41b2db09575c4e504859ea656d503aee89563a9022",
+    "ref": "ghcr.io/khunmax2/deepwitya-studio:3daa7d00",
+    "digest": "sha256:869d43c86114cb2bcb08142095325126d3f38522fdc24b6def72e95b785f2c59",
     "built": true,
-    "built_from": "dc6f05f6020ef0b83d433d858371c529c8d0fdd3",
-    "built_by": "studio-image.yml run 34901906896 on chore/pin-fork-dc6f05f6, 2026-09-15",
+    "built_from": "3daa7d000b26c032df5fc774eb18cf02016bda31",
+    "built_by": "studio-image.yml run 34925716832 on chore/pin-fork-3daa7d00, 2026-09-15",
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
