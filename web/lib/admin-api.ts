@@ -11,6 +11,8 @@ export interface UserRecord {
   /** Avatar marker: "", "icon:<name>:<color>", or "img:<version>". */
   avatar?: string;
   preset?: AccountPreset;
+  /** Fork: the primary admin, whom no other admin may demote or delete. */
+  is_primary?: boolean;
   book_permission?: {
     create: boolean;
     default: "none" | "read";
