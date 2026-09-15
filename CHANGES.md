@@ -254,6 +254,31 @@ upstream.
 
 ---
 
+## Documentation: the primary admin and account lifecycle design — 2026-09-15
+
+`docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`
+records what was decided with the user after PR #108:
+
+- Exactly one primary admin owns `data/`. That is the `auth.json` bootstrap
+  account when it has a password, otherwise the recorded account, and it
+  changes only through a handover command.
+- Only the primary admin manages admins.
+- Accounts are disabled rather than deleted. A primary-only hard delete also
+  clears the account's studio data.
+- Every account change is audited.
+
+It also records what the check found:
+
+- The bootstrap account and the recorded account both own `data/` locally.
+- Deleting an account strands its data.
+- The `disabled` flag is never read.
+- Account changes leave no trace.
+
+CLAUDE.md's note on admin workspaces now points to the design. Nothing in it is
+built yet beyond #108.
+
+---
+
 ## Fix: a promoted admin can no longer demote or delete the first admin — 2026-09-15
 
 Reported by the user before the `deploy-2026-09-15f` round: an account
