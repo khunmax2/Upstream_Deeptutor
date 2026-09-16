@@ -165,9 +165,16 @@ deployment skills and the primary admin's knowledge bases (promoted admins reach
 only their own), per-admin model
 catalogs and keys, and knowledge bases built with different embedding models
 across admins or after a demotion. The user chose on 2026-09-14 to keep this
-path for now and to decide it again after a design pass (keep the split, go
-back to upstream's shared admin workspace, or share deployment assets while
-keeping chats private). Until then: on every upstream sync, and before touching
+path, and on 2026-09-15 settled who owns `data/`: exactly one primary admin,
+the deployment's superadmin. That is the `auth.json` bootstrap account when it
+has a password, otherwise the account recorded in `primary_admin.json`, and it
+changes only through an explicit handover command. Only the primary admin
+manages admins, and accounts are disabled rather than deleted. The design and
+its phases are in
+`docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`.
+PR #108 (no admin can demote or delete the primary admin) is the only part
+built so far. Going back to upstream's shared admin workspace stays possible.
+Meanwhile: on every upstream sync, and before touching
 roles, grants, personas, skills, embedding or knowledge-base code, look for new
 `is_admin`-means-`data/` assumptions and flag them rather than deciding the
 design alone.
