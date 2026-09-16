@@ -301,6 +301,16 @@ real time per image can be read from `docker logs` on the host.
 Locale keys in `en-US.json` go from 1849 to 1848 (18 added, 19 removed), so
 `verified_against.locale_keys_en_us` changes with the pin.
 
+Image `ghcr.io/khunmax2/deepwitya-studio:8c19f351`, digest
+`sha256:a5962e05…3e82461` (run 35147860326). Strings found only in the new
+image: `Withdrew the organisation`, `Cleared the organisation` and `Image
+took` in the server bundle; `orgSetupTitle`, `orgDefaultClear`,
+`ttsDefaultModel` and `imageQualityLow` in the client chunks; the old share
+menu's `apiKeyStopSharing` and the list bar's `orgModelsPublishHint` are gone
+from it. Rolling back is the 15g digest `sha256:7a388c94…e528d1`, with no
+database restore: the older image reads everything the new one writes and
+simply does not know the quality level.
+
 ## Documentation: the primary admin and account lifecycle design — 2026-09-15
 
 `docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`
