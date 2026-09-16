@@ -266,6 +266,10 @@ records what was decided with the user after PR #108:
 - Accounts are disabled rather than deleted. A primary-only hard delete also
   clears the account's studio data.
 - Every account change is audited.
+- The Course Studio keeps its own rules: any admin shares a key or publishes
+  the organisation's model list, with the record and the confirmations that
+  already shipped. A shared key belongs to the deployment, so it survives the
+  deletion of the admin who shared it.
 
 It also records what the check found:
 

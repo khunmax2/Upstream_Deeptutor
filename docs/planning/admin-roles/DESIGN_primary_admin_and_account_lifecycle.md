@@ -49,6 +49,8 @@ first admin" is turned up a design that never said it clearly:
 | 5 | What does "delete" do? | By default it becomes *disable*: the account cannot sign in, its data stays, and it can be re-enabled. Hard delete is primary-only. It asks for confirmation, then removes the account's data on both DeepWitya and the studio. |
 | 6 | Who disables whom? | Any admin disables or enables ordinary users. Only the primary disables admins or hard-deletes anyone. |
 | 7 | Audit? | Every create, promote, demote, disable, enable, delete and owner handover records the actor, the target and the time. |
+| 8 | Course Studio: who shares, replaces or stops a shared API key? | Unchanged: any admin, with the record and the confirmations that shipped in `deploy-2026-09-15d`. |
+| 9 | Course Studio: who publishes the organisation's model list and default model? | Unchanged: any admin, with the record that ships in `deploy-2026-09-15g`. |
 
 ## Design
 
@@ -143,6 +145,12 @@ Audit lines that mention the id are kept.
 It also removes the classroom media files of the stages that account owned.
 Authorship columns (`updated_by`) are kept.
 
+Shared credentials are **not** removed. A shared row carries `scope =
+'default'` and an empty `owner_id`, so it belongs to the deployment rather
+than to the admin who shared it, and every account keeps working. Its record
+then names an account that no longer exists, and the key row says so instead
+of showing a dead id.
+
 **Open item for Phase 2: the studio call.** The studio trusts only the
 gatekeeper's `x-deeptutor-owner` and `x-deeptutor-role` headers, and it
 cannot tell the primary admin from another admin. The proposal:
@@ -182,6 +190,30 @@ reach `docker logs`.
 - **Ordinary users.** A disable/enable toggle for every admin.
 - **Delete.** Visible to the primary admin only. It opens the type-to-confirm
   dialog from §4.
+
+### 7. Course Studio: providers and API keys
+
+The studio keeps the rules it has. Nothing in §1–§6 changes them.
+
+What it does today:
+
+- Every account's keys live on the server, one row per account and provider.
+- A provider has one shared row that serves every account without its own key.
+  An account's own key always wins over it.
+- Any admin shares their key, replaces the key another admin shared, or stops
+  a share. Since `deploy-2026-09-15d` each shared row records who wrote it,
+  the page shows that to admins, and replacing or stopping asks first. Every
+  change is logged.
+- A shared custom provider carries its definition, so the receiving account
+  can use it.
+- Any admin publishes the organisation's model list and default model
+  (`deploy-2026-09-15g`), recorded and logged the same way.
+
+Why the primary admin does not appear here: the studio learns only `admin` or
+`user` from the gatekeeper. Making any of this primary-only would need the
+`x-deeptutor-primary` header from §4, so it can be tightened later at little
+cost if the user changes their mind. The decision on 2026-09-16 is to keep it
+as it is.
 
 ## Phases
 
