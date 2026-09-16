@@ -26,7 +26,7 @@
   "upstream": {
     "repo": "https://github.com/THU-MAIC/OpenMAIC",
     "level_with": true,
-    "note": "fork/main descends from upstream 29735f10 with 109 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404, a course is private unless its owner published it, a custom provider's endpoint travels with its key and a custom TTS without one refuses, a custom speech-recognition server is sent WAV, a shared custom provider travels with its definition, only a course's owner resumes its generation, a course's generated media lives on the server and older courses move theirs on the owner's visit, a custom TTS provider is only sent a voice it lists, settings and the profile follow the account, images are generated a few at a time and the model pill names the model, opening a course in another browser no longer regenerates its server-stored images, account settings hardened (first account per browser, keys never sent, one write per burst, re-read on tab return), thumbnails, exports and the edit timeline reach a course's served copies, account values go up as JSON so settings changes save, who shared a key is recorded and replacing or stopping a share asks first, a tab keeps to its account, deleted built-in models stay deleted and settings writes are logged, an admin sets the organisation's model list and default model for every account) as of 2026-09-15"
+    "note": "fork/main descends from upstream 29735f10 with 119 fork commits on top (base path, identity, Thai, embed, brand, TTS voices, raw PCM, image probe, libvips, /app/data, OpenAI-compatible image provider, settings probe uses the viewed provider's model, dynamic-src base path, learner key from gateway, glibc runtime, masked API keys in Settings, server-side credentials per owner with admin default, role header read, shared keys usable at once and badged in the provider lists, sharing as a menu on the key row, prompt templates that show the model no Chinese output -- both roots, buttons included, a stored key never travels to a caller-supplied endpoint, gateway-required means an anonymous cookie is not an identity, a refused delete is a 404, a course is private unless its owner published it, a custom provider's endpoint travels with its key and a custom TTS without one refuses, a custom speech-recognition server is sent WAV, a shared custom provider travels with its definition, only a course's owner resumes its generation, a course's generated media lives on the server and older courses move theirs on the owner's visit, a custom TTS provider is only sent a voice it lists, settings and the profile follow the account, images are generated a few at a time and the model pill names the model, opening a course in another browser no longer regenerates its server-stored images, account settings hardened (first account per browser, keys never sent, one write per burst, re-read on tab return), thumbnails, exports and the edit timeline reach a course's served copies, account values go up as JSON so settings changes save, who shared a key is recorded and replacing or stopping a share asks first, a tab keeps to its account, deleted built-in models stay deleted and settings writes are logged, an admin sets the organisation's model list and default model for every account, the default's star appears only after publishing and can be given up or moved with a question and leaves with its model, one button on the key row uses a provider for every account and removing the key withdraws it all, the home popover names the TTS provider and model, an image quality level for the OpenAI-compatible provider and a timing line per image) as of 2026-09-17"
   },
   "image": {
     "ref": "ghcr.io/khunmax2/deepwitya-studio:3a187aea",
@@ -37,13 +37,13 @@
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
-  "commit": "3a187aeae4e70ccd4cc7a30b55d2ef9a8cd3b555",
-  "commit_short": "3a187aea",
-  "commit_date": "2026-09-15",
-  "commit_subject": "Merge pull request #38 from khunmax2/feat/org-model-catalog",
-  "verified": "2026-09-15",
+  "commit": "8c19f351ba7e072e16389b7e330ab378f3a3ef87",
+  "commit_short": "8c19f351",
+  "commit_date": "2026-09-17",
+  "commit_subject": "Merge pull request #43 from khunmax2/feat/image-quality-and-timing",
+  "verified": "2026-09-17",
   "verified_against": {
-    "locale_keys_en_us": 1849,
+    "locale_keys_en_us": 1848,
     "locale_files": 12,
     "th_partial_keys": 1751,
     "th_keys_matching_upstream": 1687,
