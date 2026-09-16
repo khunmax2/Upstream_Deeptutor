@@ -254,6 +254,63 @@ upstream.
 
 ---
 
+## Pin → fork `8c19f351`: the studio's organisation setup becomes one button, the default's star behaves, the home popover names the TTS model, and images can be asked for at a lower quality — 2026-09-17
+
+The user's notes after `deploy-2026-09-15g`, eleven items about the Course
+Studio, worked through one at a time. Three closed on re-test (a new browser
+now keeps the added models and the deleted built-ins stay deleted, the TTS
+provider works without switching away and back, and every course with media
+has it on the server), and the rest are this round.
+
+**Fork PR #39.** The star that makes a model the organisation's default
+appeared on the registry's built-ins before anything was published and on
+nothing else, so a model the admin had just added had no star. Now the star
+appears only once the provider's list is published, on every row of that
+list, and the bar says so.
+
+**Fork PR #40.** The default can be given up (an un-star button); a second
+star asks before moving it and says the current one stays in the list; the
+server drops the default when a list change hides or removes its model or
+removes the list, so re-adding the model does not bring the star back; the
+"hidden from every account" chips are gone.
+
+**Fork PR #41.** The key row's share menu and the model list's own bar said
+one thing two ways. One button on the key's row, in every section: "use for
+every account" shares the admin's key (with the provider's definition when
+it is a custom one) and, for a built-in LLM provider, publishes the
+organisation's model list in the same click. "Update" does both again;
+"stop" removes the shared key, and the server withdraws the provider's list
+and default model with it. Removing the key from which the share was copied
+withdraws the same, after a dialog that says what goes. The provider badge
+now reads "องค์กร".
+
+**Fork PR #42.** The home page's media popover let the image and video tabs
+pick a provider and model while the speech tab had only its switch. The tab
+now lists every usable TTS provider with its models and shows the voice in
+use.
+
+**Fork PR #43.** A course's images arrive after its text: the studio sent the
+image server no quality level (its default runs 8 steps, 7.7 s per 1024×576
+image on the user's server, against 4.4 s at `low`), two images at a time,
+and logged nothing about how long each took. The OpenAI-compatible image
+provider's settings now offer *server default / low / high*, sent as
+OpenAI's `quality` only when a level is chosen, and the server logs `Image
+took N ms: provider=… model=… size=… quality=…` for every image, so the
+real time per image can be read from `docker logs` on the host.
+
+Locale keys in `en-US.json` go from 1849 to 1848 (18 added, 19 removed), so
+`verified_against.locale_keys_en_us` changes with the pin.
+
+Image `ghcr.io/khunmax2/deepwitya-studio:8c19f351`, digest
+`sha256:a5962e05…3e82461` (run 35147860326). Strings found only in the new
+image: `Withdrew the organisation`, `Cleared the organisation` and `Image
+took` in the server bundle; `orgSetupTitle`, `orgDefaultClear`,
+`ttsDefaultModel` and `imageQualityLow` in the client chunks; the old share
+menu's `apiKeyStopSharing` and the list bar's `orgModelsPublishHint` are gone
+from it. Rolling back is the 15g digest `sha256:7a388c94…e528d1`, with no
+database restore: the older image reads everything the new one writes and
+simply does not know the quality level.
+
 ## Documentation: the primary admin and account lifecycle design — 2026-09-15
 
 `docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`
