@@ -2428,6 +2428,7 @@
   "Primary admin": "主管理员",
   "The primary admin's role cannot be changed": "无法更改主管理员的角色",
   "The primary admin cannot be deleted": "无法删除主管理员",
+  "Only the primary admin manages admins": "只有主管理员可以管理管理员",
   "Delete {{username}}": "删除 {{username}}",
   "DeepTutor Admin · User Management": "DeepWitya 管理后台 · 用户管理",
   "Delete user": "删除用户",

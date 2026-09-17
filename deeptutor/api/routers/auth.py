@@ -1229,9 +1229,17 @@ async def admin_create_user(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="The learner preset could not be initialized.",
             ) from exc
-    logger.info(
-        f"Admin '{current.username if current else 'local'}' created user '{body.username}' "
-        f"(role={role!r}, preset={preset!r})"
+    log_admin_action(
+        "account_create",
+        target_user_id=user_id or None,
+        summary={"username": body.username, "role": role, "preset": preset},
+    )
+    logger.warning(
+        "Admin '%s' created user '%s' (role=%r, preset=%r)",
+        current.username if current else "local",
+        body.username,
+        role,
+        preset,
     )
     return {
         "ok": True,
@@ -1270,12 +1278,42 @@ def _refuse_primary_admin(info: dict | None, current: TokenPayload | None, actio
     )
 
 
+def _require_primary_admin(current: TokenPayload | None, action: str, target: dict) -> None:
+    """Fork: promoting, demoting and deleting are the primary admin's alone.
+
+    Decided 2026-09-15 (docs/planning/admin-roles/, §2): other admins keep
+    creating accounts and managing ordinary users. A refusal is audited and
+    logged, since two admin accounts once vanished from the host with no trace.
+    """
+    from deeptutor.multi_user.primary_admin import is_primary_admin_account
+
+    if current is None or is_primary_admin_account(str(current.user_id or "")):
+        return
+    target_name = str(target.get("username") or "")
+    log_admin_action(
+        "account_change_refused",
+        target_user_id=str(target.get("id") or "") or None,
+        summary={"action": action, "username": target_name},
+    )
+    logger.warning(
+        "Admin '%s' tried to %s '%s'; refused: only the primary administrator manages "
+        "administrators",
+        current.username,
+        action,
+        target_name,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Only the primary administrator can change roles or delete accounts",
+    )
+
+
 @router.delete("/users/{username}", status_code=status.HTTP_200_OK)
 async def remove_user(
     username: str,
     current: TokenPayload = Depends(require_admin),
 ) -> dict:
-    """Delete a user. Admins cannot delete their own account, nor the primary admin."""
+    """Delete a user. Only the primary admin may, and not its own account."""
     if current and username == current.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1284,19 +1322,32 @@ async def remove_user(
 
     # Capture the id before the record disappears so the avatar file can go too.
     info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     _refuse_primary_admin(info, current, "delete")
+    _require_primary_admin(current, "delete", info)
 
     removed = delete_user(username)
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    user_id = str(info.get("id") or "") if info else ""
+    user_id = str(info.get("id") or "")
     if user_id and _USER_ID_RE.match(user_id):
         from deeptutor.multi_user.identity import delete_avatar_file
 
         delete_avatar_file(user_id)
 
-    logger.info(f"Admin '{current.username if current else 'local'}' deleted user '{username}'")
+    log_admin_action(
+        "account_delete",
+        target_user_id=user_id or None,
+        summary={"username": username, "role": str(info.get("role") or "user")},
+    )
+    logger.warning(
+        "Admin '%s' deleted user '%s' (role=%s)",
+        current.username if current else "local",
+        username,
+        info.get("role") or "user",
+    )
     return {"ok": True}
 
 
@@ -1306,19 +1357,33 @@ async def update_user_role(
     body: SetRoleRequest,
     current: TokenPayload = Depends(require_admin),
 ) -> dict:
-    """Change a user's role. Admins cannot change their own role, nor the primary admin's."""
+    """Change a user's role. Only the primary admin may, and not its own role."""
     if current and username == current.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot change your own role",
         )
-    _refuse_primary_admin(get_user_info(username), current, "change the role of")
+    info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _refuse_primary_admin(info, current, "change the role of")
+    _require_primary_admin(current, "change the role of", info)
 
     updated = set_role(username, body.role)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    logger.info(
-        f"Admin '{current.username if current else 'local'}' set '{username}' role to {body.role!r}"
+    previous = str(info.get("role") or "user")
+    log_admin_action(
+        "account_role_set",
+        target_user_id=str(info.get("id") or "") or None,
+        summary={"username": username, "from": previous, "to": body.role},
+    )
+    logger.warning(
+        "Admin '%s' set '%s' role to %r (was %r)",
+        current.username if current else "local",
+        username,
+        body.role,
+        previous,
     )
     return {"ok": True, "username": username, "role": body.role}

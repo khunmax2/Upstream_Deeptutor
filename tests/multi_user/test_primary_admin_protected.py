@@ -86,16 +86,17 @@ def test_the_primary_admins_password_stays_out_of_reach(world):
     assert res.status_code == 403
 
 
-def test_admins_still_manage_every_other_account(world):
+def test_the_primary_admin_manages_every_other_account(world):
+    """Since Phase 1 step 2 (test_admin_management.py) roles and deletions are
+    the primary admin's alone; this checks the primary side of the rule."""
     client, _ = world
     demote_helper = client.put(
-        "/api/auth/users/helper/role", json={"role": "user"}, headers=_auth("demo-token")
+        "/api/auth/users/helper/role", json={"role": "user"}, headers=_auth("owner-token")
     )
     assert demote_helper.status_code == 200
     assert _role_of("helper") == "user"
-    assert client.delete("/api/auth/users/student", headers=_auth("demo-token")).status_code == 200
+    assert client.delete("/api/auth/users/student", headers=_auth("owner-token")).status_code == 200
     assert _role_of("student") is None
-    # The primary admin manages the other admins as before.
     demote_demo = client.put(
         "/api/auth/users/demo/role", json={"role": "user"}, headers=_auth("owner-token")
     )
