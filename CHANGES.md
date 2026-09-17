@@ -254,6 +254,48 @@ upstream.
 
 ---
 
+## Exactly one account owns `data/`, and only a handover moves it — 2026-09-17
+
+Phase 1, step 1 of the admin design
+(`docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`,
+§1). Found while checking the local deployment on 2026-09-15: the `auth.json`
+bootstrap account and the account recorded in `primary_admin.json` both
+resolved to the deployment tree, so two admins shared one workspace, and the
+election read `users.json` only, so the bootstrap account — the deployment's
+first admin — could never be the recorded owner.
+
+- `deeptutor/multi_user/primary_admin.py`: the bootstrap account (`env-admin`)
+  owns `data/` only when it is the recorded owner, like any other admin; only
+  `local-admin` (auth disabled) always does. The election, which runs once
+  while nothing is recorded, prefers a usable bootstrap account (username and
+  password hash) and otherwise takes the earliest-created admin in the store,
+  as before. A recorded owner is never replaced by itself: when a usable
+  bootstrap account is not the owner, the server logs one warning naming the
+  handover command.
+- The handover command, run inside the container:
+  `python -m deeptutor.multi_user.primary_admin show` and
+  `python -m deeptutor.multi_user.primary_admin handover <username | env-admin>`.
+  It accepts an admin's username or id, or the bootstrap account by its
+  username or `env-admin`; it refuses a non-admin, an unknown account and a
+  bootstrap account without a password; a handover to the current owner
+  changes nothing. It rewrites the marker, writes an audit line
+  (`primary_handover`, actor `operator`) and logs at WARNING. `data/` stays
+  where it is; the previous owner works in `data/users/<id>/` from then on.
+  A restart follows, so every worker reads the new owner.
+- `deeptutor/multi_user/audit.py`: `log_operator_action` for actions run on
+  the server with no signed-in actor.
+
+Tests: `tests/multi_user/test_primary_admin_owner.py` (8, red before);
+`tests/multi_user/test_admin_workspace_isolation.py` no longer asserts that
+the bootstrap account always owns the tree.
+
+On the host nothing changes: the record names `admin@example.com` and the
+bootstrap account there has no password. Locally the bootstrap account
+`admin` is usable and the record names `admin2`, so the round's local UAT
+runs the handover once.
+
+---
+
 ## Pin → fork `8c19f351`: the studio's organisation setup becomes one button, the default's star behaves, the home popover names the TTS model, and images can be asked for at a lower quality — 2026-09-17
 
 The user's notes after `deploy-2026-09-15g`, eleven items about the Course

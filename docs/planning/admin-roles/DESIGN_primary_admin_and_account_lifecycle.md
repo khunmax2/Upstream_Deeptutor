@@ -223,6 +223,12 @@ as it is.
 - Tests go red before each change.
 - Local UAT includes the handover `admin2` → `admin`.
 
+Progress (one step per PR, each tested locally first):
+
+1. §1 one recorded owner + the handover command — `feat/primary-admin-owner`.
+2. §2 only the primary admin manages admins, with the §5 audit lines — next.
+3. §3 disable instead of delete, with the §6 users page — after that.
+
 **Phase 2: DeepWitya, studio and gatekeeper.** It covers §4 and the studio
 purge route, then the host cleanup of the stranded accounts.
 
