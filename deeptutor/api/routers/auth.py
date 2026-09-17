@@ -651,7 +651,9 @@ async def device_login(body: DeviceLoginRequest, response: Response) -> dict:
             detail="Incorrect device credentials",
         )
     if account_disabled(payload.username):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is disabled")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="This account is disabled"
+        )
 
     token = create_token(
         payload.username,
