@@ -254,6 +254,38 @@ upstream.
 
 ---
 
+## Only the primary admin manages admins, and every account change is audited — 2026-09-17
+
+Phase 1, step 2 of the admin design (§2 and §5). Until now any admin could
+promote, demote and delete any account but the primary admin, and none of it
+left a trace: on 2026-09-15 two admin accounts were deleted on the host and
+nothing recorded by whom (it was the user).
+
+- `PUT /api/auth/users/{username}/role` and `DELETE /api/auth/users/{username}`
+  answer 403 unless the caller is the primary admin
+  (`deeptutor/api/routers/auth.py`, `_require_primary_admin`). An unknown
+  account still answers 404, and the primary admin still cannot change its
+  own role or delete itself. The bootstrap account counts as primary when it
+  owns `data/`. Other admins keep creating accounts (always as `user`) and
+  managing ordinary users' grants, presets and profiles.
+- Every account change writes to `data/system/audit/usage.jsonl` with the
+  actor, the target and what changed: `account_create` (username, role,
+  preset), `account_role_set` (from, to), `account_delete` (username, role)
+  and `account_change_refused` (the action and who was refused). The same
+  events log at WARNING so they reach `docker logs`.
+- The users page (`web/app/(admin)/admin/users/page.tsx`) reads whether the
+  viewer is the primary admin from the list's `is_primary` flag: for anyone
+  else the role button is disabled with "Only the primary admin manages
+  admins" (en, th, zh) and the delete button is not shown.
+
+Tests: `tests/multi_user/test_admin_management.py` (8; 5 red before: the
+refusals and the audit lines), `web/tests/admin-primary-admin.test.ts`
+(the viewer check; its source assertions now tolerate prettier's line
+breaks). `test_primary_admin_protected.py` now checks the primary side of
+the rule instead of "any admin manages every other account".
+
+---
+
 ## Exactly one account owns `data/`, and only a handover moves it — 2026-09-17
 
 Phase 1, step 1 of the admin design

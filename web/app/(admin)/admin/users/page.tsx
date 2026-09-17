@@ -352,6 +352,12 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-[var(--border)]">
                 {filteredUsers.map((user) => {
                   const isSelf = user.username === currentUser;
+                  // Fork: only the primary admin changes roles or deletes accounts
+                  // (docs/planning/admin-roles/, §2); the server answers 403 to
+                  // anyone else, so the page does not offer.
+                  const viewerIsPrimary = users.some(
+                    (u) => u.username === currentUser && Boolean(u.is_primary),
+                  );
                   const isAdmin = user.role === "admin";
                   // Fork: the primary admin is the deployment's superadmin; the
                   // server refuses to demote or delete it, so the page never offers.
@@ -439,15 +445,21 @@ export default function AdminUsersPage() {
                                   user,
                                 })
                               }
-                              disabled={isSelf || isPrimary}
+                              disabled={isSelf || isPrimary || !viewerIsPrimary}
                               title={
                                 isSelf
                                   ? t("Cannot change your own role")
                                   : isPrimary
-                                    ? t("The primary admin's role cannot be changed")
-                                    : user.role === "admin"
-                                      ? t("Demote to user")
-                                      : t("Promote to admin")
+                                    ? t(
+                                        "The primary admin's role cannot be changed",
+                                      )
+                                    : !viewerIsPrimary
+                                      ? t(
+                                          "Only the primary admin manages admins",
+                                        )
+                                      : user.role === "admin"
+                                        ? t("Demote to user")
+                                        : t("Promote to admin")
                               }
                               className="rounded-lg p-1.5 text-[var(--muted-foreground)]
                                        hover:bg-[var(--background)] hover:text-[var(--foreground)]
@@ -459,26 +471,28 @@ export default function AdminUsersPage() {
                                 <Shield size={15} />
                               )}
                             </button>
-                            <button
-                              onClick={() =>
-                                setConfirmTarget({ kind: "delete", user })
-                              }
-                              disabled={isSelf || isPrimary}
-                              title={
-                                isSelf
-                                  ? t("Cannot delete your own account")
-                                  : isPrimary
-                                    ? t("The primary admin cannot be deleted")
-                                    : t("Delete {{username}}", {
-                                        username: user.username,
-                                      })
-                              }
-                              className="rounded-lg p-1.5 text-[var(--muted-foreground)]
-                                       hover:bg-red-500/10 hover:text-red-500
-                                       disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                            {viewerIsPrimary && (
+                              <button
+                                onClick={() =>
+                                  setConfirmTarget({ kind: "delete", user })
+                                }
+                                disabled={isSelf || isPrimary}
+                                title={
+                                  isSelf
+                                    ? t("Cannot delete your own account")
+                                    : isPrimary
+                                      ? t("The primary admin cannot be deleted")
+                                      : t("Delete {{username}}", {
+                                          username: user.username,
+                                        })
+                                }
+                                className="rounded-lg p-1.5 text-[var(--muted-foreground)]
+                                         hover:bg-red-500/10 hover:text-red-500
+                                         disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

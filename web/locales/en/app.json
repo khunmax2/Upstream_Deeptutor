@@ -2428,6 +2428,7 @@
   "Primary admin": "Primary admin",
   "The primary admin's role cannot be changed": "The primary admin's role cannot be changed",
   "The primary admin cannot be deleted": "The primary admin cannot be deleted",
+  "Only the primary admin manages admins": "Only the primary admin manages admins",
   "Delete {{username}}": "Delete {{username}}",
   "DeepTutor Admin · User Management": "DeepWitya Admin · User Management",
   "Delete user": "Delete user",

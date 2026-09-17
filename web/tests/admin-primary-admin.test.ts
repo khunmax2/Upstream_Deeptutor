@@ -13,6 +13,13 @@ const usersPage = read("app/(admin)/admin/users/page.tsx");
 const adminApi = read("lib/admin-api.ts");
 const locale = (lang: string) =>
   JSON.parse(read(`locales/${lang}/app.json`)) as Record<string, string>;
+// `t("…")` as prettier may print it: split over lines, with a trailing comma.
+const uses = (text: string) =>
+  new RegExp(
+    String.raw`t\(\s*"` +
+      text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+      String.raw`",?\s*\)`,
+  );
 
 test("the user list carries which account is the primary admin", () => {
   assert.match(adminApi, /is_primary\?: boolean;/);
@@ -20,11 +27,27 @@ test("the user list carries which account is the primary admin", () => {
 
 test("the users page never offers to demote or delete the primary admin", () => {
   assert.match(usersPage, /const isPrimary = Boolean\(user\.is_primary\);/);
-  // Both the role button and the delete button stay disabled for it.
-  assert.equal(usersPage.match(/disabled=\{isSelf \|\| isPrimary\}/g)?.length, 2);
-  assert.match(usersPage, /t\("The primary admin's role cannot be changed"\)/);
-  assert.match(usersPage, /t\("The primary admin cannot be deleted"\)/);
-  assert.match(usersPage, /t\("Primary admin"\)/);
+  // The delete button stays disabled for it; the role button adds the
+  // viewer check (see the next test).
+  assert.equal(
+    usersPage.match(/disabled=\{isSelf \|\| isPrimary\}/g)?.length,
+    1,
+  );
+  assert.match(usersPage, uses("The primary admin's role cannot be changed"));
+  assert.match(usersPage, uses("The primary admin cannot be deleted"));
+  assert.match(usersPage, uses("Primary admin"));
+});
+
+test("only the primary admin is offered role changes and deletion", () => {
+  // Phase 1 step 2 (docs/planning/admin-roles/, §2): the server answers 403
+  // to any other admin, so the page disables the role button and hides delete.
+  assert.match(usersPage, /const viewerIsPrimary = users\.some\(/);
+  assert.match(
+    usersPage,
+    /disabled=\{isSelf \|\| isPrimary \|\| !viewerIsPrimary\}/,
+  );
+  assert.match(usersPage, uses("Only the primary admin manages admins"));
+  assert.match(usersPage, /\{viewerIsPrimary && \(\s*<button/);
 });
 
 test("the primary admin copy is present in every supported locale", () => {
@@ -32,6 +55,7 @@ test("the primary admin copy is present in every supported locale", () => {
     "Primary admin",
     "The primary admin's role cannot be changed",
     "The primary admin cannot be deleted",
+    "Only the primary admin manages admins",
   ];
   for (const lang of ["en", "th", "zh"]) {
     const messages = locale(lang);

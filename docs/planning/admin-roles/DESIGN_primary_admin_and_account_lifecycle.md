@@ -225,8 +225,9 @@ as it is.
 
 Progress (one step per PR, each tested locally first):
 
-1. §1 one recorded owner + the handover command — `feat/primary-admin-owner`.
-2. §2 only the primary admin manages admins, with the §5 audit lines — next.
+1. §1 one recorded owner + the handover command — PR #111, merged.
+2. §2 only the primary admin manages admins, with the §5 audit lines for
+   create, role change and delete — `feat/primary-admin-manages-admins`.
 3. §3 disable instead of delete, with the §6 users page — after that.
 
 **Phase 2: DeepWitya, studio and gatekeeper.** It covers §4 and the studio
