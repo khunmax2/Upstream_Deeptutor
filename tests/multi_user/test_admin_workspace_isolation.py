@@ -88,11 +88,24 @@ def test_the_election_is_recorded_and_then_stuck(mu_isolated_root, seed_user):
     assert scope_for_user(second["id"], is_admin=True).root != ADMIN_WORKSPACE_ROOT.resolve()
 
 
-@pytest.mark.parametrize("sentinel", [LOCAL_ADMIN_ID, "env-admin"])
-def test_sentinel_admins_still_own_the_deployment_tree(mu_isolated_root, seed_user, sentinel):
-    """AUTH_ENABLED=false and the env bootstrap admin are the deployment."""
+def test_the_local_admin_sentinel_still_owns_the_deployment_tree(mu_isolated_root, seed_user):
+    """AUTH_ENABLED=false is the deployment."""
     _admins(seed_user)
-    assert scope_for_user(sentinel, is_admin=True).root == admin_scope().root
+    assert scope_for_user(LOCAL_ADMIN_ID, is_admin=True).root == admin_scope().root
+
+
+def test_the_bootstrap_admin_owns_the_deployment_tree_only_when_recorded(
+    mu_isolated_root, seed_user
+):
+    """Since 2026-09-15 (docs/planning/admin-roles/) ``data/`` has one owner.
+
+    The bootstrap admin is that owner when the record names it -- the election
+    prefers it while it is usable and nothing is recorded yet -- and an admin
+    with its own workspace otherwise. See test_primary_admin_owner.py.
+    """
+    first, _second = _admins(seed_user)
+    assert primary_admin_id() == first["id"]
+    assert scope_for_user("env-admin", is_admin=True).root != admin_scope().root
 
 
 def test_a_token_for_a_second_admin_resolves_to_its_own_scope(mu_isolated_root, seed_user):

@@ -86,6 +86,31 @@ def log_admin_action(
     _write(payload)
 
 
+def log_operator_action(
+    action: str,
+    target_user_id: str | None = None,
+    summary: dict[str, Any] | None = None,
+) -> None:
+    """Record an action run on the server itself, with no signed-in actor.
+
+    Fork. The primary-admin handover is a command an operator runs in the
+    container, so there is no request user to name; the line says so instead
+    of borrowing the local-admin sentinel.
+    """
+    payload: dict[str, Any] = {
+        "time": datetime.now(timezone.utc).isoformat(),
+        "actor_id": "operator",
+        "actor_username": "server-cli",
+        "actor_role": "operator",
+        "action": action,
+    }
+    if target_user_id:
+        payload["target_user_id"] = target_user_id
+    if summary:
+        payload["summary"] = summary
+    _write(payload)
+
+
 def log_guardian_action(
     action: str,
     guardian_user_id: str,
