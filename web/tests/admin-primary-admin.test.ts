@@ -50,12 +50,34 @@ test("only the primary admin is offered role changes and deletion", () => {
   assert.match(usersPage, /\{viewerIsPrimary && \(\s*<button/);
 });
 
+test("an account is disabled instead of deleted", () => {
+  // Phase 1 step 3 (docs/planning/admin-roles/, §3 and §6): every admin gets
+  // a disable/enable toggle; for an admin row it needs the primary admin.
+  assert.match(adminApi, /export async function setUserDisabled\(/);
+  assert.match(adminApi, /\/disabled`\)/);
+  assert.match(usersPage, /kind: user\.disabled \? "enable" : "disable"/);
+  assert.match(usersPage, /disabled=\{isAdmin && !viewerIsPrimary\}/);
+  assert.match(usersPage, uses("Disable account"));
+  assert.match(usersPage, uses("Enable account"));
+  assert.match(usersPage, uses("Disabled"));
+  assert.match(usersPage, /case "disable":/);
+  assert.match(usersPage, /case "enable":/);
+});
+
 test("the primary admin copy is present in every supported locale", () => {
   const keys = [
     "Primary admin",
     "The primary admin's role cannot be changed",
     "The primary admin cannot be deleted",
     "Only the primary admin manages admins",
+    "Disable account",
+    "Enable account",
+    "Disabling…",
+    "Enabling…",
+    "Disabled",
+    "The account can no longer sign in. Everything it owns stays, and it can be enabled again.",
+    "The account can sign in again.",
+    "Failed to update account",
   ];
   for (const lang of ["en", "th", "zh"]) {
     const messages = locale(lang);

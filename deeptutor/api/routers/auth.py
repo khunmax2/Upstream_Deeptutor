@@ -63,6 +63,7 @@ from deeptutor.services.auth import (
     POCKETBASE_ENABLED,
     TOKEN_EXPIRE_HOURS,
     TokenPayload,
+    account_disabled,
     add_user,
     authenticate,
     authenticate_device,
@@ -179,6 +180,12 @@ class SetRoleRequest(BaseModel):
         if v not in ("admin", "user"):
             raise ValueError("Role must be 'admin' or 'user'")
         return v
+
+
+class SetDisabledRequest(BaseModel):
+    """Fork: payload for PUT /users/{username}/disabled."""
+
+    disabled: bool
 
 
 class AdminCreateUserRequest(RegisterRequest):
@@ -595,6 +602,12 @@ async def login(body: LoginRequest, response: Response) -> dict:
     # Standard JWT + bcrypt mode
     result = authenticate(body.username, body.password)
     if not result:
+        # Fork: a shut account is told so, instead of guessing at its password.
+        if account_disabled(body.username):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account is disabled",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -636,6 +649,10 @@ async def device_login(body: DeviceLoginRequest, response: Response) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect device credentials",
+        )
+    if account_disabled(payload.username):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="This account is disabled"
         )
 
     token = create_token(
@@ -1273,6 +1290,8 @@ def _refuse_primary_admin(info: dict | None, current: TokenPayload | None, actio
         detail=(
             "The primary administrator cannot be deleted"
             if action == "delete"
+            else "The primary administrator cannot be disabled"
+            if action == "disable"
             else "The primary administrator's role cannot be changed"
         ),
     )
@@ -1387,3 +1406,58 @@ async def update_user_role(
         previous,
     )
     return {"ok": True, "username": username, "role": body.role}
+
+
+@router.put("/users/{username}/disabled", status_code=status.HTTP_200_OK)
+async def update_user_disabled(
+    username: str,
+    body: SetDisabledRequest,
+    current: TokenPayload = Depends(require_admin),
+) -> dict:
+    """Fork: shut an account, or reopen it, instead of deleting it.
+
+    Any admin for an ordinary user; the primary admin alone for an admin;
+    nobody for the primary admin or themselves (docs/planning/admin-roles/,
+    §3). The account keeps everything it owns; its tokens stop working on
+    the next request and its device credentials are revoked.
+    """
+    from deeptutor.multi_user.device_credentials import revoke_device_credentials_for_user
+    from deeptutor.multi_user.identity import set_disabled
+
+    if current and username == current.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot disable your own account",
+        )
+    info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    action = "disable" if body.disabled else "enable"
+    _refuse_primary_admin(info, current, "disable")
+    role = str(info.get("role") or "user")
+    if role == "admin":
+        _require_primary_admin(current, action, info)
+
+    if not set_disabled(username, body.disabled):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user_id = str(info.get("id") or "")
+    revoked = 0
+    if body.disabled and user_id:
+        revoked = revoke_device_credentials_for_user(
+            user_id, revoked_by=str(current.user_id if current else "local")
+        )
+
+    log_admin_action(
+        f"account_{action}",
+        target_user_id=user_id or None,
+        summary={"username": username, "role": role},
+    )
+    logger.warning(
+        "Admin '%s' %sd account '%s' (role=%s, device credentials revoked=%d)",
+        current.username if current else "local",
+        action,
+        username,
+        role,
+        revoked,
+    )
+    return {"ok": True, "username": username, "disabled": body.disabled}
