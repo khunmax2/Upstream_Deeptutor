@@ -473,6 +473,24 @@ def set_role(username: str, role: Role) -> bool:
     return True
 
 
+def set_disabled(username: str, disabled: bool) -> bool:
+    """Fork: shut or reopen an account without touching anything else it owns.
+
+    A disabled account cannot sign in and its tokens stop working (the check
+    lives in ``services.auth.decode_token``); its workspace, grants and studio
+    data stay where they are. Returns True when the account exists.
+    """
+    if not USERS_FILE.exists():
+        return False
+    with _USERS_WRITE_LOCK:
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["disabled"] = bool(disabled)
+        _write_users(users)
+    return True
+
+
 def set_preset(username: str, preset: AccountPreset) -> bool:
     """Update an account's configuration preset without changing its role."""
     if preset not in {"standard", "learner", "custom"}:

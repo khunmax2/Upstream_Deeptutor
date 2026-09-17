@@ -321,6 +321,12 @@ def decode_token(token: str) -> TokenPayload | None:
         if not user_id:
             record = _load_users().get(str(username)) or {}
             user_id = str(record.get("id") or "")
+        # Fork: a disabled account is out on every request, not only at login
+        # (docs/planning/admin-roles/, §3). This is the one gate every caller
+        # passes: require_auth, the WebSocket upgrade, and /api/auth/status,
+        # which the course-studio gatekeeper reads.
+        if account_disabled(str(username)):
+            return None
         device_credential_id = str(payload.get("dcid") or "")
         device_session_nonce = str(payload.get("dcs") or "")
         if device_credential_id:
@@ -341,6 +347,16 @@ def decode_token(token: str) -> TokenPayload | None:
         )
     except JWTError:
         return None
+
+
+def account_disabled(username: str) -> bool:
+    """Fork: whether the account store says *username* is shut (``disabled``).
+
+    An account the store does not know is not disabled: the bootstrap account
+    is folded in by ``_load_users`` and never carries the flag.
+    """
+    record = _load_users().get(username)
+    return bool(record.get("disabled")) if isinstance(record, dict) else False
 
 
 def _current_role(username: str, token_role: str) -> str:
@@ -456,6 +472,10 @@ def authenticate(username: str, password: str) -> TokenPayload | None:
 
     hashed = record.get("hash", "") if isinstance(record, dict) else record
     if not verify_password(password, hashed):
+        return None
+    # Fork: a disabled account does not sign in even with the right password;
+    # the login route says why (403), this stays a plain refusal.
+    if isinstance(record, dict) and record.get("disabled"):
         return None
 
     role = record.get("role", "user") if isinstance(record, dict) else "user"

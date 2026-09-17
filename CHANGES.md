@@ -254,6 +254,39 @@ upstream.
 
 ---
 
+## An account is disabled instead of deleted, and a disabled account is out — 2026-09-17
+
+Phase 1, step 3 of the admin design (§3 and §6), the last DeepWitya step
+before the host round. Account records always carried a `disabled` flag and
+nothing read it: a disabled account could sign in and its tokens kept
+working, so deleting was the only way to shut an account, and deleting
+strands its data.
+
+- `PUT /api/auth/users/{username}/disabled` with `{"disabled": true|false}`
+  (`deeptutor/api/routers/auth.py`): any admin for an ordinary user, the
+  primary admin alone for an admin, nobody for the primary admin (403) or
+  themselves (400). Disabling revokes the account's device credentials.
+  Audited as `account_disable` / `account_enable` with the actor, the
+  target and the role, and logged at WARNING.
+- `decode_token` (`deeptutor/services/auth.py`) refuses a disabled account,
+  so its tokens stop working on the next request everywhere: ordinary
+  routes, the WebSocket upgrade, and `/api/auth/status`, which the Course
+  Studio gatekeeper reads — the studio refuses it too. Login answers 403
+  "This account is disabled" (password login and device login alike).
+- `identity.set_disabled` flips the flag and nothing else: the workspace,
+  grants, guardian links and studio data stay.
+- The users page: a disable/enable button on every row but the viewer's own
+  and the primary admin's (disabled for admin rows unless the viewer is the
+  primary admin), a "Disabled" mark on shut accounts, and confirmation copy
+  that says the data stays. Ten new strings in en, th and zh. The delete
+  button stays primary-only; Phase 2 makes it clean up.
+
+Tests: `tests/multi_user/test_account_disable.py` (6, red before: no
+route; then the enforcement — sign-in, token, status, device credentials —
+through the real `decode_token`), `web/tests/admin-primary-admin.test.ts`.
+
+---
+
 ## Only the primary admin manages admins, and every account change is audited — 2026-09-17
 
 Phase 1, step 2 of the admin design (§2 and §5). Until now any admin could

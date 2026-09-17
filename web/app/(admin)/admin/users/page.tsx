@@ -8,6 +8,7 @@ import {
   listUsers,
   deleteUser,
   setUserRole,
+  setUserDisabled,
   createUser,
   type UserRecord,
   type AccountPreset,
@@ -28,7 +29,9 @@ import {
   RefreshCw,
   ArrowLeft,
   SlidersHorizontal,
+  UserCheck,
   UserPlus,
+  UserX,
   Users,
   X,
 } from "lucide-react";
@@ -61,7 +64,7 @@ export default function AdminUsersPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [query, setQuery] = useState("");
   const [confirmTarget, setConfirmTarget] = useState<{
-    kind: "delete" | "promote" | "demote";
+    kind: "delete" | "promote" | "demote" | "disable" | "enable";
     user: UserRecord;
   } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -148,6 +151,15 @@ export default function AdminUsersPage() {
       if (kind === "delete") {
         await deleteUser(user.username);
         setUsers((prev) => prev.filter((u) => u.username !== user.username));
+      } else if (kind === "disable" || kind === "enable") {
+        // Fork: shut or reopen the account; everything it owns stays.
+        const disabled = kind === "disable";
+        await setUserDisabled(user.username, disabled);
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.username === user.username ? { ...u, disabled } : u,
+          ),
+        );
       } else {
         const newRole = kind === "promote" ? "admin" : "user";
         await setUserRole(user.username, newRole);
@@ -170,7 +182,10 @@ export default function AdminUsersPage() {
           ? e.message
           : confirmTarget.kind === "delete"
             ? t("Failed to delete user")
-            : t("Failed to update role"),
+            : confirmTarget.kind === "disable" ||
+                confirmTarget.kind === "enable"
+              ? t("Failed to update account")
+              : t("Failed to update role"),
       );
     } finally {
       setConfirmBusy(false);
@@ -187,6 +202,61 @@ export default function AdminUsersPage() {
 
   const normalizedQuery = query.trim().toLowerCase();
   const filteredUsers = filterUsersByQuery(users, query);
+
+  // The confirmation dialog's copy, per action. Fork adds disable/enable
+  // (docs/planning/admin-roles/, §3): the account is shut, not removed.
+  const confirmCopy = (() => {
+    switch (confirmTarget?.kind) {
+      case "promote":
+        return {
+          title: t("Promote to admin"),
+          confirm: t("Promote"),
+          busy: t("Promoting…"),
+          tone: "default" as const,
+          body: t(
+            "Admins can manage users and assignments, and work in the shared main workspace.",
+          ),
+        };
+      case "demote":
+        return {
+          title: t("Demote to user"),
+          confirm: t("Demote"),
+          busy: t("Demoting…"),
+          tone: "default" as const,
+          body: t(
+            "They will lose access to the admin area and switch to their own assigned workspace.",
+          ),
+        };
+      case "disable":
+        return {
+          title: t("Disable account"),
+          confirm: t("Disable"),
+          busy: t("Disabling…"),
+          tone: "danger" as const,
+          body: t(
+            "The account can no longer sign in. Everything it owns stays, and it can be enabled again.",
+          ),
+        };
+      case "enable":
+        return {
+          title: t("Enable account"),
+          confirm: t("Enable"),
+          busy: t("Enabling…"),
+          tone: "default" as const,
+          body: t("The account can sign in again."),
+        };
+      default:
+        return {
+          title: t("Delete user"),
+          confirm: t("Delete user"),
+          busy: t("Deleting…"),
+          tone: "danger" as const,
+          body: t(
+            "This permanently removes the account and its assignments. This cannot be undone.",
+          ),
+        };
+    }
+  })();
 
   return (
     <div className="h-screen overflow-y-auto bg-[var(--background)] px-4 py-10 [scrollbar-gutter:stable]">
@@ -404,6 +474,11 @@ export default function AdminUsersPage() {
                               {t("Primary admin")}
                             </span>
                           )}
+                          {user.disabled && (
+                            <span className="mt-1 block text-[11px] font-medium text-red-600 dark:text-red-400">
+                              {t("Disabled")}
+                            </span>
+                          )}
                           {!isAdmin && user.preset && (
                             <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
                               {t("Preset: {{preset}}", {
@@ -471,6 +546,33 @@ export default function AdminUsersPage() {
                                 <Shield size={15} />
                               )}
                             </button>
+                            {!isSelf && !isPrimary && (
+                              <button
+                                onClick={() =>
+                                  setConfirmTarget({
+                                    kind: user.disabled ? "enable" : "disable",
+                                    user,
+                                  })
+                                }
+                                disabled={isAdmin && !viewerIsPrimary}
+                                title={
+                                  isAdmin && !viewerIsPrimary
+                                    ? t("Only the primary admin manages admins")
+                                    : user.disabled
+                                      ? t("Enable account")
+                                      : t("Disable account")
+                                }
+                                className="rounded-lg p-1.5 text-[var(--muted-foreground)]
+                                         hover:bg-[var(--background)] hover:text-[var(--foreground)]
+                                         disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {user.disabled ? (
+                                  <UserCheck size={15} />
+                                ) : (
+                                  <UserX size={15} />
+                                )}
+                              </button>
+                            )}
                             {viewerIsPrimary && (
                               <button
                                 onClick={() =>
@@ -535,28 +637,10 @@ export default function AdminUsersPage() {
 
       <ConfirmDialog
         open={confirmTarget !== null}
-        title={
-          confirmTarget?.kind === "delete"
-            ? t("Delete user")
-            : confirmTarget?.kind === "promote"
-              ? t("Promote to admin")
-              : t("Demote to user")
-        }
-        tone={confirmTarget?.kind === "delete" ? "danger" : "default"}
-        confirmLabel={
-          confirmTarget?.kind === "delete"
-            ? t("Delete user")
-            : confirmTarget?.kind === "promote"
-              ? t("Promote")
-              : t("Demote")
-        }
-        busyLabel={
-          confirmTarget?.kind === "delete"
-            ? t("Deleting…")
-            : confirmTarget?.kind === "promote"
-              ? t("Promoting…")
-              : t("Demoting…")
-        }
+        title={confirmCopy.title}
+        tone={confirmCopy.tone}
+        confirmLabel={confirmCopy.confirm}
+        busyLabel={confirmCopy.busy}
         busy={confirmBusy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmTarget(null)}
@@ -586,19 +670,7 @@ export default function AdminUsersPage() {
                 </p>
               </div>
             </div>
-            <p className="mt-3">
-              {confirmTarget.kind === "delete"
-                ? t(
-                    "This permanently removes the account and its assignments. This cannot be undone.",
-                  )
-                : confirmTarget.kind === "promote"
-                  ? t(
-                      "Admins can manage users and assignments, and work in the shared main workspace.",
-                    )
-                  : t(
-                      "They will lose access to the admin area and switch to their own assigned workspace.",
-                    )}
-            </p>
+            <p className="mt-3">{confirmCopy.body}</p>
           </>
         )}
       </ConfirmDialog>
