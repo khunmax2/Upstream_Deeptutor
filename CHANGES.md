@@ -303,8 +303,17 @@ page is still Phase 1's, and PR-B brings the bin, restore and purge.
   `contract.primary_header`, `primary_header_studio_reads`); the gatekeeper
   README documents it. Locale keys unchanged at 1848.
 
-Image: pending `studio-image.yml` on `feat/primary-admin-studio-header`;
-the digest is recorded here once built. Rolling back is the 17 digest
+Image `ghcr.io/khunmax2/deepwitya-studio:e75ef948`, digest
+`sha256:8e0a86cd…d248e` (run 35369322573). Strings found only in the new
+image: `x-deeptutor-primary` in 35 server chunks and "only the primary
+administrator can purge" in one. Local UAT through the real gatekeeper on
+a `deeptutor` built from this branch, the gatekeeper recreated from it and
+the pulled digest: the primary admin's `/api/auth/status` says
+`is_primary`, a promoted admin's does not; the accounts list answers the
+primary 200 and a promoted admin 403, a client-sent primary header is
+stripped; a throwaway account's studio settings row is listed, measured,
+purged (KV gone, id off the list, second purge zeros, self-purge 400), and
+both the purge and the refusal reach the studio log. Rolling back is the 17 digest
 `sha256:a5962e05…3e82461`, with no database restore: the new image adds no
 table, and the routes it adds are unreachable without the header, which the
 old gatekeeper never sends.

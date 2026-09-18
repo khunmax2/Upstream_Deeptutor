@@ -30,10 +30,10 @@
   },
   "image": {
     "ref": "ghcr.io/khunmax2/deepwitya-studio:e75ef948",
-    "digest": null,
-    "built": false,
+    "digest": "sha256:8e0a86cd2f46ad2103b91d36439c429525ef2da7dc7544e4abb20789898d248e",
+    "built": true,
     "built_from": "e75ef948538bb1ee83180905ba9c8268f5a61647",
-    "built_by": "pending: studio-image.yml on feat/primary-admin-studio-header",
+    "built_by": "studio-image.yml run 35369322573 on feat/primary-admin-studio-header, 2026-09-18",
     "note": "Deploy with OPENMAIC_IMAGE=<ref's repository>@<digest>, never the tag: the tag can move, the digest cannot. Rebuilding the same commit produces a different digest (timestamps in layers), so a new run means a new pin entry even when the commit is unchanged."
   },
   "repo": "https://github.com/THU-MAIC/OpenMAIC",
