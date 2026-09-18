@@ -117,6 +117,8 @@ Other admins keep:
 
 ### 4. Hard delete (Phase 2)
 
+The worked-out plan is `PHASE2_hard_delete.md` (draft 2026-09-18).
+
 Primary admin only. The dialog makes the admin type the username and lists
 what will be removed.
 
