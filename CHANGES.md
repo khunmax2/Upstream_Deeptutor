@@ -254,6 +254,73 @@ upstream.
 
 ---
 
+## Delete goes through a bin, and a typed purge removes the account's data on both sides — 2026-09-19
+
+The last piece of the admin design's Phase 2
+(`docs/planning/admin-roles/PHASE2_hard_delete.md`, decision 10). Until
+this, the delete button on the users page was still the shallow delete that
+strands data; now delete is reversible and the purge is the one irreversible
+step, typed and primary-only.
+
+- **The bin.** `DELETE /api/auth/users/{u}` marks the record with
+  `deleted_at` instead of removing it (`identity.set_deleted`). The name
+  stays taken -- creating it again answers 409 "This name belongs to a
+  deleted account; purge or restore it first" -- and everything the account
+  owns stays where it is. It is locked out the way a disabled account is:
+  `decode_token` and `authenticate` refuse it, so every route, the WebSocket
+  and `/api/auth/status` (which the studio gatekeeper reads) refuse it too;
+  login and device login say "This account has been deleted". Its device
+  credentials are revoked. Audit `account_delete`.
+- **Restore.** `POST /api/auth/users/{u}/restore` clears the stamp and
+  nothing else (an account disabled before its deletion comes back
+  disabled); 409 when the account is not in the bin. Audit `account_restore`.
+- **Purge.** `DELETE /api/auth/users/{u}/purge?confirm=<u>` removes, on
+  DeepWitya's side, the workspace `data/users/<id>/`, the grant, the
+  `user-secrets` folder, the `user-mcp` file, the device-credential records,
+  the avatar, the guardian links and the record
+  (`deeptutor/multi_user/purge.py`, new). Only from the bin (409), only with
+  the name typed exactly (400), only the primary admin (403, audited). Never
+  the primary admin, `local-admin` or `env-admin`. Audit `account_purge`
+  carries what went (files, bytes, grant, secrets, MCP, devices). The
+  studio's half is the browser's call before this one, through the
+  gatekeeper with the admin's own cookie (fork `e75ef948`, previous entry):
+  studio first, because its rows are findable only while the id is known
+  here; each half is idempotent, so a failure on either side leaves
+  something to press again.
+- **Footprint and leftovers.** `GET /api/auth/users/{u}/footprint` counts
+  without removing. `GET /api/auth/orphans` lists ids that hold data but
+  have no account (the two the host stranded before the bin existed), and
+  `DELETE /api/auth/orphans/{id}?confirm=<id>` purges one. Primary-only.
+- **The users page.** Split into a `force-dynamic` server wrapper, which
+  passes the studio's same-origin path from `DEEPTUTOR_OPENMAIC_URL`, and
+  `AdminUsersClient.tsx`. The primary admin sees two tabs, **Accounts** and
+  **Bin (n)**. Delete asks once, without typing, and says the account can
+  be restored for 30 days. The bin lists each account with the days left
+  (`web/lib/account-bin.ts`; nothing purges by itself -- when the 30 days
+  are up the row says "Retention over" and waits for the press), a restore
+  button and a purge button. The purge dialog measures both sides first --
+  workspace files and bytes, grant/secrets/MCP/devices; the studio's draft
+  courses removed, published courses **kept for learners**, sessions,
+  skills, materials, settings, own keys, and a note when shared keys or
+  lists will show as shared by a deleted account -- then requires the name
+  typed before the confirm button turns on (`ConfirmDialog` gains
+  `confirmDisabled`). A **Leftovers** panel under the bin lists DeepWitya's
+  orphans and the studio's owner ids that match no account, each with the
+  same typed purge. Other admins keep Phase 1's page. 47 new strings in en,
+  th and zh. `web/lib/studio-admin-api.ts` reaches the studio's admin route
+  through the shared client as a same-origin `URL`, so the base-path rewrite
+  leaves it alone and a gatekeeper 401 is shown rather than redirected.
+
+Tests: `tests/multi_user/test_account_bin.py` (5, red before: the bin locks
+out and keeps the name and the data; restore leaves the disabled mark
+alone; purge removes every location only from the bin and only with the
+typed name and frees the name for a new id; a promoted admin gets 403 on
+every step and the primary is never a target; orphans are listed and purged
+by id), `web/tests/admin-account-bin.test.ts` (7). Three older tests that
+expected the shallow delete now expect the bin. Local UAT below.
+
+---
+
 ## Pin → fork `e75ef948`: the gatekeeper marks the primary admin, and the studio can purge an account's data — 2026-09-18
 
 The first two pieces of the admin design's Phase 2
