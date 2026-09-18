@@ -206,6 +206,10 @@ class AuthStatusResponse(BaseModel):
     username: str | None = None
     role: str | None = None
     is_admin: bool = False
+    # The deployment's primary administrator (primary_admin.py). The Course
+    # Studio gatekeeper turns this into the `x-deeptutor-primary` header, the
+    # only way the studio tells the primary admin from a promoted one.
+    is_primary: bool = False
     avatar: str = ""
     preset: AccountPreset | None = None
     learning_policy: dict | None = None
@@ -537,6 +541,7 @@ async def auth_status(
             username="local",
             role="admin",
             is_admin=True,
+            is_primary=True,
             preset="standard",
         )
 
@@ -560,6 +565,8 @@ async def auth_status(
             payload.user_id,
             is_admin=payload.role == "admin",
         )
+    from deeptutor.multi_user.primary_admin import is_primary_admin_account
+
     return AuthStatusResponse(
         enabled=True,
         authenticated=payload is not None,
@@ -567,6 +574,11 @@ async def auth_status(
         username=payload.username if payload else None,
         role=payload.role if payload else None,
         is_admin=payload.role == "admin" if payload else False,
+        is_primary=(
+            payload.role == "admin" and is_primary_admin_account(payload.user_id)
+            if payload
+            else False
+        ),
         avatar=avatar,
         preset=preset,
         learning_policy=learning_policy,

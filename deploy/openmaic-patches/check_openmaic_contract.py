@@ -159,6 +159,16 @@ def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) ->
             report.ok("gatekeeper sets role", role_header)
         elif role_header:
             report.fail("gatekeeper sets role", f"gatekeeper.mjs does not mention {role_header!r}")
+        # The primary mark is the narrowest of the three and the one a purge
+        # hangs on: drift here means the primary admin gets 403 from the
+        # studio's accounts route, or a promoted admin does not.
+        primary_header = contract.get("primary_header")
+        if primary_header and f"'{primary_header}'" in source:
+            report.ok("gatekeeper sets primary", primary_header)
+        elif primary_header:
+            report.fail(
+                "gatekeeper sets primary", f"gatekeeper.mjs does not mention {primary_header!r}"
+            )
         # The learner refusal is a decision, not an accident; it is pinned by the
         # error code the gatekeeper answers with.
         if "'account_restricted'" in source:
@@ -226,6 +236,30 @@ def identity_contract_checks(repo: Path, pin: dict[str, Any], report: Report) ->
                 "studio reads role",
                 f"contract.role_header_studio_reads is true but nothing under {repo / 'lib'} "
                 f"mentions {role_header!r}",
+            )
+
+    primary_header = contract.get("primary_header")
+    if primary_header and not contract.get("primary_header_studio_reads"):
+        report.skip(
+            "studio reads primary",
+            "the fork does not read the primary header yet — flip "
+            "contract.primary_header_studio_reads once it does",
+        )
+    elif primary_header:
+        primary_hits = [
+            path
+            for path in (repo / "lib").rglob("*.ts")
+            if primary_header in path.read_text(encoding="utf-8", errors="replace")
+        ]
+        if primary_hits:
+            report.ok(
+                "studio reads primary", f"{primary_header} in {primary_hits[0].relative_to(repo)}"
+            )
+        else:
+            report.fail(
+                "studio reads primary",
+                f"contract.primary_header_studio_reads is true but nothing under {repo / 'lib'} "
+                f"mentions {primary_header!r}",
             )
 
 
@@ -414,6 +448,21 @@ def compose_checks(pin: dict[str, Any], report: Report) -> None:
             "compose passes one role header name",
             f"expected both services to default STUDIO_ROLE_HEADER to {expected_role!r}, "
             f"got {role_defaults}",
+        )
+    expected_primary = (pin.get("contract") or {}).get("primary_header")
+    primary_defaults = {
+        name: env.get("STUDIO_PRIMARY_HEADER", "")
+        for name, env in (("studio", studio_env), ("gatekeeper", gate_env))
+    }
+    if expected_primary and all(
+        f":-{expected_primary}}}" in value for value in primary_defaults.values()
+    ):
+        report.ok("compose passes one primary header name", expected_primary)
+    elif expected_primary:
+        report.fail(
+            "compose passes one primary header name",
+            f"expected both services to default STUDIO_PRIMARY_HEADER to {expected_primary!r}, "
+            f"got {primary_defaults}",
         )
 
     # --- the two halves of the base path ---------------------------------------

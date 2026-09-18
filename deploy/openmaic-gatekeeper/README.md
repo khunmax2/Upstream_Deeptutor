@@ -96,6 +96,7 @@ payloads copied from a live instance instead.
 | `LOGIN_URL` | — | included in the refusal message |
 | `STUDIO_IDENTITY_HEADER` | `x-deeptutor-owner` | the header the uid is injected as; the studio must read the same name |
 | `STUDIO_ROLE_HEADER` | `x-deeptutor-role` | the header the verified role is injected as, `admin` or `user`; stripped from the client like the identity header |
+| `STUDIO_PRIMARY_HEADER` | `x-deeptutor-primary` | set to `1` for the deployment's primary administrator only (`/api/auth/status` `is_primary`, beside role `admin`), absent for everyone else; stripped from the client like the other two. The studio's account purge route is the one thing that reads it |
 | `ALLOW_ANONYMOUS` | — | `1` turns the gate off — local development, or a DeepTutor deliberately run without auth |
 
 `ALLOW_ANONYMOUS=1` is refused at startup, with a non-zero exit, when `NODE_ENV`
