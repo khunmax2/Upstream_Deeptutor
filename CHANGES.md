@@ -254,6 +254,19 @@ upstream.
 
 ---
 
+## Documentation: the round record for `deploy-2026-09-13d` … `deploy-2026-09-17b` — 2026-09-18
+
+`docs/reports/REPORT_rounds_2026-09-13d_to_17b.md` (new) closes the gap after
+`REPORT_uat_fixes_2026-09-13.md`: seventeen tags, fourteen deployed, in one
+table with the `main` commit, which half was recreated, the image or digest
+that landed and the host result, followed by what shipped per area, the
+evidence (red-before tests, in-image markers, local UAT before each host
+round, host re-checks), the process lessons of the week and what is open
+after 17b. `CLAUDE.md`'s admin-workspace note no longer says #108 is the only
+part built: Phase 1 (#108, #111, #112, #113) is live and Phase 2 is planned.
+
+---
+
 ## Documentation: Phase 2 plan — delete goes through a bin, then a purge on both sides — 2026-09-18
 
 `docs/planning/admin-roles/PHASE2_hard_delete.md` (new) plans §4 of the

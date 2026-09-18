@@ -172,8 +172,13 @@ changes only through an explicit handover command. Only the primary admin
 manages admins, and accounts are disabled rather than deleted. The design and
 its phases are in
 `docs/planning/admin-roles/DESIGN_primary_admin_and_account_lifecycle.md`.
-PR #108 (no admin can demote or delete the primary admin) is the only part
-built so far. Going back to upstream's shared admin workspace stays possible.
+Phase 1 is built and live (`deploy-2026-09-17b`): #108 protects the primary
+admin, #111 records exactly one owner with a `primary_admin show|handover`
+command, #112 makes admin management primary-only and audited, #113 enforces
+`disabled`. Phase 2 (delete through a bin with a 30-day restore, then a
+primary-only purge on both sides) is planned in
+`docs/planning/admin-roles/PHASE2_hard_delete.md`, not built. Going back to
+upstream's shared admin workspace stays possible.
 Meanwhile: on every upstream sync, and before touching
 roles, grants, personas, skills, embedding or knowledge-base code, look for new
 `is_admin`-means-`data/` assumptions and flag them rather than deciding the
