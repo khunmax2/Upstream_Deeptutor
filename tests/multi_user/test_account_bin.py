@@ -275,3 +275,34 @@ def test_orphans_are_listed_and_purged_by_id(world, mu_isolated_root):
     assert [line["target_user_id"] for line in _audit(mu_isolated_root, "account_purge")] == [
         orphan
     ]
+
+
+def test_a_file_the_purge_cannot_remove_is_reported_not_raised(
+    world, mu_isolated_root, monkeypatch
+):
+    client, tokens, accounts = world
+    student = accounts["student"]["id"]
+    paths = _give_data(mu_isolated_root, student)
+    owner = _auth(tokens["owner"])
+    assert client.delete("/api/auth/users/student", headers=owner).status_code == 200
+
+    import shutil
+
+    real_rmtree = shutil.rmtree
+
+    def refuse_workspace(path, *args, **kwargs):
+        if str(path) == str(paths["workspace"]):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", refuse_workspace)
+    purged = client.delete("/api/auth/users/student/purge?confirm=student", headers=owner)
+    assert purged.status_code == 200
+    assert purged.json()["removed"]["leftovers"] == [str(paths["workspace"])]
+    # The record went, the grant went; the workspace is what is left to remove by hand.
+    from deeptutor.multi_user.identity import get_user
+
+    assert get_user("student") is None
+    assert not paths["grant"].exists()
+    assert paths["workspace"].exists()
+    assert _audit(mu_isolated_root, "account_purge")[0]["summary"]["leftovers"] == 1

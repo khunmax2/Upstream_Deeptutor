@@ -55,6 +55,8 @@ class AccountFootprint:
     guardian_links: int = 0
     avatar: bool = False
     locations: list[str] = field(default_factory=list)
+    """Paths a purge could not remove (permissions, a file in use); empty on a clean purge."""
+    leftovers: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -141,13 +143,25 @@ def account_footprint(user_id: str) -> AccountFootprint:
     return footprint
 
 
-def _remove_tree(path: Path) -> bool:
+def _remove_tree(path: Path, leftovers: list[str]) -> bool:
+    """Remove *path*; a failure is recorded in *leftovers*, never raised.
+
+    The rows and the record are already gone by the time the files go, so a
+    file the process cannot delete (a permission slip, a handle held open)
+    must not turn a finished purge into a 500 that hides what did happen.
+    The route reports the leftovers; the operator removes them by hand.
+    """
     if not path.exists():
         return False
-    if path.is_dir() and not path.is_symlink():
-        shutil.rmtree(path)
-    else:
-        path.unlink()
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    except OSError as exc:
+        logger.warning("Purge could not remove %s: %s", path, exc)
+        leftovers.append(str(path))
+        return False
     return True
 
 
@@ -166,11 +180,11 @@ def purge_account_data(user_id: str) -> AccountFootprint:
     removed = account_footprint(user_id)
     removed.device_credentials = remove_device_credentials_for_user(user_id)
     for path in (_grant_file(user_id), _secrets_dir(user_id), _mcp_file(user_id)):
-        _remove_tree(path)
-    _remove_tree(_workspace_dir(user_id))
+        _remove_tree(path, removed.leftovers)
+    _remove_tree(_workspace_dir(user_id), removed.leftovers)
     logger.warning(
         "Purged account data of %s: workspace files=%d bytes=%d grant=%s secrets files=%d "
-        "mcp=%s device credentials=%d",
+        "mcp=%s device credentials=%d leftovers=%d",
         user_id,
         removed.workspace_files,
         removed.workspace_bytes,
@@ -178,6 +192,7 @@ def purge_account_data(user_id: str) -> AccountFootprint:
         removed.secrets_files,
         removed.mcp_config,
         removed.device_credentials,
+        len(removed.leftovers),
     )
     return removed
 

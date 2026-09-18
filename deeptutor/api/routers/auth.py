@@ -1514,6 +1514,7 @@ async def purge_user(
     delete_user(username)  # the record and its guardian links
     summary = {"username": username, "role": str(info.get("role") or "user"), **removed.as_dict()}
     summary.pop("locations", None)
+    summary["leftovers"] = len(removed.leftovers)
     log_admin_action("account_purge", target_user_id=user_id or None, summary=summary)
     logger.warning(
         "Admin '%s' purged account '%s' (%s)",
@@ -1563,6 +1564,7 @@ async def purge_orphan(
     removed = purge_account_data(user_id)
     summary = {"username": "", "orphan": True, **removed.as_dict()}
     summary.pop("locations", None)
+    summary["leftovers"] = len(removed.leftovers)
     log_admin_action("account_purge", target_user_id=user_id, summary=summary)
     logger.warning(
         "Admin '%s' purged the leftovers of %s (no account)",
