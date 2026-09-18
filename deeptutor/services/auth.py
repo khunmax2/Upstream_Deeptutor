@@ -350,13 +350,23 @@ def decode_token(token: str) -> TokenPayload | None:
 
 
 def account_disabled(username: str) -> bool:
-    """Fork: whether the account store says *username* is shut (``disabled``).
+    """Fork: whether *username* is locked out -- shut (``disabled``) or in the
+    bin (``deleted_at``, admin design Phase 2). Both refuse the same way on
+    every request; only the login message tells them apart.
 
     An account the store does not know is not disabled: the bootstrap account
-    is folded in by ``_load_users`` and never carries the flag.
+    is folded in by ``_load_users`` and never carries either mark.
     """
     record = _load_users().get(username)
-    return bool(record.get("disabled")) if isinstance(record, dict) else False
+    if not isinstance(record, dict):
+        return False
+    return bool(record.get("disabled")) or bool(record.get("deleted_at"))
+
+
+def account_deleted(username: str) -> bool:
+    """Fork: whether *username* is an account in the bin."""
+    record = _load_users().get(username)
+    return bool(record.get("deleted_at")) if isinstance(record, dict) else False
 
 
 def _current_role(username: str, token_role: str) -> str:
@@ -473,9 +483,10 @@ def authenticate(username: str, password: str) -> TokenPayload | None:
     hashed = record.get("hash", "") if isinstance(record, dict) else record
     if not verify_password(password, hashed):
         return None
-    # Fork: a disabled account does not sign in even with the right password;
-    # the login route says why (403), this stays a plain refusal.
-    if isinstance(record, dict) and record.get("disabled"):
+    # Fork: a disabled account, or one in the bin, does not sign in even with
+    # the right password; the login route says why (403), this stays a plain
+    # refusal.
+    if isinstance(record, dict) and (record.get("disabled") or record.get("deleted_at")):
         return None
 
     role = record.get("role", "user") if isinstance(record, dict) else "user"

@@ -9,7 +9,7 @@ import test from "node:test";
 
 const read = (file: string) =>
   readFileSync(path.resolve(process.cwd(), file), "utf8");
-const usersPage = read("app/(admin)/admin/users/page.tsx");
+const usersPage = read("app/(admin)/admin/users/AdminUsersClient.tsx");
 const adminApi = read("lib/admin-api.ts");
 const locale = (lang: string) =>
   JSON.parse(read(`locales/${lang}/app.json`)) as Record<string, string>;

@@ -63,6 +63,7 @@ from deeptutor.services.auth import (
     POCKETBASE_ENABLED,
     TOKEN_EXPIRE_HOURS,
     TokenPayload,
+    account_deleted,
     account_disabled,
     add_user,
     authenticate,
@@ -227,6 +228,8 @@ class UserInfo(BaseModel):
     preset: AccountPreset = "standard"
     # Fork: the primary administrator, whom no other admin may demote or delete.
     is_primary: bool = False
+    # Fork: set while the account is in the bin (deleted, restorable, name taken).
+    deleted_at: str | None = None
 
 
 class LearnerProfileRequest(BaseModel):
@@ -618,7 +621,11 @@ async def login(body: LoginRequest, response: Response) -> dict:
         if account_disabled(body.username):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This account is disabled",
+                detail=(
+                    "This account has been deleted"
+                    if account_deleted(body.username)
+                    else "This account is disabled"
+                ),
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -664,7 +671,12 @@ async def device_login(body: DeviceLoginRequest, response: Response) -> dict:
         )
     if account_disabled(payload.username):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="This account is disabled"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This account has been deleted"
+                if account_deleted(payload.username)
+                else "This account is disabled"
+            ),
         )
 
     token = create_token(
@@ -777,11 +789,15 @@ async def register(body: RegisterRequest) -> dict:
             detail="Self-registration is closed. Ask an administrator to create your account.",
         )
 
-    existing = {u["username"] for u in list_users()}
+    existing = {u["username"]: u for u in list_users()}
     if body.username in existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Username already taken",
+            detail=(
+                "This name belongs to a deleted account; purge or restore it first"
+                if existing[body.username].get("deleted_at")
+                else "Username already taken"
+            ),
         )
 
     add_user(body.username, body.password)
@@ -1218,11 +1234,15 @@ async def admin_create_user(
             "preset": "standard",
         }
 
-    existing = {u["username"] for u in list_users()}
+    existing = {u["username"]: u for u in list_users()}
     if body.username in existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Username already taken",
+            detail=(
+                "This name belongs to a deleted account; purge or restore it first"
+                if existing[body.username].get("deleted_at")
+                else "Username already taken"
+            ),
         )
 
     add_user(body.username, body.password, preset=body.preset)
@@ -1344,29 +1364,38 @@ async def remove_user(
     username: str,
     current: TokenPayload = Depends(require_admin),
 ) -> dict:
-    """Delete a user. Only the primary admin may, and not its own account."""
+    """Fork: delete moves the account to the bin (admin design §4, Phase 2).
+
+    The record stays, so the name stays taken and everything the account owns
+    stays where it is; it cannot sign in, its device credentials are revoked,
+    and the primary admin can restore it. What removes its data is the
+    separate, typed purge below. Only the primary admin, never its own
+    account, never the primary admin.
+    """
+    from deeptutor.multi_user.device_credentials import revoke_device_credentials_for_user
+    from deeptutor.multi_user.identity import set_deleted
+
     if current and username == current.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot delete your own account",
         )
 
-    # Capture the id before the record disappears so the avatar file can go too.
     info = get_user_info(username)
     if info is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     _refuse_primary_admin(info, current, "delete")
     _require_primary_admin(current, "delete", info)
 
-    removed = delete_user(username)
-    if not removed:
+    if not set_deleted(username, True):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
     user_id = str(info.get("id") or "")
-    if user_id and _USER_ID_RE.match(user_id):
-        from deeptutor.multi_user.identity import delete_avatar_file
-
-        delete_avatar_file(user_id)
+    revoked = 0
+    if user_id:
+        revoked = revoke_device_credentials_for_user(
+            user_id, revoked_by=str(current.user_id if current else "local")
+        )
+    deleted_at = str((get_user_info(username) or {}).get("deleted_at") or "")
 
     log_admin_action(
         "account_delete",
@@ -1374,12 +1403,173 @@ async def remove_user(
         summary={"username": username, "role": str(info.get("role") or "user")},
     )
     logger.warning(
-        "Admin '%s' deleted user '%s' (role=%s)",
+        "Admin '%s' moved account '%s' to the bin (role=%s, device credentials revoked=%d)",
+        current.username if current else "local",
+        username,
+        info.get("role") or "user",
+        revoked,
+    )
+    return {"ok": True, "deleted_at": deleted_at}
+
+
+@router.post("/users/{username}/restore", status_code=status.HTTP_200_OK)
+async def restore_user(
+    username: str,
+    current: TokenPayload = Depends(require_admin),
+) -> dict:
+    """Fork: take an account back out of the bin, exactly as it was."""
+    from deeptutor.multi_user.identity import set_deleted
+
+    info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _require_primary_admin(current, "restore", info)
+    if not info.get("deleted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="This account is not in the bin"
+        )
+    set_deleted(username, False)
+    user_id = str(info.get("id") or "")
+    log_admin_action(
+        "account_restore",
+        target_user_id=user_id or None,
+        summary={"username": username, "role": str(info.get("role") or "user")},
+    )
+    logger.warning(
+        "Admin '%s' restored account '%s' from the bin (role=%s)",
         current.username if current else "local",
         username,
         info.get("role") or "user",
     )
     return {"ok": True}
+
+
+def _require_typed_name(confirm: str | None, expected: str) -> None:
+    """A purge is irreversible; the caller types the name it means."""
+    if confirm != expected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Type the account name exactly to confirm the purge",
+        )
+
+
+def _purgeable_or_403(user_id: str) -> None:
+    from deeptutor.multi_user.purge import is_purgeable_account_id
+
+    if not is_purgeable_account_id(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The data of this account cannot be purged",
+        )
+
+
+@router.get("/users/{username}/footprint", status_code=status.HTTP_200_OK)
+async def user_footprint(
+    username: str,
+    current: TokenPayload = Depends(require_admin),
+) -> dict:
+    """Fork: what a purge of this account would remove on DeepWitya's side."""
+    from deeptutor.multi_user.purge import account_footprint
+
+    info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _require_primary_admin(current, "measure", info)
+    user_id = str(info.get("id") or "")
+    _purgeable_or_403(user_id)
+    return {"footprint": account_footprint(user_id).as_dict()}
+
+
+@router.delete("/users/{username}/purge", status_code=status.HTTP_200_OK)
+async def purge_user(
+    username: str,
+    current: TokenPayload = Depends(require_admin),
+    confirm: str | None = None,
+) -> dict:
+    """Fork: remove an account in the bin and everything it owns here.
+
+    Only from the bin (409 otherwise), only the primary admin, only with the
+    name typed (``?confirm=<username>``). The studio's half is the browser's
+    call before this one (design §4); the two are independent and each is
+    idempotent, so a failure on either side leaves something to press again.
+    """
+    from deeptutor.multi_user.identity import delete_avatar_file
+    from deeptutor.multi_user.purge import purge_account_data
+
+    info = get_user_info(username)
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _require_primary_admin(current, "purge", info)
+    user_id = str(info.get("id") or "")
+    _purgeable_or_403(user_id)
+    if not info.get("deleted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Delete the account first; a purge only takes an account from the bin",
+        )
+    _require_typed_name(confirm, username)
+
+    removed = purge_account_data(user_id)
+    delete_avatar_file(user_id)
+    delete_user(username)  # the record and its guardian links
+    summary = {"username": username, "role": str(info.get("role") or "user"), **removed.as_dict()}
+    summary.pop("locations", None)
+    log_admin_action("account_purge", target_user_id=user_id or None, summary=summary)
+    logger.warning(
+        "Admin '%s' purged account '%s' (%s)",
+        current.username if current else "local",
+        username,
+        user_id,
+    )
+    return {"ok": True, "removed": removed.as_dict()}
+
+
+@router.get("/orphans", status_code=status.HTTP_200_OK)
+async def list_orphans(current: TokenPayload = Depends(require_admin)) -> dict:
+    """Fork: ids that still hold data here but have no account (a shallow
+    delete from before the bin). Primary admin only."""
+    from deeptutor.multi_user.purge import account_footprint, orphan_ids
+
+    _require_primary_admin(current, "list leftovers", {"username": "", "id": ""})
+    return {
+        "orphans": [
+            {"user_id": user_id, "footprint": account_footprint(user_id).as_dict()}
+            for user_id in orphan_ids()
+        ]
+    }
+
+
+@router.delete("/orphans/{user_id}", status_code=status.HTTP_200_OK)
+async def purge_orphan(
+    user_id: str,
+    current: TokenPayload = Depends(require_admin),
+    confirm: str | None = None,
+) -> dict:
+    """Fork: purge the data of an id that has no account (``?confirm=<id>``)."""
+    from deeptutor.multi_user.identity import get_user_by_id
+    from deeptutor.multi_user.purge import is_purgeable_account_id, purge_account_data
+
+    _require_primary_admin(current, "purge leftovers of", {"username": "", "id": user_id})
+    if not is_purgeable_account_id(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Not a purgeable account id"
+        )
+    if get_user_by_id(user_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This id belongs to an account; delete and purge it from the users list",
+        )
+    _require_typed_name(confirm, user_id)
+    removed = purge_account_data(user_id)
+    summary = {"username": "", "orphan": True, **removed.as_dict()}
+    summary.pop("locations", None)
+    log_admin_action("account_purge", target_user_id=user_id, summary=summary)
+    logger.warning(
+        "Admin '%s' purged the leftovers of %s (no account)",
+        current.username if current else "local",
+        user_id,
+    )
+    return {"ok": True, "removed": removed.as_dict()}
 
 
 @router.put("/users/{username}/role", status_code=status.HTTP_200_OK)

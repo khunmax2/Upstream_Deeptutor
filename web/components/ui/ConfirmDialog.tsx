@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
   /** Disables the buttons and swaps the confirm label while pending. */
   busy?: boolean;
   busyLabel?: string;
+  /** Keeps the confirm button off until a precondition holds (a typed name). */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -35,6 +37,7 @@ export function ConfirmDialog({
   tone = "default",
   busy = false,
   busyLabel,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -100,7 +103,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-40 transition-colors ${
               tone === "danger"
                 ? "bg-red-600 text-white hover:bg-red-700"

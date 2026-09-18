@@ -96,7 +96,11 @@ def test_the_primary_admin_manages_every_other_account(world):
     assert demote_helper.status_code == 200
     assert _role_of("helper") == "user"
     assert client.delete("/api/auth/users/student", headers=_auth("owner-token")).status_code == 200
-    assert _role_of("student") is None
+    # Phase 2: delete moves the account to the bin; the record stays until a purge.
+    from deeptutor.multi_user.identity import account_in_bin
+
+    assert _role_of("student") == "user"
+    assert account_in_bin("student")
     demote_demo = client.put(
         "/api/auth/users/demo/role", json={"role": "user"}, headers=_auth("owner-token")
     )

@@ -285,7 +285,11 @@ def test_avatar_serving_headers_and_visibility(profile_client):
 
 
 def test_admin_user_deletion_removes_avatar_file(profile_client):
-    """Deleting an account must not leave its avatar image orphaned on disk."""
+    """Purging an account must not leave its avatar image orphaned on disk.
+
+    Phase 2: delete moves the account to the bin and keeps everything; the
+    typed purge from the bin is what removes the avatar with the rest.
+    """
     from deeptutor.multi_user.identity import get_avatar_file
 
     client, users = profile_client
@@ -298,6 +302,9 @@ def test_admin_user_deletion_removes_avatar_file(profile_client):
 
     response = client.delete("/api/auth/users/bob", headers=_auth("admin-token"))
     assert response.status_code == 200
+    assert get_avatar_file(users["bob"]["id"]) is not None
+    purged = client.delete("/api/auth/users/bob/purge?confirm=bob", headers=_auth("admin-token"))
+    assert purged.status_code == 200
     assert get_avatar_file(users["bob"]["id"]) is None
 
 
