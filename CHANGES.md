@@ -316,8 +316,35 @@ out and keeps the name and the data; restore leaves the disabled mark
 alone; purge removes every location only from the bin and only with the
 typed name and frees the name for a new id; a promoted admin gets 403 on
 every step and the primary is never a target; orphans are listed and purged
-by id), `web/tests/admin-account-bin.test.ts` (7). Three older tests that
-expected the shallow delete now expect the bin. Local UAT below.
+by id; a file the purge cannot remove is reported in `leftovers`, not
+raised), `web/tests/admin-account-bin.test.ts` (7). Three older tests that
+expected the shallow delete now expect the bin.
+
+Local UAT on a `deeptutor` built from this branch, through the UAT nginx
+and the real gatekeeper, with the studio on the `e75ef948` digest: an API
+probe (45 checks) creates a throwaway admin and a throwaway user through
+the API, plants a workspace file, grant, secrets and MCP file as the app
+user and a studio settings row through the gatekeeper, then walks
+delete → locked out on both sides (a fresh cookie gets 401 from the
+gatekeeper; one it verified a moment ago is admitted until its cache TTL
+runs out), name taken with the "deleted account" reason, data intact →
+restore → login works, purge refused → delete → studio purge, typed purge,
+nothing left on disk, name free with a new id → a planted orphan listed and
+purged → the primary admin refused as a target → the three audit actions
+present. A Playwright pass (19 checks) drives the page as the primary
+admin: delete dialog says "bin", the row moves to the Bin tab with 30 days
+left, restore brings it back, the purge dialog shows both footprints,
+keeps its button off until the exact name is typed, and the row is gone
+after; no page errors.
+
+The first probe run wrote the account store as root from `docker exec`
+and the app, which runs as its own user, could no longer read it; it
+treated the store as empty and its next write replaced the file, which
+took the four local UAT accounts with it. Two lessons recorded: probes run
+in the container only as the app user and only write accounts through the
+API; and `identity._read_json` turning an unreadable store into "no users"
+is a hazard to close separately -- a store that cannot be read must not be
+one a writer then overwrites.
 
 ---
 
