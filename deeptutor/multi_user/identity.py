@@ -96,13 +96,47 @@ def _canonical_record(
     return record
 
 
+class UsersStoreUnreadableError(RuntimeError):
+    """Fork: the account store exists on disk but cannot be read or parsed.
+
+    Raised instead of answering an empty store. Every write path reads the
+    store back through :func:`load_users` before it writes, and
+    :func:`_write_users` replaces the file whole, so "unreadable" answered
+    as "empty" is one write away from wiping every account -- which is what
+    happened on 2026-09-19 when a ``docker exec`` as root left ``users.json``
+    owned by root with mode 0600 while the app ran as ``deeptutor``. An
+    unreadable store is an outage to fix on the host, not an empty store.
+    """
+
+
 def _read_json(path: Path) -> dict[str, Any]:
+    """Read a JSON object from *path*: readable or refuse.
+
+    A missing file is the caller's decision (they check ``exists()`` first);
+    a file that is there but cannot be read, is not JSON, or is not an object
+    raises :class:`UsersStoreUnreadableError` after logging at ERROR so the
+    cause reaches ``docker logs``.
+    """
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
-        return loaded if isinstance(loaded, dict) else {}
     except Exception as exc:
-        logger.warning("Failed to read %s: %s", path, exc)
-        return {}
+        logger.error(
+            "Account store %s exists but cannot be read (%s: %s); refusing to treat it as "
+            "empty. Fix the file's ownership, permissions or contents on the host -- "
+            "no account is read or written until it is readable again.",
+            path,
+            type(exc).__name__,
+            exc,
+        )
+        raise UsersStoreUnreadableError(f"{path}: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(loaded, dict):
+        logger.error(
+            "Account store %s is not a JSON object (got %s); refusing to treat it as empty.",
+            path,
+            type(loaded).__name__,
+        )
+        raise UsersStoreUnreadableError(f"{path}: not a JSON object")
+    return loaded
 
 
 def _write_users(users: dict[str, dict[str, Any]]) -> None:

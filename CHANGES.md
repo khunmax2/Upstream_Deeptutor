@@ -254,6 +254,44 @@ upstream.
 
 ---
 
+## An account store that cannot be read is an outage, not an empty store — 2026-09-19
+
+Four accounts were lost locally on 2026-09-19. A `docker exec` run as root
+had left `data/system/auth/users.json` owned by root with mode 0600 while
+the app runs as `deeptutor`. `identity._read_json` caught the
+`PermissionError`, logged one WARNING and answered `{}`; the next writer
+(`save_user`) read that empty store, added its one record, and wrote the
+result back through `atomic_write_text` -- a new file, replacing the one it
+had never read. Every write path (`save_user`, `delete_user`, `set_role`,
+`set_disabled`, `set_deleted`, `set_password`, `set_avatar`, `set_preset`,
+the ACL edits) has the same read-modify-write shape, so any of them would
+have done it.
+
+- **Readable or refuse** (`deeptutor/multi_user/identity.py`). When
+  `users.json` exists but cannot be read, is not JSON, or is not an object,
+  `_read_json` now raises `UsersStoreUnreadableError` after logging at
+  ERROR -- a message that names the file, the cause and what to fix on the
+  host -- instead of answering an empty store. `load_users` propagates it,
+  so every writer refuses before it can replace the file; login, token
+  checks and the users page answer 500 for the duration, which is the
+  outage the log describes. A **missing** file is still an empty store:
+  first-run registration and the legacy-file migration are unchanged.
+- **The background leader does not thrash on it**
+  (`deeptutor/app/container.py`). The turn-recovery pass lists every
+  account's scope; raising there would have made the leader drop and
+  re-elect every cycle, stopping partners and cron each time. It now
+  recovers the admin scope alone that round, with a WARNING, and tries the
+  rest again next round.
+
+Tests: `tests/multi_user/test_users_store_readable_or_refuse.py` (12; red
+before -- the first one reproduced the wipe: `save_user` on an unreadable
+seeded store left only the new record). The unreadable case is built by
+patching `Path.read_text` for that one path, because `chmod 000` is ignored
+by a root runner and means nothing on Windows; the seeded bytes must be
+byte-equal afterwards.
+
+---
+
 ## Delete goes through a bin, and a typed purge removes the account's data on both sides — 2026-09-19
 
 The last piece of the admin design's Phase 2

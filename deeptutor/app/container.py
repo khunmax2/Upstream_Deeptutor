@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import socket
 from typing import Any
@@ -27,6 +28,8 @@ from deeptutor.services.session.scope import store_scope
 from deeptutor.services.session.turn_runtime import TurnRuntimeManager
 
 from .service import TurnApplicationService
+
+logger = logging.getLogger(__name__)
 
 
 class StoreProvider:
@@ -164,12 +167,21 @@ class ApplicationContainer:
     def _local_users() -> list[Any]:
         """Return the admin plus every registered local user scope."""
 
-        from deeptutor.multi_user.identity import list_user_info
+        from deeptutor.multi_user.identity import UsersStoreUnreadableError, list_user_info
         from deeptutor.multi_user.models import CurrentUser
         from deeptutor.multi_user.paths import local_admin_user, scope_for_user
 
         users = [local_admin_user()]
-        for record in list_user_info():
+        try:
+            records = list_user_info()
+        except UsersStoreUnreadableError:
+            # Fork: the store refuses rather than answering empty (identity.py).
+            # Recovery is read-only, so skipping the user scopes this round is
+            # safe; raising here would make the background leader drop and
+            # re-elect every cycle. identity already logged the cause at ERROR.
+            logger.warning("Account store unreadable; recovering the admin scope only this round")
+            return users
+        for record in records:
             user_id = str(record.get("id") or "").strip()
             role = str(record.get("role") or "user")
             if not user_id or role == "admin":
