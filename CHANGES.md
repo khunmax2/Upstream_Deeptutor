@@ -254,6 +254,63 @@ upstream.
 
 ---
 
+## Pin → fork `e75ef948`: the gatekeeper marks the primary admin, and the studio can purge an account's data — 2026-09-18
+
+The first two pieces of the admin design's Phase 2
+(`docs/planning/admin-roles/PHASE2_hard_delete.md`): the studio's purge
+routes, and the header that tells the studio who may call them. Nothing
+visible changes for anyone in this round; the delete button on the users
+page is still Phase 1's, and PR-B brings the bin, restore and purge.
+
+**Fork PR #44** (`e75ef948`, 121 commits over upstream `29735f10`):
+
+- A third gateway header, `x-deeptutor-primary: 1`, marks the deployment's
+  primary administrator. `readStudioPrimary()` reads it, true only beside
+  role `admin`; `STUDIO_PRIMARY_HEADER` renames it like the other two.
+- `lib/server/accounts/purge.ts` names every table with an owner column and
+  removes the account's rows in one transaction. A **published course
+  stays**, re-owned to `deleted:<uid>`, because the learners using it did
+  not lose their author (Moodle keeps forum posts, GitHub re-attributes to
+  `ghost`); drafts and soft-deleted courses go with their
+  `data/classrooms/<stage>/` media. **Shared keys and the organisation's
+  list stay**, their `updated_by` re-attributed to the tombstone. Orphaned
+  asset blobs are marked unreferenced for the storage package's collector.
+- `/api/studio/admin/accounts`: `GET` lists the `user:` ids with rows here
+  (DeepWitya will show the ones with no account as leftovers),
+  `GET /{ownerId}/footprint` counts without deleting, `DELETE /{ownerId}`
+  purges rows then files. 403 without the primary header, idempotent (a
+  stranded id answers 200 with zeros), self-purge refused, every purge and
+  refusal logged at WARN as `[Accounts]`.
+- Tests build the real schemas on PGlite and check that nothing owned by the
+  purged id remains, the other account is untouched, the published course
+  and the shared rows survive re-attributed, only the orphaned blob is
+  marked, and a second purge is empty; the route test covers the 403s, the
+  malformed ids, the self-purge and the files on disk.
+
+**DeepWitya, this repository:**
+
+- `/api/auth/status` answers `is_primary` (`is_primary_admin_account`, only
+  beside role `admin`; the `local-admin` of an auth-disabled install is
+  primary). `tests/multi_user/test_status_is_primary.py`, red before.
+- `deploy/openmaic-gatekeeper/gatekeeper.mjs` sets `x-deeptutor-primary: 1`
+  from that flag, only beside `admin`, cached with the verdict, and strips
+  any copy a client sent on both the HTTP and the websocket path.
+  `gatekeeper.test.mjs` gains seven checks, two of them the spoof cases
+  that were red before the strip.
+- `deploy/docker-compose.openmaic.yml` passes `STUDIO_PRIMARY_HEADER` to
+  both services; `check_openmaic_contract.py` asserts the gatekeeper sets
+  it, compose passes one name, and the fork reads it (pin fields
+  `contract.primary_header`, `primary_header_studio_reads`); the gatekeeper
+  README documents it. Locale keys unchanged at 1848.
+
+Image: pending `studio-image.yml` on `feat/primary-admin-studio-header`;
+the digest is recorded here once built. Rolling back is the 17 digest
+`sha256:a5962e05…3e82461`, with no database restore: the new image adds no
+table, and the routes it adds are unreachable without the header, which the
+old gatekeeper never sends.
+
+---
+
 ## Documentation: the round record for `deploy-2026-09-13d` … `deploy-2026-09-17b` — 2026-09-18
 
 `docs/reports/REPORT_rounds_2026-09-13d_to_17b.md` (new) closes the gap after
