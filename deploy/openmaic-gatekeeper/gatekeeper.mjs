@@ -74,6 +74,15 @@ const IDENTITY_PREFIX = 'user:';
  * `user`; the studio treats anything else, including absence, as `user`.
  */
 const ROLE_HEADER = (process.env.STUDIO_ROLE_HEADER || 'x-deeptutor-role').toLowerCase();
+/**
+ * The third header, and the narrowest: set to `1` only for the deployment's
+ * primary administrator -- the one account that owns the deployment and the
+ * only one the studio lets purge another account's data (admin design Phase
+ * 2, 2026-09-18). `role` cannot say this, every admin is `admin`, so it is
+ * its own header, read from the same verified status (`is_primary`) and
+ * carried the same way: stripped from the client, set from the verdict.
+ */
+const PRIMARY_HEADER = (process.env.STUDIO_PRIMARY_HEADER || 'x-deeptutor-primary').toLowerCase();
 const LOGIN_URL = process.env.LOGIN_URL || '';
 const ALLOW_ANONYMOUS = process.env.ALLOW_ANONYMOUS === '1';
 const AUTH_TIMEOUT_MS = 5_000;
@@ -184,8 +193,8 @@ function cachedVerdict(token) {
   return hit ? hit.ok : null;
 }
 
-function remember(token, ok, uid, role, restricted = false) {
-  verdicts.set(token, { ok, uid, role, restricted, expires: Date.now() + CACHE_TTL_MS });
+function remember(token, ok, uid, role, restricted = false, primary = false) {
+  verdicts.set(token, { ok, uid, role, restricted, primary, expires: Date.now() + CACHE_TTL_MS });
   // The map only ever holds live sessions; sweep on write so it cannot grow
   // without bound on a host that sees many short-lived tokens.
   if (verdicts.size > 1000) {
@@ -253,7 +262,7 @@ async function verify(token) {
   const cached = cachedEntry(token);
   if (cached) {
     const verdict = cached.ok ? 'allow' : cached.restricted ? 'restricted' : 'deny';
-    return { verdict, uid: cached.uid, role: cached.role };
+    return { verdict, uid: cached.uid, role: cached.role, primary: cached.primary === true };
   }
 
   const controller = new AbortController();
@@ -300,8 +309,16 @@ async function verify(token) {
     // to the caller.
     const uid = ok ? String(status?.user_id ?? '').trim() : '';
     const role = ok && (status?.is_admin === true || status?.role === 'admin') ? 'admin' : 'user';
-    remember(token, ok, uid || undefined, role, restricted);
-    return { verdict: ok ? 'allow' : restricted ? 'restricted' : 'deny', uid: uid || undefined, role };
+    // Primary only ever beside admin: a status that said otherwise would be a
+    // DeepWitya bug, and the safe reading of a contradiction is "not primary".
+    const primary = role === 'admin' && status?.is_primary === true;
+    remember(token, ok, uid || undefined, role, restricted, primary);
+    return {
+      verdict: ok ? 'allow' : restricted ? 'restricted' : 'deny',
+      uid: uid || undefined,
+      role,
+      primary,
+    };
   } catch {
     // Deliberately not cached: a transient outage must not lock a reader out
     // for the whole TTL after the checker comes back.
@@ -380,15 +397,17 @@ function refuseAuthDisabled(res) {
  * when the gate is off would make ALLOW_ANONYMOUS a spoofing tool rather than a
  * development convenience.
  */
-function forward(req, res, ownerId, role) {
+function forward(req, res, ownerId, role, primary) {
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
   const headers = { ...req.headers, host: UPSTREAM.host };
   if (cookie) headers.cookie = cookie;
   else delete headers.cookie;
   stripHeader(headers, IDENTITY_HEADER);
   stripHeader(headers, ROLE_HEADER);
+  stripHeader(headers, PRIMARY_HEADER);
   if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
   if (ownerId && role) headers[ROLE_HEADER] = role;
+  if (ownerId && role === 'admin' && primary) headers[PRIMARY_HEADER] = '1';
 
   const proxied = http.request(
     {
@@ -450,8 +469,8 @@ const server = http.createServer(async (req, res) => {
     );
   }
 
-  const { verdict, uid, role } = await verify(token);
-  if (verdict === 'allow') return forward(req, res, uid, role);
+  const { verdict, uid, role, primary } = await verify(token);
+  if (verdict === 'allow') return forward(req, res, uid, role, primary);
   if (verdict === 'restricted') return refuseRestricted(res);
   if (verdict === 'auth_disabled') return refuseAuthDisabled(res);
   if (verdict === 'unavailable') return refuseUnavailable(res);
@@ -473,12 +492,14 @@ server.on('upgrade', async (req, socket, head) => {
   const token = readCookie(req.headers.cookie, COOKIE_NAME);
   let ownerId;
   let role;
+  let primary;
   if (!ALLOW_ANONYMOUS) {
     if (!token) return socket.destroy();
     const result = await verify(token);
     if (result.verdict !== 'allow') return socket.destroy();
     ownerId = result.uid;
     role = result.role;
+    primary = result.primary;
   }
 
   const cookie = stripCookie(req.headers.cookie, COOKIE_NAME);
@@ -490,8 +511,10 @@ server.on('upgrade', async (req, socket, head) => {
   // thinks to look.
   stripHeader(headers, IDENTITY_HEADER);
   stripHeader(headers, ROLE_HEADER);
+  stripHeader(headers, PRIMARY_HEADER);
   if (ownerId) headers[IDENTITY_HEADER] = `${IDENTITY_PREFIX}${ownerId}`;
   if (ownerId && role) headers[ROLE_HEADER] = role;
+  if (ownerId && role === 'admin' && primary) headers[PRIMARY_HEADER] = '1';
 
   const upstream = net.connect(Number(UPSTREAM.port || 80), UPSTREAM.hostname, () => {
     upstream.write(

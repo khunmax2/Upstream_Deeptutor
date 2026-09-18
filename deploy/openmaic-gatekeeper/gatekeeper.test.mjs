@@ -23,6 +23,7 @@ const UPSTREAM_PORT = 4802;
 const GATE_PORT = 4803;
 const OPEN_GATE_PORT = 4804;
 const ADMIN = 'admin-token-ok';
+const PRIMARY = 'tok-primary-000';
 const LEARNER = 'learner-token-ok';
 const CUSTOM_OPEN = 'custom-open-token-ok';
 const CUSTOM_POLICIED = 'custom-policied-token-ok';
@@ -61,6 +62,7 @@ const POLICY = { allowed_surfaces: ['chat', 'reading'] };
 const ACCOUNTS = {
   [GOOD]: { user_id: 'u-1', username: 'tester', role: 'user', is_admin: false, preset: 'standard', learning_policy: null },
   [ADMIN]: { user_id: 'u-9', username: 'boss', role: 'admin', is_admin: true, preset: 'standard', learning_policy: null },
+  [PRIMARY]: { user_id: 'u-0', username: 'owner', role: 'admin', is_admin: true, is_primary: true, preset: 'standard', learning_policy: null },
   [LEARNER]: { user_id: 'u-5', username: 'pupil', role: 'user', is_admin: false, preset: 'learner', learning_policy: POLICY },
   [CUSTOM_OPEN]: { user_id: 'u-6', username: 'tutor', role: 'user', is_admin: false, preset: 'custom', learning_policy: null },
   [CUSTOM_POLICIED]: { user_id: 'u-7', username: 'cadet', role: 'user', is_admin: false, preset: 'custom', learning_policy: POLICY },
@@ -75,6 +77,7 @@ const authOn = (cookieHeader) => {
     username: account?.username ?? null,
     role: account?.role ?? null,
     is_admin: account?.is_admin ?? false,
+    is_primary: account?.is_primary ?? false,
     avatar: '',
     preset: account?.preset ?? null,
     learning_policy: account?.learning_policy ?? null,
@@ -106,6 +109,7 @@ const upstream = http.createServer((req, res) => {
       cookieSeen: req.headers.cookie ?? null,
       identitySeen: req.headers['x-deeptutor-owner'] ?? null,
       roleSeen: req.headers['x-deeptutor-role'] ?? null,
+      primarySeen: req.headers['x-deeptutor-primary'] ?? null,
     }),
   );
 });
@@ -271,6 +275,22 @@ const roleSpoof = await call(`dt_token=${GOOD}`, GATE_PORT, { 'x-deeptutor-role'
 check("a client's own role never survives", roleSpoof.body?.roleSeen, 'user');
 const openRole = await call(null, OPEN_GATE_PORT, { 'x-deeptutor-role': 'admin' });
 check('ALLOW_ANONYMOUS strips a client role too', openRole.body?.roleSeen, null);
+
+console.log('\n  -- primary header (admin design Phase 2, 2026-09-18) --');
+
+// The third header: only the deployment's primary administrator carries it,
+// so the studio's purge route can tell it from a promoted admin.
+const asPrimary = await call(`dt_token=${PRIMARY}`);
+check('the primary admin is forwarded as admin', asPrimary.body?.roleSeen, 'admin');
+check('...and marked primary', asPrimary.body?.primarySeen, '1');
+check('a promoted admin is not marked primary', asAdmin.body?.primarySeen, null);
+check('an ordinary account is not marked primary', cachedId.body?.primarySeen, null);
+const primarySpoof = await call(`dt_token=${ADMIN}`, GATE_PORT, { 'x-deeptutor-primary': '1' });
+check("a client's own primary mark never survives", primarySpoof.body?.primarySeen, null);
+const openPrimary = await call(null, OPEN_GATE_PORT, { 'x-deeptutor-primary': '1' });
+check('ALLOW_ANONYMOUS strips a client primary mark too', openPrimary.body?.primarySeen, null);
+const cachedPrimary = await call(`dt_token=${PRIMARY}`);
+check('a cached verdict still carries the primary mark', cachedPrimary.body?.primarySeen, '1');
 
 // The sidebar hides the studio from a learning account; the gate closes the
 // door that hidden entry led to. A refusal, not a login link -- the reader is
