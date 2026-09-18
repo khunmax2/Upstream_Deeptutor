@@ -1,11 +1,12 @@
 # Phase 2: delete with a grace period, then purge on both sides
 
-Draft for review, 2026-09-18 (revised the same day after the survey below).
-Implements §4 of `DESIGN_primary_admin_and_account_lifecycle.md`. Nothing
-here is built yet. Phase 1 (`deploy-2026-09-17b`) is live: only the primary
-admin deletes, and "delete" is still the shallow delete that strands data,
-so the delete button is the one thing on the users page that still does the
-wrong thing.
+Draft for review, 2026-09-18 (revised the same day after the survey below;
+agreed as decision 10). Implements §4 of
+`DESIGN_primary_admin_and_account_lifecycle.md`. Built 2026-09-18/19: fork
+#44 (the studio routes), DeepWitya #116 (status flag, gatekeeper header,
+pin) and the bin/restore/purge PR; the host round is what remains. Phase 1
+(`deploy-2026-09-17b`) is live on the host, where "delete" is still the
+shallow delete that strands data until that round.
 
 ## What upstream and other systems do
 

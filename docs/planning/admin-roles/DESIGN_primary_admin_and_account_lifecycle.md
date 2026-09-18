@@ -241,6 +241,17 @@ Progress (one step per PR, each tested locally first):
 purge) and the studio purge route, then the host cleanup of the stranded
 accounts. Plan: `PHASE2_hard_delete.md`.
 
+Progress (one step per PR, each tested locally through the real gatekeeper):
+
+1. Studio purge routes behind `readStudioPrimary` — fork PR #44, merged
+   (`e75ef948`).
+2. `/api/auth/status.is_primary`, the gatekeeper's `x-deeptutor-primary`,
+   the contract fields and the pin — DeepWitya PR #116, merged.
+3. The bin, restore, purge, footprint, orphans and the users page —
+   `feat/account-bin-and-purge`.
+4. One host round, then the two stranded ids purged from the leftovers
+   panel.
+
 ## Not decided here
 
 - Whether promoted admins can reach the primary admin's knowledge bases and

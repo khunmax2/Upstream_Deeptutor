@@ -426,6 +426,21 @@ def revoke_device_credentials_for_user(
     return changed
 
 
+def remove_device_credentials_for_user(user_id: str) -> int:
+    """Fork: drop every device-credential record of one account (a purge).
+
+    Revoking keeps a record so a revoked pairing code stays refused; a purge
+    removes the account the records belong to, so the records go with it.
+    """
+    with _DEVICE_WRITE_LOCK:
+        records = _load_records()
+        kept = [record for record in records if record.get("user_id") != user_id]
+        removed = len(records) - len(kept)
+        if removed:
+            _write_records(kept)
+    return removed
+
+
 __all__ = [
     "DEVICE_CREDENTIALS_FILE",
     "HEARTBEAT_TIMEOUT_SECONDS",

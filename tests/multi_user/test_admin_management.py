@@ -41,6 +41,12 @@ def _role_of(username: str) -> str | None:
     return None if record is None else str(record.get("role") or "user")
 
 
+def _in_bin(username: str) -> bool:
+    from deeptutor.multi_user.identity import account_in_bin
+
+    return account_in_bin(username)
+
+
 @pytest.fixture
 def world(mu_isolated_root, monkeypatch):
     from deeptutor.api.routers import auth as auth_router
@@ -102,7 +108,9 @@ def test_only_the_primary_admin_deletes(world):
     assert client.delete("/api/auth/users/student", headers=_auth("demo-token")).status_code == 403
     assert _role_of("student") == "user"
     assert client.delete("/api/auth/users/student", headers=_auth("owner-token")).status_code == 200
-    assert _role_of("student") is None
+    # Phase 2: delete moves the account to the bin; the record and role stay.
+    assert _role_of("student") == "user"
+    assert _in_bin("student")
 
 
 def test_the_primary_admin_still_cannot_touch_itself(world):

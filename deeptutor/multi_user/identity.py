@@ -84,6 +84,11 @@ def _canonical_record(
         "avatar": str(value.get("avatar") or ""),
         "preset": preset,
     }
+    # Fork: an account in the bin keeps its record (the name stays taken) with
+    # the moment it was deleted; ``None`` or absent means it is not in the bin.
+    deleted_at = value.get("deleted_at")
+    if isinstance(deleted_at, str) and deleted_at:
+        record["deleted_at"] = deleted_at
     if "book_permission" in value:
         record["book_permission"] = canonical_book_permission(value.get("book_permission"))
     if "learner_profile" in value:
@@ -258,6 +263,8 @@ def save_user(
             "book_permission": canonical_book_permission(existing.get("book_permission")),
             "learner_profile": normalize_profile(existing.get("learner_profile")),
         }
+        if isinstance(existing.get("deleted_at"), str) and existing.get("deleted_at"):
+            record["deleted_at"] = existing["deleted_at"]
         users[username] = record
         _write_users(users)
     return record
@@ -274,6 +281,7 @@ def list_user_info(  # nosec B107 - empty defaults mean "no env fallback supplie
             "role": record.get("role", "user"),
             "created_at": record.get("created_at", ""),
             "disabled": bool(record.get("disabled", False)),
+            "deleted_at": record.get("deleted_at") or None,
             "avatar": str(record.get("avatar") or ""),
             "preset": str(record.get("preset") or "standard"),
             "book_permission": public_permission_dict(
@@ -489,6 +497,35 @@ def set_disabled(username: str, disabled: bool) -> bool:
         users[username]["disabled"] = bool(disabled)
         _write_users(users)
     return True
+
+
+def set_deleted(username: str, deleted: bool) -> bool:
+    """Fork: move an account into the bin, or take it back out.
+
+    In the bin the record stays -- so the name stays taken and everything the
+    account owns stays where it is -- and ``deleted_at`` says since when. It
+    cannot sign in (``services.auth.decode_token`` refuses it like a disabled
+    account). Restoring clears the stamp and nothing else. Returns True when
+    the account exists.
+    """
+    if not USERS_FILE.exists():
+        return False
+    with _USERS_WRITE_LOCK:
+        users = load_users()
+        if username not in users:
+            return False
+        if deleted:
+            users[username]["deleted_at"] = users[username].get("deleted_at") or utc_now()
+        else:
+            users[username].pop("deleted_at", None)
+        _write_users(users)
+    return True
+
+
+def account_in_bin(username: str) -> bool:
+    """Fork: whether *username* is an account in the bin."""
+    record = get_user(username)
+    return bool(record and record.get("deleted_at"))
 
 
 def set_preset(username: str, preset: AccountPreset) -> bool:

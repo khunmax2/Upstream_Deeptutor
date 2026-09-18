@@ -8,7 +8,7 @@ const adminApi = readFileSync(
   "utf8",
 );
 const usersPage = readFileSync(
-  path.resolve(process.cwd(), "app/(admin)/admin/users/page.tsx"),
+  path.resolve(process.cwd(), "app/(admin)/admin/users/AdminUsersClient.tsx"),
   "utf8",
 );
 const grantEditor = readFileSync(
