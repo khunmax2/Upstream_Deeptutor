@@ -254,6 +254,43 @@ upstream.
 
 ---
 
+## Documentation: Phase 2 plan — delete goes through a bin, then a purge on both sides — 2026-09-18
+
+`docs/planning/admin-roles/PHASE2_hard_delete.md` (new) plans §4 of the
+lifecycle design, and the design doc gains decision 10. Nothing is built.
+
+Before writing it, upstream HKUDS/DeepTutor `main` and the official
+documentation of Microsoft Entra, Google Workspace, Moodle, Slack and GitHub
+were checked. Upstream still has the shallow delete this fork had before
+Phase 1, never reads the `disabled` flag, and audits nothing (its open issue
+#1230 asks for the first admin to be demotable). The others share one shape:
+disable is the everyday action; delete keeps the account restorable for a
+window (Entra 30 days, Google 20) before a permanent purge; content the
+account shared stays (Moodle forum posts, GitHub's `ghost`); the old name is
+reusable afterwards but as a new account; the owner hands over before it
+goes. The plan adopts that shape, and the user agreed on 2026-09-18:
+
+- **Delete** moves the account to a bin: locked out through the Phase 1
+  enforcement, name still taken, every byte kept on both sides, restorable
+  by the primary admin for 30 days. Not typed: it is reversible.
+- **Purge** is a second, typed, primary-only action from the bin, never
+  scheduled. The studio is purged first (idempotent route behind a new
+  `x-deeptutor-primary` gatekeeper header — a contract change), then
+  DeepWitya removes the workspace, grants, secrets, MCP file, device
+  credentials and the record.
+- **Published courses survive a purge** as "from a deleted account"; drafts
+  and their media go. Shared keys and the organisation's model list stay.
+- An admin can be deleted without demoting it first; the bin is the guard.
+- Audit actions: `account_delete`, `account_restore`, `account_purge`.
+- A leftovers panel purges ids that have data but no account — the two
+  stranded ids on the host.
+
+Sequence: studio PR → DeepWitya PR-A (status flag, gatekeeper header, pin,
+contract) → DeepWitya PR-B (bin, restore, purge, users page) → one host
+round with a backup first.
+
+---
+
 ## An account is disabled instead of deleted, and a disabled account is out — 2026-09-17
 
 Phase 1, step 3 of the admin design (§3 and §6), the last DeepWitya step

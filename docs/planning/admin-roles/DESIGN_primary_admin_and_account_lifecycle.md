@@ -46,11 +46,12 @@ first admin" is turned up a design that never said it clearly:
 | 2 | Who is the primary admin? | The `auth.json` bootstrap account when it is usable (username **and** password hash). Otherwise the account recorded in `primary_admin.json`. Exactly one owner of `data/`. |
 | 3 | Does the owner change by itself when a usable bootstrap appears later? | No. The election prefers a usable bootstrap only while no owner is recorded. Changing the owner is an explicit server command, and it is logged. |
 | 4 | Who manages admins? | Only the primary admin promotes, demotes, disables or deletes an admin. |
-| 5 | What does "delete" do? | By default it becomes *disable*: the account cannot sign in, its data stays, and it can be re-enabled. Hard delete is primary-only. It asks for confirmation, then removes the account's data on both DeepWitya and the studio. |
+| 5 | What does "delete" do? | By default it becomes *disable*: the account cannot sign in, its data stays, and it can be re-enabled. Hard delete is primary-only. It asks for confirmation, then removes the account's data on both DeepWitya and the studio. **Revised 2026-09-18 (decision 10):** delete first moves the account to a bin for 30 days with full restore; the purge is the separate, typed, primary-only step. |
 | 6 | Who disables whom? | Any admin disables or enables ordinary users. Only the primary disables admins or hard-deletes anyone. |
 | 7 | Audit? | Every create, promote, demote, disable, enable, delete and owner handover records the actor, the target and the time. |
 | 8 | Course Studio: who shares, replaces or stops a shared API key? | Unchanged: any admin, with the record and the confirmations that shipped in `deploy-2026-09-15d`. |
 | 9 | Course Studio: who publishes the organisation's model list and default model? | Unchanged: any admin, with the record that ships in `deploy-2026-09-15g`. |
+| 10 | (2026-09-18) Is a delete immediate? | No. Delete = the account goes to a bin: locked out, name still taken, every byte kept, restorable by the primary admin for 30 days. Purge is a second, typed, primary-only action from the bin, never scheduled. Published courses survive a purge as "from a deleted account"; drafts go. An admin can be deleted without demoting first. Audit: `account_delete`, `account_restore`, `account_purge`. Shape taken from Entra / Google Workspace (soft delete + restore window) and Moodle / GitHub (shared content outlives its author); see `PHASE2_hard_delete.md`. |
 
 ## Design
 
@@ -117,10 +118,12 @@ Other admins keep:
 
 ### 4. Hard delete (Phase 2)
 
-The worked-out plan is `PHASE2_hard_delete.md` (draft 2026-09-18).
+The worked-out plan is `PHASE2_hard_delete.md` (draft 2026-09-18, revised
+the same day with decision 10: a bin with a 30-day restore comes before the
+purge, and published courses are kept).
 
-Primary admin only. The dialog makes the admin type the username and lists
-what will be removed.
+Primary admin only. The purge dialog makes the admin type the username and
+lists what will be removed and what will be kept.
 
 **DeepWitya removes:**
 
@@ -230,12 +233,13 @@ Progress (one step per PR, each tested locally first):
 1. §1 one recorded owner + the handover command — PR #111, merged.
 2. §2 only the primary admin manages admins, with the §5 audit lines for
    create, role change and delete — PR #112, merged.
-3. §3 disable instead of delete, with the §6 users page —
-   `feat/account-disable`. Enforcement lives in `decode_token`, the one gate
+3. §3 disable instead of delete, with the §6 users page — PR #113, merged
+   (`deploy-2026-09-17b`). Enforcement lives in `decode_token`, the one gate
    every request, the WebSocket upgrade and `/api/auth/status` pass.
 
-**Phase 2: DeepWitya, studio and gatekeeper.** It covers §4 and the studio
-purge route, then the host cleanup of the stranded accounts.
+**Phase 2: DeepWitya, studio and gatekeeper.** It covers §4 (bin, restore,
+purge) and the studio purge route, then the host cleanup of the stranded
+accounts. Plan: `PHASE2_hard_delete.md`.
 
 ## Not decided here
 
