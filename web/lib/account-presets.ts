@@ -37,6 +37,15 @@ export function presetLabel(preset: string | null | undefined): string {
 }
 
 /**
+ * Presets an account can be guarded under: a parent's link to a `learner`
+ * and a teacher's link to a `student` are the same guardian record
+ * (`multi_user/guardians.py`, `GUARDABLE_PRESETS`).
+ */
+export function isGuardablePreset(preset: string | null | undefined): boolean {
+  return preset === "learner" || preset === "student";
+}
+
+/**
  * Presets whose grants an administrator curates and the admin dashboard
  * tracks for readiness. `standard` accounts configure themselves.
  */

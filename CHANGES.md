@@ -312,6 +312,67 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 2: learning evidence for the teacher — 2026-09-20
+
+Design sections 4–6: a teacher sees learning evidence only, read through
+one fork module, never a transcript or a memory document; the one memory
+text a teacher gets is written for them from the allowed sections.
+
+- `deeptutor/multi_user/learning_evidence.py` (new) returns one evidence
+  record per student from the v1.6.6 sources: Mastery Path (per path, the
+  objective map via `policy.map_summary`, attempts, active errors), the
+  Question Bank (totals, correct/wrong, last 30 days, by source, by
+  material, by category), reading progress (per material: position,
+  finished, annotation and bookmark *counts*), activity (sessions, active
+  days, turns, by capability -- counts only) and the learner profile (the
+  intake fields prior knowledge / target level / time budget; not
+  `preferences` or `notes`). Every store is read from the student's own
+  files with SQLite in `mode=ro` and no store class constructed, so a
+  teacher's read changes nothing in the student's tree. No session title,
+  message, annotation text or memory trace is in the record. No v1.6.8
+  sync (decision 11): a later sync changes the inside of this module only.
+- `deeptutor/multi_user/teacher_summary.py` (new) writes
+  `memory/school/teacher.md` -- outside `L2/` and `L3/`, not an
+  `L3_SLOTS` entry, so the student's Memory page, the `read_memory` tool,
+  the owner-only memory API and memory backups never see it -- from the
+  allowed sections only (`quiz` all; `chat` Mastery + Misconceptions;
+  `book` Pacing + Sticking points; `scope` whole; `profile` Learning style
+  + Knowledge level; names matched in en and zh) with one LLM call whose
+  prompt forbids personal facts and footnotes; the answer is parsed into
+  four fixed sections, footnotes stripped, the L3 banned-absolute guard
+  applied. A run is skipped when no allowed source changed since the last
+  one. The model is the deployment default: the school pays.
+- `deeptutor/multi_user/school_jobs.py` (new) is the nightly run for
+  every enabled `student` account, switched by `settings/school.json`
+  (`summaries_enabled`, default off; `summaries_hour`, default 2), checked
+  every 15 minutes on the background leader beside cron and partners
+  (`api/main.py`: two start/stop callbacks).
+- `deeptutor/api/routers/school.py` (new), mounted under
+  `/api/multi-user` beside the guardian routes and reusing their access
+  check and audit helper: `GET /learners/{id}/evidence` (guardian
+  `view_reports` or admin; audit `guardian_evidence_view`),
+  `POST /learners/{id}/summary` (same; audit `guardian_summary_refresh`),
+  `GET`/`PUT /school/settings` and `POST /school/summaries/run` (admin;
+  audit `school_settings_update`, `school_summaries_run`).
+- `deeptutor/multi_user/guardians.py`: a `student` is guardable like a
+  `learner` (`GUARDABLE_PRESETS`), because a teacher's link to a student
+  is the existing guardian record (decision 3); neither can be a guardian.
+  The users page offers the guardian editor for both
+  (`web/lib/account-presets.ts` `isGuardablePreset`, `AdminUsersClient.tsx`,
+  `GuardianRelationshipsEditor.tsx`); the learner profile editor stays
+  learner-only.
+
+Tests: `tests/multi_user/test_learning_evidence.py` (11: a workspace built
+with the real session, Mastery and reading stores and memory documents,
+read back with the numbers right and five planted secrets -- a message, a
+session title, a `chat.Topics` entry, a `profile.Identity` entry, a
+preference -- absent from the record, the model's input and the audit
+line; read-only proven by file listing and mtimes; the routes closed to a
+stranger, to the student, to a link without `view_reports`, open to the
+linked teacher and to an admin; the switches and the manual run admin-only;
+`due` follows the switches). `tests/multi_user/test_guardians.py` message
+updated. `web/tests/admin-user-presets.test.ts` +1.
+
 ## School roles, Phase 1 step 2: what a `student` account cannot do — 2026-09-20
 
 Design decision 4: a student is the full product, and only three groups

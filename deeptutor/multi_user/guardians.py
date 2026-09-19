@@ -78,6 +78,11 @@ def _write_records(records: list[dict[str, Any]]) -> None:
     atomic_write_text(GUARDIANS_FILE, json.dumps(records, indent=2, ensure_ascii=False))
 
 
+# Fork (school roles design, Phase 2): a `student` account is guarded the same
+# way a `learner` is -- a teacher's link to a student is a guardian record.
+GUARDABLE_PRESETS = frozenset({"learner", "student"})
+
+
 def _require_ordinary_user(user_id: str, label: str) -> None:
     user_record = get_user_by_id(user_id)
     if user_record is None:
@@ -86,10 +91,10 @@ def _require_ordinary_user(user_id: str, label: str) -> None:
     if str(record.get("role") or "user") == "admin":
         raise ValueError(f"Admin users cannot be {label}s.")
     preset = str(record.get("preset") or "standard")
-    if label == "learner" and preset != "learner":
-        raise ValueError("Guardian authorization requires a learner account.")
-    if label == "guardian" and preset == "learner":
-        raise ValueError("Learner accounts cannot be guardians.")
+    if label == "learner" and preset not in GUARDABLE_PRESETS:
+        raise ValueError("Guardian authorization requires a learner or student account.")
+    if label == "guardian" and preset in GUARDABLE_PRESETS:
+        raise ValueError("Learner and student accounts cannot be guardians.")
 
 
 def authorize_guardian(

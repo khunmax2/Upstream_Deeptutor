@@ -193,6 +193,18 @@ async def lifespan(app: FastAPI):
 
         await get_cron_service().stop()
 
+    # Fork: the nightly teacher.md run for student accounts (school roles
+    # design, Phase 2) rides the same leader election as cron and partners.
+    async def _start_school_summaries() -> None:
+        from deeptutor.multi_user.school_jobs import get_school_summary_service
+
+        await get_school_summary_service().start()
+
+    async def _stop_school_summaries() -> None:
+        from deeptutor.multi_user.school_jobs import get_school_summary_service
+
+        await get_school_summary_service().stop()
+
     async def _start_github_sync() -> None:
         from deeptutor.services.github_source.sync_service import get_sync_service
 
@@ -268,8 +280,8 @@ async def lifespan(app: FastAPI):
     background_supervisor = BackgroundLeaderSupervisor(
         application_container.coordinator,
         application_container.worker_id,
-        start_callbacks=[_start_partners, _start_cron, _start_github_sync],
-        stop_callbacks=[_stop_partners, _stop_cron, _stop_github_sync],
+        start_callbacks=[_start_partners, _start_cron, _start_github_sync, _start_school_summaries],
+        stop_callbacks=[_stop_partners, _stop_cron, _stop_github_sync, _stop_school_summaries],
         recovery_callback=application_container.recover_once,
         control_callback=_handle_background_command,
         renew_interval_seconds=application_container.settings.renew_interval_seconds,
@@ -521,6 +533,7 @@ from deeptutor.api.routers import (
     tools as tools_router,
 )
 from deeptutor.api.routers.multi_user import router as multi_user_router  # noqa: E402
+from deeptutor.api.routers.school import router as school_router  # noqa: E402
 
 # Auth router is public — login/logout/register/status require no token
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -557,6 +570,9 @@ app.include_router(
     tags=["multi-user"],
     dependencies=_auth,
 )
+# Fork: a teacher's evidence reads and the nightly summary switches (school
+# roles design, Phase 2) live in their own router beside the guardian routes.
+app.include_router(school_router, prefix="/api/multi-user", tags=["school"], dependencies=_auth)
 
 app.include_router(question.router, prefix="/api/question", tags=["question"], dependencies=_auth)
 app.include_router(knowledge.router, prefix="/api", tags=["knowledge-bases"], dependencies=_auth)

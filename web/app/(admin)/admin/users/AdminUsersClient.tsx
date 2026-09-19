@@ -20,7 +20,11 @@ import {
   type UserRecord,
   type AccountPreset,
 } from "@/lib/admin-api";
-import { ACCOUNT_PRESETS, presetLabel } from "@/lib/account-presets";
+import {
+  ACCOUNT_PRESETS,
+  isGuardablePreset,
+  presetLabel,
+} from "@/lib/account-presets";
 import { BIN_RETENTION_DAYS, binDaysLeft } from "@/lib/account-bin";
 import {
   getStudioFootprint,
@@ -862,17 +866,17 @@ export default function AdminUsersClient({
                               lockLearningPolicy={user.preset === "learner"}
                             />
                             <BookPermissionEditor userId={user.id} />
+                            {isGuardablePreset(user.preset) && (
+                              <GuardianRelationshipsEditor
+                                learnerId={user.id}
+                                learnerUsername={user.username}
+                                users={users}
+                              />
+                            )}
                             {user.preset === "learner" && (
-                              <>
-                                <GuardianRelationshipsEditor
-                                  learnerId={user.id}
-                                  learnerUsername={user.username}
-                                  users={users}
-                                />
-                                <LearnerProfileEditor
-                                  username={user.username}
-                                />
-                              </>
+                              <LearnerProfileEditor
+                                username={user.username}
+                              />
                             )}
                           </td>
                         </tr>
