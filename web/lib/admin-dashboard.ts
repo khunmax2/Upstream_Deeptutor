@@ -1,3 +1,4 @@
+import { isCuratedPreset } from "@/lib/account-presets";
 import type { UserRecord } from "@/lib/admin-api";
 import type { GuardianRelationship } from "@/lib/guardian-api";
 import type {
@@ -57,23 +58,27 @@ export interface AccountReadinessRow {
   accessReady: boolean;
 }
 
-export function hasExplicitAssignment(grant: GrantPayload | undefined): boolean {
+export function hasExplicitAssignment(
+  grant: GrantPayload | undefined,
+): boolean {
   if (!grant) return false;
   return Boolean(
     grant.models.llm.length ||
-      grant.knowledge_bases.length ||
-      grant.skills.length ||
-      grant.partners.length ||
-      (grant.enabled_tools?.length ?? 0) ||
-      (grant.mcp_tools?.length ?? 0) ||
-      grant.exec_enabled,
+    grant.knowledge_bases.length ||
+    grant.skills.length ||
+    grant.partners.length ||
+    (grant.enabled_tools?.length ?? 0) ||
+    (grant.mcp_tools?.length ?? 0) ||
+    grant.exec_enabled,
   );
 }
 
 export function assignedMaterialCount(grant: GrantPayload | undefined): number {
-  return grant?.learning_policy?.reading.material_ids.filter(
-    (materialId) => materialId !== "*",
-  ).length ?? 0;
+  return (
+    grant?.learning_policy?.reading.material_ids.filter(
+      (materialId) => materialId !== "*",
+    ).length ?? 0
+  );
 }
 
 export function buildAdminProvisioningSummary(
@@ -81,8 +86,12 @@ export function buildAdminProvisioningSummary(
   relationships: GuardianRelationship[],
   grants: ReadonlyMap<string, GrantPayload>,
 ): AdminProvisioningSummary {
+  // Fork: `teacher` and `student` are curated like `custom`.
   const custom = users.filter(
-    (user) => user.role === "user" && user.preset === "custom",
+    (user) =>
+      user.role === "user" &&
+      isCuratedPreset(user.preset) &&
+      user.preset !== "learner",
   );
   const learners = users.filter(
     (user) => user.role === "user" && user.preset === "learner",
@@ -141,14 +150,14 @@ export function buildAccountReadinessRows(
   return users
     .filter((user) => user.role === "user")
     .map((user) => {
-      const managed = user.preset === "custom" || user.preset === "learner";
+      const managed = isCuratedPreset(user.preset);
       const checked = !managed || grants.has(user.id);
       const grant = grants.get(user.id);
       const modelReady = !managed || (grant?.models.llm.length ?? 0) > 0;
       const contentReady =
         user.preset === "learner"
           ? assignedMaterialCount(grant) > 0
-          : user.preset === "custom"
+          : managed
             ? hasExplicitAssignment(grant)
             : true;
       return {
@@ -160,9 +169,12 @@ export function buildAccountReadinessRows(
       };
     })
     .sort((left, right) => {
-      if (left.accessReady !== right.accessReady) return left.accessReady ? 1 : -1;
-      return (Date.parse(right.user.created_at) || 0) -
-        (Date.parse(left.user.created_at) || 0);
+      if (left.accessReady !== right.accessReady)
+        return left.accessReady ? 1 : -1;
+      return (
+        (Date.parse(right.user.created_at) || 0) -
+        (Date.parse(left.user.created_at) || 0)
+      );
     });
 }
 
@@ -172,13 +184,16 @@ export function buildAdminDashboardSummary(
   grants: ReadonlyMap<string, GrantPayload>,
 ): AdminDashboardSummary {
   const ordinaryUsers = users.filter((user) => user.role === "user");
-  const customUsers = ordinaryUsers.filter((user) => user.preset === "custom");
+  const customUsers = ordinaryUsers.filter(
+    (user) => isCuratedPreset(user.preset) && user.preset !== "learner",
+  );
   const learnerUsers = ordinaryUsers.filter(
     (user) => user.preset === "learner",
   );
   const disabledAccounts = users.filter((user) => user.disabled).length;
   const customWithoutAssignments = customUsers.filter(
-    (user) => grants.has(user.id) && !hasExplicitAssignment(grants.get(user.id)),
+    (user) =>
+      grants.has(user.id) && !hasExplicitAssignment(grants.get(user.id)),
   ).length;
   const learnersWithoutMaterials = learnerUsers.filter(
     (user) =>
@@ -195,8 +210,9 @@ export function buildAdminDashboardSummary(
     ).length,
     custom: customUsers.length,
     learners: learnerUsers.length,
-    guardianLinks: relationships.filter((relationship) => !relationship.revoked_at)
-      .length,
+    guardianLinks: relationships.filter(
+      (relationship) => !relationship.revoked_at,
+    ).length,
     customWithoutAssignments,
     learnersWithoutMaterials,
     needsReview:

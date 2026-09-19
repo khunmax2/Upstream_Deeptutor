@@ -23,15 +23,21 @@ const zh = JSON.parse(
 ) as Record<string, string>;
 
 test("admin user creation sends the selected preset", () => {
-  assert.match(
-    adminApi,
-    /export type AccountPreset = "standard" \| "learner" \| "custom"/,
-  );
+  assert.match(adminApi, /export type \{ AccountPreset \}/);
   assert.match(
     adminApi,
     /body: JSON\.stringify\(\{ username, password, preset \}\)/,
   );
-  assert.match(usersPage, /\["standard", "learner", "custom"\] as const/);
+  // Fork: the list comes from lib/account-presets.ts, which adds student and teacher.
+  assert.match(usersPage, /ACCOUNT_PRESETS\.map\(\(preset\) =>/);
+  const presets = readFileSync(
+    path.resolve(process.cwd(), "lib/account-presets.ts"),
+    "utf8",
+  );
+  assert.match(
+    presets,
+    /"standard",\s*"learner",\s*"custom",\s*"student",\s*"teacher",/,
+  );
   assert.match(usersPage, /aria-pressed=\{createPreset === preset\}/);
 });
 

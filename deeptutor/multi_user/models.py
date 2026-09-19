@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 Role = Literal["admin", "user"]
-AccountPreset = Literal["standard", "learner", "custom"]
+# Fork: `student` (a secondary-school learner: the full product, no learning
+# policy, a few groups closed by student_policy.py) and `teacher` (behaves as
+# `custom`, plus guardian links) -- labels on an ordinary user, never a role.
+# See docs/planning/school-roles/DESIGN_teacher_student_it.md.
+AccountPreset = Literal["standard", "learner", "custom", "student", "teacher"]
 ScopeKind = Literal["admin", "user"]
 
 

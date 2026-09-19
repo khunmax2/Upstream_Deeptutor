@@ -1,5 +1,6 @@
 "use client";
 
+import { isCuratedPreset, presetLabel } from "@/lib/account-presets";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -158,9 +159,7 @@ export default function AdminDashboard() {
         listAdminGuardianRelationships(),
       ]);
       const assignmentUsers = users.filter(
-        (user) =>
-          user.role === "user" &&
-          (user.preset === "custom" || user.preset === "learner"),
+        (user) => user.role === "user" && isCuratedPreset(user.preset),
       );
       const grantResults = await Promise.allSettled(
         assignmentUsers.map(async (user) => ({
@@ -760,13 +759,7 @@ function AccountReadiness({ rows }: { rows: AccountReadinessRow[] }) {
                     {row.user.username}
                   </td>
                   <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                    {t(
-                      row.user.preset === "learner"
-                        ? "Learner"
-                        : row.user.preset === "custom"
-                          ? "Custom"
-                          : "Standard",
-                    )}
+                    {t(presetLabel(row.user.preset))}
                   </td>
                   <td className="px-4 py-3">
                     <StatusDot ready={row.modelReady} unknown={!row.checked} />
@@ -926,13 +919,7 @@ function RecentAccounts({
                   <td className="px-5 py-3 text-[var(--muted-foreground)]">
                     {user.role === "admin"
                       ? t("Admin")
-                      : t(
-                          user.preset === "learner"
-                            ? "Learner"
-                            : user.preset === "custom"
-                              ? "Custom"
-                              : "Standard",
-                        )}
+                      : t(presetLabel(user.preset))}
                   </td>
                   <td className="px-5 py-3 text-[var(--muted-foreground)]">
                     {formatDate(user.created_at, lang)}

@@ -1,5 +1,6 @@
 "use client";
 
+import { presetLabel as sharedPresetLabel } from "@/lib/account-presets";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -156,9 +157,7 @@ function relativeTime(timestamp: number, locale: string): string {
 }
 
 function presetLabel(preset: UserPreset): string {
-  if (preset === "learner") return "Learner";
-  if (preset === "custom") return "Custom";
-  return "Standard";
+  return sharedPresetLabel(preset);
 }
 
 export default function UserDashboard() {
@@ -222,41 +221,47 @@ export default function UserDashboard() {
       const extended = restricted
         ? []
         : await Promise.all([
-              safeLoad("notebooks", listNotebooks(), [] as NotebookSummary[]),
-              safeLoad("questions", getQuestionBankStats(), null),
-              safeLoad(
-                "books",
-                bookApi.list().then((response) => response.books),
-                [] as Book[],
+            safeLoad("notebooks", listNotebooks(), [] as NotebookSummary[]),
+            safeLoad("questions", getQuestionBankStats(), null),
+            safeLoad(
+              "books",
+              bookApi.list().then((response) => response.books),
+              [] as Book[],
+            ),
+            safeLoad(
+              "knowledge",
+              listKnowledgeBases({ force: true }),
+              [] as KnowledgeBaseSummary[],
+            ),
+            safeLoad("partners", listPartners(), [] as PartnerInfo[]),
+            safeLoad("skills", listSkills({ force: true }), [] as SkillInfo[]),
+            safeLoad(
+              "tools",
+              getEnabledOptionalTools({ force: true }),
+              [] as string[],
+            ),
+            safeLoad(
+              "models",
+              listLLMOptions({ force: true }).then(
+                (response) => response.options,
               ),
-              safeLoad(
-                "knowledge",
-                listKnowledgeBases({ force: true }),
-                [] as KnowledgeBaseSummary[],
-              ),
-              safeLoad("partners", listPartners(), [] as PartnerInfo[]),
-              safeLoad("skills", listSkills({ force: true }), [] as SkillInfo[]),
-              safeLoad(
-                "tools",
-                getEnabledOptionalTools({ force: true }),
-                [] as string[],
-              ),
-              safeLoad(
-                "models",
-                listLLMOptions({ force: true }).then((response) => response.options),
-                [] as LLMOption[],
-              ),
-            ]);
+              [] as LLMOption[],
+            ),
+          ]);
 
       const results = [...common, ...extended];
-      const byName = new Map(results.map((result) => [result.name, result.value]));
+      const byName = new Map(
+        results.map((result) => [result.name, result.value]),
+      );
       setData({
         sessions: (byName.get("sessions") as SessionSummary[]) ?? [],
         notebooks: (byName.get("notebooks") as NotebookSummary[]) ?? [],
-        questionStats: (byName.get("questions") as QuestionBankStats | null) ?? null,
+        questionStats:
+          (byName.get("questions") as QuestionBankStats | null) ?? null,
         books: (byName.get("books") as Book[]) ?? [],
         materials: (byName.get("materials") as MaterialInfo[]) ?? [],
-        capabilities: (byName.get("capabilities") as CapabilityDescriptor[]) ?? [],
+        capabilities:
+          (byName.get("capabilities") as CapabilityDescriptor[]) ?? [],
         knowledgeBases:
           (byName.get("knowledge") as KnowledgeBaseSummary[]) ?? [],
         partners: (byName.get("partners") as PartnerInfo[]) ?? [],
@@ -272,7 +277,9 @@ export default function UserDashboard() {
       });
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : t("Failed to load dashboard"),
+        reason instanceof Error
+          ? reason.message
+          : t("Failed to load dashboard"),
       );
     } finally {
       setLoading(false);
@@ -290,56 +297,53 @@ export default function UserDashboard() {
   );
   const recent = sessions.slice(0, 5);
   const nextSession = sessions[0];
-  const capabilities = useMemo(
-    () => {
-      const merged = mergeCapabilityPresentations(data.capabilities);
-      const readingDef = (): ChatCapabilityDef => ({
-        value: "immersive_reading",
-        label: "Immersive Reading",
-        description: "Read assigned or personal material with tutor support",
-        icon: BookOpen,
-        allowedTools: [],
-        defaultTools: [],
-      });
+  const capabilities = useMemo(() => {
+    const merged = mergeCapabilityPresentations(data.capabilities);
+    const readingDef = (): ChatCapabilityDef => ({
+      value: "immersive_reading",
+      label: "Immersive Reading",
+      description: "Read assigned or personal material with tutor support",
+      icon: BookOpen,
+      allowedTools: [],
+      defaultTools: [],
+    });
 
-      // A restricted account is denied the capability catalog (403), so counting
-      // what came back from it reported one mode on an account whose plan grants
-      // two — and contradicted the "Learning modes" figure shown further down
-      // this same page. The policy travels with the auth status and is what the
-      // server actually enforces, so for these accounts it is the source.
-      if (learningPolicy) {
-        const allowed = learningPolicy.allowed_capabilities ?? [];
-        return allowed.map((id) => {
-          if (id === "immersive_reading") return readingDef();
-          const known = merged.find(
-            (capability) => (capability.value || "chat") === id,
-          );
-          return (
-            known ?? {
-              value: id,
-              label: formatCapabilityLabel(id),
-              description: "",
-              icon: Compass,
-              allowedTools: [],
-              defaultTools: [],
-            }
-          );
-        });
-      }
-
-      if (
-        allowsLearningSurface("reading") &&
-        !merged.some((capability) => capability.value === "immersive_reading")
-      ) {
-        const chatIndex = merged.findIndex(
-          (capability) => (capability.value || "chat") === "chat",
+    // A restricted account is denied the capability catalog (403), so counting
+    // what came back from it reported one mode on an account whose plan grants
+    // two — and contradicted the "Learning modes" figure shown further down
+    // this same page. The policy travels with the auth status and is what the
+    // server actually enforces, so for these accounts it is the source.
+    if (learningPolicy) {
+      const allowed = learningPolicy.allowed_capabilities ?? [];
+      return allowed.map((id) => {
+        if (id === "immersive_reading") return readingDef();
+        const known = merged.find(
+          (capability) => (capability.value || "chat") === id,
         );
-        merged.splice(chatIndex >= 0 ? chatIndex + 1 : 0, 0, readingDef());
-      }
-      return merged.slice(0, 6);
-    },
-    [allowsLearningSurface, data.capabilities, learningPolicy],
-  );
+        return (
+          known ?? {
+            value: id,
+            label: formatCapabilityLabel(id),
+            description: "",
+            icon: Compass,
+            allowedTools: [],
+            defaultTools: [],
+          }
+        );
+      });
+    }
+
+    if (
+      allowsLearningSurface("reading") &&
+      !merged.some((capability) => capability.value === "immersive_reading")
+    ) {
+      const chatIndex = merged.findIndex(
+        (capability) => (capability.value || "chat") === "chat",
+      );
+      merged.splice(chatIndex >= 0 ? chatIndex + 1 : 0, 0, readingDef());
+    }
+    return merged.slice(0, 6);
+  }, [allowsLearningSurface, data.capabilities, learningPolicy]);
   const locale = i18n.language?.startsWith("zh") ? "zh-CN" : "en-US";
   const activitySeries = useMemo(
     () => buildDashboardActivitySeries(data.sessions, 7),
@@ -356,79 +360,80 @@ export default function UserDashboard() {
   // truthful layout whatever its preset says.
   const restricted = preset === "learner" || Boolean(status.learning_policy);
 
-  const metricCards =
-    restricted
-      ? [
-          {
-            label: t("Conversations"),
-            value: sessions.length,
-            detail: t("Learning conversations"),
-            icon: MessageSquare,
-            tone: "primary" as const,
-          },
-          {
-            label: t("Assigned materials"),
-            value: data.materials.length,
-            detail: t("Ready for immersive reading"),
-            icon: BookOpen,
-            tone: "blue" as const,
-          },
-          {
-            label: t("Available modes"),
-            value: capabilities.length,
-            detail: t("Set by your learning plan"),
-            icon: BrainCircuit,
-            tone: "teal" as const,
-          },
-          {
-            label: t("Reading tools"),
-            value: status.learning_policy?.reading?.extensions.length ?? 0,
-            detail: t("Enabled by your administrator"),
-            icon: Wrench,
-            tone: "amber" as const,
-          },
-        ]
-      : [
-          {
-            label: t("Conversations"),
-            value: sessions.length,
-            detail: t("Across your learning workspace"),
-            icon: MessageSquare,
-            tone: "primary" as const,
-          },
-          {
-            label: t("Notebooks"),
-            value: data.notebooks.length,
-            detail: t("{{count}} saved records", {
-              count: data.notebooks.reduce(
-                (sum, notebook) => sum + (notebook.record_count ?? 0),
-                0,
-              ),
-            }),
-            icon: NotebookTabs,
-            tone: "teal" as const,
-          },
-          {
-            label: t("Saved questions"),
-            value: data.questionStats?.total ?? 0,
-            detail: t("{{count}} need another look", {
-              count: data.questionStats?.wrong ?? 0,
-            }),
-            icon: FileQuestion,
-            tone: "amber" as const,
-          },
-          {
-            label: t("Books"),
-            value: data.books.length,
-            detail: t("{{count}} currently in progress", {
-              count: data.books.filter(
-                (book) => (book.reading?.percent ?? 0) > 0 && (book.reading?.percent ?? 0) < 100,
-              ).length,
-            }),
-            icon: Library,
-            tone: "blue" as const,
-          },
-        ];
+  const metricCards = restricted
+    ? [
+        {
+          label: t("Conversations"),
+          value: sessions.length,
+          detail: t("Learning conversations"),
+          icon: MessageSquare,
+          tone: "primary" as const,
+        },
+        {
+          label: t("Assigned materials"),
+          value: data.materials.length,
+          detail: t("Ready for immersive reading"),
+          icon: BookOpen,
+          tone: "blue" as const,
+        },
+        {
+          label: t("Available modes"),
+          value: capabilities.length,
+          detail: t("Set by your learning plan"),
+          icon: BrainCircuit,
+          tone: "teal" as const,
+        },
+        {
+          label: t("Reading tools"),
+          value: status.learning_policy?.reading?.extensions.length ?? 0,
+          detail: t("Enabled by your administrator"),
+          icon: Wrench,
+          tone: "amber" as const,
+        },
+      ]
+    : [
+        {
+          label: t("Conversations"),
+          value: sessions.length,
+          detail: t("Across your learning workspace"),
+          icon: MessageSquare,
+          tone: "primary" as const,
+        },
+        {
+          label: t("Notebooks"),
+          value: data.notebooks.length,
+          detail: t("{{count}} saved records", {
+            count: data.notebooks.reduce(
+              (sum, notebook) => sum + (notebook.record_count ?? 0),
+              0,
+            ),
+          }),
+          icon: NotebookTabs,
+          tone: "teal" as const,
+        },
+        {
+          label: t("Saved questions"),
+          value: data.questionStats?.total ?? 0,
+          detail: t("{{count}} need another look", {
+            count: data.questionStats?.wrong ?? 0,
+          }),
+          icon: FileQuestion,
+          tone: "amber" as const,
+        },
+        {
+          label: t("Books"),
+          value: data.books.length,
+          detail: t("{{count}} currently in progress", {
+            count: data.books.filter(
+              (book) =>
+                (book.reading?.percent ?? 0) > 0 &&
+                (book.reading?.percent ?? 0) < 100,
+            ).length,
+          }),
+          icon: Library,
+          tone: "blue" as const,
+        },
+      ];
 
   return (
     <div className="h-full overflow-y-auto bg-[var(--background)] [scrollbar-gutter:stable]">
@@ -466,7 +471,11 @@ export default function UserDashboard() {
         {error ? (
           <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
             <span>{error}</span>
-            <button type="button" onClick={() => void load()} className="font-medium underline">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="font-medium underline"
+            >
               {t("Try again")}
             </button>
           </div>
@@ -573,10 +582,18 @@ function MetricCard({
   );
 }
 
-function CardHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+function CardHeader({
+  title,
+  action,
+}: {
+  title: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[var(--border)]/70 px-5 py-4">
-      <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
+      <h2 className="text-sm font-semibold text-[var(--foreground)]">
+        {title}
+      </h2>
       {action}
     </div>
   );
@@ -600,21 +617,32 @@ function LearningMomentum({
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader
         title={t("Learning momentum")}
-        action={<span className="text-xs text-[var(--muted-foreground)]">{t("Last 7 days")}</span>}
+        action={
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {t("Last 7 days")}
+          </span>
+        }
       />
       <div className="grid gap-6 p-5 sm:grid-cols-[1fr_210px]">
         <div className="flex h-44 items-end gap-2 rounded-xl bg-[var(--background)]/45 px-3 pb-3 pt-5">
           {series.map((day) => {
-            const height = day.sessions ? Math.max(12, (day.sessions / max) * 112) : 4;
+            const height = day.sessions
+              ? Math.max(12, (day.sessions / max) * 112)
+              : 4;
             return (
-              <div key={day.dayStart} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
+              <div
+                key={day.dayStart}
+                className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"
+              >
                 <span className="text-[10px] font-medium text-[var(--muted-foreground)]">
                   {day.sessions || ""}
                 </span>
                 <div
                   className={`w-full max-w-10 rounded-t-md ${day.sessions ? "bg-[var(--primary)]" : "bg-[var(--muted)]"}`}
                   style={{ height }}
-                  title={t("{{count}} active conversations", { count: day.sessions })}
+                  title={t("{{count}} active conversations", {
+                    count: day.sessions,
+                  })}
                 />
                 <span className="truncate text-[10px] text-[var(--muted-foreground)]">
                   {weekday.format(new Date(day.dayStart))}
@@ -624,9 +652,21 @@ function LearningMomentum({
           })}
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
-          <MomentumStat label={t("Active days")} value={`${activeDays}/7`} icon={CalendarDays} />
-          <MomentumStat label={t("Conversations touched")} value={String(touchedSessions)} icon={MessageSquare} />
-          <MomentumStat label={t("Messages in your history")} value={String(totalMessages)} icon={ListChecks} />
+          <MomentumStat
+            label={t("Active days")}
+            value={`${activeDays}/7`}
+            icon={CalendarDays}
+          />
+          <MomentumStat
+            label={t("Conversations touched")}
+            value={String(touchedSessions)}
+            icon={MessageSquare}
+          />
+          <MomentumStat
+            label={t("Messages in your history")}
+            value={String(totalMessages)}
+            icon={ListChecks}
+          />
         </div>
       </div>
       <p className="border-t border-[var(--border)]/70 px-5 py-3 text-xs text-[var(--muted-foreground)]">
@@ -651,8 +691,12 @@ function MomentumStat({
         <Icon size={15} />
       </div>
       <div className="min-w-0">
-        <p className="text-lg font-semibold leading-none text-[var(--foreground)]">{value}</p>
-        <p className="mt-1 truncate text-[11px] text-[var(--muted-foreground)]">{label}</p>
+        <p className="text-lg font-semibold leading-none text-[var(--foreground)]">
+          {value}
+        </p>
+        <p className="mt-1 truncate text-[11px] text-[var(--muted-foreground)]">
+          {label}
+        </p>
       </div>
     </div>
   );
@@ -677,7 +721,8 @@ function NextSteps({
 }) {
   const { t } = useTranslation();
   const inProgressBook = books.find(
-    (book) => (book.reading?.percent ?? 0) > 0 && (book.reading?.percent ?? 0) < 100,
+    (book) =>
+      (book.reading?.percent ?? 0) > 0 && (book.reading?.percent ?? 0) < 100,
   );
   const actions: Array<{
     href: string;
@@ -696,7 +741,9 @@ function NextSteps({
   if (readingAllowed && materials[0]) {
     actions.push({
       href: "/reading/materials",
-      label: restricted ? t("Open assigned reading") : t("Read a saved material"),
+      label: restricted
+        ? t("Open assigned reading")
+        : t("Read a saved material"),
       detail: materials[0].title,
       icon: BookOpen,
     });
@@ -705,7 +752,9 @@ function NextSteps({
     actions.push({
       href: "/space/questions",
       label: t("Review questions"),
-      detail: t("{{count}} answers need another look", { count: questionStats?.wrong ?? 0 }),
+      detail: t("{{count}} answers need another look", {
+        count: questionStats?.wrong ?? 0,
+      }),
       icon: FileQuestion,
     });
   }
@@ -739,10 +788,17 @@ function NextSteps({
               <action.icon size={17} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[var(--foreground)]">{action.label}</p>
-              <p className="truncate text-xs text-[var(--muted-foreground)]">{action.detail}</p>
+              <p className="truncate text-sm font-medium text-[var(--foreground)]">
+                {action.label}
+              </p>
+              <p className="truncate text-xs text-[var(--muted-foreground)]">
+                {action.detail}
+              </p>
             </div>
-            <ArrowRight size={14} className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+            <ArrowRight
+              size={14}
+              className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]"
+            />
           </Link>
         ))}
         {actions.length === 0 ? (
@@ -796,7 +852,9 @@ function ContinueCard({
             <Icon size={24} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-xl font-semibold text-[var(--foreground)]">{title}</h2>
+            <h2 className="truncate text-xl font-semibold text-[var(--foreground)]">
+              {title}
+            </h2>
             <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--muted-foreground)]">
               {description}
             </p>
@@ -810,7 +868,8 @@ function ContinueCard({
               </Link>
               {session ? (
                 <span className="text-xs text-[var(--muted-foreground)]">
-                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} · {relativeTime(session.updated_at, locale)}
+                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} ·{" "}
+                  {relativeTime(session.updated_at, locale)}
                 </span>
               ) : null}
             </div>
@@ -878,7 +937,10 @@ function RecentActivity({
       <CardHeader title={t("Recent activity")} />
       {sessions.length === 0 ? (
         <div className="px-5 py-12 text-center">
-          <MessageSquare className="mx-auto text-[var(--muted-foreground)]/50" size={28} />
+          <MessageSquare
+            className="mx-auto text-[var(--muted-foreground)]/50"
+            size={28}
+          />
           <p className="mt-2 text-sm text-[var(--muted-foreground)]">
             {t("Your recent learning activities will appear here.")}
           </p>
@@ -899,13 +961,17 @@ function RecentActivity({
                   {session.title || t("Untitled conversation")}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]">
-                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} · {t("{{count}} messages", { count: session.message_count })}
+                  {t(formatCapabilityLabel(sessionCapabilityId(session)))} ·{" "}
+                  {t("{{count}} messages", { count: session.message_count })}
                 </p>
               </div>
               <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
                 {relativeTime(session.updated_at, locale)}
               </span>
-              <ArrowRight size={14} className="shrink-0 text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+              <ArrowRight
+                size={14}
+                className="shrink-0 text-[var(--muted-foreground)] group-hover:text-[var(--primary)]"
+              />
             </Link>
           ))}
         </div>
@@ -914,59 +980,105 @@ function RecentActivity({
   );
 }
 
-function WorkspaceAccess({ preset, data }: { preset: UserPreset; data: DashboardData }) {
+function WorkspaceAccess({
+  preset,
+  data,
+}: {
+  preset: UserPreset;
+  data: DashboardData;
+}) {
   const { t } = useTranslation();
   const assignedKnowledge = data.knowledgeBases.filter(
     (item) => item.assigned || item.source === "admin" || item.read_only,
   ).length;
-  const assignedSkills = data.skills.filter((item) => item.source === "admin").length;
-  const assignedPartners = data.partners.filter((item) => item.can_manage === false).length;
-  const sharedBooks = data.books.filter((item) => item.source === "shared").length;
-  const assignedTotal = assignedKnowledge + assignedSkills + assignedPartners + sharedBooks;
-  const custom = preset === "custom";
+  const assignedSkills = data.skills.filter(
+    (item) => item.source === "admin",
+  ).length;
+  const assignedPartners = data.partners.filter(
+    (item) => item.can_manage === false,
+  ).length;
+  const sharedBooks = data.books.filter(
+    (item) => item.source === "shared",
+  ).length;
+  const assignedTotal =
+    assignedKnowledge + assignedSkills + assignedPartners + sharedBooks;
+  // Fork: a teacher's dashboard reads like a custom account's.
+  const custom = preset === "custom" || preset === "teacher";
   const rows = custom
     ? [
         { label: t("Models"), value: data.models.length, icon: Bot },
-        { label: t("Assigned knowledge"), value: assignedKnowledge, icon: Database },
+        {
+          label: t("Assigned knowledge"),
+          value: assignedKnowledge,
+          icon: Database,
+        },
         { label: t("Assigned skills"), value: assignedSkills, icon: Sparkles },
-        { label: t("Assigned partners"), value: assignedPartners, icon: ShieldCheck },
+        {
+          label: t("Assigned partners"),
+          value: assignedPartners,
+          icon: ShieldCheck,
+        },
         { label: t("Enabled tools"), value: data.tools.length, icon: Wrench },
         { label: t("Shared books"), value: sharedBooks, icon: BookMarked },
       ]
     : [
         { label: t("Models"), value: data.models.length, icon: Bot },
-        { label: t("Knowledge bases"), value: data.knowledgeBases.length, icon: Database },
+        {
+          label: t("Knowledge bases"),
+          value: data.knowledgeBases.length,
+          icon: Database,
+        },
         { label: t("Skills"), value: data.skills.length, icon: Sparkles },
-        { label: t("Partners"), value: data.partners.length, icon: ShieldCheck },
+        {
+          label: t("Partners"),
+          value: data.partners.length,
+          icon: ShieldCheck,
+        },
         { label: t("Enabled tools"), value: data.tools.length, icon: Wrench },
-        { label: t("Reading materials"), value: data.materials.length, icon: BookText },
+        {
+          label: t("Reading materials"),
+          value: data.materials.length,
+          icon: BookText,
+        },
       ];
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader
         title={custom ? t("Your assigned access") : t("Your workspace access")}
         action={
-          <Link href="/settings" className="text-xs font-medium text-[var(--primary)] hover:underline">
+          <Link
+            href="/settings"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
             {t("View settings")}
           </Link>
         }
       />
       <div className="grid grid-cols-2 gap-2 p-4">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center gap-2.5 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3">
+          <div
+            key={row.label}
+            className="flex items-center gap-2.5 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3"
+          >
             <div className="rounded-lg bg-[var(--primary)]/10 p-2 text-[var(--primary)]">
               <row.icon size={16} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs text-[var(--muted-foreground)]">{row.label}</p>
-              <p className="text-lg font-semibold text-[var(--foreground)]">{row.value}</p>
+              <p className="truncate text-xs text-[var(--muted-foreground)]">
+                {row.label}
+              </p>
+              <p className="text-lg font-semibold text-[var(--foreground)]">
+                {row.value}
+              </p>
             </div>
           </div>
         ))}
       </div>
       {custom && assignedTotal === 0 ? (
         <p className="border-t border-[var(--border)]/70 px-5 py-3 text-xs text-[var(--muted-foreground)]">
-          {t("No shared resources have been assigned yet. Contact your administrator if you need additional access.")}
+          {t(
+            "No shared resources have been assigned yet. Contact your administrator if you need additional access.",
+          )}
         </p>
       ) : null}
     </article>
@@ -987,7 +1099,10 @@ function AssignedLearning({
       <CardHeader
         title={t("Assigned learning")}
         action={
-          <Link href="/reading" className="text-xs font-medium text-[var(--primary)] hover:underline">
+          <Link
+            href="/reading"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
             {t("Open reading")}
           </Link>
         }
@@ -1005,7 +1120,10 @@ function AssignedLearning({
         </div>
         {materials.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--border)] px-4 py-8 text-center">
-            <BookOpen className="mx-auto text-[var(--muted-foreground)]/50" size={28} />
+            <BookOpen
+              className="mx-auto text-[var(--muted-foreground)]/50"
+              size={28}
+            />
             <p className="mt-2 text-sm font-medium text-[var(--foreground)]">
               {t("No reading material assigned yet")}
             </p>
@@ -1025,12 +1143,20 @@ function AssignedLearning({
                   <BookOpen size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[var(--foreground)]">{material.title}</p>
+                  <p className="truncate text-sm font-medium text-[var(--foreground)]">
+                    {material.title}
+                  </p>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    {t("{{count}} {{unit}}", { count: material.unit_count, unit: material.unit })}
+                    {t("{{count}} {{unit}}", {
+                      count: material.unit_count,
+                      unit: material.unit,
+                    })}
                   </p>
                 </div>
-                <ArrowRight size={14} className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+                <ArrowRight
+                  size={14}
+                  className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]"
+                />
               </Link>
             ))}
           </div>
@@ -1043,17 +1169,40 @@ function AssignedLearning({
 function LearningLibrary({ data }: { data: DashboardData }) {
   const { t } = useTranslation();
   const collections = [
-    { href: "/books", label: t("Books"), value: data.books.length, icon: Library },
-    { href: "/reading/materials", label: t("Reading materials"), value: data.materials.length, icon: BookOpen },
-    { href: "/notebooks", label: t("Notebooks"), value: data.notebooks.length, icon: NotebookTabs },
-    { href: "/space/questions", label: t("Question bank"), value: data.questionStats?.total ?? 0, icon: FileQuestion },
+    {
+      href: "/books",
+      label: t("Books"),
+      value: data.books.length,
+      icon: Library,
+    },
+    {
+      href: "/reading/materials",
+      label: t("Reading materials"),
+      value: data.materials.length,
+      icon: BookOpen,
+    },
+    {
+      href: "/notebooks",
+      label: t("Notebooks"),
+      value: data.notebooks.length,
+      icon: NotebookTabs,
+    },
+    {
+      href: "/space/questions",
+      label: t("Question bank"),
+      value: data.questionStats?.total ?? 0,
+      icon: FileQuestion,
+    },
   ];
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
       <CardHeader
         title={t("Your learning library")}
         action={
-          <Link href="/space" className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline">
+          <Link
+            href="/space"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+          >
             {t("Open learning space")} <ArrowRight size={13} />
           </Link>
         }
@@ -1069,17 +1218,31 @@ function LearningLibrary({ data }: { data: DashboardData }) {
               <collection.icon size={17} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xl font-semibold leading-none text-[var(--foreground)]">{collection.value}</p>
-              <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">{collection.label}</p>
+              <p className="text-xl font-semibold leading-none text-[var(--foreground)]">
+                {collection.value}
+              </p>
+              <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
+                {collection.label}
+              </p>
             </div>
-            <ArrowRight size={14} className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+            <ArrowRight
+              size={14}
+              className="text-[var(--muted-foreground)] group-hover:text-[var(--primary)]"
+            />
           </Link>
         ))}
       </div>
       <div className="border-t border-[var(--border)]/70 px-4 py-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{t("Books to continue")}</h3>
-          <Link href="/books" className="text-xs font-medium text-[var(--primary)] hover:underline">{t("View all")}</Link>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            {t("Books to continue")}
+          </h3>
+          <Link
+            href="/books"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
+            {t("View all")}
+          </Link>
         </div>
         {data.books.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--border)] px-4 py-7 text-center text-sm text-[var(--muted-foreground)]">
@@ -1100,20 +1263,29 @@ function LearningLibrary({ data }: { data: DashboardData }) {
                       <Library size={18} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[var(--foreground)]">{book.title}</p>
+                      <p className="truncate text-sm font-medium text-[var(--foreground)]">
+                        {book.title}
+                      </p>
                       <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
                         {t("{{count}} chapters", { count: book.chapter_count })}
                       </p>
                     </div>
                     {book.source === "shared" ? (
-                      <span className="rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] text-[var(--primary)]">{t("Shared")}</span>
+                      <span className="rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] text-[var(--primary)]">
+                        {t("Shared")}
+                      </span>
                     ) : null}
                   </div>
                   <div className="mt-4 flex items-center gap-3">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--muted)]">
-                      <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.min(100, progress)}%` }} />
+                      <div
+                        className="h-full rounded-full bg-[var(--primary)]"
+                        style={{ width: `${Math.min(100, progress)}%` }}
+                      />
                     </div>
-                    <span className="text-xs font-medium text-[var(--foreground)]">{progress}%</span>
+                    <span className="text-xs font-medium text-[var(--foreground)]">
+                      {progress}%
+                    </span>
                   </div>
                 </Link>
               );
@@ -1149,7 +1321,9 @@ function LearningPlan({ status }: { status: AuthStatus }) {
     },
     {
       label: t("Upload permission"),
-      value: policy?.reading?.allow_upload ? t("Allowed") : t("Managed by administrator"),
+      value: policy?.reading?.allow_upload
+        ? t("Allowed")
+        : t("Managed by administrator"),
       icon: ShieldCheck,
     },
   ];
@@ -1158,33 +1332,69 @@ function LearningPlan({ status }: { status: AuthStatus }) {
       <CardHeader title={t("Your learning plan")} />
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
         {facts.map((fact) => (
-          <div key={fact.label} className="flex items-center gap-3 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3">
+          <div
+            key={fact.label}
+            className="flex items-center gap-3 rounded-xl border border-[var(--border)]/80 bg-[var(--background)]/35 p-3"
+          >
             <div className="rounded-xl bg-[var(--primary)]/10 p-2.5 text-[var(--primary)]">
               <fact.icon size={17} />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-[var(--muted-foreground)]">{fact.label}</p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--foreground)]">{fact.value}</p>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                {fact.label}
+              </p>
+              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--foreground)]">
+                {fact.value}
+              </p>
             </div>
           </div>
         ))}
       </div>
       <div className="grid gap-5 border-t border-[var(--border)]/70 px-5 py-4 md:grid-cols-2">
-        <PlanChips title={t("Accessible areas")} values={surfaces.map((id) => t(formatCapabilityLabel(id)))} empty={t("No area enabled")} />
-        <PlanChips title={t("Reading extensions")} values={extensions.map((id) => t(formatCapabilityLabel(id)))} empty={t("No reading extension enabled")} />
+        <PlanChips
+          title={t("Accessible areas")}
+          values={surfaces.map((id) => t(formatCapabilityLabel(id)))}
+          empty={t("No area enabled")}
+        />
+        <PlanChips
+          title={t("Reading extensions")}
+          values={extensions.map((id) => t(formatCapabilityLabel(id)))}
+          empty={t("No reading extension enabled")}
+        />
       </div>
     </section>
   );
 }
 
-function PlanChips({ title, values, empty }: { title: string; values: string[]; empty: string }) {
+function PlanChips({
+  title,
+  values,
+  empty,
+}: {
+  title: string;
+  values: string[];
+  empty: string;
+}) {
   return (
     <div>
-      <h3 className="text-xs font-semibold text-[var(--foreground)]">{title}</h3>
+      <h3 className="text-xs font-semibold text-[var(--foreground)]">
+        {title}
+      </h3>
       <div className="mt-2 flex flex-wrap gap-2">
-        {values.length ? values.map((value) => (
-          <span key={value} className="rounded-full bg-[var(--muted)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]">{value}</span>
-        )) : <span className="text-xs text-[var(--muted-foreground)]">{empty}</span>}
+        {values.length ? (
+          values.map((value) => (
+            <span
+              key={value}
+              className="rounded-full bg-[var(--muted)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]"
+            >
+              {value}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {empty}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1192,7 +1402,10 @@ function PlanChips({ title, values, empty }: { title: string; values: string[]; 
 
 function DashboardSkeleton() {
   return (
-    <div className="h-full overflow-hidden bg-[var(--background)] p-6" aria-hidden>
+    <div
+      className="h-full overflow-hidden bg-[var(--background)] p-6"
+      aria-hidden
+    >
       <div className="mx-auto max-w-[1440px] animate-pulse">
         <div className="mb-6 h-16 w-full max-w-md rounded-xl bg-[var(--muted)]/60" />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

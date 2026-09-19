@@ -292,6 +292,50 @@ byte-equal afterwards.
 
 ---
 
+## A lab stack beside the local UAT one, for a branch that is not on `main` — 2026-09-20
+
+`deploy/docker-compose.lab.yml` and `deploy/lab.ports` (new). The local UAT
+stack (`upstream_deeptutor`, container `deeptutor`, ports 3782/8001/8090)
+is the twin of the host and stays on `main`; a feature branch now gets its
+own stack from a git worktree with a copy of `data/`, so the two never
+share a container name, a port, an image tag or a data tree. The overlay
+renames every container with a `-lab` suffix and moves the ports by +1000;
+the project name `deeptutor_lab` keeps the built image apart from
+`upstream_deeptutor-deeptutor:latest`. No studio, gatekeeper or postgres --
+a DeepWitya-only branch does not need them.
+
+Two things found while bringing it up, both written into the overlay: the
+base compose file maps `${DEEPTUTOR_DOCKER_*_PORT}` and probes it but
+never passes it into the container, so the variables must be set for the
+base file (hence `lab.ports`, not a `.env`, which is gitignored); and the
+image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
+`FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
+copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
+
+## School roles, Phase 1 step 1: the `student` and `teacher` presets — 2026-09-20
+
+Design: `docs/planning/school-roles/DESIGN_teacher_student_it.md`,
+decisions 3 and 4. Two new values of `AccountPreset`, labels on an
+ordinary `user`, never a role:
+
+- `deeptutor/multi_user/models.py` widens the literal; `identity.py` keeps
+  one `PRESETS` set for its three validations (a stored `student` or
+  `teacher` survives canonicalisation, an unknown value still falls back to
+  `standard`); `/api/auth/status` passes the two through. Creating either
+  through `POST /api/auth/users` writes no learning policy (decision 5).
+- Web: `web/lib/account-presets.ts` (new) holds the list, the display
+  label and `isCuratedPreset()` (custom, learner, student, teacher -- the
+  accounts whose grants an admin curates). `admin-api.ts`, `auth.ts` and
+  `user-dashboard.ts` take their type from it; the users page's create
+  dialog offers five presets with a sentence for each; the admin dashboard
+  counts teachers and students among the curated accounts; a teacher's own
+  dashboard reads like a custom account's. Strings in en, th and zh.
+
+Tests: `tests/multi_user/test_school_presets.py` (4, red before);
+`web/tests/admin-user-presets.test.ts` follows the list to the new module.
+
+---
+
 ## Documentation: the school roles design — teacher, student, IT — 2026-09-20
 
 `docs/planning/school-roles/DESIGN_teacher_student_it.md` (new) records what

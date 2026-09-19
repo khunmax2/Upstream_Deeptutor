@@ -1,6 +1,8 @@
 import type { SessionSummary } from "@/lib/session-api";
 
-export type UserPreset = "standard" | "custom" | "learner";
+import type { AccountPreset } from "@/lib/account-presets";
+
+export type UserPreset = AccountPreset;
 
 export interface DashboardActivityDay {
   dayStart: number;

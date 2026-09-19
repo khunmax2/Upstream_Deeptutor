@@ -20,6 +20,7 @@ import {
   type UserRecord,
   type AccountPreset,
 } from "@/lib/admin-api";
+import { ACCOUNT_PRESETS, presetLabel } from "@/lib/account-presets";
 import { BIN_RETENTION_DAYS, binDaysLeft } from "@/lib/account-bin";
 import {
   getStudioFootprint,
@@ -742,13 +743,7 @@ export default function AdminUsersClient({
                           {!isAdmin && user.preset && (
                             <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
                               {t("Preset: {{preset}}", {
-                                preset: t(
-                                  user.preset === "learner"
-                                    ? "Learner"
-                                    : user.preset === "custom"
-                                      ? "Custom"
-                                      : "Standard",
-                                ),
+                                preset: t(presetLabel(user.preset)),
                               })}
                             </span>
                           )}
@@ -1019,11 +1014,11 @@ export default function AdminUsersClient({
                 {t("Account preset")}
               </legend>
               <div
-                className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--muted)]/50 p-1"
+                className="grid grid-cols-3 gap-1 sm:grid-cols-5 rounded-lg bg-[var(--muted)]/50 p-1"
                 role="group"
                 aria-label={t("Account preset")}
               >
-                {(["standard", "learner", "custom"] as const).map((preset) => (
+                {ACCOUNT_PRESETS.map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -1036,13 +1031,7 @@ export default function AdminUsersClient({
                         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                     }`}
                   >
-                    {t(
-                      preset === "learner"
-                        ? "Learner"
-                        : preset === "custom"
-                          ? "Custom"
-                          : "Standard",
-                    )}
+                    {t(presetLabel(preset))}
                   </button>
                 ))}
               </div>
@@ -1055,9 +1044,17 @@ export default function AdminUsersClient({
                     ? t(
                         "Create an ordinary account, then customize its assignments.",
                       )
-                    : t(
-                        "Create an ordinary account with the default workspace behavior.",
-                      )}
+                    : createPreset === "student"
+                      ? t(
+                          "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.",
+                        )
+                      : createPreset === "teacher"
+                        ? t(
+                            "A teacher: an ordinary account that is linked to students as their guardian.",
+                          )
+                        : t(
+                            "Create an ordinary account with the default workspace behavior.",
+                          )}
               </p>
             </fieldset>
 

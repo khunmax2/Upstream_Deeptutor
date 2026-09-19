@@ -558,10 +558,9 @@ async def auth_status(
         if info:
             avatar = str(info.get("avatar") or "")
             raw_preset = str(info.get("preset") or "standard")
-            if raw_preset == "learner":
-                preset = "learner"
-            elif raw_preset == "custom":
-                preset = "custom"
+            # Fork: the two school presets pass through like the others.
+            if raw_preset in {"learner", "custom", "student", "teacher"}:
+                preset = raw_preset  # type: ignore[assignment]
             else:
                 preset = "standard"
         learning_policy = learning_policy_for_user(
