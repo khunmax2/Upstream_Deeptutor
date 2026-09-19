@@ -292,6 +292,27 @@ byte-equal afterwards.
 
 ---
 
+## Runbook: the studio's rollback image is tagged, not only written down — 2026-09-19
+
+Found on the host after the v1 retirement's `docker image prune -f`: the
+studio images of rounds 15g and 17 were gone. An image pulled by digest has
+no tag (`RepoTags=[]`), so the moment the container stops using it, it is
+dangling, and the next prune removes it; the rollback value in
+`pre-deploy-*-studio-image.txt` then needs a fresh pull from ghcr before it
+can be used (public, so still possible, just not immediate). DeepWitya's
+rollback images were never at risk because they are tagged
+`pre-deploy-*`.
+
+`deploy/GO-LIVE.md` §11 now tags the current studio image
+(`deepwitya-studio:pre-deploy-<date>`) beside writing the value file, and §8
+says to check that tag before any prune. The cleanup of 2026-09-19 itself
+(a stray `apply-course-studio-nginx.sh`, six host-built
+`upstream_deeptutor_v2-openmaic:*` tags and six pre-go-live `deeptutor`
+tags, 12 tags = 10 images, none in use by any container on the machine)
+reclaimed ~2.7 GB on top of the prune's 3.9 GB.
+
+---
+
 ## Documentation: Phase 2 live in `deploy-2026-09-19`, v1 retired, and §8 corrected — 2026-09-19
 
 `docs/reports/REPORT_admin_lifecycle_phase2_2026-09-19.md` (new) records the
