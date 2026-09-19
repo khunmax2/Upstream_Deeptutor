@@ -175,10 +175,14 @@ its phases are in
 Phase 1 is built and live (`deploy-2026-09-17b`): #108 protects the primary
 admin, #111 records exactly one owner with a `primary_admin show|handover`
 command, #112 makes admin management primary-only and audited, #113 enforces
-`disabled`. Phase 2 (delete through a bin with a 30-day restore, then a
-primary-only purge on both sides) is planned in
-`docs/planning/admin-roles/PHASE2_hard_delete.md`, not built. Going back to
-upstream's shared admin workspace stays possible.
+`disabled`. Phase 2 is built and live too (`deploy-2026-09-19`): delete
+moves an account to a bin with a 30-day restore, and a typed, primary-only
+purge removes its data on both sides — studio fork `e75ef948` (#44), #116
+(the gatekeeper's `x-deeptutor-primary` header, a contract field), #117
+(bin, restore, purge, leftovers panel) and #118 (an unreadable `users.json`
+is refused, never treated as empty). Plan and decisions:
+`docs/planning/admin-roles/PHASE2_hard_delete.md`. Going back to upstream's
+shared admin workspace stays possible.
 Meanwhile: on every upstream sync, and before touching
 roles, grants, personas, skills, embedding or knowledge-base code, look for new
 `is_admin`-means-`data/` assumptions and flag them rather than deciding the
