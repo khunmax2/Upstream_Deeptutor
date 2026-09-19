@@ -312,6 +312,38 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 1 step 2: what a `student` account cannot do — 2026-09-20
+
+Design decision 4: a student is the full product, and only three groups
+are closed because they are not the student's to hold.
+
+- `deeptutor/multi_user/student_policy.py` (new) is one table of closed
+  routes -- writes under `/api/settings`, `/api/capabilities`,
+  `/api/tools`, `/api/agent-config`, `/api/partners`, `/api/partner-groups`;
+  everything under `/api/space/mcp` and `/api/space/cli-apps` -- with the
+  student's own `/api/settings/ui` and `/api/settings/workspace` left open.
+  `refuse_closed` is added once to the app's shared `_auth` dependency list
+  in `api/main.py`, after the auth guard, so every router that carries it
+  is covered; the path is checked before the account is read, so an open
+  request costs one comparison. A refusal answers 403 "This is a student
+  account: …", writes the audit action `student_write_refused` and logs at
+  WARNING. `CurrentUser.preset` is not filled on the request path upstream,
+  so the preset is read from the account store, only for a closed path.
+- Web: `web/lib/student-access.ts` (new) mirrors the table; `useAuthStatus`
+  now carries the preset; the sidebar (`/partners`), the Learning Space
+  tiles (MCP, CLI apps) and the Settings categories `models`, `network`,
+  `agents` are hidden for a student, so the restriction is an absence and
+  not a 403 after a click. `components/StudentNotice.tsx` (new) shows the
+  two-sentence privacy notice once per account on first sign-in (decision
+  8), keyed in browser storage, mounted in the workspace layout. Strings
+  in en, th and zh.
+
+Tests: `tests/multi_user/test_student_policy.py` (24: the table, a student
+refused on closed routes and served on open ones through the real app,
+the audit line, an ordinary user untouched); `web/tests/student-access.test.ts`
+(5, including a check that the web set names the same routes as the
+server table).
+
 ## School roles, Phase 1 step 1: the `student` and `teacher` presets — 2026-09-20
 
 Design: `docs/planning/school-roles/DESIGN_teacher_student_it.md`,
