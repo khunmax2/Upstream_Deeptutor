@@ -46,6 +46,7 @@ import {
 } from "@/components/sidebar/nav-entries";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { filterHrefsForStudent } from "@/lib/student-access";
 import { useDragSort, type DragSort } from "@/hooks/useDragSort";
 import { placeMenu, type FloatingMenuPosition } from "@/lib/floating-menu";
 import {
@@ -114,10 +115,14 @@ export function SidebarNav({
   // nothing to show. Filter the navigation to what the account can actually
   // reach; `allowedSurfaces` is null for ordinary accounts, which changes
   // nothing for them.
-  const { allowedSurfaces } = useAuthStatus();
+  const { allowedSurfaces, preset } = useAuthStatus();
   const permittedHrefs = useMemo(
-    () => filterNavBySurfaces(PRIMARY_NAV, allowedSurfaces).map((e) => e.href),
-    [allowedSurfaces],
+    () =>
+      filterHrefsForStudent(
+        filterNavBySurfaces(PRIMARY_NAV, allowedSurfaces),
+        preset,
+      ).map((e) => e.href),
+    [allowedSurfaces, preset],
   );
 
   const resolved = useMemo(

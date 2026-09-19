@@ -2439,6 +2439,8 @@
   "Failed to update account": "更新账户失败",
   "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.": "中学生：使用学校模型的完整导师；没有自己的密钥、伙伴或代码执行。",
   "A teacher: an ordinary account that is linked to students as their guardian.": "教师：作为监护人与学生关联的普通账户。",
+  "Welcome to your tutor": "欢迎使用你的导师",
+  "Your conversations with the tutor are private. Your teacher sees your learning progress, not what you say.": "你与导师的对话是私密的。老师只能看到你的学习进度，看不到你说了什么。",
   "Teacher account": "教师",
   "Student account": "学生",
   "Accounts": "账户",

@@ -1,5 +1,6 @@
 "use client";
 
+import { STUDENT_CLOSED_SETTINGS } from "@/lib/student-access";
 import {
   AudioLines,
   Bot,
@@ -110,6 +111,10 @@ export function isSettingsCategoryVisible(
   if (category.learnerOnly && !access.showLearnerOnly) return false;
   if (category.guardianOnly && !access.showGuardianOnly) return false;
   if (access.restricted && !category.learningSafe) return false;
+  // Fork: the server refuses a student's writes in these categories
+  // (multi_user/student_policy.py); the menu does not offer them.
+  if (access.hideStudentClosed && STUDENT_CLOSED_SETTINGS.has(category.key))
+    return false;
   return (
     !category.children ||
     category.children.some((leaf) => isSettingsLeafVisible(leaf, access))

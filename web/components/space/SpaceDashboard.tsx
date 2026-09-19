@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { filterHrefsForStudent } from "@/lib/student-access";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
@@ -264,9 +266,17 @@ export default function SpaceDashboard() {
   const [counts, setCounts] = useState<Partial<Record<DashKey, number>>>({});
 
   const capabilityAvailable = useCapabilityFilter();
+  const { preset } = useAuthStatus();
   const groups = useMemo(
-    () => visibleGroups(GROUPS, capabilityAvailable),
-    [capabilityAvailable],
+    () =>
+      // Fork: MCP and CLI apps are closed to a student (student_policy.py).
+      visibleGroups(GROUPS, capabilityAvailable)
+        .map((group) => ({
+          ...group,
+          items: filterHrefsForStudent(group.items, preset),
+        }))
+        .filter((group) => group.items.length > 0),
+    [capabilityAvailable, preset],
   );
 
   useEffect(() => {

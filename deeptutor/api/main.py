@@ -538,7 +538,14 @@ from deeptutor.api.routers.auth import (  # noqa: E402
     require_learning_surface,
 )
 
-_auth = [Depends(require_learning_surface)]
+# Fork: a `student` account (school roles design) has three groups of routes
+# closed to it; the rule is one table in multi_user/student_policy.py and is
+# applied here once, after the auth guard has set the current user.
+from deeptutor.multi_user.student_policy import (
+    refuse_closed as _refuse_student_closed,  # noqa: E402
+)
+
+_auth = [Depends(require_learning_surface), Depends(_refuse_student_closed)]
 # Partner data is anchored at the admin workspace (data/partners) and shared
 # process-wide, so management is admin-gated in multi-user deployments
 # (single-user local runs are implicitly admin — no behaviour change there).

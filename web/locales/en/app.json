@@ -2439,6 +2439,8 @@
   "Failed to update account": "Failed to update account",
   "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.": "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.",
   "A teacher: an ordinary account that is linked to students as their guardian.": "A teacher: an ordinary account that is linked to students as their guardian.",
+  "Welcome to your tutor": "Welcome to your tutor",
+  "Your conversations with the tutor are private. Your teacher sees your learning progress, not what you say.": "Your conversations with the tutor are private. Your teacher sees your learning progress, not what you say.",
   "Teacher account": "Teacher",
   "Student account": "Student",
   "Accounts": "Accounts",

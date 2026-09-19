@@ -2883,6 +2883,8 @@
   "Failed to update account": "อัปเดตบัญชีไม่สำเร็จ",
   "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.": "นักเรียนมัธยม: ใช้ติวเตอร์ได้เต็มรูปแบบด้วยโมเดลของโรงเรียน ไม่มีคีย์ส่วนตัว partner หรือการรันโค้ด",
   "A teacher: an ordinary account that is linked to students as their guardian.": "ครู: บัญชีผู้ใช้ทั่วไปที่ผูกกับนักเรียนในฐานะผู้ดูแล",
+  "Welcome to your tutor": "ยินดีต้อนรับสู่ติวเตอร์ของคุณ",
+  "Your conversations with the tutor are private. Your teacher sees your learning progress, not what you say.": "บทสนทนาของคุณกับติวเตอร์เป็นส่วนตัว ครูเห็นเฉพาะความคืบหน้าการเรียนของคุณ ไม่เห็นสิ่งที่คุณคุย",
   "Teacher account": "ครู",
   "Student account": "นักเรียน",
   "Accounts": "บัญชี",
