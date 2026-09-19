@@ -292,6 +292,25 @@ byte-equal afterwards.
 
 ---
 
+## Documentation: Phase 2 live in `deploy-2026-09-19`, v1 retired, and §8 corrected — 2026-09-19
+
+`docs/reports/REPORT_admin_lifecycle_phase2_2026-09-19.md` (new) records the
+four Phase 2 PRs (fork #44, #116, #117, #118), the local UAT before each and
+the incident that produced #118, the host round (`main` `0737638ce`,
+`deeptutor2` `03ce974ec252`, studio `sha256:8e0a86cd…d248e`, gatekeeper with
+the primary header; backups first; four leftover ids found, not two), and
+the retirement of the go-live rollback stack the same evening.
+
+`deploy/GO-LIVE.md` §8: `docker compose down` must name the compose files
+the stack was created with (the `config_files` label) — the v1 directory
+held a stray `compose.yaml` that a bare `down` would have used, leaving
+`deeptutor-ollama` and `deeptutor-sandbox-runner` running; and v2 must be
+checked for any dependence on v1 first. Found by the host Claude at the gate.
+
+`CLAUDE.md` and the two design documents now say Phase 2 is built and live.
+
+---
+
 ## Delete goes through a bin, and a typed purge removes the account's data on both sides — 2026-09-19
 
 The last piece of the admin design's Phase 2

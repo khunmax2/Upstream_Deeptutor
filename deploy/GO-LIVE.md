@@ -377,6 +377,14 @@ docker compose ... up -d
 - [ ] หา stack v1: `docker ps --format '{{.Names}}\t{{.Ports}}' | grep 10310` แล้วดู
       `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`
       → `cd` ไปที่นั่น → `docker compose down` (**ไม่ใส่ `-v`** — volume/`data/` ของ v1 เก็บไว้อีก 30 วัน)
+      **ระบุไฟล์ compose ให้ตรงกับที่ stack ถูกสร้าง** — อ่านจาก label
+      `docker inspect <c> --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'`
+      แล้วใส่ `-f` ทุกไฟล์ตามนั้น: dir ของ v1 มี `compose.yaml` ซ้อนกับ `docker-compose.yml` และ `down` เปล่า ๆ
+      เลือก `compose.yaml` ซึ่งรู้จักแค่ 2 service — จะทิ้ง `deeptutor-ollama` กับ `deeptutor-sandbox-runner`
+      ไว้และลบ network ไม่ได้ (พบตอนถอนจริง 2026-09-19; คำสั่งที่ใช้คือ
+      `docker compose -f docker-compose.yml -f deploy/docker-compose.localhost.yml down`)
+      ก่อน down ตรวจว่า v2 ไม่ได้พึ่ง container ของ v1 (network ของ ollama ของ v1 ต้องมีแต่ตัวของ v1,
+      env/settings ของ `deeptutor2` ไม่ชี้ไป `deeptutor-ollama`/11434)
 - [ ] `docker image prune` เฉพาะ dangling; **อย่า** `system prune -a` (ลบ `pre-golive-*` ทิ้ง)
 - [ ] หลังถอน v1 **`--revert` ใช้ไม่ได้อีก** — script ปฏิเสธเองเมื่อพอร์ต 10310 ไม่มีใครฟัง (ต้อง `--force`)
       ทางถอยที่เหลือคือ §7.3; ลบไฟล์ state ทิ้งได้: `sudo rm /etc/nginx/snippets/deepwitya-golive.state`

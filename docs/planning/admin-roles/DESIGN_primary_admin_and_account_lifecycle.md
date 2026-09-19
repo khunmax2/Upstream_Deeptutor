@@ -248,9 +248,12 @@ Progress (one step per PR, each tested locally through the real gatekeeper):
 2. `/api/auth/status.is_primary`, the gatekeeper's `x-deeptutor-primary`,
    the contract fields and the pin — DeepWitya PR #116, merged.
 3. The bin, restore, purge, footprint, orphans and the users page —
-   `feat/account-bin-and-purge`.
-4. One host round, then the two stranded ids purged from the leftovers
-   panel.
+   DeepWitya PR #117, merged; #118 (an unreadable account store is refused)
+   folded into the same round.
+4. Host round `deploy-2026-09-19`, deployed 2026-09-19 — all three halves.
+   The leftovers panel showed four stranded ids (two more than expected,
+   test accounts deleted before 2026-09-13); the user purges them from the
+   panel. Phase 2 is complete.
 
 ## Not decided here
 

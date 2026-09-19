@@ -4,9 +4,9 @@ Draft for review, 2026-09-18 (revised the same day after the survey below;
 agreed as decision 10). Implements §4 of
 `DESIGN_primary_admin_and_account_lifecycle.md`. Built 2026-09-18/19: fork
 #44 (the studio routes), DeepWitya #116 (status flag, gatekeeper header,
-pin) and the bin/restore/purge PR; the host round is what remains. Phase 1
-(`deploy-2026-09-17b`) is live on the host, where "delete" is still the
-shallow delete that strands data until that round.
+pin) and the bin/restore/purge PR (#117, with #118); live on the host since
+`deploy-2026-09-19`. `docs/reports/REPORT_admin_lifecycle_phase2_2026-09-19.md`
+records the round.
 
 ## What upstream and other systems do
 
