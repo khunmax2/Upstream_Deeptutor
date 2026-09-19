@@ -292,6 +292,41 @@ byte-equal afterwards.
 
 ---
 
+## Documentation: the school roles design — teacher, student, IT — 2026-09-20
+
+`docs/planning/school-roles/DESIGN_teacher_student_it.md` (new) records what
+was decided with the user on 2026-09-20 for running the deployment in a
+school, and what the code check behind each decision found:
+
+- Accounts today are three kinds; `standard` and `custom` are identical on
+  the server and differ in three cosmetic web places; `learner` is upstream's
+  child mode (two surfaces, age bands to 13–15, studio refused) and too
+  narrow for a secondary student.
+- No new role. A teacher is a `user` with preset `teacher` (behaves as
+  `custom`) plus guardian links; a secondary student is a `user` with preset
+  `student` = the full product with no learning policy, and three groups
+  closed by fork-only code (own settings/keys/tools/MCP, partners/MCP/exec,
+  the admin sections). `learning_policy` is left as upstream's; `learner`
+  stays for young children. Accounts are created by admins only.
+- A teacher sees learning evidence only — mastery, Question Bank, reading,
+  sessions as counts, the learner profile — never transcripts, Memory, own
+  knowledge bases, Co-Writer or partners.
+- Memory L1/L2/L3 were read layer by layer: L1 is never read for a teacher;
+  named L2 sections (`quiz`; `chat` Mastery and Misconceptions; `book` Pacing
+  and Sticking points) and L3 `scope` plus `profile` Learning style and
+  Knowledge level may feed a fifth, fork-only L3 document `teacher.md` with no
+  footnotes, not listed on the student's Memory page, read through an
+  audited guardian route. L2/L3 refresh only when a run is started, so
+  `student` accounts get a scheduled consolidation.
+- Transparency is a one-time notice at the `student` account's first
+  sign-in and the parents' consent, never a per-file marker in the student's
+  UI; every teacher read is audited.
+- Three phases: accounts; evidence (after the v1.6.8 sync, on upstream's
+  `record_assessment`); teacher dashboard and classrooms, with their own
+  design document first.
+
+---
+
 ## Runbook: the studio's rollback image is tagged, not only written down — 2026-09-19
 
 Found on the host after the v1 retirement's `docker image prune -f`: the
