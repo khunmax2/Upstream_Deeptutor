@@ -584,3 +584,40 @@ def test_due_follows_the_switches():
         )
         is True
     )
+
+
+def test_the_summary_is_written_in_the_deployment_language(mu_isolated_root, school, monkeypatch):
+    """A teacher's own interface.json (absent here, so ``en``) must not decide
+    the language; the deployment's does, the same for a refresh and the
+    nightly run."""
+    from deeptutor.multi_user.paths import get_admin_path_service
+    from deeptutor.multi_user.school_jobs import deployment_language
+
+    client, users = school
+    settings_file = get_admin_path_service().get_settings_file("interface")
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    settings_file.write_text(json.dumps({"language": "th"}), encoding="utf-8")
+    assert deployment_language() == "th"
+
+    seen: dict[str, str] = {}
+
+    async def fake_llm(*, language=None, **_kwargs):
+        seen["language"] = language
+        return "## Strengths\n- ok\n"
+
+    monkeypatch.setattr("deeptutor.services.memory.consolidator.modes._runtime.call_llm", fake_llm)
+    client.post(
+        "/api/multi-user/guardians",
+        headers=_auth("root-token"),
+        json={
+            "guardian_user_id": users["teacher"]["id"],
+            "learner_user_id": users["student"]["id"],
+            "permissions": ["view_reports"],
+        },
+    )
+    response = client.post(
+        f"/api/multi-user/learners/{users['student']['id']}/summary", headers=_auth("teacher-token")
+    )
+    assert response.status_code == 200
+    assert seen["language"] == "th"
+    assert response.json()["summary"]["language"] == "th"

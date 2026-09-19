@@ -341,7 +341,11 @@ text a teacher gets is written for them from the allowed sections.
   prompt forbids personal facts and footnotes; the answer is parsed into
   four fixed sections, footnotes stripped, the L3 banned-absolute guard
   applied. A run is skipped when no allowed source changed since the last
-  one. The model is the deployment default: the school pays.
+  one. The model is the deployment default: the school pays. The language
+  is the deployment's too (`school_jobs.deployment_language`), for the
+  nightly run and a teacher's refresh alike -- found on the lab, where a
+  teacher without an `interface.json` of their own got an English summary
+  on a Thai deployment.
 - `deeptutor/multi_user/school_jobs.py` (new) is the nightly run for
   every enabled `student` account, switched by `settings/school.json`
   (`summaries_enabled`, default off; `summaries_hour`, default 2), checked
@@ -362,7 +366,7 @@ text a teacher gets is written for them from the allowed sections.
   `GuardianRelationshipsEditor.tsx`); the learner profile editor stays
   learner-only.
 
-Tests: `tests/multi_user/test_learning_evidence.py` (11: a workspace built
+Tests: `tests/multi_user/test_learning_evidence.py` (12: a workspace built
 with the real session, Mastery and reading stores and memory documents,
 read back with the numbers right and five planted secrets -- a message, a
 session title, a `chat.Topics` entry, a `profile.Identity` entry, a
@@ -370,7 +374,7 @@ preference -- absent from the record, the model's input and the audit
 line; read-only proven by file listing and mtimes; the routes closed to a
 stranger, to the student, to a link without `view_reports`, open to the
 linked teacher and to an admin; the switches and the manual run admin-only;
-`due` follows the switches). `tests/multi_user/test_guardians.py` message
+`due` follows the switches; the deployment language wins). `tests/multi_user/test_guardians.py` message
 updated. `web/tests/admin-user-presets.test.ts` +1.
 
 ## School roles, Phase 1 step 2: what a `student` account cannot do — 2026-09-20

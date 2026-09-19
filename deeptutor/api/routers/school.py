@@ -71,12 +71,12 @@ async def guardian_summary_refresh(
         current, learner_user_id, "view_reports"
     )
     from deeptutor.multi_user.paths import scope_for_user
+    from deeptutor.multi_user.school_jobs import deployment_language
     from deeptutor.multi_user.teacher_summary import generate_summary, read_summary
-    from deeptutor.services.i18n import current_language
 
     scope = scope_for_user(learner_user_id, is_admin=False)
     result = await generate_summary(
-        scope, language=current_language(), user_label=learner_username, force=True
+        scope, language=deployment_language(), user_label=learner_username, force=True
     )
     _log_supervisor_action(
         "guardian_summary_refresh",

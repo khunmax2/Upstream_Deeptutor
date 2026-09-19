@@ -77,6 +77,27 @@ def save_school_settings(changes: dict[str, Any]) -> dict[str, Any]:
     return current
 
 
+def deployment_language() -> str:
+    """The language every ``teacher.md`` is written in: the deployment's.
+
+    Not the caller's -- a teacher's own ``settings/interface.json`` (often
+    absent, so ``en``) must not make their refresh flip a document the
+    nightly run writes in the school's language.
+    """
+    from deeptutor.multi_user.paths import get_admin_path_service
+    from deeptutor.services.i18n import _parse_language
+    from deeptutor.services.settings.interface_settings import _normalize_language
+
+    try:
+        raw = json.loads(
+            get_admin_path_service().get_settings_file("interface").read_text(encoding="utf-8")
+        )
+        language = raw.get("language") if isinstance(raw, dict) else None
+    except (OSError, ValueError):
+        language = None
+    return _parse_language(_normalize_language(language, "en"))
+
+
 # ── the run ─────────────────────────────────────────────────────────────────
 
 
@@ -104,9 +125,8 @@ async def run_summaries_once(*, force: bool = False) -> dict[str, Any]:
     """
     from deeptutor.multi_user.paths import scope_for_user
     from deeptutor.multi_user.teacher_summary import generate_summary
-    from deeptutor.services.i18n import current_language
 
-    language = current_language()
+    language = deployment_language()
     report: dict[str, Any] = {
         "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "students": 0,
@@ -210,6 +230,7 @@ def get_school_summary_service() -> SchoolSummaryService:
 __all__ = [
     "DEFAULT_SETTINGS",
     "SchoolSummaryService",
+    "deployment_language",
     "due",
     "get_school_summary_service",
     "load_school_settings",
