@@ -46,7 +46,18 @@ those roles. Checked on 2026-09-20:
   no upstream issue about teachers, classrooms or schools. What upstream *is*
   doing is consolidating learning evidence: #1504 (merged 2026-09-19) gives
   Mastery Path, Book Focus-Check and Immersive Reading one Question Bank write
-  path, `record_assessment`, with type, result and provenance.
+  path, `record_assessment`, with type, result and provenance. It is 58 files
+  and +7.2k/−1.4k over `learning/`, `sqlite_store.py`, `mastery_path.py` and
+  `reading_extensions.py` — not cherry-pickable, and the user does not want
+  to sync now (the deployment is stable after weeks of fixes). **Everything
+  the evidence needs already exists at our v1.6.6 baseline**, just in three
+  places instead of one: Mastery Path progress (`learning/policy.py`,
+  `service.py`, `storage.py`: `mastery_levels` per objective, gate kind and
+  threshold, `objective_report`, review due), the Question Bank
+  (`sqlite_store.py` `question_bank_*` with `is_correct`, categories,
+  `question_bank_stats`; `tools/question_bank.py`), reading quizzes, books,
+  sessions and the learner profile. #1504 adds one write path and moves
+  reading-quiz grading to the server; it adds no data we lack.
 - **Memory is per user and owner-only.** `services/memory/` keeps three
   layers in the user's own workspace; `/api/memory/*` serves only the owner,
   and the tutor reads L3 through the `read_memory` tool. What each layer
@@ -63,6 +74,7 @@ those roles. Checked on 2026-09-20:
 | 5 | Why not widen `learning_policy`? | It is upstream's child mode, hard-wired to two surfaces and the area of #1222. Extending it would conflict on every sync and bend its intent. `learner` stays as it is for young children. |
 | 6 | What does a teacher see? | **Learning evidence only**: mastery per objective, Question Bank results, reading progress and quizzes, books finished, sessions/time/regularity, the learner profile the student filled in, the *topics* asked about as categories. **Never** chat transcripts, Memory, personal knowledge bases, Co-Writer or partners. |
 | 7 | Memory and the dashboard? | The dashboard's spine is structured, always-fresh data (Mastery Path, Question Bank, reading, sessions). Memory contributes one derived document, `teacher.md`, built only from the sections in §5 that are learning signals, with no footnotes and a prompt that forbids personal facts. L1 is never read for a teacher. |
+| 11 | Sync v1.6.8 first, for `record_assessment`? | **No.** The evidence is read through one fork-only module, `learning_evidence.py`, from the sources v1.6.6 already has. When a later sync brings #1504, only that module's inside changes; the dashboard and the guardian routes do not. Reading-quiz grading stays client-side until then — acceptable for a pilot, and every read is audited. The sync moves to "when convenient, nothing waits on it". |
 | 8 | Does the student see what the teacher sees? | **No per-file marker.** The student's Memory page is upstream's, unchanged; `teacher.md` is not listed there. Transparency is given **once, at the policy level**: a two-line notice on the `student` account's first sign-in ("your conversations with the tutor are private; your teacher sees your learning progress"), and in the consent the school collects from parents. Every teacher read is audited so the school can answer a parent. |
 | 9 | Defaults for a class? | IT (later a teacher) can set a class's starting persona, granted models and shared knowledge bases. A student can change the persona; the default is a direction, not a lock. |
 | 10 | Studio for students? | Deferred. When it comes it is one more surface in the same shape (a learner mode that reads published courses, never creates or uses keys) and a gatekeeper contract change. Not part of the phases below. |
@@ -122,17 +134,24 @@ learning evidence of decision 6, read through routes that check the guardian
 link and audit the read. Sources, in order of trust:
 
 1. Mastery Path progress (`learning/policy.py`: mastery per objective, gate
-   kind, status) and the Question Bank (`record_assessment`, after the
-   v1.6.8 sync);
+   kind, status, review due) and the Question Bank (`sqlite_store.py`:
+   entries with `is_correct`, categories, stats);
 2. reading progress, quizzes and finished books;
 3. session counts, time on task, regularity — counts, never content;
 4. the learner profile the student filled in;
 5. `teacher.md` from Memory (§5), as an AI-written summary beside the
    numbers.
 
+All five are read through **one fork-only module,
+`deeptutor/multi_user/learning_evidence.py`**, which returns one evidence
+record per student and is the only thing the guardian routes and the
+dashboard call. It reads the three sources v1.6.6 keeps separately; when a
+sync brings upstream's `record_assessment` (#1504), the module's inside
+changes and nothing above it does. This is the fork rule — new files over
+edited upstream files — applied to data as well as code.
+
 Details (layout, aggregation per class, alerts) are for
-`DESIGN_teacher_dashboard.md`, written after the v1.6.8 sync so it builds on
-upstream's Question Bank rather than on a fork copy.
+`DESIGN_teacher_dashboard.md`, written before Phase 3.
 
 ### 5. Memory: what may reach a teacher
 
@@ -190,10 +209,10 @@ with its dependency on the settings, partners, MCP and exec routers; sidebar
 and Settings hiding; the first-sign-in notice; tests red before each. No
 studio change, no host contract change: one `deeptutor2` rebuild.
 
-**Phase 2 — evidence.** After the v1.6.8 sync (for `record_assessment`):
+**Phase 2 — evidence.** `learning_evidence.py` over the v1.6.6 sources,
 the guardian evidence routes (mastery, question bank, reading, sessions,
 profile), the `teacher.md` consolidator mode and its scheduled run, the
-audit lines. Still DeepWitya only.
+audit lines. Still DeepWitya only; no upstream sync required.
 
 **Phase 3 — teacher dashboard and classrooms.** Its own design document
 first (`DESIGN_teacher_dashboard.md`): the page, per-class aggregation,

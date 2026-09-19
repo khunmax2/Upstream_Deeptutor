@@ -321,9 +321,14 @@ school, and what the code check behind each decision found:
 - Transparency is a one-time notice at the `student` account's first
   sign-in and the parents' consent, never a per-file marker in the student's
   UI; every teacher read is audited.
-- Three phases: accounts; evidence (after the v1.6.8 sync, on upstream's
-  `record_assessment`); teacher dashboard and classrooms, with their own
-  design document first.
+- No upstream sync is required: upstream's #1504 (`record_assessment`) is
+  58 files and not cherry-pickable, and every source it unifies already
+  exists at v1.6.6 (Mastery Path progress, the Question Bank, reading
+  quizzes, books, sessions, the learner profile). A fork-only
+  `learning_evidence.py` reads them; when a sync brings #1504 only that
+  module's inside changes.
+- Three phases: accounts; evidence; teacher dashboard and classrooms, with
+  their own design document first.
 
 ---
 
