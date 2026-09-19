@@ -386,6 +386,8 @@ docker compose ... up -d
       ก่อน down ตรวจว่า v2 ไม่ได้พึ่ง container ของ v1 (network ของ ollama ของ v1 ต้องมีแต่ตัวของ v1,
       env/settings ของ `deeptutor2` ไม่ชี้ไป `deeptutor-ollama`/11434)
 - [ ] `docker image prune` เฉพาะ dangling; **อย่า** `system prune -a` (ลบ `pre-golive-*` ทิ้ง)
+      และก่อน prune ทุกครั้ง ดูว่า image studio ที่จะเป็นทางถอยติด tag แล้ว (`docker images deepwitya-studio`) —
+      image ที่ pull ตาม digest ไม่มี tag และจะถูก prune ทันทีที่ container เลิกใช้
 - [ ] หลังถอน v1 **`--revert` ใช้ไม่ได้อีก** — script ปฏิเสธเองเมื่อพอร์ต 10310 ไม่มีใครฟัง (ต้อง `--force`)
       ทางถอยที่เหลือคือ §7.3; ลบไฟล์ state ทิ้งได้: `sudo rm /etc/nginx/snippets/deepwitya-golive.state`
 - [ ] ลบ `location /deepwitya2` ที่ :80 ถ้ายังเหลือ (`apply-nginx-deepwitya2.sh --revert` ทำให้แล้ว)
@@ -497,6 +499,11 @@ $COMPOSE up -d --build --no-deps deeptutor 2>&1 | tee ../_deeptutor_backup/deplo
 docker exec deeptutor2 chmod 775 /app/data/user /app/data/user/settings          # ซ้ำ! (deeptutor2 start ใหม่เมื่อไร settings/ กลับเป็น 700)
 bash deploy/backup-studio.sh                                  # จุดถอยของข้อมูลก่อนเปลี่ยน image → ต้อง "verify N tables" + done
 docker pull ghcr.io/khunmax2/deepwitya-studio@sha256:<digest จาก pin>   # ขั้นแยก ไม่มีอะไรดับ — ช้า/ค้างก็ไม่กระทบใคร
+# ทางถอยของ studio ต้อง "ติด tag" ไม่ใช่แค่จดค่า: image ที่ pull ตาม digest ไม่มี tag (RepoTags=[])
+# พอ container เลิกใช้ก็เป็น dangling ทันที และ `docker image prune` ครั้งถัดไปจะลบทิ้ง — เกิดแล้ว 2026-09-19
+# (image รอบ 15g และ 17 หายจากเครื่องหลัง prune ตอนถอน v1; ถอยได้ก็ต่อเมื่อ pull จาก ghcr ใหม่)
+docker inspect deeptutor-openmaic --format '{{.Config.Image}}' | tee ../_deeptutor_backup/pre-deploy-$(date +%Y%m%d)-studio-image.txt
+docker tag "$(docker inspect deeptutor-openmaic --format '{{.Image}}')" deepwitya-studio:pre-deploy-$(date +%Y%m%d)
 sed -i 's|^OPENMAIC_IMAGE=.*|OPENMAIC_IMAGE=ghcr.io/khunmax2/deepwitya-studio@sha256:<digest จาก pin>|' deploy/production.env
 python3 deploy/openmaic-patches/check_openmaic_contract.py    # ต้อง PASS "production.env pulls the pinned digest"
 # ---- จุดรอ "studio" (คนสั่ง) — ขั้นเดียวที่ studio ดับ ----
