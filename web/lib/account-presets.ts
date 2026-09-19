@@ -26,9 +26,11 @@ export function presetLabel(preset: string | null | undefined): string {
     case "custom":
       return "Custom";
     case "student":
-      return "Student";
+      return "Student account";
     case "teacher":
-      return "Teacher";
+      // Not the shared "Teacher" key: that is the locked-persona option in
+      // the grant editor, and a school names the person, not the persona.
+      return "Teacher account";
     default:
       return "Standard";
   }
