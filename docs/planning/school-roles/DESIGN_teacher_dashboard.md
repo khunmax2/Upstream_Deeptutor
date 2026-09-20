@@ -135,14 +135,37 @@ report and offers the credentials download. The users page gets one column
 
 ### 2.1 Where
 
-`/dashboard/students`, a third tab of the existing Dashboard beside the
-account's own overview and Learner Anima — `DashboardTabs` already carries
-the pattern, and the Dashboard entry is "unrestricted" in the sidebar, so
-no navigation code changes. The tab appears for preset `teacher` and for
-admins; anyone else who types the URL gets the existing dashboard. Admins
-see every class; a teacher sees the classes they are in. **(proposed;
-the alternative is a sidebar entry "My students", which needs a
-teacher-only filter beside the student one and a new top-level route)**
+Checked on 2026-09-20 before deciding: the existing `/dashboard`
+(`UserDashboard.tsx`, 1,400 lines) is a *first-person* page. Every section
+— Learning momentum, Next steps, Recent activity, Workspace access, Assigned
+learning, Learning plan, Library — reads the caller's own data through
+owner-only routes (`/api/sessions`, `/api/reading/materials`, the notebook,
+the knowledge bases), so none of it can be pointed at another account, and
+several show exactly what a teacher must not see (Recent activity is the
+chat sessions by title; Library is the personal knowledge bases). Rewriting
+that page to show students would mean a new data layer under every section
+with the old sections still there to leak. `/admin` (`AdminDashboard.tsx`)
+is IT's page — accounts, provisioning, readiness — and is where classroom
+management belongs, not the teacher's roster.
+
+So the teacher's view is **new pages that reuse the dashboard's visual
+parts** (`MetricCard`, `CardHeader`, the progress bars and card styles) and
+**none of its data flow**: everything on them comes from `/api/multi-user/`
+routes that check the guardian link and write an audit line.
+
+- `/dashboard/students` — a third Dashboard tab, "Students", beside
+  Overview and Learner Anima (`DashboardTabs` already carries the pattern,
+  and the Dashboard entry is "unrestricted" in the sidebar, so no
+  navigation code changes). The **overview of every student** the teacher
+  is responsible for, by class (§2.2), with the class in numbers above it
+  (§3).
+- `/dashboard/students/<id>` — the **student's own dashboard** (§2.3),
+  reached by clicking the name in the roster.
+
+The tab appears for preset `teacher` and for admins; admins see every
+class, a teacher the classes they are in. Anyone else who types the URL is
+sent to `/dashboard`. The teacher's own Overview tab stays: a teacher is a
+learner of their own too. **(decided with the user 2026-09-20)**
 
 ### 2.2 The roster
 
@@ -258,10 +281,10 @@ last report — the routes exist since Phase 2.
 
 | # | Question | Proposed |
 |---|---|---|
-| 1 | Where does the teacher's page live? | A third Dashboard tab, `/dashboard/students`, for preset `teacher` and admins. |
-| 2 | Does a classroom hold class defaults (decision 9)? | Yes: a grant fragment applied on join, editable per student afterwards, not removed on leave. |
+| 1 | Where does the teacher's page live? | **Decided:** a third Dashboard tab, `/dashboard/students` (all students, by class) and `/dashboard/students/<id>` (one student), new pages reusing the dashboard's visual parts only. |
+| 2 | Does a classroom hold class defaults (decision 9)? | **Decided:** yes — a grant fragment applied on join, editable per student afterwards, not removed on leave. |
 | 3 | Membership derives guardian links? | Yes, with `granted_via` on the record; hand-made links are never touched. |
-| 4 | CSV columns? | `username,password,classroom`; empty password → generated, returned once as a downloadable CSV. |
+| 4 | CSV columns? | **Decided:** `username,password,classroom`; empty password → generated, returned once as a downloadable CSV. |
 | 5 | Alert thresholds? | Inactive 7 d; struggling < 50 % on ≥ 10 questions/30 d; backlog ≥ 10; reviews ≥ 5; reading stalled 14 d. |
 | 6 | Audit granularity? | Roster per class; detail and refresh per student. |
 | 7 | Export / print? | Not in the pilot. |
