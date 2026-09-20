@@ -14,6 +14,10 @@ check and audit helper:
   model is the deployment default, as in the nightly run: the school pays.
 * ``GET`` / ``PUT /school/settings`` and ``POST /school/summaries/run`` --
   the nightly summary job's switches and a manual run, admin only.
+* ``/school/classrooms`` (Phase 3a) -- classrooms as a bulk editor of
+  guardian links (:mod:`deeptutor.multi_user.classrooms`), admin writes,
+  teacher reads of their own; ``POST /school/import`` -- student accounts
+  from a CSV (:mod:`deeptutor.multi_user.school_import`), admin only.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from deeptutor.api.routers.auth import require_admin, require_auth
@@ -122,3 +126,199 @@ async def run_school_summaries(_: object = Depends(require_admin)) -> dict[str, 
     report = await run_summaries_once(force=False)
     log_admin_action("school_summaries_run", summary=report)
     return report
+
+
+# ── classrooms (Phase 3a) ───────────────────────────────────────────────────
+
+
+class ClassroomPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    term: str = Field(default="", max_length=80)
+    home_room_teacher_id: str = ""
+    teacher_ids: list[str] = Field(default_factory=list)
+    student_ids: list[str] = Field(default_factory=list)
+    defaults: dict[str, Any] | None = None
+
+
+class ClassroomUpdatePayload(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    term: str | None = Field(default=None, max_length=80)
+    home_room_teacher_id: str | None = None
+    defaults: dict[str, Any] | None = None
+
+
+class MemberIdsPayload(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=500)
+
+
+class ImportPayload(BaseModel):
+    csv: str = Field(min_length=1, max_length=200_000)
+    create_classrooms: bool = False
+
+
+def _classroom_or_404(classroom_id: str) -> dict[str, Any]:
+    from deeptutor.multi_user.classrooms import get_classroom
+
+    record = get_classroom(classroom_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Classroom not found")
+    return record
+
+
+def _classroom_view(record: dict[str, Any]) -> dict[str, Any]:
+    """The record with usernames beside the ids, for the pages."""
+    from deeptutor.multi_user.identity import list_user_info
+
+    names = {str(u.get("id") or ""): str(u.get("username") or "") for u in list_user_info()}
+    return {
+        **record,
+        "teachers": [{"id": tid, "username": names.get(tid, "")} for tid in record["teacher_ids"]],
+        "students": [{"id": sid, "username": names.get(sid, "")} for sid in record["student_ids"]],
+    }
+
+
+@router.get("/school/classrooms")
+async def list_school_classrooms(
+    include_archived: bool = False,
+    current: object = Depends(require_auth),
+) -> dict[str, Any]:
+    """Admins see every classroom; a teacher the ones they are in."""
+    from deeptutor.multi_user.classrooms import list_classrooms
+
+    is_admin = str(getattr(current, "role", "") or "") == "admin"
+    actor_id = str(getattr(current, "user_id", "") or "")
+    records = list_classrooms(
+        include_archived=include_archived and is_admin,
+        teacher_user_id=None if is_admin else actor_id,
+    )
+    return {"classrooms": [_classroom_view(record) for record in records]}
+
+
+@router.post("/school/classrooms", status_code=201)
+async def create_school_classroom(
+    payload: ClassroomPayload, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.classrooms import ClassroomError, create_classroom
+
+    try:
+        record = create_classroom(
+            payload.name,
+            term=payload.term,
+            home_room_teacher_id=payload.home_room_teacher_id,
+            teacher_ids=payload.teacher_ids,
+            student_ids=payload.student_ids,
+            defaults=payload.defaults,
+        )
+    except ClassroomError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_admin_action(
+        "classroom_create",
+        summary={
+            "classroom_id": record["id"],
+            "name": record["name"],
+            "teachers": len(record["teacher_ids"]),
+            "students": len(record["student_ids"]),
+        },
+    )
+    return {"classroom": _classroom_view(record)}
+
+
+@router.put("/school/classrooms/{classroom_id}")
+async def update_school_classroom(
+    classroom_id: str, payload: ClassroomUpdatePayload, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.classrooms import ClassroomError, update_classroom
+
+    _classroom_or_404(classroom_id)
+    changes = payload.model_dump(exclude_none=True)
+    try:
+        record = update_classroom(classroom_id, **changes)
+    except ClassroomError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_admin_action(
+        "classroom_update",
+        summary={"classroom_id": classroom_id, "fields": sorted(changes)},
+    )
+    return {"classroom": _classroom_view(record)}
+
+
+@router.delete("/school/classrooms/{classroom_id}")
+async def archive_school_classroom(
+    classroom_id: str, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.classrooms import archive_classroom
+
+    _classroom_or_404(classroom_id)
+    record = archive_classroom(classroom_id)
+    log_admin_action("classroom_archive", summary={"classroom_id": classroom_id})
+    return {"classroom": _classroom_view(record)}
+
+
+@router.put("/school/classrooms/{classroom_id}/teachers")
+async def set_school_classroom_teachers(
+    classroom_id: str, payload: MemberIdsPayload, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.classrooms import ClassroomError, set_teachers
+
+    _classroom_or_404(classroom_id)
+    try:
+        record, changes = set_teachers(classroom_id, payload.ids)
+    except ClassroomError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_admin_action(
+        "classroom_members_update",
+        summary={"classroom_id": classroom_id, "kind": "teachers", **changes},
+    )
+    return {"classroom": _classroom_view(record), "changes": changes}
+
+
+@router.put("/school/classrooms/{classroom_id}/students")
+async def set_school_classroom_students(
+    classroom_id: str, payload: MemberIdsPayload, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.classrooms import ClassroomError, set_students
+
+    _classroom_or_404(classroom_id)
+    try:
+        record, changes = set_students(classroom_id, payload.ids)
+    except ClassroomError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_admin_action(
+        "classroom_members_update",
+        summary={"classroom_id": classroom_id, "kind": "students", **changes},
+    )
+    return {"classroom": _classroom_view(record), "changes": changes}
+
+
+@router.post("/school/import")
+async def import_school_students(
+    payload: ImportPayload, _: object = Depends(require_admin)
+) -> dict[str, Any]:
+    """Create student accounts from a CSV and place them in their classrooms.
+
+    The generated passwords are in this response and nowhere else.
+    """
+    from deeptutor.multi_user.audit import log_admin_action
+    from deeptutor.multi_user.school_import import import_students
+    from deeptutor.services.auth import AUTH_ENABLED, POCKETBASE_ENABLED
+
+    if not AUTH_ENABLED or POCKETBASE_ENABLED:
+        raise HTTPException(status_code=400, detail="CSV import needs the built-in auth store.")
+    report = await asyncio.to_thread(
+        import_students, payload.csv, create_classrooms=payload.create_classrooms
+    )
+    log_admin_action("school_import", summary=report.public())
+    return {
+        "created": [
+            {"username": row["username"], "classroom": row["classroom"]} for row in report.created
+        ],
+        "skipped": report.skipped,
+        "errors": report.errors,
+        "classrooms_created": report.classrooms_created,
+        "credentials_csv": report.credentials_csv() if report.created else "",
+    }

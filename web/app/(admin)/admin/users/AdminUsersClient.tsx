@@ -26,6 +26,7 @@ import {
   presetLabel,
 } from "@/lib/account-presets";
 import { BIN_RETENTION_DAYS, binDaysLeft } from "@/lib/account-bin";
+import { listClassrooms } from "@/lib/school-api";
 import {
   getStudioFootprint,
   listStudioOwners,
@@ -49,6 +50,7 @@ import {
   ArrowLeft,
   Archive,
   RotateCcw,
+  School,
   SlidersHorizontal,
   UserCheck,
   UserPlus,
@@ -137,6 +139,11 @@ export default function AdminUsersClient({
     loading: boolean;
   }>({ deepwitya: null, studio: null, studioError: "", loading: false });
   const [orphans, setOrphans] = useState<OrphanRecord[]>([]);
+  // Fork (school roles, Phase 3a): which classrooms each account is in,
+  // shown under the preset. Read-only here; edited on /admin/classrooms.
+  const [classNames, setClassNames] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const [studioOnlyIds, setStudioOnlyIds] = useState<string[]>([]);
   const [leftoversError, setLeftoversError] = useState("");
 
@@ -146,6 +153,19 @@ export default function AdminUsersClient({
     try {
       const data = await listUsers();
       setUsers(data);
+      listClassrooms()
+        .then((rooms) => {
+          const names = new Map<string, string[]>();
+          for (const room of rooms) {
+            for (const id of [...room.teacher_ids, ...room.student_ids]) {
+              names.set(id, [...(names.get(id) ?? []), room.name]);
+            }
+          }
+          setClassNames(
+            new Map([...names].map(([id, list]) => [id, list.join(", ")])),
+          );
+        })
+        .catch(() => setClassNames(new Map()));
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Failed to load users"));
     } finally {
@@ -494,6 +514,16 @@ export default function AdminUsersClient({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {/* Fork (school roles, Phase 3a): classrooms live on their own page. */}
+              <Link
+                href="/admin/classrooms"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
+                           border border-[var(--border)] text-[var(--foreground)]
+                           hover:bg-[var(--card)] transition-colors"
+              >
+                <School size={14} />
+                {t("Classrooms")}
+              </Link>
               <button
                 onClick={openCreateDialog}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
@@ -751,6 +781,13 @@ export default function AdminUsersClient({
                               })}
                             </span>
                           )}
+                          {classNames.get(user.id) && (
+                            <span className="mt-0.5 block text-[11px] text-[var(--muted-foreground)]">
+                              {t("Class: {{names}}", {
+                                names: classNames.get(user.id),
+                              })}
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-[var(--muted-foreground)]">
                           {formatDate(user.created_at, lang)}
@@ -874,9 +911,7 @@ export default function AdminUsersClient({
                               />
                             )}
                             {user.preset === "learner" && (
-                              <LearnerProfileEditor
-                                username={user.username}
-                              />
+                              <LearnerProfileEditor username={user.username} />
                             )}
                           </td>
                         </tr>

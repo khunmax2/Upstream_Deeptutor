@@ -312,6 +312,53 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 3a: classrooms and the CSV import — 2026-09-20
+
+Design §1: a classroom is a bulk editor of guardian links, not a new
+authorization path, and the file at term start replaces a hundred dialogs.
+
+- `deeptutor/multi_user/classrooms.py` (new): the store
+  (`data/system/school/classrooms.json`, path resolved per call like the
+  guardian store's), records with name, term, home-room teacher, teachers
+  (preset `teacher`), students (preset `student`), `defaults.grant` and
+  `archived_at`. After every membership change `sync_links` creates the
+  missing `view_reports` + `assign_materials` links for every teacher x
+  student pair of every active classroom and revokes the ones *this module
+  created* that no classroom justifies; it knows its own links by id
+  (`derived_links`), so a link an admin made by hand is never created or
+  revoked here and `guardians.py` is untouched. Class defaults (decision 9)
+  are merged into a student's grant on join -- llm items by profile with
+  the model ids unioned, knowledge bases and skills by value -- and never
+  removed on leave.
+- `deeptutor/multi_user/school_import.py` (new): `username,password,
+  classroom` CSV (BOM tolerated, header case-free, blank lines skipped,
+  at most 500 rows); usernames follow `RegisterRequest`'s rule, an empty
+  password is generated (12 letters and digits) and returned once in the
+  report, never logged; accounts are created with preset `student` through
+  `services.auth.add_user` (the admin route's code) and audited as
+  `account_create` with `via: import`; an existing username is `skipped`,
+  unknown classrooms are errors unless `create_classrooms`.
+- `deeptutor/api/routers/school.py`: `GET/POST /school/classrooms`,
+  `PUT/DELETE /school/classrooms/{id}` (delete archives),
+  `PUT .../teachers`, `PUT .../students`, `POST /school/import`. Admin
+  writes; a teacher lists only the classrooms they are in. Audit
+  `classroom_create` / `classroom_update` / `classroom_archive` /
+  `classroom_members_update` (counts) / `school_import` (counts).
+- Web: `web/lib/school-api.ts` (new; also carries the Phase 2 evidence,
+  summary and settings calls for 3b), `web/app/(admin)/admin/classrooms/`
+  (new page: list, editor with teachers + home-room star, student picker
+  with search, defaults from the admin resources, archive with confirm;
+  the import dialog with file or paste, report, and the credentials CSV
+  offered once as a download), a "Classrooms" link and a "Class: …" line
+  per account on the users page. 44 strings in en, th, zh.
+
+Tests: `tests/multi_user/test_classrooms.py` (9: derive / revoke / archive,
+a hand-made link untouched and a pair shared by two classes, the rules,
+defaults on join and kept on leave, the username rule equals
+`RegisterRequest`'s, CSV parsing line by line, an import end to end with
+the password verified against the hash and absent from the audit, the
+routes and their audit). `web/tests/school-classrooms.test.ts` (3).
+
 ## School roles, Phase 3 design: the teacher dashboard and classrooms — 2026-09-20
 
 `docs/planning/school-roles/DESIGN_teacher_dashboard.md` (new): what the
