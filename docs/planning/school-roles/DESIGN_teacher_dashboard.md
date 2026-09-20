@@ -1,7 +1,12 @@
 # Teacher dashboard and classrooms — design (school roles, Phase 3)
 
 Drafted 2026-09-20 on `feat/school-phase1`, after Phase 1 (accounts) and
-Phase 2 (evidence) were built and tested on the lab stack. The parent
+Phase 2 (evidence) were built and tested on the lab stack; 3a, 3b and 3c
+were built on the same branch the same day (report:
+`../../reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md`). One
+difference from §1.2 as written: derived links are tracked by id in the
+classroom store (`derived_links`) rather than by a `granted_via` field on
+the guardian record, so `guardians.py` keeps its record shape. The parent
 design is `DESIGN_teacher_student_it.md`; this document is what its Phase 3
 sentence — "the page, per-class aggregation, classroom as a group with a
 home-room teacher, CSV import" — means in detail. The decisions marked

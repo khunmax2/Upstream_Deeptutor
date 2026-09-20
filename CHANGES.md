@@ -312,6 +312,17 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 3c: IT's switch, and the report — 2026-09-20
+
+- `/admin/classrooms` gains the nightly-summary panel (`NightlySummaryPanel`
+  in `AdminClassroomsClient.tsx`): enabled, server hour, "Run now", the last
+  run's counts — over the Phase 2 routes. 11 strings in en, th, zh.
+- `docs/reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md` (new): what
+  the branch holds, what the lab proved, what was found on the way, what
+  stays open. Both design documents now say the phases are built and where
+  the report is; the dashboard design notes the one deviation from §1.2
+  (`derived_links` in the classroom store instead of `granted_via`).
+
 ## School roles, Phase 3b: the teacher's pages — 2026-09-20
 
 Design §2 and §3, as decided: a third Dashboard tab for the `teacher`

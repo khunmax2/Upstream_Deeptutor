@@ -5328,5 +5328,14 @@
   "Strengths": "优势",
   "Working on": "正在努力",
   "Learning style": "学习风格",
-  "Suggested next steps": "建议的下一步"
+  "Suggested next steps": "建议的下一步",
+  "Nightly summary for teachers": "每晚教师摘要",
+  "Once a day, every student account gets a short learning summary written for their teachers from the allowed parts of their memory. Uses the deployment's default model; a student whose memory has not changed costs nothing.": "每天一次，每个学生账户都会根据其记忆中允许的部分生成一份给教师的简短学习摘要。使用部署的默认模型；记忆未变化的学生不产生费用。",
+  "Failed to load school settings": "加载学校设置失败",
+  "Failed to save school settings": "保存学校设置失败",
+  "The run failed": "运行失败",
+  "At (server hour)": "时间（服务器小时）",
+  "Run now": "立即运行",
+  "Not run yet": "尚未运行",
+  "Last run {{when}}: {{students}} students, {{written}} written, {{unchanged}} unchanged, {{no_input}} without memory, {{failed}} failed": "上次运行 {{when}}：{{students}} 名学生，写入 {{written}}，未变 {{unchanged}}，无记忆 {{no_input}}，失败 {{failed}}"
 }

@@ -5328,5 +5328,14 @@
   "Strengths": "Strengths",
   "Working on": "Working on",
   "Learning style": "Learning style",
-  "Suggested next steps": "Suggested next steps"
+  "Suggested next steps": "Suggested next steps",
+  "Nightly summary for teachers": "Nightly summary for teachers",
+  "Once a day, every student account gets a short learning summary written for their teachers from the allowed parts of their memory. Uses the deployment's default model; a student whose memory has not changed costs nothing.": "Once a day, every student account gets a short learning summary written for their teachers from the allowed parts of their memory. Uses the deployment's default model; a student whose memory has not changed costs nothing.",
+  "Failed to load school settings": "Failed to load school settings",
+  "Failed to save school settings": "Failed to save school settings",
+  "The run failed": "The run failed",
+  "At (server hour)": "At (server hour)",
+  "Run now": "Run now",
+  "Not run yet": "Not run yet",
+  "Last run {{when}}: {{students}} students, {{written}} written, {{unchanged}} unchanged, {{no_input}} without memory, {{failed}} failed": "Last run {{when}}: {{students}} students, {{written}} written, {{unchanged}} unchanged, {{no_input}} without memory, {{failed}} failed"
 }

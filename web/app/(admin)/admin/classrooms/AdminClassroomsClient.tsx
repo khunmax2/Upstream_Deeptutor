@@ -28,11 +28,15 @@ import {
   listClassrooms,
   setClassroomStudents,
   setClassroomTeachers,
+  getSchoolSettings,
+  runSummariesNow,
+  saveSchoolSettings,
   updateClassroom,
   type Classroom,
   type ClassroomDefaults,
   type ImportReport,
   type MemberChanges,
+  type SchoolSettings,
 } from "@/lib/school-api";
 
 /**
@@ -286,6 +290,8 @@ export default function AdminClassroomsClient() {
             </ul>
           )}
         </div>
+
+        <NightlySummaryPanel />
       </div>
 
       {showCreate && (
@@ -322,6 +328,154 @@ export default function AdminClassroomsClient() {
         )}
       </ConfirmDialog>
     </div>
+  );
+}
+
+// ── the nightly summary (Phase 3c) ─────────────────────────────────────────
+
+/**
+ * IT's switch for `teacher.md`: whether the nightly run is on, at which
+ * hour, a "Run now", and the last run's report. The routes are Phase 2's
+ * (`/school/settings`, `/school/summaries/run`); the model is the
+ * deployment default, so this is also where the school sees what it pays
+ * for.
+ */
+function NightlySummaryPanel() {
+  const { t, i18n } = useTranslation();
+  const [settings, setSettings] = useState<SchoolSettings | null>(null);
+  const [hour, setHour] = useState(2);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getSchoolSettings()
+      .then((value) => {
+        setSettings(value);
+        setHour(value.summaries_hour);
+      })
+      .catch((e: unknown) =>
+        setError(errorText(e, t("Failed to load school settings"))),
+      );
+  }, [t]);
+
+  const save = async (changes: {
+    summaries_enabled?: boolean;
+    summaries_hour?: number;
+  }) => {
+    setBusy("save");
+    setError("");
+    try {
+      const value = await saveSchoolSettings(changes);
+      setSettings(value);
+      setHour(value.summaries_hour);
+    } catch (e) {
+      setError(errorText(e, t("Failed to save school settings")));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const runNow = async () => {
+    setBusy("run");
+    setError("");
+    try {
+      const report = await runSummariesNow();
+      setSettings((current) =>
+        current ? { ...current, last_run: report } : current,
+      );
+    } catch (e) {
+      setError(errorText(e, t("The run failed")));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const last = settings?.last_run ?? null;
+  const when = (iso?: string) =>
+    iso
+      ? new Intl.DateTimeFormat(i18n.language, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(iso))
+      : "";
+
+  return (
+    <section
+      className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm"
+      data-testid="nightly-summary"
+    >
+      <h2 className="text-sm font-semibold text-[var(--foreground)]">
+        {t("Nightly summary for teachers")}
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+        {t(
+          "Once a day, every student account gets a short learning summary written for their teachers from the allowed parts of their memory. Uses the deployment's default model; a student whose memory has not changed costs nothing.",
+        )}
+      </p>
+      {error && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+      )}
+      {settings === null ? (
+        <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+          {t("Loading...")}
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={settings.summaries_enabled}
+              disabled={busy !== ""}
+              onChange={(e) => save({ summaries_enabled: e.target.checked })}
+            />
+            {t("Enabled")}
+          </label>
+          <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+            {t("At (server hour)")}
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={hour}
+              disabled={busy !== ""}
+              onChange={(e) => setHour(Number(e.target.value))}
+              onBlur={() =>
+                hour !== settings.summaries_hour &&
+                save({ summaries_hour: Math.max(0, Math.min(23, hour)) })
+              }
+              className={`w-16 ${inputClass}`}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={runNow}
+            disabled={busy !== ""}
+            className={buttonClass}
+          >
+            <RefreshCw
+              size={14}
+              className={busy === "run" ? "animate-spin" : ""}
+            />
+            {busy === "run" ? t("Running...") : t("Run now")}
+          </button>
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {last
+              ? t(
+                  "Last run {{when}}: {{students}} students, {{written}} written, {{unchanged}} unchanged, {{no_input}} without memory, {{failed}} failed",
+                  {
+                    when: when(last.started_at),
+                    students: last.students ?? 0,
+                    written: last.written?.length ?? 0,
+                    unchanged: last.unchanged ?? 0,
+                    no_input: last.no_input ?? 0,
+                    failed: last.failed?.length ?? 0,
+                  },
+                )
+              : t("Not run yet")}
+          </span>
+        </div>
+      )}
+    </section>
   );
 }
 

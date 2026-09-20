@@ -5328,5 +5328,14 @@
   "Strengths": "จุดแข็ง",
   "Working on": "กำลังฝึก",
   "Learning style": "รูปแบบการเรียนรู้",
-  "Suggested next steps": "ขั้นต่อไปที่แนะนำ"
+  "Suggested next steps": "ขั้นต่อไปที่แนะนำ",
+  "Nightly summary for teachers": "สรุปสำหรับครูรายคืน",
+  "Once a day, every student account gets a short learning summary written for their teachers from the allowed parts of their memory. Uses the deployment's default model; a student whose memory has not changed costs nothing.": "วันละครั้ง บัญชีนักเรียนทุกคนจะได้สรุปการเรียนสั้น ๆ สำหรับครู เขียนจากส่วนของความจำที่อนุญาตเท่านั้น ใช้โมเดลเริ่มต้นของระบบ นักเรียนที่ความจำไม่เปลี่ยนไม่มีค่าใช้จ่าย",
+  "Failed to load school settings": "โหลดการตั้งค่าโรงเรียนไม่สำเร็จ",
+  "Failed to save school settings": "บันทึกการตั้งค่าโรงเรียนไม่สำเร็จ",
+  "The run failed": "รันไม่สำเร็จ",
+  "At (server hour)": "เวลา (ชั่วโมงตามเซิร์ฟเวอร์)",
+  "Run now": "รันตอนนี้",
+  "Not run yet": "ยังไม่เคยรัน",
+  "Last run {{when}}: {{students}} students, {{written}} written, {{unchanged}} unchanged, {{no_input}} without memory, {{failed}} failed": "รันล่าสุด {{when}}: นักเรียน {{students}} คน เขียน {{written}} ไม่เปลี่ยน {{unchanged}} ไม่มีความจำ {{no_input}} ล้มเหลว {{failed}}"
 }

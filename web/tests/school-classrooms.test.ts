@@ -51,6 +51,15 @@ test("the page is admin-only, edits members and defaults, and imports", () => {
   ]) {
     assert.ok(page.includes(call), `page calls ${call}`);
   }
+  // Phase 3c: IT's switch for the nightly summary lives on the same page.
+  for (const call of [
+    "getSchoolSettings(",
+    "saveSchoolSettings(",
+    "runSummariesNow(",
+  ]) {
+    assert.ok(page.includes(call), `page calls ${call}`);
+  }
+  assert.match(page, /data-testid="nightly-summary"/);
   // The generated passwords are offered as a download, never rendered as text.
   assert.match(page, /student-credentials\.csv/);
   assert.doesNotMatch(page, /credentials_csv\}\s*</);
