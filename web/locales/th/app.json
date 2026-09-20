@@ -5250,5 +5250,13 @@
   "Line {{line}}: {{username}} {{reason}}": "บรรทัด {{line}}: {{username}} {{reason}}",
   "The generated passwords are in this file and nowhere else. Download it now; closing this dialog discards it.": "รหัสผ่านที่สุ่มอยู่ในไฟล์นี้ที่เดียว ดาวน์โหลดตอนนี้ ปิดหน้าต่างนี้แล้วจะหายไป",
   "Download credentials CSV": "ดาวน์โหลด CSV รหัสผ่าน",
-  "Class: {{names}}": "ห้อง: {{names}}"
+  "Class: {{names}}": "ห้อง: {{names}}",
+  "Invalid username.": "ชื่อผู้ใช้ไม่ถูกต้อง",
+  "A password is at least 8 characters.": "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร",
+  "The classroom is empty.": "ไม่ได้ระบุห้องเรียน",
+  "This username appears twice in the file.": "ชื่อผู้ใช้นี้ซ้ำในไฟล์",
+  "The header must name username and classroom columns.": "บรรทัดหัวตารางต้องมีคอลัมน์ username และ classroom",
+  "already exists": "มีอยู่แล้ว",
+  "in the bin": "อยู่ในถังขยะ",
+  "The account was not created.": "สร้างบัญชีไม่สำเร็จ"
 }

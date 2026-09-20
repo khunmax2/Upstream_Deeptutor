@@ -5250,5 +5250,13 @@
   "Line {{line}}: {{username}} {{reason}}": "Line {{line}}: {{username}} {{reason}}",
   "The generated passwords are in this file and nowhere else. Download it now; closing this dialog discards it.": "The generated passwords are in this file and nowhere else. Download it now; closing this dialog discards it.",
   "Download credentials CSV": "Download credentials CSV",
-  "Class: {{names}}": "Class: {{names}}"
+  "Class: {{names}}": "Class: {{names}}",
+  "Invalid username.": "Invalid username.",
+  "A password is at least 8 characters.": "A password is at least 8 characters.",
+  "The classroom is empty.": "The classroom is empty.",
+  "This username appears twice in the file.": "This username appears twice in the file.",
+  "The header must name username and classroom columns.": "The header must name username and classroom columns.",
+  "already exists": "already exists",
+  "in the bin": "in the bin",
+  "The account was not created.": "The account was not created."
 }

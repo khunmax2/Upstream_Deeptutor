@@ -5250,5 +5250,13 @@
   "Line {{line}}: {{username}} {{reason}}": "第 {{line}} 行：{{username}} {{reason}}",
   "The generated passwords are in this file and nowhere else. Download it now; closing this dialog discards it.": "生成的密码只在此文件中。请立即下载；关闭此对话框后将丢失。",
   "Download credentials CSV": "下载凭据 CSV",
-  "Class: {{names}}": "班级：{{names}}"
+  "Class: {{names}}": "班级：{{names}}",
+  "Invalid username.": "用户名无效。",
+  "A password is at least 8 characters.": "密码至少 8 个字符。",
+  "The classroom is empty.": "未填写班级。",
+  "This username appears twice in the file.": "该用户名在文件中重复。",
+  "The header must name username and classroom columns.": "表头必须包含 username 和 classroom 列。",
+  "already exists": "已存在",
+  "in the bin": "在回收站中",
+  "The account was not created.": "账户未创建。"
 }

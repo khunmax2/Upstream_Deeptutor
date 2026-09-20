@@ -934,8 +934,11 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
                 {report.errors.map((item, index) => (
                   <li key={index}>
                     {item.line > 0
-                      ? t("Line {{line}}: {{reason}}", item)
-                      : item.reason}
+                      ? t("Line {{line}}: {{reason}}", {
+                          line: item.line,
+                          reason: t(item.reason),
+                        })
+                      : t(item.reason)}
                   </li>
                 ))}
               </ul>
@@ -944,7 +947,11 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
               <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-[var(--muted-foreground)]">
                 {report.skipped.map((item) => (
                   <li key={item.line}>
-                    {t("Line {{line}}: {{username}} {{reason}}", item)}
+                    {t("Line {{line}}: {{username}} {{reason}}", {
+                      line: item.line,
+                      username: item.username,
+                      reason: t(item.reason),
+                    })}
                   </li>
                 ))}
               </ul>
