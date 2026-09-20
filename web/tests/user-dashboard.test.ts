@@ -72,6 +72,9 @@ test("workspace mode takes precedence over the last turn capability", () => {
 
 test("preset and capability helpers provide stable safe fallbacks", () => {
   assert.equal(normalizeUserPreset("custom"), "custom");
+  // Fork: the school presets keep their name on the dashboard chip.
+  assert.equal(normalizeUserPreset("student"), "student");
+  assert.equal(normalizeUserPreset("teacher"), "teacher");
   assert.equal(normalizeUserPreset("unknown"), "standard");
   assert.equal(capabilityLaunchHref("chat"), "/chat");
   assert.equal(capabilityLaunchHref("deep_solve"), "/chat?capability=deep_solve");

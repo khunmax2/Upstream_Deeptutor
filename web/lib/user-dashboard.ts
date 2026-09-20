@@ -1,6 +1,6 @@
 import type { SessionSummary } from "@/lib/session-api";
 
-import type { AccountPreset } from "@/lib/account-presets";
+import { ACCOUNT_PRESETS, type AccountPreset } from "@/lib/account-presets";
 
 export type UserPreset = AccountPreset;
 
@@ -11,7 +11,11 @@ export interface DashboardActivityDay {
 }
 
 export function normalizeUserPreset(value: unknown): UserPreset {
-  return value === "custom" || value === "learner" ? value : "standard";
+  // Every preset the server knows (incl. the fork's student / teacher);
+  // anything else reads as standard.
+  return (ACCOUNT_PRESETS as readonly string[]).includes(String(value))
+    ? (value as UserPreset)
+    : "standard";
 }
 
 export function visibleDashboardSessions(

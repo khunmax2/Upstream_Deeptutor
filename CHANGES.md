@@ -341,7 +341,14 @@ evidence record a teacher reads, for its owner.
      string (14) and the Thai learning prompt; `แดชบอร์ด` and
      `ศูนย์ความรู้` stay.
   5. **The quiz-gate trap**: the Quiz mode's description now says the
-     practice does not count toward a Mastery Path (locale strings only).
+     practice does not count toward a Mastery Path (locale strings only;
+     kept short enough for the picker's one line).
+- Also: the dashboard's preset chip kept collapsing `student` / `teacher`
+  to "Standard" (`lib/user-dashboard.ts` `normalizeUserPreset` knew three
+  presets); it now knows every preset in `ACCOUNT_PRESETS`. A policy-bound
+  (learner) account is not asked for its own evidence at all -- it cannot
+  reach the multi-user routes, and asking would have been the catalog
+  request again.
 
 Tests: `test_learning_evidence.py` +1 (own record: same numbers, summary
 withheld, nothing in the audit), `tests/pet` 37 green on the new rate,
