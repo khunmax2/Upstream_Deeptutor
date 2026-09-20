@@ -1,6 +1,7 @@
 "use client";
 
 import { presetLabel as sharedPresetLabel } from "@/lib/account-presets";
+import MyLearning from "@/components/dashboard/MyLearning";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -192,6 +193,18 @@ export default function UserDashboard() {
       const preset = normalizeUserPreset(auth.preset);
       const chatAllowed = allowsLearningSurface("chat");
       const readingAllowed = allowsLearningSurface("reading");
+      // Which dashboard an account gets follows its *policy*, not its preset.
+      // The sidebar and the server already decide this way, so a `custom`
+      // account an admin gave a learning policy was the odd one out: it was
+      // filtered down to chat + reading everywhere else, yet handed the wide
+      // layout here — which then asked for six APIs its own policy denies and
+      // printed each denial as a zero. See `restricted` in the render below.
+      //
+      // Decided 2026-09-20 (dashboards report, open item 3): the catalog is
+      // not asked for either — the server refused it on every load and the
+      // answer was never used — so a restricted account no longer sees the
+      // "temporarily unavailable" banner for a request that should not exist.
+      const restricted = preset === "learner" || Boolean(auth.learning_policy);
 
       const common = await Promise.all([
         safeLoad(
@@ -206,18 +219,13 @@ export default function UserDashboard() {
         ),
         safeLoad(
           "capabilities",
-          fetchCapabilityCatalog({ force: true }),
+          restricted
+            ? Promise.resolve([] as CapabilityDescriptor[])
+            : fetchCapabilityCatalog({ force: true }),
           [] as CapabilityDescriptor[],
         ),
       ]);
 
-      // Which dashboard an account gets follows its *policy*, not its preset.
-      // The sidebar and the server already decide this way, so a `custom`
-      // account an admin gave a learning policy was the odd one out: it was
-      // filtered down to chat + reading everywhere else, yet handed the wide
-      // layout here — which then asked for six APIs its own policy denies and
-      // printed each denial as a zero. See `restricted` in the render below.
-      const restricted = preset === "learner" || Boolean(auth.learning_policy);
       const extended = restricted
         ? []
         : await Promise.all([
@@ -515,6 +523,10 @@ export default function UserDashboard() {
             readingAllowed={allowsLearningSurface("reading")}
           />
         </section>
+
+        {/* Fork (school roles, step B): the same evidence a teacher reads,
+            rendered for its owner. */}
+        <MyLearning />
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <ContinueCard

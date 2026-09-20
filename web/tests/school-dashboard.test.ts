@@ -133,3 +133,38 @@ test("every t() literal on the pages has an entry in en, th and zh", () => {
       assert.ok(table[key], `${lang} is missing "${key}"`);
   }
 });
+
+test("My learning is the owner's view of the same record, without the teacher's part", () => {
+  const source = read("components/dashboard/MyLearning.tsx");
+  assert.match(source, /getMyEvidence\(/);
+  assert.match(source, /SpotlightChip/);
+  assert.doesNotMatch(
+    source,
+    /AlertChip|refreshTeacherSummary|evidence\?\.comparison|teacher-summary/,
+  );
+  assert.match(
+    read("components/dashboard/UserDashboard.tsx"),
+    /<MyLearning \/>/,
+  );
+  assert.match(read("lib/school-api.ts"), /\/api\/multi-user\/me\/evidence/);
+  const route = read("../deeptutor/api/routers/school.py");
+  assert.match(route, /@router\.get\("\/me\/evidence"\)/);
+  assert.match(route, /evidence\["summary"\] = \{"available": False/);
+  for (const lang of ["en", "th", "zh"]) {
+    const table = locale(lang);
+    for (const key of [
+      "My learning",
+      "Nothing to show yet. Talk to the tutor, answer a few questions or read something, and your progress appears here.",
+    ]) {
+      assert.ok(table[key], `${lang} is missing "${key}"`);
+    }
+  }
+});
+
+test("a restricted account no longer asks for the capability catalog (open item 3)", () => {
+  const source = read("components/dashboard/UserDashboard.tsx");
+  assert.match(
+    source,
+    /restricted\s*\?\s*Promise\.resolve\(\[\] as CapabilityDescriptor\[\]\)\s*:\s*fetchCapabilityCatalog/,
+  );
+});

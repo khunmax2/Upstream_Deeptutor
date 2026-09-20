@@ -312,6 +312,41 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, step B: "My learning" on the student's own dashboard, and the five open items of 2026-09-04 — 2026-09-20
+
+One source, two views: the student's dashboard now renders the same
+evidence record a teacher reads, for its owner.
+
+- `api/routers/school.py`: `GET /api/multi-user/me/evidence` -- the caller's
+  own record with spotlights, read from the caller's own scope
+  (`learning_evidence(..., scope=)`), the teacher's part left out
+  (`teacher.md` withheld, no alerts, no comparison), not audited.
+- `web/components/dashboard/MyLearning.tsx` (new), mounted in
+  `UserDashboard.tsx` under Learning momentum: four cards (active days and
+  about-minutes, accuracy, objectives mastered, materials finished), the
+  green spotlight chips, the eight-week bars; a one-line "nothing yet"
+  for a fresh account; absent rather than broken when the call fails.
+- The dashboards report's five open items (`REPORT_dashboards_live_run_2026-09-04.md`
+  §5.1, §7), decided by the user on 2026-09-20:
+  1. **Anima's pacing**: `deeptutor/pet/tuning.py` is tuned for a term, not
+     a demo -- a fed or fresh pet has three days before neglect makes it
+     sick (`decay_hunger_per_sec = 25 / 3 days`, `initial_hunger = 50`);
+     `tests/pet/test_pet_derive.py` reads the rate from the tuning and pins
+     the three days.
+  2. Anima stays unassignable -- no change.
+  3. **The always-refused request**: `UserDashboard.tsx` no longer asks a
+     restricted account for the capability catalog; the "temporarily
+     unavailable" banner that only that refusal produced is gone with it.
+  4. **Thai labels**: `เส้นทางสู่ความเชี่ยวชาญ` → `เส้นทางฝึกฝน` in every
+     string (14) and the Thai learning prompt; `แดชบอร์ด` and
+     `ศูนย์ความรู้` stay.
+  5. **The quiz-gate trap**: the Quiz mode's description now says the
+     practice does not count toward a Mastery Path (locale strings only).
+
+Tests: `test_learning_evidence.py` +1 (own record: same numbers, summary
+withheld, nothing in the audit), `tests/pet` 37 green on the new rate,
+`web/tests/school-dashboard.test.ts` +2.
+
 ## School roles, step A: richer evidence — minutes, trend, good news, class comparison — 2026-09-20
 
 After a look at what Khan Academy, Google Classroom, Canvas, Microsoft

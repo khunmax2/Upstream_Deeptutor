@@ -28,7 +28,7 @@
   "Guided Learning": "引导式学习",
   "Flexible conversation with any tool": "灵活对话，可使用任意工具",
   "Multi-step reasoning & problem solving": "多步推理与问题求解",
-  "Auto-validated question generation": "自动校验的题目生成",
+  "Auto-validated question generation": "自动校验的题目生成 — 自由练习，不计入掌握路径",
   "Comprehensive multi-agent research": "多智能体综合研究",
   "No KB": "无知识库",
   "Tools": "工具",
@@ -5360,5 +5360,7 @@
   "Questions answered, by week (filled = correct)": "每周答题数（实心 = 正确）",
   "{{count}} active days": "{{count}} 个活跃日",
   "Back again": "回归",
-  "Still learning": "学习中"
+  "Still learning": "学习中",
+  "My learning": "我的学习",
+  "Nothing to show yet. Talk to the tutor, answer a few questions or read something, and your progress appears here.": "还没有内容。和导师聊聊、答几道题或读点什么，你的进度就会显示在这里。"
 }

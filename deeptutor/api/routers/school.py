@@ -78,6 +78,28 @@ async def guardian_evidence(
     return evidence
 
 
+@router.get("/me/evidence")
+async def my_evidence(current: object = Depends(require_auth)) -> dict[str, Any]:
+    """The caller's own evidence record, for the "My learning" section of
+    their dashboard (step B). The same record a teacher would read -- one
+    source, two views -- minus what is the teacher's business: no
+    ``teacher.md``, no alerts, no class comparison. Not audited: an account
+    reading itself is not a supervisor action."""
+    from deeptutor.multi_user.context import get_current_user
+    from deeptutor.multi_user.identity import get_user_by_id
+    from deeptutor.multi_user.learning_evidence import learning_evidence
+    from deeptutor.multi_user.school_alerts import spotlights_for
+
+    user = get_current_user()
+    found = get_user_by_id(user.id)
+    record = found[1] if found else {}
+    evidence = await asyncio.to_thread(learning_evidence, user.id, record, scope=user.scope)
+    evidence["student"]["username"] = user.username
+    evidence["spotlights"] = spotlights_for(evidence)
+    evidence["summary"] = {"available": False, "generated_at": None, "sections": []}
+    return evidence
+
+
 @router.post("/learners/{learner_user_id}/summary")
 async def guardian_summary_refresh(
     learner_user_id: str,

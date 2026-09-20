@@ -360,6 +360,12 @@ export async function getLearningEvidence(
   return json(res, "Failed to load learning evidence");
 }
 
+/** The caller's own record (step B): the same shape, the teacher's part left out. */
+export async function getMyEvidence(): Promise<LearningEvidence> {
+  const res = await apiFetch(apiUrl("/api/multi-user/me/evidence"));
+  return json(res, "Failed to load learning evidence");
+}
+
 export async function refreshTeacherSummary(
   studentId: string,
 ): Promise<{ status: string; summary: LearningEvidence["summary"] }> {

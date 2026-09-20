@@ -238,10 +238,10 @@ export function PageSkeleton() {
       <div className="mb-5 h-6 w-48 rounded bg-[var(--muted)]" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-28 rounded-2xl bg-[var(--muted)]/60" />
+          <div key={i} className="h-28 rounded-2xl bg-[var(--muted)]" />
         ))}
       </div>
-      <div className="mt-5 h-64 rounded-2xl bg-[var(--muted)]/60" />
+      <div className="mt-5 h-64 rounded-2xl bg-[var(--muted)]" />
     </div>
   );
 }

@@ -654,3 +654,45 @@ def test_the_record_carries_minutes_and_an_eight_week_trend(student):
     assert this_week["questions"] == 3 and this_week["correct"] == 2
     assert this_week["minutes"] == 1.0
     assert all(w["turns"] == 0 for w in trend[:-1])
+
+
+# ── step B: an account reads itself ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_my_evidence_is_the_same_record_minus_the_teachers_part(
+    mu_isolated_root, school, monkeypatch
+):
+    from deeptutor.multi_user import teacher_summary
+
+    client, users = school
+    record = users["student"]
+    scope_id = record["id"]
+    from deeptutor.multi_user.paths import scope_for_user
+
+    async def fake_llm(**_kwargs):
+        return "## Strengths\n- Power rule is reliable\n"
+
+    monkeypatch.setattr("deeptutor.services.memory.consolidator.modes._runtime.call_llm", fake_llm)
+    written = await teacher_summary.generate_summary(scope_for_user(scope_id, is_admin=False))
+    assert written["status"] == "written"
+
+    mine = client.get("/api/multi-user/me/evidence", headers=_auth("student-token"))
+    assert mine.status_code == 200, mine.text
+    body = mine.json()
+    assert body["student"] == {"id": scope_id, "username": "student", "preset": "student"}
+    assert body["question_bank"]["total"] == 3
+    assert body["activity"]["trend"]
+    assert "spotlights" in body and "comparison" not in body
+    # The teacher's summary is not the student's to see (decision 8).
+    assert body["summary"]["available"] is False
+    assert "Power rule" not in mine.text
+    # Not a supervisor action: nothing in the audit.
+    audit_path = mu_isolated_root / "data" / "system" / "audit" / "usage.jsonl"
+    audit = audit_path.read_text(encoding="utf-8") if audit_path.exists() else ""
+    assert "guardian_evidence_view" not in audit
+
+    # An account with nothing yet still gets a record, not an error.
+    fresh = client.get("/api/multi-user/me/evidence", headers=_auth("stranger-token"))
+    assert fresh.status_code == 200
+    assert fresh.json()["activity"]["available"] is False

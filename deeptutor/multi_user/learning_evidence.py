@@ -494,16 +494,20 @@ def _profile(record: dict[str, Any], mastery: dict[str, Any], scope: UserScope) 
 # ── the record ──────────────────────────────────────────────────────────────
 
 
-def learning_evidence(user_id: str, record: dict[str, Any]) -> dict[str, Any]:
+def learning_evidence(
+    user_id: str, record: dict[str, Any], *, scope: UserScope | None = None
+) -> dict[str, Any]:
     """The evidence record for the account *record* with id *user_id*.
 
     *record* is the account's canonical store record (``identity``); only its
     ``username``-free learning fields are read here. The caller has already
-    checked that the reader may see this student.
+    checked that the reader may see this student. *scope* is the workspace to
+    read; a student's own is the default, and an account reading itself
+    passes its current scope (the primary admin's is the deployment tree).
     """
     from deeptutor.multi_user.teacher_summary import read_summary
 
-    scope = scope_for_user(user_id, is_admin=False)
+    scope = scope or scope_for_user(user_id, is_admin=False)
     mastery = _mastery(scope)
     question_bank, activity = _chat_history(scope)
     return {

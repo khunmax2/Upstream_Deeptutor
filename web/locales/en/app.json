@@ -28,7 +28,7 @@
   "Guided Learning": "Guided Learning",
   "Flexible conversation with any tool": "Flexible conversation with any tool",
   "Multi-step reasoning & problem solving": "Multi-step reasoning & problem solving",
-  "Auto-validated question generation": "Auto-validated question generation",
+  "Auto-validated question generation": "Auto-validated question generation — practice that does not count toward a Mastery Path",
   "Comprehensive multi-agent research": "Comprehensive multi-agent research",
   "No KB": "No KB",
   "Tools": "Tools",
@@ -5360,5 +5360,7 @@
   "Questions answered, by week (filled = correct)": "Questions answered, by week (filled = correct)",
   "{{count}} active days": "{{count}} active days",
   "Back again": "Back again",
-  "Still learning": "Still learning"
+  "Still learning": "Still learning",
+  "My learning": "My learning",
+  "Nothing to show yet. Talk to the tutor, answer a few questions or read something, and your progress appears here.": "Nothing to show yet. Talk to the tutor, answer a few questions or read something, and your progress appears here."
 }
