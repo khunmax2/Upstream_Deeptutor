@@ -24,14 +24,24 @@ import {
 import {
   ALERT_HINTS,
   ALERT_LABELS,
+  SPOTLIGHT_HINTS,
+  SPOTLIGHT_LABELS,
   canSeeStudents,
+  formatMinutes,
   formatPercent,
   relativeTime,
   type AlertName,
+  type SpotlightName,
 } from "@/lib/school-dashboard";
 import { resolveUiLanguage } from "@/lib/ui-language";
 
-import { AlertChip, MetricCard, PageError, PageSkeleton } from "./school-parts";
+import {
+  AlertChip,
+  MetricCard,
+  PageError,
+  PageSkeleton,
+  SpotlightChip,
+} from "./school-parts";
 
 /**
  * Fork: every student the teacher is responsible for, by classroom
@@ -153,7 +163,11 @@ export default function StudentsOverview() {
       ) : (
         <>
           <ClassNumbers roster={roster} />
-          <RosterTable rows={rows} locale={locale} />
+          <RosterTable
+            rows={rows}
+            locale={locale}
+            classroomId={roster.classroom.id}
+          />
         </>
       )}
     </div>
@@ -204,10 +218,11 @@ function ClassNumbers({ roster }: { roster: Roster }) {
           tone="teal"
         />
         <MetricCard
-          label={t("Reviews due")}
-          value={totals.reviews_due}
-          detail={t("{{count}} materials finished", {
-            count: totals.reading_finished,
+          label={t("Time with the tutor (30 d)")}
+          value={formatMinutes(totals.minutes_30, t)}
+          detail={t("{{count}} reviews due · {{finished}} materials finished", {
+            count: totals.reviews_due,
+            finished: totals.reading_finished,
           })}
           icon={Target}
           tone="blue"
@@ -233,7 +248,15 @@ function ClassNumbers({ roster }: { roster: Roster }) {
   );
 }
 
-function RosterTable({ rows, locale }: { rows: RosterRow[]; locale: string }) {
+function RosterTable({
+  rows,
+  locale,
+  classroomId,
+}: {
+  rows: RosterRow[];
+  locale: string;
+  classroomId: string;
+}) {
   const { t } = useTranslation();
   if (rows.length === 0) {
     return (
@@ -253,6 +276,9 @@ function RosterTable({ rows, locale }: { rows: RosterRow[]; locale: string }) {
               {t("Active days (30 d)")}
             </th>
             <th className="px-4 py-3 text-right font-medium">
+              {t("Time (30 d)")}
+            </th>
+            <th className="px-4 py-3 text-right font-medium">
               {t("Questions (30 d)")}
             </th>
             <th className="px-4 py-3 text-right font-medium">{t("Mastery")}</th>
@@ -268,7 +294,7 @@ function RosterTable({ rows, locale }: { rows: RosterRow[]; locale: string }) {
             >
               <td className="px-4 py-3">
                 <Link
-                  href={`/dashboard/students/${encodeURIComponent(row.student.id)}`}
+                  href={`/dashboard/students/${encodeURIComponent(row.student.id)}?classroom=${encodeURIComponent(classroomId)}`}
                   className="font-medium text-[var(--foreground)] underline-offset-4 hover:underline"
                 >
                   {row.student.username}
@@ -285,6 +311,9 @@ function RosterTable({ rows, locale }: { rows: RosterRow[]; locale: string }) {
               </td>
               <td className="px-4 py-3 text-right tabular-nums">
                 {row.active_days_30}
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums">
+                {row.minutes_30 > 0 ? formatMinutes(row.minutes_30, t) : "—"}
               </td>
               <td className="px-4 py-3 text-right tabular-nums">
                 {row.questions_30 > 0
@@ -306,6 +335,13 @@ function RosterTable({ rows, locale }: { rows: RosterRow[]; locale: string }) {
                       key={name}
                       label={t(ALERT_LABELS[name as AlertName] ?? name)}
                       hint={t(ALERT_HINTS[name as AlertName] ?? "")}
+                    />
+                  ))}
+                  {(row.spotlights ?? []).map((name) => (
+                    <SpotlightChip
+                      key={name}
+                      label={t(SPOTLIGHT_LABELS[name as SpotlightName] ?? name)}
+                      hint={t(SPOTLIGHT_HINTS[name as SpotlightName] ?? "")}
                     />
                   ))}
                 </div>

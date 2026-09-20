@@ -312,6 +312,38 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, step A: richer evidence — minutes, trend, good news, class comparison — 2026-09-20
+
+After a look at what Khan Academy, Google Classroom, Canvas, Microsoft
+Insights, IXL and Moodle put in front of a teacher (official docs only),
+four things every one of them shows and this fork did not. All four go
+into the shared evidence record, so the teacher's pages and, later, the
+student's own dashboard get them from one place.
+
+- `deeptutor/multi_user/learning_evidence.py`: `activity.minutes_30`,
+  estimated from message timestamps (gaps of at most 10 minutes count,
+  a longer silence and the last message count one tail minute -- "about",
+  never a clock), and `activity.trend`, eight Monday-to-Sunday weeks of
+  turns, active days, minutes, questions and correct; each Mastery path
+  reports `mastered_recently` (objectives mastered with an attempt in 7 d).
+- `deeptutor/multi_user/school_alerts.py`: `spotlights_for`, five positive
+  rules beside the five alerts (mastered this week, finished a material,
+  accuracy up 10 points over the four weeks before, steady on 4 of 7 days,
+  back after two quiet weeks); `summary_row` and `class_totals` carry
+  minutes and spotlights; `class_comparison` gives the class medians.
+- `api/routers/school.py`: `GET /learners/{id}/evidence` answers
+  `spotlights`, and with `?classroom_id=` (a teacher of that class, the
+  student in it) a `comparison`; the roster build is one helper.
+- Web: a time column and green spotlight chips on the roster, a time card
+  for the class; on the student's page a "Last 8 weeks" card with two bar
+  strips (pure CSS), class medians beside the student's own numbers,
+  spotlight chips. 21 strings in en, th, zh.
+
+Tests: `test_learning_evidence.py` +2 (the minutes rule, the trend from the
+real stores), `test_school_roster.py` +11 (each spotlight at its rule, the
+totals and comparison, the route with and without a classroom).
+`web/tests/school-dashboard.test.ts` +1.
+
 ## School roles, Phase 3c: IT's switch, and the report — 2026-09-20
 
 - `/admin/classrooms` gains the nightly-summary panel (`NightlySummaryPanel`

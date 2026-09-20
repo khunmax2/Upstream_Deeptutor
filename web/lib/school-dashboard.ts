@@ -33,6 +33,47 @@ export const ALERT_HINTS: Record<AlertName, string> = {
   reading_stalled: "A material started but not opened for 14 days",
 };
 
+export type SpotlightName =
+  "mastered_recently" | "reading_finished" | "accuracy_up" | "steady" | "back";
+
+export const SPOTLIGHT_ORDER: readonly SpotlightName[] = [
+  "mastered_recently",
+  "reading_finished",
+  "accuracy_up",
+  "steady",
+  "back",
+];
+
+export const SPOTLIGHT_LABELS: Record<SpotlightName, string> = {
+  mastered_recently: "Mastered this week",
+  reading_finished: "Finished a material",
+  accuracy_up: "Accuracy up",
+  steady: "Steady",
+  back: "Back",
+};
+
+export const SPOTLIGHT_HINTS: Record<SpotlightName, string> = {
+  mastered_recently: "An objective reached mastered in the last 7 days",
+  reading_finished: "A reading material finished in the last 7 days",
+  accuracy_up: "This week's accuracy is 10 points over the four weeks before",
+  steady: "Active on at least 4 of the last 7 days",
+  back: "Active again after two quiet weeks",
+};
+
+/** "about 25 min" / "about 1 h 40 min"; minutes are an estimate. */
+export function formatMinutes(
+  value: number | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (value === null || value === undefined) return "—";
+  const minutes = Math.round(value);
+  if (minutes < 60) return t("{{count}} min", { count: minutes });
+  return t("{{hours}} h {{minutes}} min", {
+    hours: Math.floor(minutes / 60),
+    minutes: minutes % 60,
+  });
+}
+
 /**
  * The Students tab is for teachers and admins. A teacher is an ordinary
  * account with the `teacher` preset (parent design, decision 3); admins see

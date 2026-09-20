@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   ArrowLeft,
@@ -25,11 +25,15 @@ import {
   ALERT_LABELS,
   OBJECTIVE_STATUS_LABELS,
   SOURCE_LABELS,
+  SPOTLIGHT_HINTS,
+  SPOTLIGHT_LABELS,
   canSeeStudents,
   formatDateTime,
+  formatMinutes,
   formatPercent,
   relativeTime,
   type AlertName,
+  type SpotlightName,
 } from "@/lib/school-dashboard";
 import { resolveUiLanguage } from "@/lib/ui-language";
 
@@ -41,7 +45,9 @@ import {
   PageError,
   PageSkeleton,
   ProgressBar,
+  SpotlightChip,
   StatusChip,
+  WeekBars,
 } from "./school-parts";
 
 /**
@@ -54,6 +60,10 @@ import {
  */
 export default function StudentDetail({ studentId }: { studentId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // The roster links here with its classroom, so the page can show the
+  // class medians beside the student's own numbers.
+  const classroomId = searchParams.get("classroom") ?? "";
   const { t, i18n } = useTranslation();
   const locale = resolveUiLanguage(i18n.language);
   const { policyResolved, authStatus } = useLearningPolicy();
@@ -67,13 +77,13 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
   const load = useCallback(async () => {
     setError("");
     try {
-      setEvidence(await getLearningEvidence(studentId));
+      setEvidence(await getLearningEvidence(studentId, classroomId));
     } catch (e) {
       setError(
         e instanceof Error ? e.message : t("Failed to load learning evidence"),
       );
     }
-  }, [studentId, t]);
+  }, [studentId, classroomId, t]);
 
   useEffect(() => {
     if (!policyResolved) return;
@@ -130,6 +140,12 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
     summary,
   } = evidence;
   const alerts = collectAlerts(evidence);
+  const spotlights = (evidence.spotlights ?? []) as SpotlightName[];
+  const comparison = evidence.comparison ?? null;
+  const beside = (own: string, cls: string | null) =>
+    comparison && cls !== null
+      ? t("{{own}} · class {{cls}}", { own, cls })
+      : own;
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
@@ -148,13 +164,20 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
             })}
           </p>
         </div>
-        {alerts.length > 0 && (
+        {(alerts.length > 0 || spotlights.length > 0) && (
           <div className="flex flex-wrap gap-1">
             {alerts.map((name) => (
               <AlertChip
                 key={name}
                 label={t(ALERT_LABELS[name])}
                 hint={t(ALERT_HINTS[name])}
+              />
+            ))}
+            {spotlights.map((name) => (
+              <SpotlightChip
+                key={name}
+                label={t(SPOTLIGHT_LABELS[name] ?? name)}
+                hint={t(SPOTLIGHT_HINTS[name] ?? "")}
               />
             ))}
           </div>
@@ -165,9 +188,18 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
         <MetricCard
           label={t("Active days (30 d)")}
           value={activity.active_days_30 ?? 0}
-          detail={t("{{count}} turns with the tutor", {
-            count: activity.turns_30 ?? 0,
-          })}
+          detail={beside(
+            t("{{count}} turns · about {{minutes}}", {
+              count: activity.turns_30 ?? 0,
+              minutes: formatMinutes(activity.minutes_30 ?? 0, t),
+            }),
+            comparison && comparison.active_days_30 !== null
+              ? t("{{days}} days · {{minutes}}", {
+                  days: comparison.active_days_30,
+                  minutes: formatMinutes(comparison.minutes_30, t),
+                })
+              : null,
+          )}
           icon={Activity}
           tone="primary"
         />
@@ -178,9 +210,14 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
               ? formatPercent(bank.recent.correct / bank.recent.total)
               : "—"
           }
-          detail={t("{{count}} questions answered", {
-            count: bank.recent?.total ?? 0,
-          })}
+          detail={beside(
+            t("{{count}} questions answered", {
+              count: bank.recent?.total ?? 0,
+            }),
+            comparison && comparison.accuracy_30 !== null
+              ? formatPercent(comparison.accuracy_30)
+              : null,
+          )}
           icon={FileQuestion}
           tone="teal"
         />
@@ -266,6 +303,40 @@ export default function StudentDetail({ studentId }: { studentId: string }) {
               </p>
             )}
           </Card>
+
+          {activity.trend && activity.trend.length > 0 && (
+            <Card title={t("Last 8 weeks")} testId="trend">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs text-[var(--muted-foreground)]">
+                    {t("Time with the tutor, by week")}
+                  </p>
+                  <WeekBars
+                    weeks={activity.trend}
+                    value={(w) => w.minutes}
+                    labels={(w) =>
+                      `${w.week_start}: ${formatMinutes(w.minutes, t)} · ${t("{{count}} active days", { count: w.active_days })}`
+                    }
+                  />
+                </div>
+                <div>
+                  <p className="mb-2 text-xs text-[var(--muted-foreground)]">
+                    {t("Questions answered, by week (filled = correct)")}
+                  </p>
+                  <WeekBars
+                    weeks={activity.trend}
+                    value={(w) => w.questions}
+                    share={(w) =>
+                      w.questions > 0 ? w.correct / w.questions : null
+                    }
+                    labels={(w) =>
+                      `${w.week_start}: ${w.correct}/${w.questions}`
+                    }
+                  />
+                </div>
+              </div>
+            </Card>
+          )}
 
           <Card title={t("Mastery paths")} testId="mastery">
             {mastery.paths.length === 0 ? (

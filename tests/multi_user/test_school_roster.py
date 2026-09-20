@@ -250,3 +250,166 @@ def test_a_link_revoked_by_hand_keeps_the_student_off_the_teachers_roster(school
         f"/api/multi-user/school/classrooms/{room['id']}/roster", headers=_auth("root-token")
     ).json()
     assert len(body["rows"]) == 2
+
+
+# ── step A: spotlights and the class comparison ─────────────────────────────
+
+
+def _weeks(*pairs):
+    """(turns, questions, correct) per week, oldest first, padded to 8."""
+    rows = [
+        {"week_start": f"2026-0{i + 1}-01", "turns": 0, "questions": 0, "correct": 0}
+        for i in range(8)
+    ]
+    for row, (turns, questions, correct) in zip(rows[8 - len(pairs) :], pairs):
+        row.update(turns=turns, questions=questions, correct=correct)
+    return rows
+
+
+def test_a_quiet_healthy_record_has_no_spotlight():
+    from deeptutor.multi_user.school_alerts import spotlights_for
+
+    assert spotlights_for(_evidence(), now=NOW) == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        (
+            {"mastery": {"available": True, "paths": [{"mastered_recently": ["Limits"]}]}},
+            ["mastered_recently"],
+        ),
+        (
+            {
+                "reading": {
+                    "available": True,
+                    "materials": [{"progress": 1.0, "finished": True, "last_read_at": _iso(2)}],
+                }
+            },
+            ["reading_finished"],
+        ),
+        (
+            {
+                "reading": {
+                    "available": True,
+                    "materials": [{"progress": 1.0, "finished": True, "last_read_at": _iso(9)}],
+                }
+            },
+            [],
+        ),
+        (
+            {
+                "activity": {
+                    "available": True,
+                    "last_active_at": _iso(1),
+                    "trend": _weeks((3, 10, 4), (3, 10, 5), (4, 6, 5)),
+                }
+            },
+            ["accuracy_up"],
+        ),
+        (
+            {
+                "activity": {
+                    "available": True,
+                    "last_active_at": _iso(1),
+                    "trend": _weeks((3, 10, 4), (3, 10, 5), (4, 4, 4)),
+                }
+            },
+            [],
+        ),
+        (
+            {"activity": {"available": True, "last_active_at": _iso(1), "active_days_7": 4}},
+            ["steady"],
+        ),
+        (
+            {
+                "activity": {
+                    "available": True,
+                    "last_active_at": _iso(1),
+                    "trend": _weeks((5, 0, 0), (0, 0, 0), (0, 0, 0), (2, 0, 0)),
+                }
+            },
+            ["back"],
+        ),
+        (
+            {
+                "activity": {
+                    "available": True,
+                    "last_active_at": _iso(1),
+                    "trend": _weeks((0, 0, 0), (1, 0, 0), (2, 0, 0)),
+                }
+            },
+            [],
+        ),
+    ],
+)
+def test_each_spotlight_fires_on_its_rule(overrides, expected):
+    from deeptutor.multi_user.school_alerts import spotlights_for
+
+    assert spotlights_for(_evidence(**overrides), now=NOW) == expected
+
+
+def test_summary_row_and_totals_carry_minutes_and_spotlights():
+    from deeptutor.multi_user.school_alerts import class_comparison, class_totals, summary_row
+
+    records = [
+        _evidence(
+            activity={
+                "available": True,
+                "last_active_at": _iso(1),
+                "active_days_30": 6,
+                "minutes_30": 40.0,
+                "active_days_7": 4,
+            }
+        ),
+        _evidence(
+            student={"id": "u_2", "username": "s2", "preset": "student"},
+            activity={
+                "available": True,
+                "last_active_at": _iso(1),
+                "active_days_30": 2,
+                "minutes_30": 10.0,
+            },
+        ),
+    ]
+    rows = [summary_row(r, now=NOW) for r in records]
+    assert rows[0]["minutes_30"] == 40.0 and rows[0]["spotlights"] == ["steady"]
+    totals = class_totals(rows, records, now=NOW)
+    assert totals["minutes_30"] == 50.0
+    assert totals["spotlights"]["steady"] == 1
+    comparison = class_comparison(rows)
+    assert comparison == {
+        "students": 2,
+        "accuracy_30": 0.75,
+        "active_days_30": 4.0,
+        "minutes_30": 25.0,
+    }
+
+
+def test_evidence_with_a_classroom_adds_the_comparison(school):
+    client, people, room = school
+    s1 = people["s1"]["id"]
+    ok = client.get(
+        f"/api/multi-user/learners/{s1}/evidence?classroom_id={room['id']}",
+        headers=_auth("t1-token"),
+    )
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["comparison"]["classroom_id"] == room["id"]
+    assert body["comparison"]["students"] == 2
+    assert body["spotlights"] == []
+    # A teacher not in the classroom, or a student not in it: refused.
+    assert (
+        client.get(
+            f"/api/multi-user/learners/{s1}/evidence?classroom_id={room['id']}",
+            headers=_auth("t2-token"),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            f"/api/multi-user/learners/{s1}/evidence?classroom_id=cls_nope",
+            headers=_auth("t1-token"),
+        ).status_code
+        == 404
+    )

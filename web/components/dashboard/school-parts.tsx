@@ -111,6 +111,78 @@ export function AlertChip({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
+export function SpotlightChip({
+  label,
+  hint,
+}: {
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <span
+      title={hint}
+      className="inline-flex items-center rounded-full bg-teal-500/10 px-2 py-0.5 text-[11px] font-medium text-teal-700 dark:text-teal-300"
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * Eight small bars, one per week, oldest left. Two series at most: the
+ * primary one drawn as bars, an optional second one as the bar's filled
+ * share (questions and correct). Pure CSS, no chart library.
+ */
+export function WeekBars<W extends { week_start: string }>({
+  weeks,
+  value,
+  share,
+  labels,
+}: {
+  weeks: W[];
+  value: (week: W) => number;
+  share?: (week: W) => number | null;
+  labels: (week: W) => string;
+}) {
+  const max = Math.max(1, ...weeks.map((w) => value(w)));
+  return (
+    <div className="flex h-20 items-end gap-1.5" role="img">
+      {weeks.map((week, index) => {
+        const v = value(week);
+        const height = Math.round((v / max) * 100);
+        const filled = share ? share(week) : null;
+        return (
+          <div
+            key={index}
+            className="flex flex-1 flex-col items-center gap-1"
+            title={labels(week)}
+          >
+            <div className="relative flex h-16 w-full items-end overflow-hidden rounded-t bg-[var(--muted)]/50">
+              <div
+                className="w-full rounded-t bg-[var(--primary)]/30"
+                style={{ height: `${height}%` }}
+              >
+                {filled !== null && (
+                  <div
+                    className="w-full rounded-t bg-[var(--primary)]"
+                    style={{
+                      height: `${Math.round(filled * 100)}%`,
+                      marginTop: "auto",
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+            <span className="text-[9px] tabular-nums text-[var(--muted-foreground)]">
+              {week.week_start.slice(5)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function StatusChip({
   status,
   label,

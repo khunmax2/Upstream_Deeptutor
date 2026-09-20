@@ -7,7 +7,11 @@ import {
   ALERT_HINTS,
   ALERT_LABELS,
   ALERT_ORDER,
+  SPOTLIGHT_HINTS,
+  SPOTLIGHT_LABELS,
+  SPOTLIGHT_ORDER,
   canSeeStudents,
+  formatMinutes,
   formatPercent,
   relativeTime,
 } from "../lib/school-dashboard";
@@ -67,7 +71,40 @@ test("the pages read only the school routes and never a first-person one", () =>
   assert.match(read("lib/school-api.ts"), /\/roster/);
 });
 
+test("the spotlights the server raises all have a label and a hint", () => {
+  const server = read("../deeptutor/multi_user/school_alerts.py");
+  const match = server.match(/SPOTLIGHTS: tuple\[str, \.\.\.\] = \(([^)]*)\)/);
+  assert.ok(match, "school_alerts.py names SPOTLIGHTS");
+  const serverNames = [...match![1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...SPOTLIGHT_ORDER], serverNames);
+  for (const lang of ["en", "th", "zh"]) {
+    const table = locale(lang);
+    for (const name of SPOTLIGHT_ORDER) {
+      assert.ok(table[SPOTLIGHT_LABELS[name]], `${lang} label for ${name}`);
+      assert.ok(table[SPOTLIGHT_HINTS[name]], `${lang} hint for ${name}`);
+    }
+  }
+  // The roster passes its classroom to the student's page for the comparison.
+  assert.match(
+    read("components/dashboard/StudentsOverview.tsx"),
+    /\?classroom=\$\{encodeURIComponent\(classroomId\)\}/,
+  );
+  assert.match(
+    read("components/dashboard/StudentDetail.tsx"),
+    /searchParams\.get\("classroom"\)/,
+  );
+  assert.match(
+    read("lib/school-api.ts"),
+    /classroom_id=\$\{encodeURIComponent\(classroomId\)\}/,
+  );
+});
+
 test("formatting helpers", () => {
+  const t = (key: string, o?: Record<string, unknown>) =>
+    key.replace(/\{\{(\w+)\}\}/g, (_, k) => String(o?.[k]));
+  assert.equal(formatMinutes(null, t), "—");
+  assert.equal(formatMinutes(24.6, t), "25 min");
+  assert.equal(formatMinutes(100, t), "1 h 40 min");
   assert.equal(formatPercent(null), "—");
   assert.equal(formatPercent(0.754), "75%");
   const now = Date.parse("2026-09-21T12:00:00Z");

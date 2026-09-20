@@ -621,3 +621,36 @@ def test_the_summary_is_written_in_the_deployment_language(mu_isolated_root, sch
     assert response.status_code == 200
     assert seen["language"] == "th"
     assert response.json()["summary"]["language"] == "th"
+
+
+# ── step A: minutes and the weekly trend ────────────────────────────────────
+
+
+def test_minutes_are_estimated_from_message_gaps_with_a_cap():
+    from deeptutor.multi_user.learning_evidence import SESSION_GAP_SECONDS, _minutes
+
+    # One session: 0 s, 5 min, 8 min, then a 2-hour silence, then one more.
+    stamps = [0.0, 300.0, 480.0, 480.0 + 7200.0]
+    # 5 + 3 min of work, the long gap counts one tail minute, plus one tail
+    # minute for the last message.
+    assert _minutes({"s": stamps}) == 5 + 3 + 1 + 1
+    assert _minutes({"s": [0.0]}) == 1.0
+    assert _minutes({}) == 0.0
+    assert _minutes({"a": [0.0, float(SESSION_GAP_SECONDS)]}) == SESSION_GAP_SECONDS / 60 + 1
+
+
+def test_the_record_carries_minutes_and_an_eight_week_trend(student):
+    from deeptutor.multi_user.learning_evidence import TREND_WEEKS, learning_evidence
+
+    record, _scope = student
+    activity = learning_evidence(record["id"], record)["activity"]
+    # Three messages seconds apart: no measurable gaps, one tail minute.
+    assert activity["minutes_30"] == 1.0
+    trend = activity["trend"]
+    assert len(trend) == TREND_WEEKS
+    assert [w["week_start"] for w in trend] == sorted(w["week_start"] for w in trend)
+    this_week = trend[-1]
+    assert this_week["turns"] == 2 and this_week["active_days"] == 1
+    assert this_week["questions"] == 3 and this_week["correct"] == 2
+    assert this_week["minutes"] == 1.0
+    assert all(w["turns"] == 0 for w in trend[:-1])

@@ -12,7 +12,8 @@ of trust the design gives them:
    Path and the reading quizzes, with ``is_correct``;
 3. reading progress -- position, finished or not, annotation and bookmark
    *counts*;
-4. activity -- sessions, active days, turns; counts only;
+4. activity -- sessions, active days, turns, estimated minutes and an
+   eight-week trend; counts only;
 5. the learner profile -- the intake fields a student fills in for a goal
    (prior knowledge, target level, time budget), and the account profile an
    admin set;
@@ -135,6 +136,14 @@ def _mastery(scope: UserScope) -> dict[str, Any]:
             for module in summary["modules"]
         ]
         attempts = progress.quiz_attempts
+        week_ago = datetime.now(tz=timezone.utc).timestamp() - 7 * 86400
+        recent_ids = {a.knowledge_point_id for a in attempts if a.timestamp >= week_ago}
+        mastered_recently = [
+            kp["name"]
+            for module in summary["modules"]
+            for kp in module["knowledge_points"]
+            if kp["status"] == "mastered" and kp["id"] in recent_ids
+        ]
         paths.append(
             {
                 "id": progress.book_id,
@@ -148,6 +157,7 @@ def _mastery(scope: UserScope) -> dict[str, Any]:
                 "errors_active": sum(
                     1 for record in progress.error_records if record.status != "graduated"
                 ),
+                "mastered_recently": mastered_recently,
                 "modules": modules,
                 "updated_at": _iso(row["updated_at"]),
             }
@@ -236,6 +246,84 @@ def _question_bank(conn: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
+# ── time on task and the weekly trend ───────────────────────────────────────
+
+# A student's time is not logged; it is read off the message timestamps. Two
+# messages of one session less than SESSION_GAP apart are one stretch of
+# work; a longer silence ends the stretch, and the last message of a stretch
+# is given TAIL_MINUTES for reading the answer. Khan Academy and IXL report
+# minutes the same way (time between events, capped) -- an estimate a
+# teacher reads as "about", never a clock.
+SESSION_GAP_SECONDS = 10 * 60
+TAIL_MINUTES = 1.0
+TREND_WEEKS = 8
+
+
+def _minutes(stamps_by_session: dict[str, list[float]]) -> float:
+    total = 0.0
+    for stamps in stamps_by_session.values():
+        stamps = sorted(stamps)
+        for earlier, later in zip(stamps, stamps[1:]):
+            gap = later - earlier
+            total += gap / 60 if gap <= SESSION_GAP_SECONDS else TAIL_MINUTES
+        if stamps:
+            total += TAIL_MINUTES
+    return round(total, 1)
+
+
+def _week_start(ts: float) -> datetime:
+    day = datetime.fromtimestamp(ts, tz=timezone.utc).date()
+    monday = day - timedelta(days=day.weekday())
+    return datetime(monday.year, monday.month, monday.day, tzinfo=timezone.utc)
+
+
+def _trend(conn: sqlite3.Connection, now: datetime) -> list[dict[str, Any]]:
+    """One row per week for the last :data:`TREND_WEEKS`, Monday to Sunday
+    (the current week included, partial). Counts only: user turns, active
+    days, minutes, questions answered and correct."""
+    this_monday = _week_start(now.timestamp())
+    first = this_monday - timedelta(weeks=TREND_WEEKS - 1)
+    weeks: dict[str, dict[str, Any]] = {}
+    for index in range(TREND_WEEKS):
+        start = first + timedelta(weeks=index)
+        weeks[start.date().isoformat()] = {
+            "week_start": start.date().isoformat(),
+            "turns": 0,
+            "active_days": 0,
+            "minutes": 0.0,
+            "questions": 0,
+            "correct": 0,
+        }
+    days: dict[str, set[str]] = {key: set() for key in weeks}
+    stamps: dict[str, dict[str, list[float]]] = {key: {} for key in weeks}
+    for row in conn.execute(
+        "SELECT session_id, role, created_at FROM messages WHERE created_at >= ?",
+        (first.timestamp(),),
+    ):
+        key = _week_start(row["created_at"]).date().isoformat()
+        if key not in weeks:
+            continue
+        stamps[key].setdefault(row["session_id"], []).append(float(row["created_at"]))
+        if row["role"] == "user":
+            weeks[key]["turns"] += 1
+            days[key].add(
+                datetime.fromtimestamp(row["created_at"], tz=timezone.utc).date().isoformat()
+            )
+    for row in conn.execute(
+        "SELECT created_at, is_correct FROM notebook_entries WHERE created_at >= ?",
+        (first.timestamp(),),
+    ):
+        key = _week_start(row["created_at"]).date().isoformat()
+        if key not in weeks:
+            continue
+        weeks[key]["questions"] += 1
+        weeks[key]["correct"] += 1 if row["is_correct"] else 0
+    for key, week in weeks.items():
+        week["active_days"] = len(days[key])
+        week["minutes"] = _minutes(stamps[key])
+    return list(weeks.values())
+
+
 # ── 4. activity ─────────────────────────────────────────────────────────────
 
 
@@ -269,6 +357,11 @@ def _activity(conn: sqlite3.Connection) -> dict[str, Any]:
             (since_30,),
         )
     }
+    stamps_30: dict[str, list[float]] = {}
+    for row in conn.execute(
+        "SELECT session_id, created_at FROM messages WHERE created_at >= ?", (since_30,)
+    ):
+        stamps_30.setdefault(row["session_id"], []).append(float(row["created_at"]))
     return {
         "available": True,
         "sessions_total": int(sessions["total"]),
@@ -277,7 +370,9 @@ def _activity(conn: sqlite3.Connection) -> dict[str, Any]:
         "active_days_7": int(days_7["days"]),
         "active_days_30": int(days_30["days"]),
         "turns_30": int(turns["turns"]),
+        "minutes_30": _minutes(stamps_30),
         "by_capability_30": by_capability,
+        "trend": _trend(conn, now),
     }
 
 
@@ -423,4 +518,4 @@ def learning_evidence(user_id: str, record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-__all__ = ["RECENT_DAYS", "learning_evidence"]
+__all__ = ["RECENT_DAYS", "SESSION_GAP_SECONDS", "TREND_WEEKS", "learning_evidence"]

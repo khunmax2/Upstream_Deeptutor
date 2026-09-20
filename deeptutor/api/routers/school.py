@@ -47,21 +47,33 @@ def _available(evidence: dict[str, Any]) -> dict[str, bool]:
 @router.get("/learners/{learner_user_id}/evidence")
 async def guardian_evidence(
     learner_user_id: str,
+    classroom_id: str = "",
     current: object = Depends(require_auth),
 ) -> dict[str, Any]:
+    """One student's evidence record; with ``classroom_id``, also the class
+    medians to show beside it (the caller must be a teacher of that class or
+    an admin, and the student must be in it)."""
     learner_username, learner_record, actor_user_id, is_admin = _require_guardian_access(
         current, learner_user_id, "view_reports"
     )
     from deeptutor.multi_user.learning_evidence import learning_evidence
+    from deeptutor.multi_user.school_alerts import class_comparison, spotlights_for
 
     evidence = await asyncio.to_thread(learning_evidence, learner_user_id, learner_record)
     evidence["student"]["username"] = learner_username
+    evidence["spotlights"] = spotlights_for(evidence)
+    if classroom_id:
+        record, _admin = _require_classroom_reader(current, classroom_id)
+        if learner_user_id not in record["student_ids"]:
+            raise HTTPException(status_code=400, detail="The student is not in this classroom")
+        rows, _records = await asyncio.to_thread(_roster_rows, record, actor_user_id, is_admin)
+        evidence["comparison"] = {"classroom_id": classroom_id, **class_comparison(rows)}
     _log_supervisor_action(
         "guardian_evidence_view",
         actor_user_id=actor_user_id,
         learner_user_id=learner_user_id,
         is_admin=is_admin,
-        summary={"available": _available(evidence)},
+        summary={"available": _available(evidence), "classroom_id": classroom_id or None},
     )
     return evidence
 
@@ -337,6 +349,34 @@ def _require_classroom_reader(current: object, classroom_id: str) -> tuple[dict[
     return record, is_admin
 
 
+def _roster_rows(
+    record: dict[str, Any], actor_id: str, is_admin: bool
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """One summary row (and the record behind it) per student the reader may see."""
+    from deeptutor.multi_user.guardians import guardian_can_access
+    from deeptutor.multi_user.identity import get_user_by_id
+    from deeptutor.multi_user.learning_evidence import learning_evidence
+    from deeptutor.multi_user.school_alerts import summary_row
+
+    rows: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
+    for student_id in record["student_ids"]:
+        found = get_user_by_id(student_id)
+        if found is None:
+            continue
+        username, account = found
+        # The classroom lists the student; the guardian link is what allows
+        # the read. A link revoked by hand keeps the row out.
+        if not is_admin and not guardian_can_access(actor_id, student_id, "view_reports"):
+            continue
+        evidence = learning_evidence(student_id, account)
+        evidence["student"]["username"] = username
+        records.append(evidence)
+        rows.append(summary_row(evidence))
+    rows.sort(key=lambda row: (-len(row["alerts"]), row["student"].get("username", "")))
+    return rows, records
+
+
 @router.get("/school/classrooms/{classroom_id}/roster")
 async def classroom_roster(
     classroom_id: str,
@@ -349,34 +389,11 @@ async def classroom_roster(
     (a student's detail is audited per student, by the evidence route).
     """
     from deeptutor.multi_user.audit import log_admin_action, log_guardian_action
-    from deeptutor.multi_user.guardians import guardian_can_access
-    from deeptutor.multi_user.identity import get_user_by_id
-    from deeptutor.multi_user.learning_evidence import learning_evidence
-    from deeptutor.multi_user.school_alerts import class_totals, summary_row
+    from deeptutor.multi_user.school_alerts import class_totals
 
     record, is_admin = _require_classroom_reader(current, classroom_id)
     actor_id = str(getattr(current, "user_id", "") or "")
-
-    def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        rows: list[dict[str, Any]] = []
-        records: list[dict[str, Any]] = []
-        for student_id in record["student_ids"]:
-            found = get_user_by_id(student_id)
-            if found is None:
-                continue
-            username, account = found
-            # The classroom lists the student; the guardian link is what
-            # allows the read. A link revoked by hand keeps the row out.
-            if not is_admin and not guardian_can_access(actor_id, student_id, "view_reports"):
-                continue
-            evidence = learning_evidence(student_id, account)
-            evidence["student"]["username"] = username
-            records.append(evidence)
-            rows.append(summary_row(evidence))
-        rows.sort(key=lambda row: (-len(row["alerts"]), row["student"].get("username", "")))
-        return rows, records
-
-    rows, records = await asyncio.to_thread(build)
+    rows, records = await asyncio.to_thread(_roster_rows, record, actor_id, is_admin)
     summary = {"classroom_id": classroom_id, "students": len(rows)}
     if is_admin:
         log_admin_action("classroom_roster_view", summary=summary)

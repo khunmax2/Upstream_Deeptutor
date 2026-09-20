@@ -228,6 +228,23 @@ export async function runSummariesNow(): Promise<
 
 // ── evidence (Phase 2 routes, read by the teacher's page) ──────────────────
 
+export interface TrendWeek {
+  week_start: string;
+  turns: number;
+  active_days: number;
+  minutes: number;
+  questions: number;
+  correct: number;
+}
+
+export interface ClassComparison {
+  classroom_id: string;
+  students: number;
+  accuracy_30: number | null;
+  active_days_30: number | null;
+  minutes_30: number | null;
+}
+
 export interface EvidenceSummarySection {
   title: string;
   items: string[];
@@ -307,8 +324,15 @@ export interface LearningEvidence {
     active_days_7?: number;
     active_days_30?: number;
     turns_30?: number;
+    /** Estimated from message gaps (10-minute cap); "about", not a clock. */
+    minutes_30?: number;
     by_capability_30?: Record<string, number>;
+    trend?: TrendWeek[];
   };
+  /** Positive rules (school_alerts.spotlights_for); the route adds them. */
+  spotlights?: string[];
+  /** Class medians beside the student's numbers, when a classroom was named. */
+  comparison?: ClassComparison;
   profile: {
     account: Record<string, string> | null;
     goals: Array<Record<string, string>>;
@@ -323,10 +347,14 @@ export interface LearningEvidence {
 
 export async function getLearningEvidence(
   studentId: string,
+  classroomId = "",
 ): Promise<LearningEvidence> {
+  const query = classroomId
+    ? `?classroom_id=${encodeURIComponent(classroomId)}`
+    : "";
   const res = await apiFetch(
     apiUrl(
-      `/api/multi-user/learners/${encodeURIComponent(studentId)}/evidence`,
+      `/api/multi-user/learners/${encodeURIComponent(studentId)}/evidence${query}`,
     ),
   );
   return json(res, "Failed to load learning evidence");
@@ -349,6 +377,7 @@ export interface RosterRow {
   last_active_at: string | null;
   active_days_30: number;
   turns_30: number;
+  minutes_30: number;
   questions_30: number;
   correct_30: number;
   accuracy_30: number | null;
@@ -361,6 +390,7 @@ export interface RosterRow {
   reading_finished: number;
   summary_at: string | null;
   alerts: string[];
+  spotlights: string[];
 }
 
 export interface ClassTotals {
@@ -371,7 +401,9 @@ export interface ClassTotals {
   below_half: number;
   reviews_due: number;
   reading_finished: number;
+  minutes_30: number;
   alerts: Record<string, number>;
+  spotlights: Record<string, number>;
   top_wrong_categories: Array<{ name: string; wrong: number }>;
 }
 
