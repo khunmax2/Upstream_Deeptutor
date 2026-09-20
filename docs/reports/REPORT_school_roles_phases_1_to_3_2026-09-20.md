@@ -70,6 +70,32 @@ they are throwaway and not committed.
   database; the "read-only" test ignores those two sidecars and nothing
   else.
 
+## Steps A and B, the same day
+
+After a look at what Khan Academy, Google Classroom, Canvas, Microsoft
+Insights, IXL and Moodle put in front of a teacher (official docs only),
+the user chose to grow the *shared evidence record* rather than either
+page on its own:
+
+| step | commits | what |
+|---|---|---|
+| **A — richer evidence** | `5d6f66d66` `415c44a99` | estimated minutes (message gaps, 10-minute cap), an eight-week trend, five positive spotlights beside the five alerts, class medians beside a student's own numbers (`?classroom_id=`). Teacher pages show all four. |
+| **B — "My learning"** | `e490a927d` + 2 fixes → `926bb112d` | `GET /me/evidence` (own record, teacher's part withheld, not audited) rendered on the student's own dashboard; and the dashboards report's five open items closed as the user decided: Anima paced for a term (three days, not 75 s), the always-refused catalog request dropped (banner gone), `เส้นทางสู่ความเชี่ยวชาญ` → `เส้นทางฝึกฝน`, the Quiz mode says it does not count toward a Mastery Path; plus the preset chip now names student/teacher accounts. |
+
+Lab: `uat-teacher-page.cjs` 18/18 on A (bars were transparent on the first
+image -- Tailwind v3 cannot alpha an arbitrary `var()` colour -- fixed with
+`color-mix` inline; two label keys collided with existing nav words),
+`uat-my-learning.cjs` 14/14 on B (a policy-bound account was first asked
+for its own evidence and refused; now not asked).
+
+**Not exercised on the lab, unit-tested only:** the four spotlights other
+than "back", the four alerts other than "inactive", class defaults landing
+in a grant on join, archiving a classroom and saving teachers/defaults from
+the page, the CSV *file* input (the paste path was used), a teacher with
+several classrooms, the pet's three-day pacing (wall-clock; a pet that was
+already sick under the demo tuning stays sick until a correct answer --
+true on the host too, once deployed).
+
 ## Open, by design
 
 - The branch is unmerged and has no PR; opening one runs CI on 3.11–3.14 —
