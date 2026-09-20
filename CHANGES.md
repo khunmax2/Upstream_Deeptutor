@@ -312,6 +312,20 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 3 design: the teacher dashboard and classrooms — 2026-09-20
+
+`docs/planning/school-roles/DESIGN_teacher_dashboard.md` (new): what the
+parent design's Phase 3 sentence means in detail, written before any code.
+Three pieces -- 3a classrooms (`data/system/school/classrooms.json`, a
+bulk editor of guardian links with `granted_via`, class defaults on join,
+CSV import with one-time generated passwords, admin page
+`/admin/classrooms`); 3b the teacher's page (`/dashboard/students`: a
+roster from one audited call per class with a server-computed summary row
+per student, a detail view over the Phase 2 evidence route, `teacher.md`
+as four cards with a refresh, five plain-rule alerts); 3c the class in
+numbers and the admin's nightly-summary switch. Eight decisions are marked
+for the user to confirm.
+
 ## School roles, Phase 2: learning evidence for the teacher — 2026-09-20
 
 Design sections 4–6: a teacher sees learning evidence only, read through
