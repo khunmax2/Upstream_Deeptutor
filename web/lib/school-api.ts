@@ -341,3 +341,51 @@ export async function refreshTeacherSummary(
   );
   return json(res, "Failed to refresh the summary");
 }
+
+// ── the roster (Phase 3b) ──────────────────────────────────────────────────
+
+export interface RosterRow {
+  student: { id: string; username: string; preset: string };
+  last_active_at: string | null;
+  active_days_30: number;
+  turns_30: number;
+  questions_30: number;
+  correct_30: number;
+  accuracy_30: number | null;
+  unresolved: number;
+  mastered: number;
+  objectives: number;
+  paths: number;
+  reviews_due: number;
+  reading_started: number;
+  reading_finished: number;
+  summary_at: string | null;
+  alerts: string[];
+}
+
+export interface ClassTotals {
+  students: number;
+  active_7: number;
+  active_30: number;
+  median_accuracy_30: number | null;
+  below_half: number;
+  reviews_due: number;
+  reading_finished: number;
+  alerts: Record<string, number>;
+  top_wrong_categories: Array<{ name: string; wrong: number }>;
+}
+
+export interface Roster {
+  classroom: Classroom;
+  rows: RosterRow[];
+  totals: ClassTotals;
+}
+
+export async function getClassroomRoster(id: string): Promise<Roster> {
+  const res = await apiFetch(
+    apiUrl(
+      `/api/multi-user/school/classrooms/${encodeURIComponent(id)}/roster`,
+    ),
+  );
+  return json(res, "Failed to load the roster");
+}

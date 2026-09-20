@@ -312,6 +312,41 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles, Phase 3b: the teacher's pages — 2026-09-20
+
+Design §2 and §3, as decided: a third Dashboard tab for the `teacher`
+preset and admins, new pages that reuse the dashboard's visual parts and
+none of its first-person data flow.
+
+- `deeptutor/multi_user/school_alerts.py` (new): `summary_row` reduces an
+  evidence record to the roster's columns; `alerts_for` applies the five
+  plain rules of §2.4 (inactive 7 d; struggling < 50 % on ≥ 10 questions
+  in 30 d; backlog ≥ 10 unresolved; reviews due ≥ 5; reading stalled 14 d)
+  with the thresholds as constants; `class_totals` rolls the rows up
+  (active this week / month, median accuracy, under 50 %, reviews due,
+  materials finished, alert counts, the three most-missed categories).
+- `deeptutor/api/routers/school.py`: `GET /school/classrooms/{id}/roster`
+  for a teacher of the classroom or an admin -- one evidence read per
+  student, a row and the totals; a student whose link was revoked by hand
+  stays off a teacher's roster (the guardian record decides, the
+  classroom only lists); one audit line per read,
+  `classroom_roster_view`, naming the students covered in its summary.
+- Web: `components/dashboard/DashboardTabs.tsx` gains the "Students" tab
+  (`lib/school-dashboard.ts` `canSeeStudents`; the tab stays lit on a
+  student's page); `/dashboard/students` (`StudentsOverview.tsx`: the class
+  selector, the class in numbers, the roster sorted by alerts, rows linking
+  to the student) and `/dashboard/students/<id>` (`StudentDetail.tsx`:
+  `teacher.md` as cards with Refresh, Mastery paths with objective chips,
+  questions by source / material / category, reading, activity, the intake
+  profile). `school-parts.tsx` holds the shared cards. Anyone else who
+  opens the URLs is sent to `/dashboard`. 70 strings in en, th, zh.
+
+Tests: `tests/multi_user/test_school_roster.py` (15: each alert at its
+threshold, the totals, the route's access rules, the revoked-by-hand case,
+the audit). `web/tests/school-dashboard.test.ts` (5: who sees the tab, the
+alert names match the server's, the pages import no first-person API,
+formatting, every string present).
+
 ## School roles, Phase 3a: classrooms and the CSV import — 2026-09-20
 
 Design §1: a classroom is a bulk editor of guardian links, not a new

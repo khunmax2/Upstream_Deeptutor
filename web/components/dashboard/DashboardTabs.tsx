@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, PawPrint } from "lucide-react";
+import { LayoutDashboard, PawPrint, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useLearningPolicy } from "@/features/dashboard/useLearningPolicy";
+import { canSeeStudents } from "@/lib/school-dashboard";
 
 /**
  * The Dashboard's two inner pages.
@@ -19,12 +20,17 @@ import { useLearningPolicy } from "@/features/dashboard/useLearningPolicy";
 const DASHBOARD_PAGES = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/anima", label: "Learner Anima", icon: PawPrint },
+  // Fork (school roles, Phase 3b): the teacher's students, by classroom.
+  // Shown to the `teacher` preset and to admins; everyone else never sees
+  // the door, and the pages themselves send them back to /dashboard.
+  { href: "/dashboard/students", label: "Students", icon: Users },
 ] as const;
 
 export default function DashboardTabs() {
   const { t } = useTranslation();
   const pathname = usePathname() || "/dashboard";
-  const { allowsAnima, policyResolved } = useLearningPolicy();
+  const { allowsAnima, policyResolved, authStatus } = useLearningPolicy();
+  const teacher = policyResolved && canSeeStudents(authStatus ?? {});
 
   // An account the companion is closed to gets no tab for it at all. It used to
   // get the tab plus a locked notice, which is honest but invites the question
@@ -41,7 +47,8 @@ export default function DashboardTabs() {
   // or an old link still gets told why rather than meeting a broken page.
   const pages = DASHBOARD_PAGES.filter(
     (page) =>
-      page.href !== "/dashboard/anima" || (policyResolved && allowsAnima),
+      (page.href !== "/dashboard/anima" || (policyResolved && allowsAnima)) &&
+      (page.href !== "/dashboard/students" || teacher),
   );
 
   return (
@@ -50,7 +57,11 @@ export default function DashboardTabs() {
       className="flex border-b border-[var(--border)]"
     >
       {pages.map((page) => {
-        const active = pathname === page.href;
+        // The students pages nest (/dashboard/students/<id>), so the tab
+        // stays lit on a student's page too.
+        const active =
+          pathname === page.href ||
+          (page.href !== "/dashboard" && pathname.startsWith(page.href + "/"));
         const Icon = page.icon;
         return (
           <Link

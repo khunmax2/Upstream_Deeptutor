@@ -322,3 +322,76 @@ async def import_school_students(
         "classrooms_created": report.classrooms_created,
         "credentials_csv": report.credentials_csv() if report.created else "",
     }
+
+
+# ── the roster (Phase 3b) ──────────────────────────────────────────────────
+
+
+def _require_classroom_reader(current: object, classroom_id: str) -> tuple[dict[str, Any], bool]:
+    """The classroom, for an admin or a teacher who is in it."""
+    record = _classroom_or_404(classroom_id)
+    is_admin = str(getattr(current, "role", "") or "") == "admin"
+    actor_id = str(getattr(current, "user_id", "") or "")
+    if not is_admin and actor_id not in record["teacher_ids"]:
+        raise HTTPException(status_code=403, detail="Not a teacher of this classroom")
+    return record, is_admin
+
+
+@router.get("/school/classrooms/{classroom_id}/roster")
+async def classroom_roster(
+    classroom_id: str,
+    current: object = Depends(require_auth),
+) -> dict[str, Any]:
+    """One summary row per student of the classroom, and the class in numbers.
+
+    One audit line per read, with the class and its size -- not one per
+    student, which at forty rows would bury the reads a parent asks about
+    (a student's detail is audited per student, by the evidence route).
+    """
+    from deeptutor.multi_user.audit import log_admin_action, log_guardian_action
+    from deeptutor.multi_user.guardians import guardian_can_access
+    from deeptutor.multi_user.identity import get_user_by_id
+    from deeptutor.multi_user.learning_evidence import learning_evidence
+    from deeptutor.multi_user.school_alerts import class_totals, summary_row
+
+    record, is_admin = _require_classroom_reader(current, classroom_id)
+    actor_id = str(getattr(current, "user_id", "") or "")
+
+    def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        rows: list[dict[str, Any]] = []
+        records: list[dict[str, Any]] = []
+        for student_id in record["student_ids"]:
+            found = get_user_by_id(student_id)
+            if found is None:
+                continue
+            username, account = found
+            # The classroom lists the student; the guardian link is what
+            # allows the read. A link revoked by hand keeps the row out.
+            if not is_admin and not guardian_can_access(actor_id, student_id, "view_reports"):
+                continue
+            evidence = learning_evidence(student_id, account)
+            evidence["student"]["username"] = username
+            records.append(evidence)
+            rows.append(summary_row(evidence))
+        rows.sort(key=lambda row: (-len(row["alerts"]), row["student"].get("username", "")))
+        return rows, records
+
+    rows, records = await asyncio.to_thread(build)
+    summary = {"classroom_id": classroom_id, "students": len(rows)}
+    if is_admin:
+        log_admin_action("classroom_roster_view", summary=summary)
+    else:
+        # One guardian line per read, naming every student it covered in the
+        # summary rather than as forty lines: the audit stays readable and
+        # still answers "who looked at my child's roster row, and when".
+        log_guardian_action(
+            "classroom_roster_view",
+            guardian_user_id=actor_id,
+            learner_user_id="",
+            summary={**summary, "student_ids": [row["student"]["id"] for row in rows]},
+        )
+    return {
+        "classroom": _classroom_view(record),
+        "rows": rows,
+        "totals": class_totals(rows, records),
+    }
