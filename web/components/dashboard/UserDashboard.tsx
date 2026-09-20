@@ -525,8 +525,10 @@ export default function UserDashboard() {
         </section>
 
         {/* Fork (school roles, step B): the same evidence a teacher reads,
-            rendered for its owner. */}
-        <MyLearning />
+            rendered for its owner. A policy-bound (learner) account cannot
+            reach the multi-user routes, so it is not asked — the lesson of
+            the catalog request above, applied before it repeats. */}
+        {!restricted && <MyLearning />}
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <ContinueCard
