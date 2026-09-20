@@ -49,7 +49,7 @@ export const SPOTLIGHT_LABELS: Record<SpotlightName, string> = {
   reading_finished: "Finished a material",
   accuracy_up: "Accuracy up",
   steady: "Steady",
-  back: "Back",
+  back: "Back again",
 };
 
 export const SPOTLIGHT_HINTS: Record<SpotlightName, string> = {
@@ -127,7 +127,7 @@ export function relativeTime(
 /** Status chips of a Mastery Path objective, in display order. */
 export const OBJECTIVE_STATUS_LABELS: Record<string, string> = {
   mastered: "Mastered",
-  learning: "Learning",
+  learning: "Still learning",
   new: "New",
 };
 

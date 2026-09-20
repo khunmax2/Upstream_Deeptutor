@@ -157,10 +157,22 @@ export function WeekBars<W extends { week_start: string }>({
             className="flex flex-1 flex-col items-center gap-1"
             title={labels(week)}
           >
-            <div className="relative flex h-16 w-full items-end overflow-hidden rounded-t bg-[var(--muted)]/50">
+            {/* Tailwind v3 cannot alpha an arbitrary var() colour, so the
+                tints are color-mix inline; the filled share is solid. */}
+            <div
+              className="relative flex h-16 w-full items-end overflow-hidden rounded-t"
+              style={{
+                backgroundColor:
+                  "color-mix(in srgb, var(--muted) 60%, transparent)",
+              }}
+            >
               <div
-                className="w-full rounded-t bg-[var(--primary)]/30"
-                style={{ height: `${height}%` }}
+                className="w-full rounded-t"
+                style={{
+                  height: `${height}%`,
+                  backgroundColor:
+                    "color-mix(in srgb, var(--primary) 30%, transparent)",
+                }}
               >
                 {filled !== null && (
                   <div

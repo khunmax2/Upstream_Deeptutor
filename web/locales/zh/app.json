@@ -5358,5 +5358,7 @@
   "Last 8 weeks": "最近 8 周",
   "Time with the tutor, by week": "每周与导师相处时间",
   "Questions answered, by week (filled = correct)": "每周答题数（实心 = 正确）",
-  "{{count}} active days": "{{count}} 个活跃日"
+  "{{count}} active days": "{{count}} 个活跃日",
+  "Back again": "回归",
+  "Still learning": "学习中"
 }

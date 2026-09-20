@@ -5358,5 +5358,7 @@
   "Last 8 weeks": "8 สัปดาห์ล่าสุด",
   "Time with the tutor, by week": "เวลากับติวเตอร์ รายสัปดาห์",
   "Questions answered, by week (filled = correct)": "คำถามที่ตอบ รายสัปดาห์ (ส่วนทึบ = ถูก)",
-  "{{count}} active days": "ใช้งาน {{count}} วัน"
+  "{{count}} active days": "ใช้งาน {{count}} วัน",
+  "Back again": "กลับมาแล้ว",
+  "Still learning": "กำลังเรียน"
 }
