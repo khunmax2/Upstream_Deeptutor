@@ -312,6 +312,23 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles: the student policy survives an unreadable account store — 2026-09-30
+
+Pre-merge hardening. `student_policy.is_student` reads the account store on
+a closed path; since #118 that store raises rather than answering "empty"
+when it cannot be read. Letting the error through would answer 500 to, among
+others, an admin's settings write during exactly the incident they are
+fixing, so it is caught, logged at WARNING, and read as "not a student" --
+one student write in a window where login is refused for everyone anyway.
+
+Found while checking the branch before the merge: upstream's
+`require_learning_surface` reads the same store one dependency earlier and
+still lets the error through, so a 500 in that window is **pre-existing on
+`main`** and not introduced here; recorded, not fixed in this branch.
+
+Test: `tests/multi_user/test_student_policy.py` +1 (the policy is called
+directly, so the assertion is about this dependency and not the stack).
+
 ## School roles, step B: "My learning" on the student's own dashboard, and the five open items of 2026-09-04 — 2026-09-20
 
 One source, two views: the student's dashboard now renders the same

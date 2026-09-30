@@ -77,12 +77,26 @@ def is_student(user: Any) -> bool:
     the object from the token, which carries no preset -- so the answer comes
     from the account record. Callers check the path first, so this read
     happens only for a request that would be refused anyway.
+
+    An unreadable account store (``UsersStoreUnreadableError``, #118) answers
+    "not a student" and logs it. The alternative -- letting the error reach
+    the client -- turns every admin's settings write into a 500 during
+    exactly the incident an admin is trying to fix, while the cost of being
+    wrong is one student write in a window where login is already refused
+    for everyone (the store guard runs there too).
     """
     if user is None or str(getattr(user, "role", "") or "") != "user":
         return False
-    from .identity import get_user_by_id
+    from .identity import UsersStoreUnreadableError, get_user_by_id
 
-    found = get_user_by_id(str(getattr(user, "id", "") or ""))
+    try:
+        found = get_user_by_id(str(getattr(user, "id", "") or ""))
+    except UsersStoreUnreadableError:
+        logger.warning(
+            "Student policy: the account store is unreadable; letting %s through unchecked",
+            getattr(user, "username", "?"),
+        )
+        return False
     return bool(found) and str(found[1].get("preset") or "") == STUDENT_PRESET
 
 

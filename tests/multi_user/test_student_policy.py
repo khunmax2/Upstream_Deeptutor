@@ -9,6 +9,7 @@ is one table (`student_policy.CLOSED`) applied through the app's shared
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 
 from fastapi.testclient import TestClient
@@ -131,3 +132,48 @@ def test_an_ordinary_user_is_not_touched(world, mu_isolated_root):
             and str(response.json().get("detail", "")).startswith("This is a student account")
         ), (method, path, response.text)
     assert _audit(mu_isolated_root) == []
+
+
+def test_an_unreadable_store_does_not_make_the_policy_raise(mu_isolated_root, caplog):
+    """#118's guard makes the account store raise rather than answer "empty".
+    This dependency runs on every closed path, so it must not turn that into
+    a 500 of its own: it logs and lets the request through, and the request
+    then meets whatever the rest of the stack decides.
+
+    (Upstream's `require_learning_surface` reads the same store one step
+    earlier and does let the error through -- pre-existing on `main`, not
+    this policy's to fix here.)"""
+    import asyncio
+    from types import SimpleNamespace
+
+    from deeptutor.multi_user import identity, student_policy
+
+    original = identity.get_user_by_id
+
+    def boom(*_args, **_kwargs):
+        raise identity.UsersStoreUnreadableError("users.json is unreadable")
+
+    identity.get_user_by_id = boom
+    try:
+        user = SimpleNamespace(id="u_1", username="somebody", role="user")
+        with caplog.at_level("WARNING"):
+            assert student_policy.is_student(user) is False
+        assert "account store is unreadable" in caplog.text
+
+        request = SimpleNamespace(url=SimpleNamespace(path="/api/settings/catalog"), method="PUT")
+        with _current(user):
+            # No HTTPException, no UsersStoreUnreadableError.
+            assert asyncio.run(student_policy.refuse_closed(request)) is None
+    finally:
+        identity.get_user_by_id = original
+
+
+@contextmanager
+def _current(user):
+    from deeptutor.multi_user.context import reset_current_user, set_current_user
+
+    token = set_current_user(user)
+    try:
+        yield
+    finally:
+        reset_current_user(token)
