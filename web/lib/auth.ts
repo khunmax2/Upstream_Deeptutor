@@ -15,7 +15,7 @@ export interface AuthStatus {
   role?: string;
   is_admin?: boolean;
   /** Server-side account preset; null for identities without a local account. */
-  preset?: "standard" | "learner" | "custom" | null;
+  preset?: "standard" | "learner" | "custom" | "student" | "teacher" | null;
   /** Avatar marker: "", "icon:<name>:<color>", or "img:<version>". */
   avatar?: string;
   learning_policy?: {
@@ -69,7 +69,8 @@ export function fetchAuthStatus(): Promise<AuthStatus | null> {
           value: status,
           // Retry unavailable backends quickly; stable answers can be shared
           // across the shell and Settings providers for one navigation.
-          expiresAt: Date.now() + (status === null ? 1_000 : AUTH_STATUS_CACHE_MS),
+          expiresAt:
+            Date.now() + (status === null ? 1_000 : AUTH_STATUS_CACHE_MS),
         };
         return status;
       })

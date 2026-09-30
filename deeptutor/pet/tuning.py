@@ -5,14 +5,21 @@ edit, not a code edit: drop a ``data/user/settings/pet.json`` with any subset of
 these fields to override the defaults, matching how the rest of DeepTutor reads
 runtime settings.
 
-The defaults below are **demo-tuned** (see `docs/issues/anima-habitat/DEMO.md`):
+The defaults below were **demo-tuned** until 2026-09-20 (see
+`docs/issues/anima-habitat/DEMO.md`): a fresh pet fell sick about 75 seconds
+after it was created, which sold a three-minute demo and nothing else. They
+are now tuned for a school term, the user's call on the dashboards report's
+open item 1:
 
-* ``initial_hunger = 70`` — the pet starts hungry, so the very first thing the
-  audience sees is a companion that *needs* them (demo script step 1).
-* ``learn_exp = 50`` with ``exp_to_next = 100`` — mastering **2** objectives
-  levels the pet up. At the original 20 exp a level-up needed 5 mastered
-  objectives, which is unreachable in a 3-minute demo, so the level-up beat
-  (script step 4) could never fire.
+* a pet fed by a mastered objective (hunger ``-25``) has **three days** before
+  neglect makes it sick; a fresh pet starts at the same distance from the gate
+  (``initial_hunger = 50``), so a student who signs up on Friday still has a
+  healthy companion on Monday;
+* ``learn_exp = 50`` with ``exp_to_next = 100`` stays -- mastering **2**
+  objectives levels the pet up, which a student can reach in one sitting.
+
+The demo numbers are one ``pet.json`` away (``decay_hunger_per_sec: 0.0667``,
+``initial_hunger: 70``).
 """
 
 from __future__ import annotations
@@ -32,9 +39,10 @@ class PetTuning(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    # decay (per wall-clock second, integrated lazily on read)
-    decay_hunger_per_sec: float = 1.0 / 15.0  # ~+1 hunger / 15s
-    happy_decay_per_sec: float = 2.0 / 15.0  # bleeds only while starving
+    # decay (per wall-clock second, integrated lazily on read). One mastered
+    # objective's relief (25 hunger) lasts SICK_AFTER_DAYS of neglect.
+    decay_hunger_per_sec: float = 25.0 / (3 * 86400)  # ~+25 hunger / 3 days
+    happy_decay_per_sec: float = 50.0 / (3 * 86400)  # bleeds only while starving
     hunger_unhappy: float = 60.0  # above this, decay also hurts happiness
     sick_threshold: float = 75.0  # upward crossing → sick
 
@@ -47,7 +55,7 @@ class PetTuning(BaseModel):
 
     # progression + a fresh pet's starting point
     exp_to_next: float = 100.0
-    initial_hunger: float = 70.0
+    initial_hunger: float = 50.0  # three days from the sick gate, like a fed pet
     initial_happy: float = 80.0
 
     # evolution: levels at which the pet advances to its next form (stage 2, 3, …).

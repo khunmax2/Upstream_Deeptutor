@@ -32,6 +32,7 @@ import {
   isNavActive,
 } from "@/components/sidebar/nav-entries";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { filterHrefsForStudent } from "@/lib/student-access";
 import {
   mergeManualOrder,
   readSessionOrder,
@@ -158,8 +159,11 @@ export function SidebarShell({
   // Memory and Knowledge Center sit behind the same server guard as the primary
   // features (/api/memory and /api/knowledge-bases both answer 403 for a
   // restricted learner), so they get the same filter.
-  const { allowedSurfaces } = useAuthStatus();
-  const secondaryNav = filterNavBySurfaces(SECONDARY_NAV, allowedSurfaces);
+  const { allowedSurfaces, preset } = useAuthStatus();
+  const secondaryNav = filterHrefsForStudent(
+    filterNavBySurfaces(SECONDARY_NAV, allowedSurfaces),
+    preset,
+  );
   const router = useRouter();
   const { t } = useTranslation();
   const { sidebarCollapsed, setSidebarCollapsed: setCollapsed } = useAppShell();

@@ -1,3 +1,4 @@
+import { isStudentPreset } from "@/lib/student-access";
 import type { AuthStatus } from "@/lib/auth";
 
 export interface SettingsAccess {
@@ -18,6 +19,8 @@ export interface SettingsAccess {
    * were all offered to a learner and all failed.
    */
   restricted: boolean;
+  /** Fork: a `student` account does not get the provider, network and agent categories. */
+  hideStudentClosed: boolean;
 }
 
 export const PENDING_SETTINGS_ACCESS: SettingsAccess = {
@@ -26,6 +29,7 @@ export const PENDING_SETTINGS_ACCESS: SettingsAccess = {
   showLearnerOnly: false,
   showGuardianOnly: false,
   restricted: false,
+  hideStudentClosed: false,
 };
 
 /** Convert the backend's account identity into the settings visibility model. */
@@ -55,5 +59,6 @@ export function settingsAccessFromAuthStatus(
       !authStatus.learning_policy &&
       (authStatus.preset === "standard" || authStatus.preset === "custom"),
     restricted: Boolean(authStatus.learning_policy),
+    hideStudentClosed: isStudentPreset(authStatus.preset),
   };
 }

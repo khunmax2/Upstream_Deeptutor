@@ -20,7 +20,13 @@ import {
   type UserRecord,
   type AccountPreset,
 } from "@/lib/admin-api";
+import {
+  ACCOUNT_PRESETS,
+  isGuardablePreset,
+  presetLabel,
+} from "@/lib/account-presets";
 import { BIN_RETENTION_DAYS, binDaysLeft } from "@/lib/account-bin";
+import { listClassrooms } from "@/lib/school-api";
 import {
   getStudioFootprint,
   listStudioOwners,
@@ -44,6 +50,7 @@ import {
   ArrowLeft,
   Archive,
   RotateCcw,
+  School,
   SlidersHorizontal,
   UserCheck,
   UserPlus,
@@ -132,6 +139,11 @@ export default function AdminUsersClient({
     loading: boolean;
   }>({ deepwitya: null, studio: null, studioError: "", loading: false });
   const [orphans, setOrphans] = useState<OrphanRecord[]>([]);
+  // Fork (school roles, Phase 3a): which classrooms each account is in,
+  // shown under the preset. Read-only here; edited on /admin/classrooms.
+  const [classNames, setClassNames] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const [studioOnlyIds, setStudioOnlyIds] = useState<string[]>([]);
   const [leftoversError, setLeftoversError] = useState("");
 
@@ -141,6 +153,19 @@ export default function AdminUsersClient({
     try {
       const data = await listUsers();
       setUsers(data);
+      listClassrooms()
+        .then((rooms) => {
+          const names = new Map<string, string[]>();
+          for (const room of rooms) {
+            for (const id of [...room.teacher_ids, ...room.student_ids]) {
+              names.set(id, [...(names.get(id) ?? []), room.name]);
+            }
+          }
+          setClassNames(
+            new Map([...names].map(([id, list]) => [id, list.join(", ")])),
+          );
+        })
+        .catch(() => setClassNames(new Map()));
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Failed to load users"));
     } finally {
@@ -489,6 +514,16 @@ export default function AdminUsersClient({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {/* Fork (school roles, Phase 3a): classrooms live on their own page. */}
+              <Link
+                href="/admin/classrooms"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
+                           border border-[var(--border)] text-[var(--foreground)]
+                           hover:bg-[var(--card)] transition-colors"
+              >
+                <School size={14} />
+                {t("Classrooms")}
+              </Link>
               <button
                 onClick={openCreateDialog}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
@@ -742,13 +777,14 @@ export default function AdminUsersClient({
                           {!isAdmin && user.preset && (
                             <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
                               {t("Preset: {{preset}}", {
-                                preset: t(
-                                  user.preset === "learner"
-                                    ? "Learner"
-                                    : user.preset === "custom"
-                                      ? "Custom"
-                                      : "Standard",
-                                ),
+                                preset: t(presetLabel(user.preset)),
+                              })}
+                            </span>
+                          )}
+                          {classNames.get(user.id) && (
+                            <span className="mt-0.5 block text-[11px] text-[var(--muted-foreground)]">
+                              {t("Class: {{names}}", {
+                                names: classNames.get(user.id),
                               })}
                             </span>
                           )}
@@ -867,17 +903,15 @@ export default function AdminUsersClient({
                               lockLearningPolicy={user.preset === "learner"}
                             />
                             <BookPermissionEditor userId={user.id} />
+                            {isGuardablePreset(user.preset) && (
+                              <GuardianRelationshipsEditor
+                                learnerId={user.id}
+                                learnerUsername={user.username}
+                                users={users}
+                              />
+                            )}
                             {user.preset === "learner" && (
-                              <>
-                                <GuardianRelationshipsEditor
-                                  learnerId={user.id}
-                                  learnerUsername={user.username}
-                                  users={users}
-                                />
-                                <LearnerProfileEditor
-                                  username={user.username}
-                                />
-                              </>
+                              <LearnerProfileEditor username={user.username} />
                             )}
                           </td>
                         </tr>
@@ -1019,11 +1053,11 @@ export default function AdminUsersClient({
                 {t("Account preset")}
               </legend>
               <div
-                className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--muted)]/50 p-1"
+                className="grid grid-cols-3 gap-1 sm:grid-cols-5 rounded-lg bg-[var(--muted)]/50 p-1"
                 role="group"
                 aria-label={t("Account preset")}
               >
-                {(["standard", "learner", "custom"] as const).map((preset) => (
+                {ACCOUNT_PRESETS.map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -1036,13 +1070,7 @@ export default function AdminUsersClient({
                         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                     }`}
                   >
-                    {t(
-                      preset === "learner"
-                        ? "Learner"
-                        : preset === "custom"
-                          ? "Custom"
-                          : "Standard",
-                    )}
+                    {t(presetLabel(preset))}
                   </button>
                 ))}
               </div>
@@ -1055,9 +1083,17 @@ export default function AdminUsersClient({
                     ? t(
                         "Create an ordinary account, then customize its assignments.",
                       )
-                    : t(
-                        "Create an ordinary account with the default workspace behavior.",
-                      )}
+                    : createPreset === "student"
+                      ? t(
+                          "A secondary-school student: the full tutor with the school's models; no own keys, partners or code execution.",
+                        )
+                      : createPreset === "teacher"
+                        ? t(
+                            "A teacher: an ordinary account that is linked to students as their guardian.",
+                          )
+                        : t(
+                            "Create an ordinary account with the default workspace behavior.",
+                          )}
               </p>
             </fieldset>
 

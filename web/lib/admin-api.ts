@@ -1,6 +1,8 @@
 import { apiFetch, apiUrl } from "@/lib/api";
 
-export type AccountPreset = "standard" | "learner" | "custom";
+import type { AccountPreset } from "@/lib/account-presets";
+
+export type { AccountPreset };
 
 export interface UserRecord {
   id: string;

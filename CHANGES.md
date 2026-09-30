@@ -292,6 +292,365 @@ byte-equal afterwards.
 
 ---
 
+## A lab stack beside the local UAT one, for a branch that is not on `main` — 2026-09-20
+
+`deploy/docker-compose.lab.yml` and `deploy/lab.ports` (new). The local UAT
+stack (`upstream_deeptutor`, container `deeptutor`, ports 3782/8001/8090)
+is the twin of the host and stays on `main`; a feature branch now gets its
+own stack from a git worktree with a copy of `data/`, so the two never
+share a container name, a port, an image tag or a data tree. The overlay
+renames every container with a `-lab` suffix and moves the ports by +1000;
+the project name `deeptutor_lab` keeps the built image apart from
+`upstream_deeptutor-deeptutor:latest`. No studio, gatekeeper or postgres --
+a DeepWitya-only branch does not need them.
+
+Two things found while bringing it up, both written into the overlay: the
+base compose file maps `${DEEPTUTOR_DOCKER_*_PORT}` and probes it but
+never passes it into the container, so the variables must be set for the
+base file (hence `lab.ports`, not a `.env`, which is gitignored); and the
+image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
+`FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
+copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
+
+## School roles: the app shell's route budget, raised on measurement — 2026-09-30
+
+CI's frontend gate caught what the local `test:node` run could not: the
+budget check runs after a production build (`npm run check`), and the app
+shell measured **430KB against a 420KB budget**. The cause is this feature's
+own strings — `locales/en/app.json` is the one locale imported eagerly
+(`i18n/init.ts`; zh and th are dynamic) and the branch adds **162 English
+keys, 11.4KB raw**, which is the whole overage.
+
+`scripts/route_budgets.mjs` asks that the fork's own carrying be examined
+before the line is raised, so it was: the September orphan list is already
+reclaimed (180 of 204 keys gone, 23 back in use, 1 left), leaving nothing
+cheap there. Budget 420 → **435**, the measurement plus a little, with the
+reasoning in the file.
+
+Recorded for a separate change, not done here: a repo-wide scan finds ~778
+sentence keys in `en` that appear in no source file, about 59KB. A sweep
+needs its own PR and its own verification -- a key can be reached through a
+server message rather than a `t()` literal.
+
+## School roles: the student policy survives an unreadable account store — 2026-09-30
+
+Pre-merge hardening. `student_policy.is_student` reads the account store on
+a closed path; since #118 that store raises rather than answering "empty"
+when it cannot be read. Letting the error through would answer 500 to, among
+others, an admin's settings write during exactly the incident they are
+fixing, so it is caught, logged at WARNING, and read as "not a student" --
+one student write in a window where login is refused for everyone anyway.
+
+Found while checking the branch before the merge: upstream's
+`require_learning_surface` reads the same store one dependency earlier and
+still lets the error through, so a 500 in that window is **pre-existing on
+`main`** and not introduced here; recorded, not fixed in this branch.
+
+Test: `tests/multi_user/test_student_policy.py` +1 (the policy is called
+directly, so the assertion is about this dependency and not the stack).
+
+## School roles, step B: "My learning" on the student's own dashboard, and the five open items of 2026-09-04 — 2026-09-20
+
+One source, two views: the student's dashboard now renders the same
+evidence record a teacher reads, for its owner.
+
+- `api/routers/school.py`: `GET /api/multi-user/me/evidence` -- the caller's
+  own record with spotlights, read from the caller's own scope
+  (`learning_evidence(..., scope=)`), the teacher's part left out
+  (`teacher.md` withheld, no alerts, no comparison), not audited.
+- `web/components/dashboard/MyLearning.tsx` (new), mounted in
+  `UserDashboard.tsx` under Learning momentum: four cards (active days and
+  about-minutes, accuracy, objectives mastered, materials finished), the
+  green spotlight chips, the eight-week bars; a one-line "nothing yet"
+  for a fresh account; absent rather than broken when the call fails.
+- The dashboards report's five open items (`REPORT_dashboards_live_run_2026-09-04.md`
+  §5.1, §7), decided by the user on 2026-09-20:
+  1. **Anima's pacing**: `deeptutor/pet/tuning.py` is tuned for a term, not
+     a demo -- a fed or fresh pet has three days before neglect makes it
+     sick (`decay_hunger_per_sec = 25 / 3 days`, `initial_hunger = 50`);
+     `tests/pet/test_pet_derive.py` reads the rate from the tuning and pins
+     the three days.
+  2. Anima stays unassignable -- no change.
+  3. **The always-refused request**: `UserDashboard.tsx` no longer asks a
+     restricted account for the capability catalog; the "temporarily
+     unavailable" banner that only that refusal produced is gone with it.
+  4. **Thai labels**: `เส้นทางสู่ความเชี่ยวชาญ` → `เส้นทางฝึกฝน` in every
+     string (14) and the Thai learning prompt; `แดชบอร์ด` and
+     `ศูนย์ความรู้` stay.
+  5. **The quiz-gate trap**: the Quiz mode's description now says the
+     practice does not count toward a Mastery Path (locale strings only;
+     kept short enough for the picker's one line).
+- Also: the dashboard's preset chip kept collapsing `student` / `teacher`
+  to "Standard" (`lib/user-dashboard.ts` `normalizeUserPreset` knew three
+  presets); it now knows every preset in `ACCOUNT_PRESETS`. A policy-bound
+  (learner) account is not asked for its own evidence at all -- it cannot
+  reach the multi-user routes, and asking would have been the catalog
+  request again.
+
+Tests: `test_learning_evidence.py` +1 (own record: same numbers, summary
+withheld, nothing in the audit), `tests/pet` 37 green on the new rate,
+`web/tests/school-dashboard.test.ts` +2.
+
+## School roles, step A: richer evidence — minutes, trend, good news, class comparison — 2026-09-20
+
+After a look at what Khan Academy, Google Classroom, Canvas, Microsoft
+Insights, IXL and Moodle put in front of a teacher (official docs only),
+four things every one of them shows and this fork did not. All four go
+into the shared evidence record, so the teacher's pages and, later, the
+student's own dashboard get them from one place.
+
+- `deeptutor/multi_user/learning_evidence.py`: `activity.minutes_30`,
+  estimated from message timestamps (gaps of at most 10 minutes count,
+  a longer silence and the last message count one tail minute -- "about",
+  never a clock), and `activity.trend`, eight Monday-to-Sunday weeks of
+  turns, active days, minutes, questions and correct; each Mastery path
+  reports `mastered_recently` (objectives mastered with an attempt in 7 d).
+- `deeptutor/multi_user/school_alerts.py`: `spotlights_for`, five positive
+  rules beside the five alerts (mastered this week, finished a material,
+  accuracy up 10 points over the four weeks before, steady on 4 of 7 days,
+  back after two quiet weeks); `summary_row` and `class_totals` carry
+  minutes and spotlights; `class_comparison` gives the class medians.
+- `api/routers/school.py`: `GET /learners/{id}/evidence` answers
+  `spotlights`, and with `?classroom_id=` (a teacher of that class, the
+  student in it) a `comparison`; the roster build is one helper.
+- Web: a time column and green spotlight chips on the roster, a time card
+  for the class; on the student's page a "Last 8 weeks" card with two bar
+  strips (pure CSS), class medians beside the student's own numbers,
+  spotlight chips. 21 strings in en, th, zh.
+
+Tests: `test_learning_evidence.py` +2 (the minutes rule, the trend from the
+real stores), `test_school_roster.py` +11 (each spotlight at its rule, the
+totals and comparison, the route with and without a classroom).
+`web/tests/school-dashboard.test.ts` +1.
+
+## School roles, Phase 3c: IT's switch, and the report — 2026-09-20
+
+- `/admin/classrooms` gains the nightly-summary panel (`NightlySummaryPanel`
+  in `AdminClassroomsClient.tsx`): enabled, server hour, "Run now", the last
+  run's counts — over the Phase 2 routes. 11 strings in en, th, zh.
+- `docs/reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md` (new): what
+  the branch holds, what the lab proved, what was found on the way, what
+  stays open. Both design documents now say the phases are built and where
+  the report is; the dashboard design notes the one deviation from §1.2
+  (`derived_links` in the classroom store instead of `granted_via`).
+
+## School roles, Phase 3b: the teacher's pages — 2026-09-20
+
+Design §2 and §3, as decided: a third Dashboard tab for the `teacher`
+preset and admins, new pages that reuse the dashboard's visual parts and
+none of its first-person data flow.
+
+- `deeptutor/multi_user/school_alerts.py` (new): `summary_row` reduces an
+  evidence record to the roster's columns; `alerts_for` applies the five
+  plain rules of §2.4 (inactive 7 d; struggling < 50 % on ≥ 10 questions
+  in 30 d; backlog ≥ 10 unresolved; reviews due ≥ 5; reading stalled 14 d)
+  with the thresholds as constants; `class_totals` rolls the rows up
+  (active this week / month, median accuracy, under 50 %, reviews due,
+  materials finished, alert counts, the three most-missed categories).
+- `deeptutor/api/routers/school.py`: `GET /school/classrooms/{id}/roster`
+  for a teacher of the classroom or an admin -- one evidence read per
+  student, a row and the totals; a student whose link was revoked by hand
+  stays off a teacher's roster (the guardian record decides, the
+  classroom only lists); one audit line per read,
+  `classroom_roster_view`, naming the students covered in its summary.
+- Web: `components/dashboard/DashboardTabs.tsx` gains the "Students" tab
+  (`lib/school-dashboard.ts` `canSeeStudents`; the tab stays lit on a
+  student's page); `/dashboard/students` (`StudentsOverview.tsx`: the class
+  selector, the class in numbers, the roster sorted by alerts, rows linking
+  to the student) and `/dashboard/students/<id>` (`StudentDetail.tsx`:
+  `teacher.md` as cards with Refresh, Mastery paths with objective chips,
+  questions by source / material / category, reading, activity, the intake
+  profile). `school-parts.tsx` holds the shared cards. Anyone else who
+  opens the URLs is sent to `/dashboard`. 70 strings in en, th, zh.
+
+Tests: `tests/multi_user/test_school_roster.py` (15: each alert at its
+threshold, the totals, the route's access rules, the revoked-by-hand case,
+the audit). `web/tests/school-dashboard.test.ts` (5: who sees the tab, the
+alert names match the server's, the pages import no first-person API,
+formatting, every string present).
+
+## School roles, Phase 3a: classrooms and the CSV import — 2026-09-20
+
+Design §1: a classroom is a bulk editor of guardian links, not a new
+authorization path, and the file at term start replaces a hundred dialogs.
+
+- `deeptutor/multi_user/classrooms.py` (new): the store
+  (`data/system/school/classrooms.json`, path resolved per call like the
+  guardian store's), records with name, term, home-room teacher, teachers
+  (preset `teacher`), students (preset `student`), `defaults.grant` and
+  `archived_at`. After every membership change `sync_links` creates the
+  missing `view_reports` + `assign_materials` links for every teacher x
+  student pair of every active classroom and revokes the ones *this module
+  created* that no classroom justifies; it knows its own links by id
+  (`derived_links`), so a link an admin made by hand is never created or
+  revoked here and `guardians.py` is untouched. Class defaults (decision 9)
+  are merged into a student's grant on join -- llm items by profile with
+  the model ids unioned, knowledge bases and skills by value -- and never
+  removed on leave.
+- `deeptutor/multi_user/school_import.py` (new): `username,password,
+  classroom` CSV (BOM tolerated, header case-free, blank lines skipped,
+  at most 500 rows); usernames follow `RegisterRequest`'s rule, an empty
+  password is generated (12 letters and digits) and returned once in the
+  report, never logged; accounts are created with preset `student` through
+  `services.auth.add_user` (the admin route's code) and audited as
+  `account_create` with `via: import`; an existing username is `skipped`,
+  unknown classrooms are errors unless `create_classrooms`.
+- `deeptutor/api/routers/school.py`: `GET/POST /school/classrooms`,
+  `PUT/DELETE /school/classrooms/{id}` (delete archives),
+  `PUT .../teachers`, `PUT .../students`, `POST /school/import`. Admin
+  writes; a teacher lists only the classrooms they are in. Audit
+  `classroom_create` / `classroom_update` / `classroom_archive` /
+  `classroom_members_update` (counts) / `school_import` (counts).
+- Web: `web/lib/school-api.ts` (new; also carries the Phase 2 evidence,
+  summary and settings calls for 3b), `web/app/(admin)/admin/classrooms/`
+  (new page: list, editor with teachers + home-room star, student picker
+  with search, defaults from the admin resources, archive with confirm;
+  the import dialog with file or paste, report, and the credentials CSV
+  offered once as a download), a "Classrooms" link and a "Class: …" line
+  per account on the users page. 44 strings in en, th, zh.
+
+Tests: `tests/multi_user/test_classrooms.py` (9: derive / revoke / archive,
+a hand-made link untouched and a pair shared by two classes, the rules,
+defaults on join and kept on leave, the username rule equals
+`RegisterRequest`'s, CSV parsing line by line, an import end to end with
+the password verified against the hash and absent from the audit, the
+routes and their audit). `web/tests/school-classrooms.test.ts` (3).
+
+## School roles, Phase 3 design: the teacher dashboard and classrooms — 2026-09-20
+
+`docs/planning/school-roles/DESIGN_teacher_dashboard.md` (new): what the
+parent design's Phase 3 sentence means in detail, written before any code.
+Three pieces -- 3a classrooms (`data/system/school/classrooms.json`, a
+bulk editor of guardian links with `granted_via`, class defaults on join,
+CSV import with one-time generated passwords, admin page
+`/admin/classrooms`); 3b the teacher's page (`/dashboard/students`: a
+roster from one audited call per class with a server-computed summary row
+per student, a detail view over the Phase 2 evidence route, `teacher.md`
+as four cards with a refresh, five plain-rule alerts); 3c the class in
+numbers and the admin's nightly-summary switch. Eight decisions are marked
+for the user to confirm.
+
+## School roles, Phase 2: learning evidence for the teacher — 2026-09-20
+
+Design sections 4–6: a teacher sees learning evidence only, read through
+one fork module, never a transcript or a memory document; the one memory
+text a teacher gets is written for them from the allowed sections.
+
+- `deeptutor/multi_user/learning_evidence.py` (new) returns one evidence
+  record per student from the v1.6.6 sources: Mastery Path (per path, the
+  objective map via `policy.map_summary`, attempts, active errors), the
+  Question Bank (totals, correct/wrong, last 30 days, by source, by
+  material, by category), reading progress (per material: position,
+  finished, annotation and bookmark *counts*), activity (sessions, active
+  days, turns, by capability -- counts only) and the learner profile (the
+  intake fields prior knowledge / target level / time budget; not
+  `preferences` or `notes`). Every store is read from the student's own
+  files with SQLite in `mode=ro` and no store class constructed, so a
+  teacher's read changes nothing in the student's tree. No session title,
+  message, annotation text or memory trace is in the record. No v1.6.8
+  sync (decision 11): a later sync changes the inside of this module only.
+- `deeptutor/multi_user/teacher_summary.py` (new) writes
+  `memory/school/teacher.md` -- outside `L2/` and `L3/`, not an
+  `L3_SLOTS` entry, so the student's Memory page, the `read_memory` tool,
+  the owner-only memory API and memory backups never see it -- from the
+  allowed sections only (`quiz` all; `chat` Mastery + Misconceptions;
+  `book` Pacing + Sticking points; `scope` whole; `profile` Learning style
+  + Knowledge level; names matched in en and zh) with one LLM call whose
+  prompt forbids personal facts and footnotes; the answer is parsed into
+  four fixed sections, footnotes stripped, the L3 banned-absolute guard
+  applied. A run is skipped when no allowed source changed since the last
+  one. The model is the deployment default: the school pays. The language
+  is the deployment's too (`school_jobs.deployment_language`), for the
+  nightly run and a teacher's refresh alike -- found on the lab, where a
+  teacher without an `interface.json` of their own got an English summary
+  on a Thai deployment.
+- `deeptutor/multi_user/school_jobs.py` (new) is the nightly run for
+  every enabled `student` account, switched by `settings/school.json`
+  (`summaries_enabled`, default off; `summaries_hour`, default 2), checked
+  every 15 minutes on the background leader beside cron and partners
+  (`api/main.py`: two start/stop callbacks).
+- `deeptutor/api/routers/school.py` (new), mounted under
+  `/api/multi-user` beside the guardian routes and reusing their access
+  check and audit helper: `GET /learners/{id}/evidence` (guardian
+  `view_reports` or admin; audit `guardian_evidence_view`),
+  `POST /learners/{id}/summary` (same; audit `guardian_summary_refresh`),
+  `GET`/`PUT /school/settings` and `POST /school/summaries/run` (admin;
+  audit `school_settings_update`, `school_summaries_run`).
+- `deeptutor/multi_user/guardians.py`: a `student` is guardable like a
+  `learner` (`GUARDABLE_PRESETS`), because a teacher's link to a student
+  is the existing guardian record (decision 3); neither can be a guardian.
+  The users page offers the guardian editor for both
+  (`web/lib/account-presets.ts` `isGuardablePreset`, `AdminUsersClient.tsx`,
+  `GuardianRelationshipsEditor.tsx`); the learner profile editor stays
+  learner-only.
+
+Tests: `tests/multi_user/test_learning_evidence.py` (12: a workspace built
+with the real session, Mastery and reading stores and memory documents,
+read back with the numbers right and five planted secrets -- a message, a
+session title, a `chat.Topics` entry, a `profile.Identity` entry, a
+preference -- absent from the record, the model's input and the audit
+line; read-only proven by file listing and mtimes; the routes closed to a
+stranger, to the student, to a link without `view_reports`, open to the
+linked teacher and to an admin; the switches and the manual run admin-only;
+`due` follows the switches; the deployment language wins). `tests/multi_user/test_guardians.py` message
+updated. `web/tests/admin-user-presets.test.ts` +1.
+
+## School roles, Phase 1 step 2: what a `student` account cannot do — 2026-09-20
+
+Design decision 4: a student is the full product, and only three groups
+are closed because they are not the student's to hold.
+
+- `deeptutor/multi_user/student_policy.py` (new) is one table of closed
+  routes -- writes under `/api/settings`, `/api/capabilities`,
+  `/api/tools`, `/api/agent-config`, `/api/partners`, `/api/partner-groups`;
+  everything under `/api/space/mcp` and `/api/space/cli-apps` -- with the
+  student's own `/api/settings/ui` and `/api/settings/workspace` left open.
+  `refuse_closed` is added once to the app's shared `_auth` dependency list
+  in `api/main.py`, after the auth guard, so every router that carries it
+  is covered; the path is checked before the account is read, so an open
+  request costs one comparison. A refusal answers 403 "This is a student
+  account: …", writes the audit action `student_write_refused` and logs at
+  WARNING. `CurrentUser.preset` is not filled on the request path upstream,
+  so the preset is read from the account store, only for a closed path.
+- Web: `web/lib/student-access.ts` (new) mirrors the table; `useAuthStatus`
+  now carries the preset; the sidebar (`/partners`), the Learning Space
+  tiles (MCP, CLI apps) and the Settings categories `models`, `network`,
+  `agents` are hidden for a student, so the restriction is an absence and
+  not a 403 after a click. `components/StudentNotice.tsx` (new) shows the
+  two-sentence privacy notice once per account on first sign-in (decision
+  8), keyed in browser storage, mounted in the workspace layout. Strings
+  in en, th and zh.
+
+Tests: `tests/multi_user/test_student_policy.py` (24: the table, a student
+refused on closed routes and served on open ones through the real app,
+the audit line, an ordinary user untouched); `web/tests/student-access.test.ts`
+(5, including a check that the web set names the same routes as the
+server table).
+
+## School roles, Phase 1 step 1: the `student` and `teacher` presets — 2026-09-20
+
+Design: `docs/planning/school-roles/DESIGN_teacher_student_it.md`,
+decisions 3 and 4. Two new values of `AccountPreset`, labels on an
+ordinary `user`, never a role:
+
+- `deeptutor/multi_user/models.py` widens the literal; `identity.py` keeps
+  one `PRESETS` set for its three validations (a stored `student` or
+  `teacher` survives canonicalisation, an unknown value still falls back to
+  `standard`); `/api/auth/status` passes the two through. Creating either
+  through `POST /api/auth/users` writes no learning policy (decision 5).
+- Web: `web/lib/account-presets.ts` (new) holds the list, the display
+  label and `isCuratedPreset()` (custom, learner, student, teacher -- the
+  accounts whose grants an admin curates). `admin-api.ts`, `auth.ts` and
+  `user-dashboard.ts` take their type from it; the users page's create
+  dialog offers five presets with a sentence for each; the admin dashboard
+  counts teachers and students among the curated accounts; a teacher's own
+  dashboard reads like a custom account's. Strings in en, th and zh.
+
+Tests: `tests/multi_user/test_school_presets.py` (4, red before);
+`web/tests/admin-user-presets.test.ts` follows the list to the new module.
+
+---
+
 ## Documentation: the school roles design — teacher, student, IT — 2026-09-20
 
 `docs/planning/school-roles/DESIGN_teacher_student_it.md` (new) records what

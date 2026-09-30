@@ -1,0 +1,7 @@
+# Ports of the lab stack (passed with --env-file; named .ports because *.env is gitignored) (deploy/docker-compose.lab.yml). The base compose
+# file reads the same variables for its own port lines, so they must be set
+# here and not only in the overlay, or the UAT stack's ports get published
+# as well. No secrets belong in this file.
+DEEPTUTOR_DOCKER_BACKEND_PORT=9001
+DEEPTUTOR_DOCKER_FRONTEND_PORT=4782
+DEEPTUTOR_DOCKER_POCKETBASE_PORT=9090

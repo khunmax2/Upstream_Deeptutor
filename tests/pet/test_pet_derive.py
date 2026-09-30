@@ -59,21 +59,21 @@ def test_clamps_bounds():
 # --- decay ------------------------------------------------------------------
 def test_time_decay_is_linear_and_deterministic():
     s = PetState(hunger=0.0, happy=90.0)
-    derive.apply_time_decay(s, 150.0)  # 150s * (1/15) = +10 hunger
-    assert s.hunger == 10.0
+    derive.apply_time_decay(s, 10.0 / T.decay_hunger_per_sec)  # the seconds worth +10
+    assert round(s.hunger, 6) == 10.0
     assert s.happy == 90.0  # below unhappy threshold → happiness untouched
 
 
 def test_decay_hurts_happiness_when_starving():
     s = PetState(hunger=65.0, happy=90.0)  # already above HUNGER_UNHAPPY (60)
-    derive.apply_time_decay(s, 15.0)
-    assert s.hunger == 66.0
+    derive.apply_time_decay(s, 1.0 / T.decay_hunger_per_sec)  # the seconds worth +1
+    assert round(s.hunger, 6) == 66.0
     assert s.happy < 90.0
 
 
 def test_sick_gate_trips_on_upward_crossing():
     s = PetState(hunger=70.0, sick=False)
-    derive.apply_time_decay(s, 90.0)  # 70 + 6 = 76 → crosses 75
+    derive.apply_time_decay(s, 6.0 / T.decay_hunger_per_sec)  # 70 + 6 = 76 → crosses 75
     assert s.hunger >= SICK_THRESHOLD
     assert s.sick is True
 
@@ -84,7 +84,7 @@ def test_quiz_pass_cure_sticks_while_still_hungry():
     s = PetState(hunger=80.0, sick=True)
     derive.apply_quiz_pass(s)
     assert s.sick is False
-    derive.apply_time_decay(s, 15.0)  # hunger 80 → 81, already above gate
+    derive.apply_time_decay(s, 1.0 / T.decay_hunger_per_sec)  # 80 → 81, already above gate
     apply_rules(s)
     assert s.sick is False
 
@@ -164,8 +164,8 @@ def test_read_applies_decay_by_elapsed():
     record = _fresh_record(start)
     record.state.hunger = 0.0
     snap = LearningSnapshot(version=0)
-    derive_on_read(record, snap, start + 150.0)  # +10 hunger
-    assert record.state.hunger == 10.0
+    derive_on_read(record, snap, start + 10.0 / T.decay_hunger_per_sec)  # +10 hunger
+    assert round(record.state.hunger, 6) == 10.0
 
 
 def test_store_drops_incompatible_records(tmp_path):
@@ -195,3 +195,14 @@ def test_bridge_manual_event_persists(tmp_path):
     reloaded = PetStore(path=tmp_path / "pet_state.json").get("p1")
     assert reloaded is not None
     assert reloaded.state.exp == LEARN_EXP
+
+
+def test_a_fed_pet_has_three_days_before_neglect_makes_it_sick():
+    """The user's call (dashboards report, open item 1): school pacing, not demo
+    pacing. A fresh pet and a just-fed pet both sit 25 points under the gate."""
+    fresh = derive.new_pet_state()
+    assert T.sick_threshold - fresh.hunger == 25.0
+    derive.apply_time_decay(fresh, 3 * 86400 - 60)
+    assert fresh.sick is False
+    derive.apply_time_decay(fresh, 120)
+    assert fresh.sick is True

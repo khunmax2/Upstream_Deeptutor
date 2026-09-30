@@ -1,7 +1,10 @@
 # School roles — teacher, student, IT: design
 
 Decided with the user on 2026-09-20, after the admin lifecycle design
-(`../admin-roles/`) went live in `deploy-2026-09-19`. Nothing here is built.
+(`../admin-roles/`) went live in `deploy-2026-09-19`. Phases 1–3 were built
+the same day on `feat/school-phase1` (unmerged, lab-tested; see
+`../../reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md`); Phase 3's
+own design is `DESIGN_teacher_dashboard.md`.
 This document is the agreement that the phases at the end implement, and it
 records what was checked in the code before each decision was made.
 

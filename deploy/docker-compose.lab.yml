@@ -1,0 +1,63 @@
+# ============================================
+# Lab — a second DeepWitya stack beside the local UAT one, for a branch
+# ============================================
+# The local UAT stack (project `upstream_deeptutor`, container `deeptutor`,
+# ports 3782/8001/8090, nginx 8080) is the twin of the host and stays on
+# `main`. A feature branch that is not on `main` yet gets its own stack from
+# a git worktree, so the two never share a container name, a port, an image
+# tag or a `data/` tree:
+#
+#   git worktree add ../Upstream_Deeptutor_lab feat/<topic>
+#   cp -r data ../Upstream_Deeptutor_lab/data      # same settings, own copy
+#   # then set backend_port 9001 / frontend_port 4782 in the copy's
+#   # data/user/settings/system.json (the image reads ports from there)
+#   cd ../Upstream_Deeptutor_lab
+#   docker compose -p deeptutor_lab --env-file deploy/lab.ports \
+#     -f docker-compose.yml -f deploy/docker-compose.lab.yml up -d --build
+#   open http://localhost:4782/deepwitya
+#
+# What this overlay changes, and nothing else:
+#   - every container name gets a `-lab` suffix (compose pins names in the
+#     base file, so two projects would otherwise collide);
+#   - the ports move by +1000 (frontend 4782, backend 9001, pocketbase 9090),
+#     set in deploy/lab.ports (not `.env`: that pattern is gitignored, and
+#     this file holds no secrets) because the base file reads the same variables;
+#   - the image is built with the production base path, like the UAT overlay,
+#     so pages and links behave as on the host;
+#   - the project name makes the built image `deeptutor_lab-deeptutor`, so
+#     `upstream_deeptutor-deeptutor:latest` and its pre-uat tags are untouched.
+#
+# `./data` is relative to the compose directory, i.e. the worktree's own copy.
+# No studio, gatekeeper or postgres: a DeepWitya-only branch does not need
+# them; add `deploy/docker-compose.openmaic.yml` (with its own ports) when a
+# branch touches the studio.
+#
+# NOT a production file.
+# ============================================
+
+services:
+  deeptutor:
+    container_name: deeptutor-lab
+    build:
+      args:
+        NEXT_PUBLIC_BASE_PATH: /deepwitya
+    environment:
+      # No port variables here on purpose: the image is JSON-driven and its
+      # entrypoint unsets BACKEND_PORT / FRONTEND_PORT, then reads
+      # data/user/settings/system.json. The lab's copy of data/ therefore
+      # carries backend_port 9001 and frontend_port 4782 (see the recipe).
+      - DEEPTUTOR_OPENMAIC_URL=
+    ports:
+      - "9001:9001"
+      - "4782:4782"
+
+  redis:
+    container_name: deeptutor-redis-lab
+
+  pocketbase:
+    container_name: pocketbase-lab
+    ports:
+      - "9090:8090"
+
+  sandbox-runner:
+    container_name: deeptutor-sandbox-runner-lab

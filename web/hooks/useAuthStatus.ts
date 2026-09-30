@@ -26,6 +26,8 @@ export interface AuthStatusState {
    * the learner clicked. Surfacing it here lets the navigation reflect it.
    */
   allowedSurfaces: string[] | null;
+  /** Fork: the account preset (`student`, `teacher`, ...) or null. */
+  preset: string | null;
 }
 
 const INITIAL: AuthStatusState = {
@@ -36,6 +38,7 @@ const INITIAL: AuthStatusState = {
   statusAvailable: false,
   loading: true,
   allowedSurfaces: null,
+  preset: null,
 };
 
 /**
@@ -63,6 +66,7 @@ export function toAuthStatusState(
     allowedSurfaces: status?.learning_policy
       ? (status.learning_policy.allowed_surfaces ?? ["chat", "reading"])
       : null,
+    preset: typeof status?.preset === "string" ? status.preset : null,
   };
 }
 

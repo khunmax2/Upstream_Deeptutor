@@ -5,6 +5,7 @@ import { KeyRound, ShieldCheck, ShieldOff, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { isGuardablePreset } from "@/lib/account-presets";
 import type { UserRecord } from "@/lib/admin-api";
 import {
   authorizeGuardianRelationship,
@@ -91,7 +92,7 @@ export function GuardianRelationshipsEditor({
     (user) =>
       user.role === "user" &&
       user.id !== learnerId &&
-      user.preset !== "learner" &&
+      !isGuardablePreset(user.preset) &&
       !activeGuardianIds.has(user.id),
   );
 

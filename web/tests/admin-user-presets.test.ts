@@ -23,15 +23,21 @@ const zh = JSON.parse(
 ) as Record<string, string>;
 
 test("admin user creation sends the selected preset", () => {
-  assert.match(
-    adminApi,
-    /export type AccountPreset = "standard" \| "learner" \| "custom"/,
-  );
+  assert.match(adminApi, /export type \{ AccountPreset \}/);
   assert.match(
     adminApi,
     /body: JSON\.stringify\(\{ username, password, preset \}\)/,
   );
-  assert.match(usersPage, /\["standard", "learner", "custom"\] as const/);
+  // Fork: the list comes from lib/account-presets.ts, which adds student and teacher.
+  assert.match(usersPage, /ACCOUNT_PRESETS\.map\(\(preset\) =>/);
+  const presets = readFileSync(
+    path.resolve(process.cwd(), "lib/account-presets.ts"),
+    "utf8",
+  );
+  assert.match(
+    presets,
+    /"standard",\s*"learner",\s*"custom",\s*"student",\s*"teacher",/,
+  );
   assert.match(usersPage, /aria-pressed=\{createPreset === preset\}/);
 });
 
@@ -64,4 +70,42 @@ test("account preset copy is present in both supported locales", () => {
     assert.notEqual(en[key], "");
     assert.notEqual(zh[key], "");
   }
+});
+
+// Fork (school roles design, Phase 2): a teacher's link to a `student` is the
+// same guardian record as a parent's link to a `learner`, so the users page
+// offers the guardian editor for both and neither can be a guardian.
+test("a student account is guardable like a learner", () => {
+  const presets = readFileSync(
+    path.resolve(process.cwd(), "lib/account-presets.ts"),
+    "utf8",
+  );
+  const guardianEditor = readFileSync(
+    path.resolve(
+      process.cwd(),
+      "features/multi-user/components/GuardianRelationshipsEditor.tsx",
+    ),
+    "utf8",
+  );
+  assert.match(
+    presets,
+    /export function isGuardablePreset[\s\S]*preset === "learner" \|\| preset === "student"/,
+  );
+  assert.match(
+    usersPage,
+    /\{isGuardablePreset\(user\.preset\) && \(\s*<GuardianRelationshipsEditor/,
+  );
+  assert.match(
+    usersPage,
+    /\{user\.preset === "learner" && \(\s*<LearnerProfileEditor/,
+  );
+  assert.match(guardianEditor, /!isGuardablePreset\(user\.preset\) &&/);
+  const guardians = readFileSync(
+    path.resolve(process.cwd(), "../deeptutor/multi_user/guardians.py"),
+    "utf8",
+  );
+  assert.match(
+    guardians,
+    /GUARDABLE_PRESETS = frozenset\(\{"learner", "student"\}\)/,
+  );
 });

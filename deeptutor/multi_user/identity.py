@@ -41,6 +41,11 @@ LEGACY_USERS_FILE = PROJECT_ROOT / "data" / "user" / "auth_users.json"
 LEGACY_SECRET_FILE = PROJECT_ROOT / "data" / "user" / "auth_secret"
 
 
+# Fork: the presets an account may carry. Upstream had three; `student` and
+# `teacher` are the school roles design (docs/planning/school-roles/).
+PRESETS = frozenset({"standard", "learner", "custom", "student", "teacher"})
+
+
 def new_user_id() -> str:
     return f"u_{uuid4().hex}"
 
@@ -73,7 +78,7 @@ def _canonical_record(
     if role not in {"admin", "user"}:
         role = default_role
     preset = str(value.get("preset") or "standard")
-    if preset not in {"standard", "learner", "custom"}:
+    if preset not in PRESETS:
         preset = "standard"
     record = {
         "id": str(value.get("id") or new_user_id()),
@@ -284,7 +289,7 @@ def save_user(
         effective_role: Role = role if account_exists else "admin"
         existing = users.get(username) or {}
         effective_preset = str(existing.get("preset") or preset or "standard")
-        if effective_preset not in {"standard", "learner", "custom"}:
+        if effective_preset not in PRESETS:
             effective_preset = preset
         record = {
             "id": str(existing.get("id") or new_user_id()),
@@ -564,7 +569,7 @@ def account_in_bin(username: str) -> bool:
 
 def set_preset(username: str, preset: AccountPreset) -> bool:
     """Update an account's configuration preset without changing its role."""
-    if preset not in {"standard", "learner", "custom"}:
+    if preset not in PRESETS:
         raise ValueError("preset must be 'standard', 'learner', or 'custom'")
     if not USERS_FILE.exists():
         return False

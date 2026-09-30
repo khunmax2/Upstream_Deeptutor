@@ -91,7 +91,7 @@ def test_admin_can_authorize_and_revoke_guardians(mu_isolated_root, monkeypatch)
         },
     )
     assert non_learner_target.status_code == 400
-    assert "requires a learner account" in non_learner_target.json()["detail"]
+    assert "requires a learner or student account" in non_learner_target.json()["detail"]
 
     learner_as_guardian = client.post(
         "/api/multi-user/guardians",
