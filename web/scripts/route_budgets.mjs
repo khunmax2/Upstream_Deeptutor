@@ -70,7 +70,22 @@ const ROUTE_TARGETS = [
 // at this line. `en` holds 5,137 keys against upstream's 4,008 — 1,129 of them
 // fork-only, and the last dead-key sweep found 270 that no `t()` call reaches.
 // Reclaiming those is worth more than the 10KB added here.
-const ROOT_SHELL_BUDGET_KB = 420;
+//
+// 420 → 435 for the school roles work (2026-09-30), and the line above was
+// followed before this one was touched. What the fork carries was measured
+// again: the September orphan list is **already reclaimed** (180 of its 204
+// keys are gone, 23 came back into use, 1 is left), so there was nothing
+// cheap left there. The overage is this feature's own strings — 162 new
+// English keys, 11.4KB raw, against a shell that measured 430KB — and they
+// are load-bearing: a teacher's roster, the classroom pages and the
+// student's own section are text. 435 is the measurement plus a little.
+//
+// The next sweep is a real opportunity and belongs in its own change, not
+// here: a scan of every file in the repo (2026-09-30) finds ~778 sentence
+// keys in `en` that appear nowhere in any source file — about 59KB. That
+// wants its own PR and its own verification, because a key can be reached
+// through a server message rather than a `t()` literal.
+const ROOT_SHELL_BUDGET_KB = 435;
 const SERVER_TIMEOUT_MS = 20_000;
 
 function assertBuildPresent() {

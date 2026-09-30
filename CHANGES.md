@@ -312,6 +312,26 @@ image is JSON-driven -- its entrypoint unsets `BACKEND_PORT` /
 `FRONTEND_PORT` and reads `data/user/settings/system.json` -- so the lab's
 copy of `data/` carries `backend_port` 9001 and `frontend_port` 4782.
 
+## School roles: the app shell's route budget, raised on measurement — 2026-09-30
+
+CI's frontend gate caught what the local `test:node` run could not: the
+budget check runs after a production build (`npm run check`), and the app
+shell measured **430KB against a 420KB budget**. The cause is this feature's
+own strings — `locales/en/app.json` is the one locale imported eagerly
+(`i18n/init.ts`; zh and th are dynamic) and the branch adds **162 English
+keys, 11.4KB raw**, which is the whole overage.
+
+`scripts/route_budgets.mjs` asks that the fork's own carrying be examined
+before the line is raised, so it was: the September orphan list is already
+reclaimed (180 of 204 keys gone, 23 back in use, 1 left), leaving nothing
+cheap there. Budget 420 → **435**, the measurement plus a little, with the
+reasoning in the file.
+
+Recorded for a separate change, not done here: a repo-wide scan finds ~778
+sentence keys in `en` that appear in no source file, about 59KB. A sweep
+needs its own PR and its own verification -- a key can be reached through a
+server message rather than a `t()` literal.
+
 ## School roles: the student policy survives an unreadable account store — 2026-09-30
 
 Pre-merge hardening. `student_policy.is_student` reads the account store on
