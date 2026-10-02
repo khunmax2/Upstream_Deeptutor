@@ -1,6 +1,15 @@
 # Provider-aware LLM call adaptation (env-only, UI-ready)
 
-Status: in-progress
+Status: **parked since 2026-07-13** — the two parts that were needed shipped;
+the rest of the design was never started and nothing has moved in ~3 months.
+What is live: `reasoning_params.py` drops reasoning params for hosts that
+reject them (part 1), and `DEEPTUTOR_AGENT_BINDING` /
+`DEEPTUTOR_VOICE_CLASSIFIER_BINDING` let the endpoint pick the provider spec
+(part 2 — design option 2a). What is not: folding `reasoning_effort` into the
+capability system behind `_sanitize_call_kwargs` (item 1), teaching provider
+resolution to recognise OpenAI-compat gateways by `base_url` (option 2b), and
+the UI the title promises. None of it blocks anything today — the config-only
+path works. (Checked 2026-10-02.)
 Owner: Attapon · Drafted: 2026-07-12
 
 ## Progress
