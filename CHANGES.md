@@ -254,6 +254,42 @@ upstream.
 
 ---
 
+## A machine can be set up from this repo alone, and a fresh clone could not run pytest — 2026-10-02
+
+Added: `deploy/SETUP_NEW_MACHINE.md`. Changed: `CLAUDE.md`, `docs/README.md`.
+
+Upstream's `README.md`, `DEPLOY.md` and `CONTAINERIZATION.md` describe plain
+DeepTutor. They know nothing about Course Studio, the gatekeeper, the
+`/deepwitya` base path or this fork's Python 3.13 rule, so there was no answer
+to "what do I do on a new machine". The new guide is that answer, and every
+number in it was measured rather than recalled.
+
+**One clone is enough.** Course Studio runs from a digest-pinned image, and
+that image is **publicly pullable**: an anonymous ghcr token and the manifest
+for the pinned digest both answer 200, so a new machine needs no GitHub login.
+The gatekeeper is `node:22-alpine` with `deploy/openmaic-gatekeeper/` mounted
+read-only — nothing is built from the studio source. The `OpenMAIC` checkout
+is needed only to *change* the studio, and the guide says when and where to
+put it (`../OpenMAIC`, which is what the contract checker defaults to).
+
+**A fresh clone could not run `pytest`, and nothing said so.** `data/` is
+gitignored, and `pytest` — unlike `deeptutor start` and the container
+entrypoint — never calls `init_user_directories()`, so every run died on
+`FileNotFoundError: Configuration file not found: main.yaml`. CI had been
+quietly writing its own `main.yaml` for this reason. Reproduced against an
+empty `DEEPTUTOR_HOME`, fixed with one initialiser call, and confirmed green
+afterwards; `CLAUDE.md`'s pytest block now leads with it.
+
+Two things worth knowing that the investigation turned up. A first run creates
+**17 files** on its own — `main.yaml`, `interface.json`, `auth.json`,
+`system.json`, `model_catalog.json`, `agents.yaml`, `integrations.json`, the
+six RAG configs and three personas — so losing `data/` costs only what users
+made: accounts, grants, the five API keys, chats, pet, memory, knowledge
+bases. And `init_user_directories(project_root)` **ignores its argument**
+("kept for API compatibility"); it reads `DEEPTUTOR_HOME` and nothing else, so
+passing a path and assuming isolation writes to the real `data/`. That is
+written down in the guide beside the test instructions.
+
 ## The OpenMAIC design handoff said "not started" while the thing was live — 2026-10-02
 
 Changed: `docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md`.
