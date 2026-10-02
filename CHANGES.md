@@ -254,6 +254,49 @@ upstream.
 
 ---
 
+## 756 locale keys upstream had already deleted, and the app shell is 57 KB lighter — 2026-10-02
+
+Changed: `web/locales/{en,th,zh}/app.json`.
+
+`en` carried 5,364 keys and 944 of them — 17% — were mentioned nowhere in
+31.6 MB of source. Tracing them against upstream's own releases explains why,
+and the explanation matters more than the size.
+
+**Upstream deleted 927 keys in v1.6.5** (4,703 to 3,995 — the "Mimic Exam"
+question-generation surface and its neighbours). The fork synced v1.6.6 and
+took the code but not the deletions. Checked at the real merge base, upstream
+commit `7a96bba1`: its `en/app.json` has 4,008 keys and **none** of the 751
+is among them, so git has been treating every one as *our* addition. That is
+why they survived three syncs and why nobody saw them: the parity check
+compares our three locales with each other, and `i18n_delta.py` adds missing
+Thai keys rather than pruning dead English ones. Left alone they would ride
+along forever.
+
+So 756 keys are removed from all three locales: those upstream dropped, plus
+seven the fork itself orphaned. Three guards decided the list — a round-trip
+that reproduces each file byte for byte before anything is written, a
+recomputed usage scan rather than a saved list, and a check against **every**
+upstream release from v1.6.6 to v1.6.12, which is what spared the five
+upstream has since brought back (`Rename model`, `Explain this passage`,
+`Import conversations`, `Ready · {{count}} doc`/`docs`).
+
+**Kept on purpose: the 188 that upstream still ships.** Deleting those would
+be undone by the next sync and would show as a diff in every one after it.
+
+`en` 370 to 311 KB, `th` 619 to 519 KB, `zh` 363 to 305 KB — 217 KB in all,
+and because `en` is the only locale statically imported, **the root app shell
+falls from 430 KB to 373 KB** against a 435 KB budget that had just been
+raised to fit the school strings.
+
+Verified beyond the gate. The diff is 756 deletions and zero insertions per
+file. The i18n audit reports the same 16 unresolved `t()` literals as `main`,
+none of them from this change. And the built bundle was scanned for all 756:
+nine strings appear, all benign — four come from `node_modules`, and five are
+no longer keys but the *values* of dotted keys still in use
+(`guidedLearning.loadingRecords`, `readiness.section.catalog`,
+`Space tooltip`), which is the clearest sign these were redundant duplicates
+of text the app reaches another way.
+
 ## A sweep for dead weight found almost none, and one PRD that had quietly stalled — 2026-10-02
 
 Changed: `docs/issues/llm-provider-adaptation/PRD.md`.
