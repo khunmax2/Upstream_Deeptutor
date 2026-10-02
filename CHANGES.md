@@ -254,6 +254,41 @@ upstream.
 
 ---
 
+## A sweep for dead weight found almost none, and one PRD that had quietly stalled — 2026-10-02
+
+Changed: `docs/issues/llm-provider-adaptation/PRD.md`.
+
+Third pass over the repository looking for what could be deleted. The useful
+result is mostly negative, and worth recording so the next sweep does not
+repeat it.
+
+**Nothing is rotting.** No build output is tracked (`web/dist/`, `.next/`,
+`__pycache__` are all absent from `git ls-files`); the largest tracked files
+are upstream's figures and the generated API contract, not junk; and the
+merged branches were cleared earlier the same day.
+
+**Three categories must not be pruned, for three different reasons.**
+`docs/reports/` and `CHANGES.md` are the Apache-2.0 §4(b) record. `docs/plans/`,
+ADRs `0001`–`0004`, `Communication.md` and the root release docs are
+**upstream's** — authorship checked file by file — so deleting them buys
+tidiness and pays for it with a conflict on every sync. And the two
+`th_i18n_delta_*.json` files under `docs/planning/`, which look like spent
+one-shot artefacts, are cited as evidence by `REPORT_sync_v1.4.15.md` and
+`REPORT_sync_v1.5.8.md`; the sync skill regenerates deltas per sync, but these
+two are an appendix to the record.
+
+**The fork's own PRDs were already honest.** Four of five carry an accurate
+dated "done" line written when the work landed.
+
+The fifth had stalled without saying so. `llm-provider-adaptation` still read
+`Status: in-progress` from 2026-07-12. Both documented parts shipped — the
+reasoning-param drop and the endpoint-based binding override — and nothing has
+moved since 2026-07-13. It now says parked, names what is live
+(`reasoning_params.py`, `DEEPTUTOR_AGENT_BINDING`,
+`DEEPTUTOR_VOICE_CLASSIFIER_BINDING`), names what was never built (the
+capability-system route for `reasoning_effort`, gateway recognition by
+`base_url`, the UI in the title), and says it blocks nothing.
+
 ## A machine can be set up from this repo alone, and a fresh clone could not run pytest — 2026-10-02
 
 Added: `deploy/SETUP_NEW_MACHINE.md`. Changed: `CLAUDE.md`, `docs/README.md`.
