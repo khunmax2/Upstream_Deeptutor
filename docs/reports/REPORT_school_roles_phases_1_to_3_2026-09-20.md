@@ -108,3 +108,55 @@ true on the host too, once deployed).
 - Parents (a guardian who is not a teacher), assignments from the dashboard,
   export / print, Studio for students, lifelong export: parent design §7 and
   dashboard design §5, all deferred on purpose.
+
+## Merged and live — 2026-10-02
+
+The branch went up as **PR #122** and merged as `31c4599a1` after two fixes
+CI asked for: the app-shell route budget raised to 435 KB for the 162 new
+`en` keys (`8adebac79`), and the student policy made to let an unreadable
+account store through unchecked rather than refuse on it (`6908d1a69`). A
+claim made during review and withdrawn: the branch does **not** introduce a
+500 on an unreadable `users.json` — upstream's `require_learning_surface`
+already does that on `main`, and a test written to pin the fork's behaviour
+is what showed it.
+
+**Local UAT of the merged image, before the host round.** The question was
+not whether the school work works — the lab had answered that — but whether
+the four accounts that predate it still behave. They do:
+
+* 24 API calls across `admin2`, `standard` (admins), `student` (preset
+  learner) and `custom`: no 5xx anywhere. The learner is refused every new
+  school route by its learning policy; `custom` reads its own evidence and
+  gets an empty classroom list, correctly filtered to classrooms it teaches.
+* The learner's dashboard has no "temporarily unavailable" banner and no
+  "My learning"; `custom` has the section and its eight-week trend; both new
+  admin pages and the third dashboard tab render in Thai.
+* A learner typing `/dashboard/students` is sent to `/dashboard`, and
+  `/admin/classrooms` to `/chat`.
+* 15 page loads over three accounts — chat, settings, mastery, memory,
+  questions, notebooks, anima, users — no crash, no 5xx.
+
+Two non-blockers stand: the learner still draws two console-only 403s
+(`mastery-paths/topics/index`, `settings`), and `/dashboard/students` tells
+an admin who is in no classroom to "ask an admin to add you".
+
+*Technique worth keeping:* none of this needed anyone's password. A JWT
+minted inside the container with `create_token` and injected as the HttpOnly
+`dt_token` cookie through Playwright's `addCookies` opens any account's own
+view, which page JS cannot do and a login form would have required
+credentials for.
+
+**Host round `deploy-2026-10-02`** (= `d7a65c395`) went up the same day: a
+`deeptutor2` rebuild only, no studio, gatekeeper, postgres, nginx or compose
+change. Image `03ce974ec252` → `28599e6c9353`, 8/8 healthy, `RestartCount=0`,
+~6 minutes of build and ~1 of downtime. The check that proves the new code is
+live is the API, not a page: `/api/multi-user/school/classrooms` answers
+**401** while an invented sibling route answers **404**, so the router is
+mounted. A page cannot prove it — the middleware answers 307 for every path
+under `/admin` and `/dashboard` whether or not it exists.
+
+There are no school accounts on the host yet, so what changed for its users
+is only the five dashboard leftovers: `เส้นทางฝึกฝน`, the shorter quiz hint,
+the learner banner gone, "My learning" for accounts that are not
+policy-bound, and the pet's three-day pacing — under which a pet already
+sick stays sick until a correct answer.
