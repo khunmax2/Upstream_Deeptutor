@@ -254,6 +254,32 @@ upstream.
 
 ---
 
+## The OpenMAIC design handoff said "not started" while the thing was live — 2026-10-02
+
+Changed: `docs/planning/openmaic-integration/OPENMAIC_INTEGRATION_V2_handoff.md`.
+
+Second pass of the documentation audit, for the staleness a link check cannot
+see: a doc whose links all resolve but whose claims are false. Grepping the
+planning and issue docs for "not started", "not yet" and their Thai
+equivalents turned up one, and it was the worst possible one to be wrong.
+
+Line 3 of the Course Studio design handoff read *"Status: design agreed in
+outline, not started. No code exists for it yet."* It was true when written on
+2026-09-10. Course Studio went live on `/deepwitya/studio` two days later and
+has had a dozen rounds since. The original line is kept as a quotation,
+because the document is a record of that design session, under a dated status
+that says so and points at `CHANGES.md`, `deploy/GO-LIVE.md` and the go-live
+report for what actually runs.
+
+Its §5.1 also located the OpenMAIC checkout at
+`/Users/attapon/Project/antigravity/OpenMAIC` on a machine that is not this
+one, cloned from `THU-MAIC/OpenMAIC` and "not yet a fork". Today the working
+copy is `D:/Vscode/OpenMAIC`, `origin` is `khunmax2/OpenMAIC`, and the fork
+work goes to the `new` remote, `khunmax2/Ups_openMAIC`, whose `main` is at
+`e75ef948`. Noted in place rather than rewritten, for the same reason.
+
+The five ADRs were checked in the same pass: all `Accepted`, none superseded.
+
 ## The docs were audited against the tree, and pointed at eight things that are not there — 2026-10-02
 
 Changed: `CLAUDE.md`, `AGENTS.md`, `docs/README.md`, `deploy/REDEPLOY.md`,
