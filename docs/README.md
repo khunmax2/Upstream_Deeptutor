@@ -57,6 +57,16 @@ user-facing docs (`README.md`, `DEPLOY.md`, `CONTAINERIZATION.md`,
 - **`branding/`** — the DeepWitya marks and the upstream originals they
   replace.
 
+## Setting up a machine
+
+`deploy/SETUP_NEW_MACHINE.md` is the fork's own install guide — what to clone
+(one repo; Course Studio is a public image), the two values
+`deploy/production.env` needs, what a first run creates for itself, and the one
+step a fresh clone must take before `pytest` will run. Upstream's `README.md`,
+`DEPLOY.md` and `CONTAINERIZATION.md` at the repo root do not know about Course
+Studio, the gatekeeper, the `/deepwitya` base path or this fork's Python 3.13
+rule.
+
 ## The one skill
 
 `.claude/skills/upstream-sync/` is the upstream-sync procedure — stages in

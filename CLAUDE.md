@@ -63,6 +63,9 @@ hybrid retrieval degrades to vector-only (`llama-index-retrievers-bm25` carries
 the same marker — PyStemmer 2.x has no 3.14 wheel). Both failures are silent at
 install time. See the 2026-09-05 entry under "Documentation" in `CHANGES.md`.
 
+Setting this repo up on a machine for the first time — including Course Studio,
+which needs no second clone — is `deploy/SETUP_NEW_MACHINE.md`.
+
 ```bash
 # Install for development (source, with dev tooling)
 python3.13 -m venv .venv       # or: uv venv --python 3.13 .venv
@@ -79,7 +82,12 @@ pytest -q tests deeptutor/learning/tests     # full suite, as CI runs it
 pytest tests/path/to/test_x.py               # a single file
 pytest tests/path/to/test_x.py::test_name    # a single test
 # Note: --strict-markers is on; async tests need the `asyncio` marker (pytest-asyncio).
-# CI expects data/user/settings/main.yaml to exist (system.language, logging.level).
+# A FRESH CLONE CANNOT RUN PYTEST YET. `data/` is gitignored, and pytest -- unlike
+# `deeptutor start` and the container entrypoint -- never calls the initialiser, so
+# every run dies on `FileNotFoundError: main.yaml`. Create the settings once:
+#   python -c "from deeptutor.services.setup import init_user_directories; init_user_directories()"
+# CI does the same thing by hand (main.yaml + tests/fixtures/ci_model_catalog.json).
+# Full first-machine walkthrough: deploy/SETUP_NEW_MACHINE.md
 
 # On Windows, a stale ACL on %TEMP%\pytest-of-<user> makes `tmp_path` unusable and
 # every test that touches it ERRORs at setup — 2,600+ of them, which buries the
