@@ -254,6 +254,24 @@ upstream.
 
 ---
 
+## Documentation: school roles merged (#122) and live in `deploy-2026-10-02` — 2026-10-02
+
+Changed: `docs/reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md`.
+
+The report gains its closing section. Phases 1-3 and steps A/B merged as
+`31c4599a1`; the local UAT of the merged image found the four accounts that
+predate the work unchanged (24 API calls, 15 page loads, no 5xx, no crash),
+and the host round `deploy-2026-10-02` rebuilt `deeptutor2` alone -- image
+`03ce974ec252` to `28599e6c9353`, 8/8 healthy, `RestartCount=0`.
+
+Two things the round taught, both in the report. A page cannot prove new code
+is live here: the middleware answers 307 for every path under `/admin` and
+`/dashboard` whether or not it exists, so the proof is the API -- a real
+school route answers 401 while an invented sibling answers 404. And UAT of
+any account needs nobody's password: a JWT minted in the container with
+`create_token`, injected as the HttpOnly `dt_token` cookie through
+Playwright's `addCookies`, opens that account's own view.
+
 ## Local UAT: where the studio's two secrets live, and what nginx's "host not found" really means — 2026-10-02
 
 Changed: `deploy/docker-compose.uat.yml` (header comment only).
