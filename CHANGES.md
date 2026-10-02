@@ -254,6 +254,37 @@ upstream.
 
 ---
 
+## Three diagnostic probes kept, and the 2026-09-13 handoff folder dropped — 2026-10-02
+
+Added: `deploy/probes/` (`ws_turn_probe_in_container.py`,
+`ws_turn_probe_via_proxy.py`, `studio_f1_probe.py`, `README.md`).
+
+A `docs/planning/handoff-2026-09-13/` folder had sat in the working tree since
+2026-09-12, never committed and referenced by nothing. Read before deleting,
+it turned out to be two different things. The document is spent: its open
+tasks are all closed (#83 merged, the About page's upstream block hidden,
+`deploy-2026-09-13` shipped, v1 retired), and its gotchas and doc map are now
+in `CLAUDE.md`, `deploy/GO-LIVE.md` and `deploy/REDEPLOY.md` -- every one
+checked, with a single exception noted below.
+
+Its `tools/` were not spent. Three probes live there that exist nowhere else
+and do not overlap the committed ones: a turn replayed over the WebSocket from
+inside the container, the same turn through nginx so the payload can be
+compared with the browser's, and an end-to-end check of the studio's
+private-unless-published rule -- the audit's own method for F1. They move to
+`deploy/probes/` with a README that says what each one answers, and carries
+the three facts worth keeping with them: the reading-assistant hang that was
+guessed wrong twice before a WS frame showed `ReadingViewport` is
+`extra="forbid"` and the UI was sending `time_seconds`; that
+`docker exec … python3 - <<PY` prints nothing without `-i` (the one gotcha
+recorded nowhere else); and py-spy from a sidecar for a wedged backend.
+
+The folder's five open backlog items -- a per-request gatekeeper log, a
+"connection lost" state for the reading assistant, `deeptutor.reading` INFO
+reaching the container's stdout, published-course asset bytes still bound to
+the owner principal, and a caption-track switcher -- were carried over before
+the folder was deleted. None is started; none is lost.
+
 ## Documentation: school roles merged (#122) and live in `deploy-2026-10-02` — 2026-10-02
 
 Changed: `docs/reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md`.
