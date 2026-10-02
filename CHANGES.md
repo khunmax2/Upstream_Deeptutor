@@ -254,6 +254,40 @@ upstream.
 
 ---
 
+## Local UAT: where the studio's two secrets live, and what nginx's "host not found" really means — 2026-10-02
+
+Changed: `deploy/docker-compose.uat.yml` (header comment only).
+
+Bringing the UAT stack up on the post-merge image showed the dev machine had
+no `deploy/production.env`. `OPENMAIC_IMAGE` and `OPENMAIC_POSTGRES_PASSWORD`
+existed **only inside the running containers**, and compose refuses to
+interpolate without them — so the stack was one lost container away from a
+studio postgres volume nobody could open again, since that volume only accepts
+the password it was created with. Both values were recovered from
+`docker inspect` and written to the gitignored file; the header now says to
+pass it with `--env-file` and records the two inspect commands that recover it.
+
+The second half corrects a guess. `deeptutor-uat-nginx` had died on
+2026-09-28 with `host not found in upstream "gatekeeper"` after a Docker
+restart, and an uncommitted swap of its two `networks:` entries was being
+carried locally as the fix. It is not one. With the swap applied the failure
+reproduces exactly — stop the gatekeeper, restart nginx, same message — because
+`proxy_pass` names a host literally and nginx resolves it once at config load;
+the order of the attachment list has nothing to do with it. The swap is
+discarded rather than merged.
+
+What the message actually means is that nginx cannot see the other containers,
+and the two cases differ:
+
+* **The name comes back late.** `restart: unless-stopped` retries and nginx
+  recovers on its own — measured at ~20s in the reproduction. Nothing to fix.
+* **The container lost its network attachment**, which is what a Docker
+  Desktop or WSL restart can do. Then the name never resolves and the retry
+  loop spins forever. Only compose re-attaches it; `docker start` does not.
+
+So the recipe after a restart is the same `compose up -d` that starts the
+stack, and the header says so beside the symptom.
+
 ## An account store that cannot be read is an outage, not an empty store — 2026-09-19
 
 Four accounts were lost locally on 2026-09-19. A `docker exec` run as root

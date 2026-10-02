@@ -15,6 +15,29 @@
 #   OPENMAIC_IMAGE               built by deploy/build-studio.sh
 #   OPENMAIC_POSTGRES_PASSWORD
 #
+# Keep those two in `deploy/production.env` (gitignored) and pass it, rather
+# than exporting them per shell:
+#
+#   docker compose --env-file deploy/production.env -f docker-compose.yml …
+#
+# Without the file compose refuses to interpolate and nothing starts. A dev
+# machine that never wrote it still works while the containers are up -- the
+# values are in their environment -- but losing them strands the studio's
+# postgres volume, which only accepts the password it was created with.
+# Recover both from the running stack before that happens:
+#
+#   docker inspect deeptutor-openmaic --format '{{.Config.Image}}'
+#   docker inspect deeptutor-openmaic-postgres \
+#     --format '{{range .Config.Env}}{{println .}}{{end}}' | grep POSTGRES_PASSWORD
+#
+# After a Docker Desktop or WSL restart, bring the stack up with the same
+# command rather than starting containers one by one. Compose re-attaches the
+# networks; a bare `docker start` does not, and nginx then dies on
+# `host not found in upstream "gatekeeper"` because its proxy_pass names are
+# resolved once at config load. That message means nginx cannot see the other
+# containers, not that the gatekeeper is unwell -- when the name merely comes
+# back late, `restart: unless-stopped` recovers it on its own within ~20s.
+#
 # DeepWitya must be built with NEXT_PUBLIC_BASE_PATH=/deepwitya. That is a build
 # argument compiled into its bundle, so it is set below and a rebuild is needed
 # if it changes -- the same rule the studio image follows.
