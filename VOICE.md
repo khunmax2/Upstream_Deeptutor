@@ -68,7 +68,7 @@ fast-path/classifier/kb_router/loop ครบ) ส่วน **กล่องแ
 |---|---|
 | `loop.py` | `InPageAgentLoop` — ตัวขับ observe→think→act; ก่อนอ้าง `done.success` ทำ **hard grounding** (issue 01): เทียบ landed URL vs target ที่ task ระบุ, ไม่ตรง→บังคับ `success=false` (`stopped_reason="grounding_miss"`) |
 | `route_grounding.py` | **(ใหม่, issue 01)** แหล่ง truth อิสระ: `resolve_target_route(task)` (deterministic, exact/substring + length tie-break, ambiguous/non-nav→`None`), `landed_path`, `path_satisfies` (sibling-safe) |
-| `route_manifest.json` | **(ใหม่)** route→aliases ที่ curate (seed จาก `web/lib/settings-nav.ts`+UI_PAGES) — แยกจาก `ui_graph.json` (คนละบทบาท: อันนี้ grounding, ui_graph คือ open_path whitelist); parity-tested ที่ `web/tests/voice-route-manifest-parity.test.ts` |
+| `route_manifest.json` | **(ใหม่)** route→aliases ที่ curate (seed จาก `web/features/settings/navigation/settings-nav.ts`+UI_PAGES) — แยกจาก `ui_graph.json` (คนละบทบาท: อันนี้ grounding, ui_graph คือ open_path whitelist); parity-tested ที่ `web/tests/voice-route-manifest-parity.test.ts` |
 | `llm.py` | `think()` เรียก LLM + log token usage; env helpers (`hard_grounding_enabled`, step_delay/max_steps override, binding) |
 | `prompt.py` | system prompt ของ loop |
 | `intent.py` | free short-circuit: คำสั่งนี้ควรเข้า loop ไหม (Phase D2) |

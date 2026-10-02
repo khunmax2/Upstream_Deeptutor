@@ -65,7 +65,8 @@ export function wsUrl(path: string): string { return path; }
 → ให้ prepend `BASE_PATH` ตรงนี้ (import จาก `basePath.ts`) จุดเดียวจบ
 
 ### 2.3 `web/lib/basePath.ts` — ไฟล์ใหม่ ยกไปทั้งดุ้น
-upstream ไม่เคยแตะ → copy จาก `deploy/patches/verbatim/basePath.ts`
+upstream ไม่เคยแตะ → copy จาก `web/lib/basePath.ts` ของ checkout นี้
+(เดิมบรรทัดนี้ชี้ `deploy/patches/verbatim/basePath.ts` ซึ่งไม่เคยถูก commit)
 (เช็ค import alias ให้ตรง convention `@/shared/...` ของโค้ดใหม่)
 
 ### 2.4 `asset()` wrappers — basePath ไม่ prefix ให้ raw img / next-image / favicon
@@ -137,8 +138,9 @@ ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
   `integrations.json` (`pocketbase_port`) ผ่าน wrapper ที่เขียน `docker.env`
 
 ### 2.6 compose override + nginx — ยกไปทั้งดุ้น
-`deploy/patches/verbatim/docker-compose.localhost.yml` และ
-`nginx-deepwitya.locations.conf` (แก้ port/path ตามตาราง §1)
+`deploy/docker-compose.localhost.yml` และ `deploy/nginx-deepwitya2.locations.conf`
+(แก้ port/path ตามตาราง §1) — เดิมบรรทัดนี้ชี้ `deploy/patches/verbatim/` ซึ่งไม่เคยถูก
+commit และชื่อ `nginx-deepwitya.locations.conf` ที่ไม่มี `2`
 
 ---
 
@@ -159,7 +161,7 @@ upstream เพิ่ม `deeptutor-redis` (`redis:7.4-alpine`, volume `./data/r
 จะเป็น `memory` (ไม่ได้ใช้ redis จริง) ก็ตาม → ปล่อยรันไปเลย ง่ายสุด
 
 ### 4.2 `web/proxy.ts` เปลี่ยนโครง
-- ใช้ `resolveBackendApiBase()` จาก `web/lib/backend-runtime-config` แทน env ตรง ๆ
+- ใช้ `resolveBackendApiBase()` จาก `web/lib/backend-runtime-config.ts` แทน env ตรง ๆ
 - default เปลี่ยนเป็น `127.0.0.1` แทน `localhost` (dual-stack fix — ตรงกับที่เราต้องการอยู่แล้ว)
 - route ใหม่ `isCodexCallbackPath` / `isRetiredPagePath` → ตรวจว่าทำงานถูกใต้ basePath
 
@@ -253,8 +255,9 @@ docker restart <c>
   เช็คสถานะ: `curl .../api/auth/is_first_user`
 - **อย่าเปิด PocketBase ถ้าจะใช้ multi-user** — โค้ดระบุว่า PocketBase deployment
   เป็น single-user และจะปิด self-registration (`pocketbase_url` ต้องว่าง = SQLite)
-- หน้า `/` (basePath root พอดี) ตอบ 200 ไม่เด้ง login — ปกติ ไม่ใช่ช่องโหว่
-  เพราะไม่มี `web/app/page.tsx` มันคือ shell เปล่า ทุก route จริงเด้ง 307 ไป
+- หน้า `/` (basePath root พอดี): **ข้อนี้เปลี่ยนไปแล้ว** ตอนเขียนมันตอบ 200 เป็น shell เปล่า
+  เพราะยังไม่มี root page วันนี้ `web/app/(workspace)/page.tsx` รับ `/` แล้ว และวัดเมื่อ
+  2026-10-02 ได้ 308 → ล็อกอินแล้วไป `/chat` ส่วนที่ยังจริงคือ route อื่นเด้ง 307 ไป
   `/login?next=…` และ API ตอบ 401
 
 ## 7. เกณฑ์ตัดสินว่าเขียว (ก่อนสลับ nginx)

@@ -254,6 +254,59 @@ upstream.
 
 ---
 
+## The docs were audited against the tree, and pointed at eight things that are not there — 2026-10-02
+
+Changed: `CLAUDE.md`, `AGENTS.md`, `docs/README.md`, `deploy/REDEPLOY.md`,
+`docs/maic-fork-export/README.md`, `docs/issues/anima-habitat/README.md`,
+`docs/planning/admin-roles/PHASE2_hard_delete.md`, `VOICE.md`.
+
+Every markdown link and inline path in the fork's 136 docs was resolved
+against `git ls-files`. Most mismatches were fine — `CHANGES.md` and
+`docs/reports/` name files as they stood at the time, which is what a record
+is for, and several docs correctly name files in the *studio* repository or on
+`archive/main-2026-09-09`. What was left was eight live pointers to things no
+branch has ever held, three of them in the two files every agent reads first.
+
+**`CLAUDE.md`.** Its "Agent skills" section sent readers to
+`docs/agents/issue-tracker.md`, `triage-labels.md` and `domain.md`, and said
+issues live in GitHub Issues. None of those files is in any commit and the
+issue list is empty; the PRDs are in `docs/issues/<topic>/PRD.md`. §2 was worse:
+it made the whole upstream-sync policy depend on three documents under
+`docs/planning/upstream-sync/`, a folder that has never been committed — the
+procedure is the `.claude/skills/upstream-sync/` skill, which was sitting in
+the repo unmentioned. §1.3 named a report template in a `docs/planning/thai-i18n/`
+folder that is equally absent. And the architecture paragraph put
+`emit_capability_result()` in `deeptutor/capabilities/_shared.py`; it lives in
+`deeptutor/agents/_shared/capability_result.py`. `AGENTS.md` carried the same
+wrong path plus `deeptutor/app.py` for the SDK facade, which is
+`deeptutor/app/facade.py`.
+
+**The cause is one the repo already warns about.** `/docs/` was gitignored
+upstream, where it is generated. While that rule still applied here, four
+`planning/` subfolders — `upstream-sync/`, `thai-i18n/`, `line-integration/`,
+`ideation/` — existed only on disk, and the 2026-09-09 history rewrite took
+them. That is the same trap `CLAUDE.md` records for the old local-only
+`CHANGELOG.md`, and `docs/README.md` had gone on describing all four as though
+they were there. It is rewritten against what is committed, and says plainly
+what was lost and that the outcomes survive in `reports/`.
+
+Three smaller corrections. `deploy/REDEPLOY.md` told a redeploy to copy two
+files out of `deploy/patches/verbatim/`, never committed either — the sources
+are the repo's own `web/lib/basePath.ts` and
+`deploy/docker-compose.localhost.yml` — and claimed `/` answers 200 as an
+empty shell, which stopped being true once `web/app/(workspace)/page.tsx`
+took that route: measured today it is a 308. `docs/maic-fork-export/README.md`
+said five files left `main` in the rewrite; two of them,
+`deploy/openmaic-gatekeeper/` and `deploy/docker-compose.openmaic.yml`, came
+back with the second integration. `PHASE2_hard_delete.md` planned a
+`test_account_purge.py` that was built into `test_account_bin.py` instead.
+
+Checked and deliberately left alone: `CHANGES.md` and `docs/reports/` (the
+§4(b) record, historical by design), `DEPLOY.md`'s `deploy/Caddyfile` (a file
+the operator creates from `Caddyfile.example`, and the doc says so), and
+`GO-LIVE.md`'s `deploy/uat_scene_content.py` (an example of a stray untracked
+file seen once, not a file that should exist).
+
 ## Three diagnostic probes kept, and the 2026-09-13 handoff folder dropped — 2026-10-02
 
 Added: `deploy/probes/` (`ws_turn_probe_in_container.py`,

@@ -211,6 +211,13 @@ git show archive/main-2026-09-09:deeptutor/services/config/openmaic_bridge.py
 git log archive/main-2026-09-09 -- deploy/openmaic-gatekeeper/
 ```
 
+**Two of the five have since come back.** The second integration, built from
+2026-09-10, put `deploy/openmaic-gatekeeper/` and
+`deploy/docker-compose.openmaic.yml` on `main` again — different code for the
+same jobs, so read the archive copies as history, not as what runs. Still only
+on `archive/main-2026-09-09`: `openmaic_bridge.py`, `OPENMAIC_RUNBOOK.md` and
+`OPENMAIC_EMBED.md`. (Checked 2026-10-02.)
+
 The seven tools under `deploy/openmaic-patches/` were carried onto the new
 `main` instead of being copied here, for the reason given above: they are
 instruments a rebuild will *run*, not notes it will read, and a second copy

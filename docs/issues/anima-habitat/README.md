@@ -233,8 +233,12 @@ on the `/anima` page (v6 option B).
 
 ## Reference
 
-- Handoff: `docs/planning/ideation/anima-handoff.md` — the original 5-day demo spec
-  (visual/UX intent; **not** the state-logic authority — this doc is).
+- Handoff: the original 5-day demo spec (visual/UX intent; **not** the
+  state-logic authority — this doc is). It lived at
+  `docs/planning/ideation/anima-handoff.md`, which was never committed and is
+  in no branch — written while `/docs/` was still gitignored and lost in the
+  2026-09-09 history rewrite. This document is now the only authority.
+  (Checked 2026-10-02.)
 - `preview.html` — the current standalone preview, the one the user approves before
   any production port (see `HANDOFF.md`).
 - `prototype-2026-07-14.html` — the earlier standalone prototype that `preview.html`
