@@ -1,6 +1,15 @@
 # OpenMAIC integration, second attempt — handoff
 
-**Status:** design agreed in outline, not started. No code exists for it yet.
+**Status (2026-10-02): built and live — this is a record of the design
+session, not a plan to execute.** Course Studio has been serving
+`/deepwitya/studio` on the host since 2026-09-12 and has been through many
+rounds since; the line below is how it read on the day it was written and is
+kept for that reason. For what actually runs, read `CHANGES.md` from
+"Course Studio" onward, `deploy/GO-LIVE.md` and
+`docs/reports/REPORT_golive_course_studio_2026-09-12.md`.
+
+> **Status:** design agreed in outline, not started. No code exists for it yet.
+
 **Written:** 2026-09-10, at the end of a design session with Attapon.
 **Read before this:** `docs/maic-fork-export/README.md` — what the first attempt
 did and what bit it. This document does not repeat it.
@@ -463,7 +472,10 @@ and the decision is recorded as **ADR-0005** (`docs/adr/0005-course-studio-sibli
 
 **A working checkout of upstream OpenMAIC is on this machine** at
 `/Users/attapon/Project/antigravity/OpenMAIC`, `origin` pointing at
-`THU-MAIC/OpenMAIC` — a plain clone, **not yet a fork**. Fast-forwarded on
+`THU-MAIC/OpenMAIC` — a plain clone, **not yet a fork**. *(Both facts have
+moved on: as of 2026-10-02 the working copy is `D:/Vscode/OpenMAIC`, `origin`
+is `khunmax2/OpenMAIC` and the fork work is pushed to the `new` remote,
+`khunmax2/Ups_openMAIC`, whose `main` is at `e75ef948`.)* Fast-forwarded on
 2026-09-10 to `29735f10` (`fix(ssrf): keep cloud metadata endpoints blocked
 under ALLOW_LOCAL_NETWORKS`). One local edit is stashed in the working tree:
 `.gitignore` gains pnpm store paths. Note the pin file still names `d4ef5faa`
