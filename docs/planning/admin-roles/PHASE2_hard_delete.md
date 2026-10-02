@@ -242,8 +242,9 @@ primary-only, typed, preceded by a backup, and reachable only from the bin.
 
 - DeepWitya: `tests/multi_user/test_account_bin.py` (delete locks the account
   out and blocks the name, restore brings it back unchanged, purge refuses an
-  account that is not in the bin), `tests/multi_user/test_account_purge.py`
-  (every location removed, refusals, confirm, audit summary, orphans),
+  account that is not in the bin — **as built, this one file also carries the
+  purge cases** this plan had put in a second `test_account_purge.py`: every
+  location removed, refusals, confirm, audit summary, orphans),
   `tests/api` for `/status.is_primary`, gatekeeper test for the header,
   contract-check test.
 - Studio: `tests/server/accounts.test.ts` (403 without the primary header,

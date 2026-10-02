@@ -22,24 +22,33 @@ Capabilities** (multi-stage pipelines that own a turn — `chat`, `mastery_path`
 `deep_solve`, `deep_research`, `visualize`, `math_animator`, …;
 `deeptutor/capabilities/`, `runtime/registry/capability_registry.py`). Every
 capability streams events on a shared `StreamBus` and converges on
-`emit_capability_result()` in `deeptutor/capabilities/_shared.py`. Runtime
+`emit_capability_result()` in `deeptutor/agents/_shared/capability_result.py`.
+Runtime
 settings live in `data/user/settings/*.json` (project-root `.env` is intentionally
 ignored). Frontend is a Next.js app under `web/`; Python packages are `deeptutor`
 (full), `deeptutor_cli`, `deeptutor_web`.
 
-## Agent skills
+## Where the thinking is written down
 
-### Issue tracker
+This section said, until 2026-10-02, that issues live in GitHub Issues and
+pointed at three files under `docs/agents/`. No such folder has ever been
+committed, and the repo's GitHub Issues list is empty. What is actually here:
 
-Issues and PRDs are tracked in GitHub Issues for this repo. See `docs/agents/issue-tracker.md`.
+- **`docs/issues/<topic>/PRD.md`** — the product requirement docs
+  (`inpage-agent-grounding`, `kb-content-routing`, `llm-provider-adaptation`,
+  `voice-intent-classifier`, `anima-habitat`). Some carry a numbered
+  `issues/` folder beside them; that is the issue tracker.
+- **`docs/adr/`** — the architecture decisions, numbered `0001`–`0005`, with
+  root `CONTEXT.md` as the single-context overview. Read the ADRs covering an
+  area before changing it.
+- **`docs/planning/<workstream>/`** — designs and phase plans
+  (`admin-roles`, `school-roles`, `openmaic-integration`, `upstream-pr`).
+- **`docs/reports/REPORT_*.md`** — what each round actually did; the
+  Apache-2.0 §4(b) companion to `CHANGES.md`.
+- **`.claude/skills/upstream-sync/`** — the only skill in the repo, and the
+  real upstream-sync procedure (see §2).
 
-### Triage labels
-
-Triage uses the default mattpocock/skills label vocabulary. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Domain documentation uses a single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+`docs/README.md` indexes all of it.
 
 ## Development commands
 
@@ -202,8 +211,11 @@ files were changed. **Every change to this fork MUST be recorded** in all of:
    `chore:` …). Group related changes.
 3. **`docs/reports/REPORT_*.md`** — for multi-step work, close each round/phase with a
    report and **commit it**. Reports live in `docs/reports/` (not the repo root);
-   planning/design docs live in `docs/planning/`. (Template:
-   `docs/planning/thai-i18n/Thai_Localization_DeepTutor_REPORT_TEMPLATE.md`.)
+   planning/design docs live in `docs/planning/`. There is no template — the
+   named one lived in a `docs/planning/thai-i18n/` folder that was never
+   committed. Copy the shape of a recent report instead, e.g.
+   `docs/reports/REPORT_school_roles_phases_1_to_3_2026-09-20.md` for a
+   multi-phase build or `REPORT_sync_v1.6.6.md` for a sync.
 4. **`NOTICE`** — keep the modification statement current; never remove upstream
    attribution.
 
@@ -213,13 +225,24 @@ files were changed. **Every change to this fork MUST be recorded** in all of:
 
 ## 2. Upstream sync
 
-Before merging any upstream release: never sync onto a **red-CI** upstream release;
-run the impact analysis first (diagnose), then the sync procedure (execute) — both
-maintained in `docs/planning/upstream-sync/`
-(`Thai_Localization_UPSTREAM_IMPACT_ANALYSIS.md` then
-`Thai_Localization_UPSTREAM_SYNC_STRATEGY.md`; `UPSTREAM_SYNC_handoff.md` warms up a
-new sync task). After a successful sync, add an entry to `CHANGES.md`
-under **"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`.
+Never sync onto a **red-CI** upstream release.
+
+**The procedure is the `upstream-sync` skill** (`.claude/skills/upstream-sync/`):
+its `SKILL.md` carries the stages — impact analysis, dry merge, go/no-go, the
+merge, the gates — `references/decisions.md` carries the decisions already
+made, and `scripts/` carries the four it runs (`sync_state.sh`,
+`i18n_delta.py`, `invariants.py`, `backtest.sh`). It exists because the
+expensive failure here is **an upstream change that breaks fork behaviour
+while every gate stays green**; the stages are built to catch that class.
+
+Until 2026-10-02 this section instead named three documents under
+`docs/planning/upstream-sync/`. That folder has never been committed and
+those files are in no branch — the procedure moved into the skill. Read the
+skill, not a path from an older copy of this file.
+
+After a successful sync, add an entry to `CHANGES.md` under
+**"Upstream syncs"** and a `docs/reports/REPORT_sync_*.md`; the seven already
+there (v1.4.8 … v1.6.6) are the shape to follow.
 
 > Note: `main` currently carries fork customizations (Thai i18n was merged in), so an
 > upstream sync is a real **merge-with-conflicts**, not a fast-forward.
