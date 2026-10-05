@@ -23,13 +23,28 @@ from deeptutor.services.codebuddy_credentials import (
 )
 
 
+def _future_ms(seconds: float) -> int:
+    """Epoch milliseconds *seconds* from now.
+
+    The fixture used to hardcode ``1791055241000`` and ``1793647241000`` --
+    2026-10-03 19:20 UTC and 2026-11-02. Both were comfortably ahead when this
+    file was written in August 2026, and the first became the past while no
+    code changed: the same commit went green on 2026-10-03 and red the next
+    day, with every Python matrix entry failing on
+    ``assert credentials.is_expired() is False``. A session fixture has to
+    describe "valid" relative to the run, which is what the expired case below
+    already does with ``time.time() - 60``.
+    """
+    return int((time.time() + seconds) * 1000)
+
+
 def _write_auth_file(tmp_path: Path, monkeypatch, **auth_overrides) -> Path:
     auth = {
         "accessToken": "access-token",
         "refreshToken": "refresh-token",
         "tokenType": "Bearer",
-        "expiresAt": 1791055241000,
-        "refreshExpiresAt": 1793647241000,
+        "expiresAt": _future_ms(30 * 86_400),
+        "refreshExpiresAt": _future_ms(60 * 86_400),
         "domain": "www.codebuddy.cn",
     }
     auth.update(auth_overrides)
@@ -43,7 +58,8 @@ def _write_auth_file(tmp_path: Path, monkeypatch, **auth_overrides) -> Path:
 
 
 def test_load_credentials_parses_session(tmp_path, monkeypatch) -> None:
-    _write_auth_file(tmp_path, monkeypatch)
+    expires_at_ms = _future_ms(30 * 86_400)
+    _write_auth_file(tmp_path, monkeypatch, expiresAt=expires_at_ms)
 
     credentials = load_credentials()
 
@@ -53,7 +69,7 @@ def test_load_credentials_parses_session(tmp_path, monkeypatch) -> None:
     assert credentials.user_id == "uid-1"
     assert credentials.user_label == "tester"
     # Epoch milliseconds in the file, seconds in the dataclass.
-    assert credentials.expires_at == pytest.approx(1791055241.0)
+    assert credentials.expires_at == pytest.approx(expires_at_ms / 1000)
     assert credentials.is_expired() is False
 
 

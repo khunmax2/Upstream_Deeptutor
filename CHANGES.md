@@ -254,6 +254,36 @@ upstream.
 
 ---
 
+## CI went red on an untouched commit: an upstream test had an expiry date in it — 2026-10-05
+
+Changed: `tests/services/test_codebuddy_credentials.py` (upstream's file).
+
+The scheduled run on `main` failed on 2026-10-04. The same commit,
+`912e3fad6`, had passed on 2026-10-03 and twice on 2026-10-02. Nothing in the
+repository changed between them; the calendar did.
+
+`_write_auth_file` built its session fixture with `"expiresAt":
+1791055241000` -- **2026-10-03 19:20 UTC**. It was about seven weeks ahead
+when upstream added the file on 2026-08-13 (#780, Ching Wing Kwok). Once the
+clock passed it, `assert credentials.is_expired() is False` could only fail,
+and it failed on all four Python versions at once, which is what made it look
+like infrastructure rather than a date. `refreshExpiresAt` carried a second
+one, 2026-11-02, which had not gone off yet.
+
+Both are now computed from `time.time()`, 30 and 60 days out, which is the
+idiom the same file already used for its expired case
+(`int((time.time() - 60) * 1000)`). The parse assertion keeps its precision by
+passing the value in rather than comparing with a constant.
+
+Reproduced before fixing and after: the file as it stands on `main` fails
+here today, 1 failed and 9 passed, with the same assertion CI reported; the
+amended file passes 10 of 10.
+
+**This is upstream's bug, and upstream still has it** -- v1.6.12, their
+newest, carries the same two constants, so their CI is red for the same
+reason. Worth sending back as a PR; `docs/planning/upstream-pr/` is where the
+fork keeps those.
+
 ## 756 locale keys upstream had already deleted, and the app shell is 57 KB lighter — 2026-10-02
 
 Changed: `web/locales/{en,th,zh}/app.json`.
