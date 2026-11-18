@@ -254,6 +254,48 @@ upstream.
 
 ---
 
+## CI went red on an untouched commit again, this time because the runner moved — 2026-11-18
+
+Changed: `.github/workflows/tests.yml`.
+
+The scheduled run on `main` has failed every night since **2026-10-28**, 22 in
+a row, on a commit nobody has touched: `0bc61f7f6` has been the tip since
+2026-10-05. The nightly runs through 2026-10-27 were green on that same commit.
+
+GitHub rolled the `ubuntu-latest` label to Ubuntu 26.04. The pinned Playwright
+(1.57.0 in `web/package-lock.json`) refuses it outright:
+
+```
+BEWARE: your OS is not officially supported by Playwright;
+        installing dependencies for ubuntu26.04-x64 as a fallback.
+Cannot install dependencies for ubuntu26.04-x64 with Playwright 1.57.0!
+Error: ERROR: Playwright does not support chromium on ubuntu26.04-x64
+```
+
+Only the `Install Playwright Chromium` step fails. Everything before it passes
+— `npm run check` reports 1263 of 1263 — and the audits after it are skipped
+rather than run, so for three weeks the interaction, accessibility and visual
+matrix audits have not been covering anything while the job reported failure
+for an unrelated reason.
+
+`web-tests` and `multi-worker-web` now pin `ubuntu-24.04`. **Only those two**:
+they are the jobs that install a browser. `lint`, `python-tests`,
+`gatekeeper-tests` and `test-summary` deliberately stay on `ubuntu-latest` so
+the next platform move is still heard rather than silenced — pinning the whole
+workflow would trade one stale signal for another.
+
+Rejected for now: bumping `@playwright/test` from 1.57 to 1.65, which is the
+move that eventually follows the platform forward. Eight minor versions of
+browser engine is exactly the kind of change that shifts visual-matrix
+baselines, and doing it inside a repair of a red pipeline would make a
+rendering diff and an infrastructure failure indistinguishable. It belongs on
+its own branch with someone looking at the images. The pin carries a comment
+saying so.
+
+This is the second time in six weeks that this pipeline went red with no
+commit behind it, after the expiry-date fixture below. Both were time bombs of
+a sort: one in the test data, one in the platform underneath.
+
 ## CI went red on an untouched commit: an upstream test had an expiry date in it — 2026-10-05
 
 Changed: `tests/services/test_codebuddy_credentials.py` (upstream's file).
